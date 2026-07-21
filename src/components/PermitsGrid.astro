@@ -20,7 +20,7 @@ interface Props {
   /** CSS height of the grid viewport. */
   height?: string;
 }
-const { height = 'clamp(480px, calc(100vh - 340px), 900px)' } = Astro.props;
+const { height = 'clamp(720px, calc(100vh - 200px), 1600px)' } = Astro.props;
 
 const config = JSON.stringify({ columns: permitColumns, rows: permits });
 

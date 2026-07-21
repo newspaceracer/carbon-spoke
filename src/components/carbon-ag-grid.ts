@@ -83,6 +83,19 @@ const RENDERERS: Record<string, (p: ICellRendererParams) => string> = {
     return `<cds-tag type="${s.type}" size="sm"><svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="${s.viewBox}" width="16" height="16" aria-hidden="true"><path d="${s.path}"/></svg>${esc(p.value)}</cds-tag>`;
   },
   role: (p) => (p.value ? `<cds-tag type="teal" size="sm">${esc(p.value)}</cds-tag>` : ''),
+  // Comma-separated free tags → one quiet gray cds-tag each.
+  tags: (p) =>
+    String(p.value ?? '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => `<cds-tag type="gray" size="sm">${esc(t)}</cds-tag>`)
+      .join(''),
+  // Document reference — a link when present, an em dash placeholder when not.
+  doc: (p) =>
+    p.value
+      ? `<a href="/permit" style="color:var(--cds-link-primary,#0f62fe);text-decoration:none;font-weight:500">${esc(p.value)}</a>`
+      : `<span style="color:var(--cds-text-secondary,#525252)">&mdash;</span>`,
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

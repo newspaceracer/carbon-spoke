@@ -2,13 +2,14 @@
 // scans (900+ CA State Parks Scientific Research & Collection Permits). This is
 // the large, interactive table case: too many rows for tiles, so the index is an
 // AG Grid (see CLAUDE.md "Grids"). Every record is INVENTED and deterministic —
-// permit IDs, applicant names, titles, and dates are fabricated by a seeded PRNG,
-// so the same 960 rows appear on every build. Public scientific facts (taxa, park
-// names, resource categories) are kept only for domain credibility.
+// permit IDs, people, titles, and dates are fabricated by a seeded PRNG, so the
+// same 960 rows appear on every build. Public scientific facts (taxa, park names,
+// resource categories) are kept only for domain credibility.
 //
 // The signed-in reviewer is J. Okafor (see user.ts). Two membership facts drive
 // the index's quick-filter segments:
-//   - "My permits"   — permits where she holds a role (row.role is set).
+//   - "My permits"   — permits she is the responsible/supporting analyst on
+//                      (row.role is set; she's stamped as the responsible analyst).
 //   - "My district"  — permits in one of her assigned districts (myDistricts).
 // Both are precomputed per row into `_buckets` so the grid can filter on a plain
 // serializable field (the AG Grid wrapper reads `_buckets`; see carbon-ag-grid.ts).
@@ -31,6 +32,16 @@ function mulberry32(seed: number): () => number {
 
 const rng = mulberry32(0x5eeded);
 const pick = <T>(arr: readonly T[]): T => arr[Math.floor(rng() * arr.length)];
+// Pick `n` DISTINCT values from a pool (used for tags + supporting analysts).
+function pickN<T>(arr: readonly T[], n: number, exclude: readonly T[] = []): T[] {
+  const out: T[] = [];
+  let guard = 0;
+  while (out.length < n && guard++ < 50) {
+    const v = pick(arr);
+    if (!out.includes(v) && !exclude.includes(v)) out.push(v);
+  }
+  return out;
+}
 
 // ── Domain vocabulary (public facts, safe to use) ───────────────────────────
 const studies = [
@@ -74,6 +85,41 @@ const categories = [
   'Herpetology', 'Entomology', 'Mammalogy',
 ] as const;
 
+// Permit paperwork vocabulary — the classification fields the register carries.
+const permitTypes = [
+  'Scientific Research & Collection', 'Right of Entry', 'Special Use',
+  'Educational Collection', 'Filming & Photography',
+] as const;
+const recordTypes = ['Permit', 'Amendment', 'Renewal', 'Application'] as const;
+const renewalTypes = ['New', 'Renewal', 'Amendment', 'Reissuance'] as const;
+
+// Free-text-ish labels a permit can be tagged with (0–2 per record).
+const tagPool = [
+  'Sensitive species', 'Marine', 'Multi-year', 'Federal co-permit',
+  'Threatened/Endangered', 'Coastal Commission', 'Fee waived', 'Expedited',
+] as const;
+
+// People. Principal investigators + submitters are drawn broadly (first + last);
+// analysts come from a smaller agency staff pool so names recur like real staff.
+const firstNames = [
+  'Ana', 'Ben', 'Carla', 'David', 'Elena', 'Frank', 'Grace', 'Hassan', 'Ingrid',
+  'Jamal', 'Kira', 'Luis', 'Maya', 'Noah', 'Olga', 'Priya', 'Rosa', 'Sam',
+  'Tara', 'Umar', 'Vera', 'Wes', 'Ximena', 'Yusuf', 'Zoe',
+] as const;
+const lastNames = [
+  'Alvarez', 'Bennett', 'Cho', 'Delgado', 'Escobar', 'Fisher', 'Gupta', 'Hensley',
+  'Ibarra', 'Jansen', 'Kwon', 'Lombardi', 'Muñoz', 'Nakamura', 'Osei', 'Park',
+  'Quiroga', 'Reyes', 'Salazar', 'Thompson', 'Underwood', 'Vasquez', 'Yamada', 'Zavala',
+] as const;
+const person = () => `${pick(firstNames)} ${pick(lastNames)}`;
+
+// Agency analysts who can be assigned to a permit (mirrors user.ts directory).
+const analysts = [
+  'J. Okafor', 'M. Santos', 'D. Cho', 'A. Moreno', 'K. Whitfield',
+  'P. Nair', 'R. Delgado', 'L. Tran', 'T. Herrera', 'J. Park',
+] as const;
+const ME = currentUser.displayName; // 'J. Okafor' — stamped on the reviewer's own permits.
+
 // Districts a permit can belong to — the statewide directory plus the reviewer's
 // assigned districts (some of which aren't in the public directory), so the
 // "My district" segment always has a meaningful population.
@@ -109,27 +155,53 @@ const roles = ['Lead analyst', 'Supporting analyst', 'District reviewer', 'Techn
 const offices = ['411', '635', '208', '733', '512', '309', '874'] as const;
 
 export interface PermitRow {
+  /** Application / Permit # — the row identifier. */
   permitId: string;
+  permitType: string;
+  recordType: string;
+  /** Project title (hidden by default — long, only needed on drill-in). */
   title: string;
-  applicant: string;
-  category: string;
-  district: string;
   /** Human status label (also the value the grid sorts / quick-filters on). */
   status: string;
   /** Drives the status glyph + colour in the cell renderer. */
   statusKind: string;
-  /** The reviewer's role on this permit, or '' when she has none. */
-  role: string;
-  park: string;
-  /** ISO YYYY-MM-DD — sorts chronologically as a string; formatted for display. */
+  renewalType: string;
+  category: string;
+  /** Comma-separated free tags (hidden by default). */
+  tags: string;
+  principalInvestigator: string;
+  /** PI Certificate-of-Field lead — the field-designated co-investigator. */
+  picof: string;
+  /** ISO YYYY-MM-DD dates — sort chronologically as strings; formatted on display. */
+  projectStart: string;
+  projectEnd: string;
+  permitStart: string;
+  permitEnd: string;
   submitted: string;
-  expires: string;
+  submitter: string;
+  organization: string;
+  district: string;
+  park: string;
+  responsibleAnalyst: string;
+  /** Comma-separated analyst names. */
+  supportingAnalysts: string;
+  /** Whether the signed permit document is on file ('Yes' / 'No'). */
+  signedPermit: string;
+  annualReportDue: string;
+  /** Whether this year's annual report has been submitted ('Yes' / 'No'). */
+  annualReportSubmitted: string;
+  /** Link label when a report exists, else '' (rendered as an em dash). */
+  annualReport: string;
+  /** The reviewer's role on this permit, or '' when she has none. Drives buckets. */
+  role: string;
   /** Precomputed filter buckets the grid's scope switcher reads. */
   _buckets: string[];
 }
 
 const COUNT = 960;
 const pad3 = (n: number) => String(n).padStart(3, '0');
+const iso = (y: number, m: number, d: number) =>
+  `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
 export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
   const district = pick(districts);
@@ -137,28 +209,65 @@ export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
   // ~2.6% of permits are the reviewer's — drawn independently of district.
   const role = rng() < 0.026 ? pick(roles) : '';
 
-  const submittedYear = 2024 + Math.floor(rng() * 3); // 2024–2026
+  // Project spans several years; the permit is an annual authorization within it.
+  const startYear = 2023 + Math.floor(rng() * 3); // 2023–2025
   const month = 1 + Math.floor(rng() * 12);
   const day = 1 + Math.floor(rng() * 28);
-  const submitted = `${submittedYear}-${pad3(month).slice(1)}-${pad3(day).slice(1)}`;
-  const expires = `${submittedYear + 1}-${pad3(month).slice(1)}-${pad3(day).slice(1)}`;
+  const projLen = 1 + Math.floor(rng() * 3); // 1–3 year project
+
+  const projectStart = iso(startYear, month, day);
+  const projectEnd = iso(startYear + projLen, month, day);
+
+  // Submitted a little before the permit takes effect (same season).
+  const subMonth = 1 + ((month + 9) % 12); // ~2 months earlier, wrapped
+  const submitted = iso(startYear, subMonth, day);
+  const permitStart = iso(startYear, month, day);
+  const permitEnd = iso(startYear + 1, month, day);
+  // Annual report is due a month after the permit term ends.
+  const annualReportDue = iso(startYear + 1, 1 + (month % 12), day);
+
+  // Paperwork state follows status: an active/expired permit has a signed doc;
+  // some of those have this year's annual report in.
+  const active = status.kind === 'succeeded' || status.kind === 'expired';
+  const signedPermit = active ? 'Yes' : 'No';
+  const reportIn = active && rng() < 0.6;
+
+  // The reviewer is stamped as responsible analyst on the permits that are "hers".
+  const responsibleAnalyst = role ? ME : pick(analysts);
+  const supportingAnalysts = pickN(analysts, 1 + Math.floor(rng() * 2), [responsibleAnalyst]).join(', ');
 
   const buckets = ['all'];
   if (role) buckets.push('mine');
   if (myDistricts.includes(district)) buckets.push('district');
 
   return {
-    permitId: `${String(submittedYear).slice(2)}-${pick(offices)}-${pad3(i)}`,
+    permitId: `${String(startYear).slice(2)}-${pick(offices)}-${pad3(i)}`,
+    permitType: pick(permitTypes),
+    recordType: pick(recordTypes),
     title: `${pick(studies)} of ${pick(subjects)} at ${pick(parks)}`,
-    applicant: pick(organizations),
-    category: pick(categories),
-    district,
     status: status.label,
     statusKind: status.kind,
-    role,
-    park: pick(parks),
+    renewalType: pick(renewalTypes),
+    category: pick(categories),
+    tags: pickN(tagPool, Math.floor(rng() * 3)).join(', '),
+    principalInvestigator: person(),
+    picof: person(),
+    projectStart,
+    projectEnd,
+    permitStart,
+    permitEnd,
     submitted,
-    expires,
+    submitter: person(),
+    organization: pick(organizations),
+    district,
+    park: pick(parks),
+    responsibleAnalyst,
+    supportingAnalysts,
+    signedPermit,
+    annualReportDue,
+    annualReportSubmitted: reportIn ? 'Yes' : 'No',
+    annualReport: reportIn ? 'View report' : '',
+    role,
     _buckets: buckets,
   };
 });
@@ -174,16 +283,32 @@ export const scopeCounts = {
 // `valueFormatter` are STRING KEYS the AG Grid wrapper maps to real functions
 // (see carbon-ag-grid.ts). `pinned` / `hide` seed the default view a reviewer can
 // then customize; `flex: 0` + `width` keeps a column fixed while the flex columns
-// share the remaining width.
+// share the remaining width. Order + default visibility + pins match the register's
+// column-manager spec.
 export const permitColumns = [
-  { field: 'permitId', headerName: 'Permit', cellRenderer: 'permitLink', pinned: 'left', width: 130, flex: 0 },
-  { field: 'title', headerName: 'Title', minWidth: 300, flex: 3 },
+  { field: 'permitId', headerName: 'Application/Permit #', cellRenderer: 'permitLink', pinned: 'left', width: 160, flex: 0 },
+  { field: 'permitType', headerName: 'Permit Type', width: 220, flex: 0 },
+  { field: 'recordType', headerName: 'Record Type', width: 140, flex: 0 },
+  { field: 'title', headerName: 'Project title', minWidth: 300, flex: 3, hide: true },
   { field: 'status', headerName: 'Status', cellRenderer: 'status', width: 190, flex: 0 },
-  { field: 'role', headerName: 'My role', cellRenderer: 'role', width: 165, flex: 0 },
+  { field: 'renewalType', headerName: 'Renewal Type', width: 150, flex: 0 },
   { field: 'category', headerName: 'Category', minWidth: 190, flex: 1 },
-  { field: 'district', headerName: 'District', minWidth: 200, flex: 1 },
-  { field: 'applicant', headerName: 'Applicant', minWidth: 200, flex: 1 },
-  { field: 'park', headerName: 'Park unit', minWidth: 210, flex: 1, hide: true },
-  { field: 'submitted', headerName: 'Submitted', valueFormatter: 'date', width: 150, flex: 0 },
-  { field: 'expires', headerName: 'Expires', valueFormatter: 'date', width: 150, flex: 0, hide: true },
+  { field: 'tags', headerName: 'Tags', cellRenderer: 'tags', minWidth: 200, flex: 1, hide: true },
+  { field: 'principalInvestigator', headerName: 'Principal Investigator', pinned: 'left', width: 200, flex: 0 },
+  { field: 'picof', headerName: 'PICOF', width: 170, flex: 0 },
+  { field: 'projectStart', headerName: 'Project Start Date', valueFormatter: 'date', width: 165, flex: 0 },
+  { field: 'projectEnd', headerName: 'Project End Date', valueFormatter: 'date', width: 165, flex: 0 },
+  { field: 'permitStart', headerName: 'Permit Start Date', valueFormatter: 'date', pinned: 'left', width: 165, flex: 0 },
+  { field: 'permitEnd', headerName: 'Permit End Date', valueFormatter: 'date', width: 165, flex: 0 },
+  { field: 'submitted', headerName: 'Date submitted', valueFormatter: 'date', width: 165, flex: 0 },
+  { field: 'submitter', headerName: 'Name of Submitter', width: 190, flex: 0 },
+  { field: 'organization', headerName: 'Organization', minWidth: 200, flex: 1 },
+  { field: 'district', headerName: 'Districts', minWidth: 200, flex: 1 },
+  { field: 'park', headerName: 'Park Units', minWidth: 210, flex: 1 },
+  { field: 'responsibleAnalyst', headerName: 'Responsible Analyst', width: 190, flex: 0 },
+  { field: 'supportingAnalysts', headerName: 'Supporting Analysts', minWidth: 210, flex: 1 },
+  { field: 'signedPermit', headerName: 'Signed Permit', width: 150, flex: 0 },
+  { field: 'annualReportDue', headerName: 'Annual Report Due Date', valueFormatter: 'date', pinned: 'left', width: 190, flex: 0 },
+  { field: 'annualReportSubmitted', headerName: 'Annual report submitted', width: 200, flex: 0 },
+  { field: 'annualReport', headerName: 'Annual Report', cellRenderer: 'doc', width: 160, flex: 0 },
 ] as const;

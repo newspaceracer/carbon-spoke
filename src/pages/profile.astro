@@ -4,8 +4,11 @@
      header: identity banner (g100 zone) — avatar, name, role · division, contact facts.
      spine:  main.page > .cds--css-grid  (main col 11 / rail col 5, mirrors permit Overview)
      sections:
-       - Personal information (main) -> editable form: cds-text-input + cds-dropdown,
-                                        Save/Cancel (cds-button), cds-inline-notification on save
+       - Personal information (main) -> VIEW-FIRST form (read-only until Edit),
+                                        matching the read-then-act grammar of the
+                                        district/permit pages: header Edit action ->
+                                        cds-text-input + cds-dropdown unlock -> Save/Cancel
+                                        (cds-button) footer, cds-inline-notification on save
        - Notification preferences (main) -> per-event Email / In-app cds-toggle grid
        - Role & access (rail) -> READ-ONLY cds-tile: role/permission cds-tags + assigned
                                  districts; changing access is an admin action, so stated
@@ -76,6 +79,10 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
       <!-- ── Main column ─────────────────────────────────────────────────── -->
       <div class="main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-11">
         <PermitSection title="Personal information">
+          <!-- View-first, like the rest of the app: the record reads read-only
+               until you deliberately enter edit mode. Save/Cancel then bound the
+               transaction (see .form__actions, hidden until editing). -->
+          <cds-button slot="aside" id="profile-edit" kind="ghost" size="sm">Edit</cds-button>
           <p class="section-hint t-body-01">Update how you appear to applicants and other reviewers across the permitting system.</p>
 
           <!-- Confirmation of a save. Hidden until the form is submitted. -->
@@ -90,34 +97,34 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
 
           <form id="profile-form" class="form" data-storage-key="profile-personal">
             <div class="field-grid">
-              <cds-text-input id="f-firstName" label="First name" value={u.firstName}></cds-text-input>
-              <cds-text-input id="f-lastName" label="Last name" value={u.lastName}></cds-text-input>
-              <cds-text-input id="f-title" label="Job title" value={u.title}></cds-text-input>
-              <cds-dropdown id="f-division" title-text="Division" value={u.division}>
+              <cds-text-input id="f-firstName" label="First name" value={u.firstName} readonly></cds-text-input>
+              <cds-text-input id="f-lastName" label="Last name" value={u.lastName} readonly></cds-text-input>
+              <cds-text-input id="f-title" label="Job title" value={u.title} readonly></cds-text-input>
+              <cds-dropdown id="f-division" title-text="Division" value={u.division} read-only>
                 {divisions.map((d) => (
                   <cds-dropdown-item value={d.value}>{d.label}</cds-dropdown-item>
                 ))}
               </cds-dropdown>
-              <cds-text-input id="f-email" type="email" label="Email address" value={u.email}></cds-text-input>
-              <cds-text-input id="f-phone" type="tel" label="Office phone" value={u.phone}></cds-text-input>
+              <cds-text-input id="f-email" type="email" label="Email address" value={u.email} readonly></cds-text-input>
+              <cds-text-input id="f-phone" type="tel" label="Office phone" value={u.phone} readonly></cds-text-input>
 
               <h3 class="form__subhead field-grid__wide t-heading-01">Mailing address</h3>
               <div class="field-grid__wide">
-                <cds-text-input id="f-street" label="Street address" value={u.address.street}></cds-text-input>
+                <cds-text-input id="f-street" label="Street address" value={u.address.street} readonly></cds-text-input>
               </div>
               <div class="field-grid__wide">
-                <cds-text-input id="f-unit" label="Suite / unit (optional)" value={u.address.unit}></cds-text-input>
+                <cds-text-input id="f-unit" label="Suite / unit (optional)" value={u.address.unit} readonly></cds-text-input>
               </div>
-              <cds-text-input id="f-city" label="City" value={u.address.city}></cds-text-input>
-              <cds-dropdown id="f-state" title-text="State" value={u.address.state}>
+              <cds-text-input id="f-city" label="City" value={u.address.city} readonly></cds-text-input>
+              <cds-dropdown id="f-state" title-text="State" value={u.address.state} read-only>
                 {states.map((s) => (
                   <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>
                 ))}
               </cds-dropdown>
-              <cds-text-input id="f-zip" label="ZIP code" value={u.address.zip}></cds-text-input>
+              <cds-text-input id="f-zip" label="ZIP code" value={u.address.zip} readonly></cds-text-input>
             </div>
 
-            <div class="form__actions">
+            <div class="form__actions" id="form-actions" hidden>
               <cds-button id="profile-reset" kind="ghost" type="button">Cancel</cds-button>
               <cds-button id="profile-save" type="button">Save changes</cds-button>
             </div>
@@ -136,7 +143,6 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
               <cds-toggle
                 id="theme-toggle"
                 class="prefs__toggle"
-                size="sm"
                 label-text="Dark mode"
                 hide-label
               ></cds-toggle>
@@ -157,7 +163,6 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
                 <cds-toggle
                   class="prefs__toggle"
                   data-key={n.key}
-                  size="sm"
                   label-text={`Email me: ${n.label}`}
                   hide-label
                   toggled={n.enabled || undefined}
@@ -280,13 +285,22 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
   const form = document.getElementById('profile-form') as HTMLFormElement | null;
   const saveBtn = document.getElementById('profile-save');
   const resetBtn = document.getElementById('profile-reset');
+  const editBtn = document.getElementById('profile-edit');
+  const actions = document.getElementById('form-actions');
   const notice = document.getElementById('save-notice') as any;
 
   const fieldIds = ['firstName', 'lastName', 'title', 'division', 'email', 'phone', 'street', 'unit', 'city', 'state', 'zip'] as const;
   type FieldKey = (typeof fieldIds)[number];
   const fieldEl = (k: FieldKey) => document.getElementById(`f-${k}`) as any;
+  // cds-dropdown exposes the readonly flag as `readOnly` / attr `read-only`;
+  // cds-text-input uses `readonly`. One helper handles both.
+  const setReadonly = (el: any, ro: boolean) => {
+    if (!el) return;
+    if (el.tagName === 'CDS-DROPDOWN') el.readOnly = ro;
+    else el.readonly = ro;
+  };
 
-  // Baseline = the seeded defaults; Cancel restores to these.
+  // Baseline = the seeded defaults; a saved edit overrides them.
   const defaults: Record<FieldKey, string> = {
     firstName: currentUser.firstName,
     lastName: currentUser.lastName,
@@ -308,7 +322,7 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
     'science': 'Office of Scientific Review',
   };
 
-  if (form && saveBtn && resetBtn && notice) {
+  if (form && saveBtn && resetBtn && editBtn && actions && notice) {
     const storageKey = form.dataset.storageKey || 'profile-personal';
 
     const readStored = (): Partial<Record<FieldKey, string>> => {
@@ -355,22 +369,44 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
       return out;
     };
 
-    // Hydrate from any previously saved edits.
-    setFields({ ...defaults, ...readStored() });
+    // The persisted truth: seeded defaults overlaid with any saved edit.
+    const savedValues = (): Record<FieldKey, string> => ({ ...defaults, ...readStored() });
+
+    // View-first, like district/permit: the fields read read-only until you
+    // click Edit. Edit mode unlocks them and swaps the header Edit action for
+    // the Save/Cancel footer; leaving edit mode locks them again.
+    const setEditable = (on: boolean) => {
+      fieldIds.forEach((k) => setReadonly(fieldEl(k), !on));
+      actions.hidden = !on;
+      editBtn.hidden = on;
+    };
+
+    // Hydrate from any previously saved edits; start locked (view mode).
+    setFields(savedValues());
     syncBanner(current());
+    setEditable(false);
+
+    editBtn.addEventListener('click', () => {
+      notice.hidden = true;
+      setEditable(true);
+      fieldEl('firstName')?.focus();
+    });
 
     saveBtn.addEventListener('click', () => {
       const values = current();
       localStorage.setItem(storageKey, JSON.stringify(values));
       syncBanner(values);
+      setEditable(false);
       notice.hidden = false;
       notice.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
 
+    // Cancel discards this edit session — revert the fields to the last saved
+    // state and lock them. (It does NOT reset to seeded defaults; a saved edit
+    // stays saved.)
     resetBtn.addEventListener('click', () => {
-      setFields(defaults);
-      syncBanner(defaults);
-      localStorage.removeItem(storageKey);
+      setFields(savedValues());
+      setEditable(false);
       notice.hidden = true;
     });
   }
@@ -585,6 +621,11 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
     margin-top: 1.75rem;
     max-width: 44rem;
   }
+  .form__actions[hidden] { display: none; }
+  /* cds-button sets :host display, overriding the UA [hidden] rule — an explicit
+     author rule is needed to hide the Edit action in edit mode (same reason the
+     notifications above carry their own [hidden] rules). */
+  #profile-edit[hidden] { display: none; }
 
   /* Notification preferences — one event per row with a single email on/off
      toggle. Layout only; the control is a stock cds-toggle. */
@@ -606,7 +647,18 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
     margin: 0.125rem 0 0;
     color: var(--cds-text-secondary, #525252);
   }
-  .prefs__toggle { justify-self: end; }
+  /* cds-toggle renders as [switch][side-text]; with hide-label Carbon fills that
+     side text with the label-text value (variable width per row), so
+     right-aligning the whole control lands each switch at a different x and the
+     switches look ragged. We keep label-text (the component's own hidden label
+     span still provides the accessible name), but collapse the visible side text
+     to zero width by zeroing the ONE token it uses — scoped to these toggles,
+     inherited into the shadow DOM via the custom property. Every toggle is then
+     switch-width only → identical width → aligned, at any size, no clipping. */
+  .prefs__toggle {
+    justify-self: end;
+    --cds-body-01-font-size: 0;
+  }
 
   /* Role & access rail — a read-only cds-tile. Surface/padding are the tile's;
      these rules lay out its content (facts, district list, note). */
