@@ -1,0 +1,177 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — the "Districts" nav item links here.
+     spine:  main.page > cds-stack(gap 8)
+     sections:
+       - header      -> breadcrumb (Home / Districts) + title block (count + lede)
+       - directory   -> one section PER region; each is its own 2x Grid of
+                        cds-clickable-tile cards (name, HQ, parks, superintendent)
+                        linking to the shared /district detail template.
+
+   Static build: the whole roster (districtDirectory) renders server-side. Every
+   card links to /district — the single district-detail template — the same way
+   search.astro's results all link to /permit.
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import { districtDirectory } from '../data/district';
+
+// Home-page card metadata — the hub globs pages and reads this to self-list.
+export const prototype = {
+  title: 'Districts',
+  summary:
+    'The full district roster grouped by region — HQ, park count, and ' +
+    'superintendent per district, each linking to its detail screen.',
+  tag: 'Internal tool',
+};
+
+// Group the roster by region, preserving the authored order of both regions and
+// the districts within them (one grid per region per the layout rules).
+const byRegion = districtDirectory.reduce<Record<string, typeof districtDirectory>>((acc, d) => {
+  (acc[d.region] ??= []).push(d);
+  return acc;
+}, {});
+const regions = Object.keys(byRegion);
+
+const totalParks = districtDirectory.reduce((sum, d) => sum + d.parks, 0);
+
+// Right-arrow glyph reused across the clickable tiles (decorative — the tile's
+// accessible name comes from its heading).
+const arrow = 'M9.3 3.7 13.1 7.5 1 7.5 1 8.5 13.1 8.5 9.3 12.3 10 13 15 8 10 3z';
+---
+
+<BaseLayout title="Districts">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <cds-stack gap="8">
+      <!-- ── Header ─────────────────────────────────────────────────────── -->
+      <div class="cds--css-grid cds--css-grid--with-row-gap">
+        <cds-breadcrumb no-trailing-slash class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">Districts</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <header class="head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
+          <h1 class="head__title">Districts</h1>
+          <p class="head__lede t-body-01">
+            The administrative districts of the CA State Parks research &amp; collection
+            program. A district administers a set of park units and coordinates permits
+            through its assigned staff. Select a district for its office, parks, and contacts.
+          </p>
+          <p class="head__counts t-label-01">
+            {districtDirectory.length} districts · {regions.length} regions · {totalParks} park units
+          </p>
+        </header>
+      </div>
+
+      <!-- ── Directory, grouped by region ───────────────────────────────── -->
+      {regions.map((region) => (
+        <section class="cds--css-grid cds--css-grid--with-row-gap">
+          <div class="region-head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+            <h2 class="region-head__title t-heading-03">{region}</h2>
+            <cds-tag type="cool-gray">{byRegion[region].length}</cds-tag>
+          </div>
+
+          {byRegion[region].map((d) => (
+            <cds-clickable-tile href="/district" class="card cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4">
+              <div class="card__row">
+                <h3 class="card__name t-heading-compact-02">{d.name}</h3>
+                <dl class="card__meta">
+                  <div class="card__meta-row">
+                    <dt class="card__label t-label-01">Headquarters</dt>
+                    <dd class="card__value t-body-01">{d.headquarters}</dd>
+                  </div>
+                  <div class="card__meta-row">
+                    <dt class="card__label t-label-01">Park units</dt>
+                    <dd class="card__value t-body-01">{d.parks}</dd>
+                  </div>
+                  <div class="card__meta-row">
+                    <dt class="card__label t-label-01">Superintendent</dt>
+                    <dd class="card__value t-body-01">{d.superintendent}</dd>
+                  </div>
+                </dl>
+              </div>
+              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                <path d={arrow} />
+              </svg>
+            </cds-clickable-tile>
+          ))}
+        </section>
+      ))}
+    </cds-stack>
+  </main>
+</BaseLayout>
+
+<style>
+  /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens.
+     Width + horizontal margins are owned by the 2x Grid (.cds--css-grid). body
+     already offsets the fixed ui-shell header (theme.css padding-top). */
+  .page {
+    padding-block: 1.5rem 6rem;
+  }
+  .head__title {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 400;
+    line-height: 1.15;
+  }
+  .head__lede {
+    margin: 0.75rem 0 0;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .head__counts {
+    margin: 0.75rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .region-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .region-head__title {
+    margin: 0;
+  }
+
+  /* Each district is one clickable tile; suppress the link underline on its text
+     in every interactive state via the component's public part hook — not a
+     .cds--* internal override. */
+  .card::part(link),
+  .card::part(link):hover,
+  .card::part(link):focus,
+  .card::part(link):active {
+    text-decoration: none;
+  }
+  .card__row {
+    /* Leave the bottom-right corner clear for the clickable-tile arrow icon. */
+    padding-inline-end: 1.5rem;
+  }
+  .card__name {
+    margin: 0 0 1rem;
+    color: var(--cds-text-primary, #161616);
+  }
+  .card__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    margin: 0;
+  }
+  .card__meta-row {
+    min-width: 0;
+  }
+  .card__label {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .card__value {
+    margin: 0.125rem 0 0;
+    color: var(--cds-text-primary, #161616);
+    word-break: break-word;
+  }
+</style>

@@ -45,59 +45,58 @@ const principles = [
 <BaseLayout title="Carbon Spoke">
   <main class="page">
     <cds-stack gap="8">
-      <header class="head">
-        <p class="head__eyebrow">Carbon Spoke</p>
-        <h1 class="head__title">Prototypes</h1>
-        <p class="head__lede">
-          A design workspace for building UIs fast by composing the Carbon Design
-          System's stock, accessible <code>cds-*</code> components. Every screen below
-          is assembled from that catalog — no bespoke controls.
-        </p>
+      <header class="head cds--css-grid">
+        <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-6 cds--lg:col-span-10">
+          <p class="head__eyebrow">Carbon Spoke</p>
+          <h1 class="head__title">Prototypes</h1>
+          <p class="head__lede">
+            A design workspace for building UIs fast by composing the Carbon Design
+            System's stock, accessible <code>cds-*</code> components. Every screen below
+            is assembled from that catalog — no bespoke controls.
+          </p>
+        </div>
       </header>
 
-      <!-- Prototype directory (auto-generated from src/pages/**) -->
-      <section>
-        <div class="section-head">
+      <!-- Prototype directory (auto-generated from src/pages/**). Each card is a
+           2x-Grid column: 4 cols wide → 4-up at lg, 2-up at md, 1-up at sm. -->
+      <section class="cds--css-grid cds--css-grid--with-row-gap">
+        <div class="section-head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
           <h2 class="section-head__title">Screens</h2>
           <cds-tag type="cool-gray">{prototypes.length} prototype{prototypes.length === 1 ? '' : 's'}</cds-tag>
         </div>
 
         {prototypes.length === 0 ? (
-          <p class="muted">No prototypes yet. Add a page under <code>src/pages/</code> and it shows up here.</p>
+          <p class="muted cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">No prototypes yet. Add a page under <code>src/pages/</code> and it shows up here.</p>
         ) : (
-          <div class="grid">
-            {prototypes.map((proto) => (
-              <a class="proto" href={proto.href}>
-                <cds-tile>
-                  <cds-stack gap="3">
-                    {proto.tag && <cds-tag type="teal">{proto.tag}</cds-tag>}
-                    <h3 class="proto__name">{proto.title}</h3>
-                    {proto.summary && <p class="proto__summary">{proto.summary}</p>}
-                    <span class="proto__go">Open&nbsp;→</span>
-                  </cds-stack>
-                </cds-tile>
-              </a>
-            ))}
-          </div>
+          prototypes.map((proto) => (
+            <a class="proto cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4" href={proto.href}>
+              <cds-tile>
+                <cds-stack gap="3">
+                  {proto.tag && <cds-tag type="teal">{proto.tag}</cds-tag>}
+                  <h3 class="proto__name">{proto.title}</h3>
+                  {proto.summary && <p class="proto__summary">{proto.summary}</p>}
+                  <span class="proto__go">Open&nbsp;→</span>
+                </cds-stack>
+              </cds-tile>
+            </a>
+          ))
         )}
       </section>
 
       <!-- Orientation: how this spoke works -->
-      <section>
-        <div class="section-head">
+      <section class="cds--css-grid cds--css-grid--with-row-gap">
+        <div class="section-head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
           <h2 class="section-head__title">How this spoke works</h2>
         </div>
-        <div class="grid">
-          {principles.map((rule) => (
-            <cds-tile>
-              <cds-stack gap="3">
-                <h3 class="proto__name">{rule.title}</h3>
-                <p class="proto__summary">{rule.body}</p>
-              </cds-stack>
-            </cds-tile>
-          ))}
-        </div>
-        <p class="muted foot">
+        {principles.map((rule) => (
+          <cds-tile class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4">
+            <cds-stack gap="3">
+              <h3 class="proto__name">{rule.title}</h3>
+              <p class="proto__summary">{rule.body}</p>
+            </cds-stack>
+          </cds-tile>
+        ))}
+        <p class="muted foot cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
           Full detail lives in <code>CLAUDE.md</code> and the <code>carbon-first</code> skill.
           To add a screen: create <code>src/pages/&lt;slug&gt;.astro</code> and give it an
           <code>export const prototype</code> — it lists itself here.
@@ -108,11 +107,12 @@ const principles = [
 </BaseLayout>
 
 <style>
-  /* Page-level layout only — component styling lives in the cds-* legos. */
+  /* Page-level layout only — component styling lives in the cds-* legos. Width
+     + horizontal margins are owned by the 2x Grid (.cds--css-grid on each
+     section: Carbon responsive margins, centered, capped at 99rem). This wrapper
+     only sets vertical padding. */
   .page {
-    max-width: 60rem;
-    margin: 0 auto;
-    padding: 3rem 1.5rem 6rem;
+    padding-block: 3rem 6rem;
   }
   .head__eyebrow {
     margin: 0;
@@ -133,21 +133,16 @@ const principles = [
     max-width: 42rem;
     color: var(--cds-text-secondary, #525252);
   }
+  /* Row-gap on the section grid handles the space below this heading. */
   .section-head {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-bottom: 1rem;
   }
   .section-head__title {
     margin: 0;
     font-size: 1.25rem;
     font-weight: 400;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-    gap: 1rem;
   }
   /* The whole card is a link; the cds-tile inside carries the surface + tokens. */
   .proto {

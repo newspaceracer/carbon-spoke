@@ -23,7 +23,24 @@ const { title = 'Carbon Spoke' } = Astro.props;
        page with WHITE raised layers (tiles/fields/cards), so elements contrast
        against the background for free — Carbon's value-layering model. -->
   <body class="cds--g10">
-    <AppHeader />
+    <!-- Honor the saved light/dark preference (set on the profile page) before
+         the page paints, so there's no flash of the default theme. Light maps to
+         the g10 zone, dark to g90 — the same body theme-zone mechanic, just
+         swapped. Runs inline (is:inline) so it executes synchronously here. -->
+    <script is:inline>
+      (function () {
+        try {
+          var dark = localStorage.getItem('theme-preference') === 'dark';
+          var b = document.body;
+          b.classList.remove('cds--white', 'cds--g10', 'cds--g90', 'cds--g100');
+          b.classList.add(dark ? 'cds--g90' : 'cds--g10');
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- A page supplies its own product nav via `<... slot="nav" />`; otherwise
+         it gets the generic AppHeader. This guarantees exactly one top bar. -->
+    {Astro.slots.has('nav') ? <slot name="nav" /> : <AppHeader />}
     <slot />
 
     <!-- Registers every cds-* custom element used in the app. Astro bundles

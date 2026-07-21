@@ -1,0 +1,405 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — Admin tools › "Manage internal users".
+     header: identity banner (g100) — "Users" system-admin console + crumb.
+     spine:  main.page > .cds--css-grid (single full-width column)
+     sections:
+       - Role change requests -> the pending inbox. A cds-table (user, current role,
+                                 requested role, reason) with per-row Approve / Deny.
+                                 Approving promotes the user's account role. Empty
+                                 state when the queue is clear.
+       - All users            -> the account directory: a cds-table (user, account
+                                 role, affiliation) with per-row "Manage" opening a
+                                 cds-modal to set the account role directly.
+   This is the ACCOUNT axis — a user's global role lives here, not on any one
+   district. (District MEMBERSHIP is edited per-district in /manage-district.)
+   Prototype-local: requests + role changes persist to localStorage via
+   src/data/requests.ts, shared with the profile page that submits requests.
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitSection from '../components/PermitSection.astro';
+import { directory, accountRoleOptions } from '../data/user';
+import { districtDirectory } from '../data/district';
+
+export const prototype = {
+  title: 'Users',
+  summary:
+    'The system-admin console for user accounts — review and approve role-change ' +
+    'requests, and manage every user’s global account role in one place.',
+  tag: 'Internal tool',
+};
+---
+
+<BaseLayout title="Users">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <cds-breadcrumb no-trailing-slash class="banner__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">Users</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <p class="banner__eyebrow t-label-01">System administration</p>
+        <h1 class="banner__name t-heading-05">Users</h1>
+      </div>
+    </header>
+
+    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+      <div class="col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <!-- Action confirmation. -->
+        <cds-inline-notification
+          id="admin-notice"
+          hidden
+          kind="success"
+          low-contrast
+          title=""
+          subtitle=""
+        ></cds-inline-notification>
+
+        <!-- ── Role change requests (the inbox) ─────────────────────────────── -->
+        <PermitSection title="Role change requests">
+          <p class="section-hint t-body-01">
+            Requests reviewers have submitted from their profile. Approving a request
+            <strong>promotes the user’s account role</strong> to the one requested; denying it
+            closes the request. Role changes take effect across the permitting system.
+          </p>
+
+          <!-- carbon-checked: empty-state copy is prose, not a control — a <p> with a
+               Carbon type role is the house pattern (see manage-district hints). -->
+          <p id="requests-empty" class="empty t-body-01" hidden>No pending role change requests.</p>
+
+          <div class="table-wrap" id="requests-wrap">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>User</cds-table-header-cell>
+                  <cds-table-header-cell>Current role</cds-table-header-cell>
+                  <cds-table-header-cell>Requested role</cds-table-header-cell>
+                  <cds-table-header-cell>Reason</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="requests-tbody"></cds-table-body>
+            </cds-table>
+          </div>
+        </PermitSection>
+
+        <!-- ── All users (the account directory) ────────────────────────────── -->
+        <PermitSection title="All users">
+          <cds-tag slot="aside" type="cool-gray" id="users-count">{directory.length}</cds-tag>
+          <p class="section-hint t-body-01">
+            Every account in the system and its current global role. Use <strong>Manage</strong> to set a
+            user’s account role directly. A user’s per-district assignments are edited on that
+            district’s management screen, not here.
+          </p>
+          <div class="table-wrap">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>User</cds-table-header-cell>
+                  <cds-table-header-cell>Account role</cds-table-header-cell>
+                  <cds-table-header-cell>Affiliation</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="users-tbody"></cds-table-body>
+            </cds-table>
+          </div>
+        </PermitSection>
+      </div>
+    </div>
+
+    <!-- ── Manage-user modal: set the account role directly ─────────────────── -->
+    <cds-modal id="user-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>User account</cds-modal-label>
+        <cds-modal-heading>Manage user</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <div class="modal-grid">
+          <!-- Identity is owned by the user's account (read-only here). -->
+          <div class="identity">
+            <p class="identity__name t-heading-compact-01" id="u-name"></p>
+            <p class="identity__meta t-body-01">
+              <span id="u-email"></span>
+              <span id="u-affil"></span>
+            </p>
+            <p class="identity__note t-label-01">Identity comes from this user’s account — only their role is set here.</p>
+          </div>
+
+          <cds-dropdown id="u-role" title-text="Account role">
+            {accountRoleOptions.map((r) => (
+              <cds-dropdown-item value={r.value}>{r.label}</cds-dropdown-item>
+            ))}
+          </cds-dropdown>
+          <!-- carbon-checked: the dropdown has no per-option helper slot; this <p>
+               is the reusable home for the selected role's description. -->
+          <p class="modal-desc t-label-01" id="u-role-desc"></p>
+
+          <!-- District picker — shown only for a district-scoped role (lead /
+               assistant), which is always the lead/assistant OF a district. -->
+          <div id="u-district-wrap" hidden>
+            <cds-dropdown id="u-district" title-text="District">
+              {districtDirectory.map((d) => (
+                <cds-dropdown-item value={d.id}>{d.name}</cds-dropdown-item>
+              ))}
+            </cds-dropdown>
+          </div>
+        </div>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="u-save">Save role</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+  </main>
+</BaseLayout>
+
+<script>
+  import { directory, accountRoleOptions, accountRoleMeta, findUser } from '../data/user';
+  import {
+    pendingRequests,
+    decideRequest,
+    accountRoleOf,
+    accountRoleDisplay,
+    setAccountRole,
+    roleLabel,
+    roleDisplay,
+  } from '../data/requests';
+  import { avatarHTML } from '../lib/avatar';
+
+  const $ = (id: string) => document.getElementById(id);
+  const esc = (s = '') =>
+    s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+  // A User cell: shared initials chip + name/email — one source (src/lib/avatar.ts).
+  const userCellHTML = (name: string, email: string) =>
+    `<div class="u-id">${avatarHTML(name, 'sm')}` +
+    `<span class="u-idtext"><span class="u-name">${esc(name)}</span><span class="u-sub">${esc(email)}</span></span></div>`;
+
+  const notice = $('admin-notice') as any;
+  const flash = (title: string, subtitle: string) => {
+    if (!notice) return;
+    notice.title = title;
+    notice.subtitle = subtitle;
+    notice.hidden = false;
+    notice.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
+  // ── Requests inbox ──────────────────────────────────────────────────────────
+  const renderRequests = () => {
+    const tbody = $('requests-tbody');
+    const empty = $('requests-empty');
+    const wrap = $('requests-wrap');
+    if (!tbody) return;
+
+    const rows = pendingRequests();
+    if (empty) empty.hidden = rows.length > 0;
+    if (wrap) wrap.hidden = rows.length === 0;
+
+    tbody.replaceChildren(
+      ...rows.map((req) => {
+        const user = findUser(req.userId);
+        const row = document.createElement('cds-table-row');
+
+        const userCell = document.createElement('cds-table-cell');
+        userCell.innerHTML = userCellHTML(user?.name ?? '(unknown user)', user?.email ?? '');
+
+        const currentCell = document.createElement('cds-table-cell');
+        currentCell.innerHTML = `<cds-tag type="cool-gray" size="sm">${esc(accountRoleDisplay(req.userId))}</cds-tag>`;
+
+        const requestedCell = document.createElement('cds-table-cell');
+        requestedCell.innerHTML = `<cds-tag type="blue" size="sm">${esc(roleDisplay(req.role, req.district))}</cds-tag>`;
+
+        const reasonCell = document.createElement('cds-table-cell');
+        reasonCell.innerHTML = `<span class="u-reason">${esc(req.reason || '—')}</span>`;
+
+        const actionCell = document.createElement('cds-table-cell');
+        const wrapEl = document.createElement('div');
+        wrapEl.className = 'row-actions';
+        const approve = document.createElement('cds-button');
+        approve.setAttribute('kind', 'primary'); approve.setAttribute('size', 'sm');
+        approve.textContent = 'Approve';
+        approve.addEventListener('click', () => {
+          decideRequest(req.id, 'approved');
+          renderRequests();
+          renderUsers();
+          flash('Request approved', `${user?.name ?? 'The user'} is now ${roleDisplay(req.role, req.district)}.`);
+        });
+        const deny = document.createElement('cds-button');
+        deny.setAttribute('kind', 'danger-ghost'); deny.setAttribute('size', 'sm');
+        deny.textContent = 'Deny';
+        deny.addEventListener('click', () => {
+          decideRequest(req.id, 'denied');
+          renderRequests();
+          flash('Request denied', `${user?.name ?? 'The user'}’s request for ${roleLabel(req.role)} was denied.`);
+        });
+        wrapEl.append(approve, deny);
+        actionCell.appendChild(wrapEl);
+
+        row.append(userCell, currentCell, requestedCell, reasonCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
+  // ── User directory ──────────────────────────────────────────────────────────
+  const renderUsers = () => {
+    const tbody = $('users-tbody');
+    if (!tbody) return;
+    tbody.replaceChildren(
+      ...directory.map((u) => {
+        const row = document.createElement('cds-table-row');
+
+        const userCell = document.createElement('cds-table-cell');
+        userCell.innerHTML = userCellHTML(u.name, u.email);
+
+        const roleCell = document.createElement('cds-table-cell');
+        // Just the role label — the district already lives in the Affiliation
+        // column, so repeating it here (accountRoleDisplay adds it) is redundant.
+        roleCell.textContent = roleLabel(accountRoleOf(u.id).role);
+
+        const affilCell = document.createElement('cds-table-cell');
+        affilCell.textContent = u.affiliation;
+
+        const actionCell = document.createElement('cds-table-cell');
+        const manage = document.createElement('cds-button');
+        manage.setAttribute('kind', 'ghost'); manage.setAttribute('size', 'sm');
+        manage.textContent = 'Manage';
+        manage.addEventListener('click', () => openUserModal(u.id));
+        actionCell.appendChild(manage);
+
+        row.append(userCell, roleCell, affilCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
+  // ── Manage-user modal ─────────────────────────────────────────────────────────
+  const modal = $('user-modal') as any;
+  const roleEl = $('u-role') as any;
+  const roleDesc = $('u-role-desc');
+  const districtWrap = $('u-district-wrap');
+  const districtEl = $('u-district') as any;
+  let editingUserId = '';
+
+  const isScoped = (value: string) => !!accountRoleMeta(value)?.scoped;
+
+  // A district role needs a district; a global one doesn't — show the picker and
+  // the role's description to match the current selection.
+  const syncForRole = (value: string) => {
+    if (roleDesc) roleDesc.textContent = accountRoleMeta(value)?.description ?? '';
+    if (districtWrap) districtWrap.hidden = !isScoped(value);
+  };
+
+  const openUserModal = (userId: string) => {
+    editingUserId = userId;
+    const u = findUser(userId);
+    if ($('u-name')) $('u-name')!.textContent = u?.name ?? '';
+    if ($('u-email')) $('u-email')!.textContent = u?.email ?? '';
+    if ($('u-affil')) $('u-affil')!.textContent = u?.affiliation ?? '';
+
+    const { role, district } = accountRoleOf(userId);
+    if (roleEl) roleEl.value = role || accountRoleOptions[0].value;
+    if (districtEl) districtEl.value = district || 'north-coast-redwoods';
+    syncForRole(roleEl?.value);
+    modal.open = true;
+  };
+
+  roleEl?.addEventListener('cds-dropdown-selected', () => syncForRole(roleEl.value));
+
+  $('u-save')?.addEventListener('click', () => {
+    const value = roleEl?.value;
+    if (!value || !editingUserId) return;
+    const district = isScoped(value) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
+    setAccountRole(editingUserId, value, district);
+    modal.open = false;
+    renderUsers();
+    renderRequests(); // current-role column may reference this user
+    const u = findUser(editingUserId);
+    flash('Role updated', `${u?.name ?? 'The user'} is now ${roleDisplay(value, district)}.`);
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  renderRequests();
+  renderUsers();
+</script>
+
+<style>
+  .page { padding-block: 0 6rem; }
+
+  /* Identity banner — same construction as the other admin screens. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__crumb { display: block; margin-bottom: var(--cds-spacing-05, 1rem); }
+  .banner__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+  .banner__name { margin: 0; }
+
+  .body { margin-top: var(--cds-spacing-07, 2rem); }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+    min-width: 0;
+  }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 52rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty {
+    margin: 0;
+    padding: 1.5rem 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty[hidden], #requests-wrap[hidden], #admin-notice[hidden] { display: none; }
+  #admin-notice { margin-bottom: 1.25rem; max-width: 52rem; }
+
+  /* Tables — client-rendered cells use global classes. */
+  .table-wrap { overflow-x: auto; }
+  :global(.u-id) { display: flex; align-items: center; gap: 0.625rem; }
+  :global(.u-idtext) { min-width: 0; }
+  /* The identity chip (.avatar) is styled globally in theme.css — one source. */
+  :global(.u-name) { display: block; color: var(--cds-text-primary, #161616); }
+  :global(.u-sub) { display: block; font-size: 0.75rem; color: var(--cds-text-secondary, #525252); }
+  :global(.u-reason) {
+    display: block;
+    max-width: 26rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  :global(.row-actions) { display: flex; gap: 0.25rem; }
+
+  /* Manage-user modal internals. */
+  .modal-grid { display: flex; flex-direction: column; gap: 1.25rem; }
+  .identity {
+    padding: 1rem;
+    background: var(--cds-layer-01, #f4f4f4);
+    border-left: 3px solid var(--cds-border-interactive, #0f62fe);
+  }
+  .identity__name { margin: 0; color: var(--cds-text-primary, #161616); }
+  .identity__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    margin: 0.25rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .identity__note { margin: 0.5rem 0 0; color: var(--cds-text-secondary, #525252); }
+  .modal-desc { margin: 0; color: var(--cds-text-secondary, #525252); }
+</style>

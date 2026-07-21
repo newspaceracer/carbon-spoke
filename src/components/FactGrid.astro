@@ -1,23 +1,87 @@
 ---
 // A scannable key/value grid — label above value, wrapping into responsive
-// columns. The default read for permit facts inside a section card.
+// columns. The default read for permit facts inside a section.
+// Pass `tiles` to promote each fact onto its own cds-tile surface (a card grid)
+// where facts read better as discrete blocks than as a dense dl.
+// A row with `href` renders its value as a cds-link to that document (the answer
+// lives in an uploaded file) with a launch glyph.
 import type { MetaRow } from '../data/permit';
+import ContactCard from './ContactCard.astro';
 interface Props {
   rows: MetaRow[];
   /** Minimum column width; wider for long values (e.g. contact strings). */
   min?: string;
+  /** Render each fact as its own cds-tile card instead of a plain dl row. */
+  tiles?: boolean;
 }
-const { rows, min = '15rem' } = Astro.props;
+const { rows, min = '15rem', tiles = false } = Astro.props;
+
+// Yes/no facts only surface when affirmative — a "No" row drops out entirely,
+// and a "Yes" row's tile states the label itself instead of showing "Yes".
+const visibleRows = rows.filter((r) => !(r.boolean && r.value !== 'Yes'));
+
+// Carbon `launch` 16 glyph — signals the value opens an uploaded document.
+const launchIcon =
+  '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">' +
+  '<path d="M13,14H3c-0.6,0-1-0.4-1-1V3c0-0.6,0.4-1,1-1h5v1H3v10h10V8h1v5C14,13.6,13.6,14,13,14z"/>' +
+  '<path d="M10 1 10 2 13.3 2 9 6.3 9.7 7 14 2.7 14 6 15 6 15 1z"/></svg>';
 ---
 
-<dl class="factgrid" style={`--min:${min}`}>
-  {rows.map((row) => (
-    <div class="factgrid__item">
-      <dt class="factgrid__key t-label-01">{row.key}</dt>
-      <dd class="factgrid__val t-body-01">{row.value}</dd>
-    </div>
-  ))}
-</dl>
+{tiles ? (
+  <div class="factgrid factgrid--tiles" style={`--min:${min}`}>
+    {visibleRows.map((row) => (
+      row.contact ? (
+        <ContactCard role={row.key} contact={row.contact} kind={row.contactKind} />
+      ) : row.boolean ? (
+        <cds-tile class="factgrid__item factgrid__item--flag">
+          <p class="factgrid__flag t-body-01">{row.key}</p>
+        </cds-tile>
+      ) : row.entries ? (
+        <cds-tile class="factgrid__item">
+          <dl class="factgrid__pair">
+            <dt class="factgrid__key t-label-01">{row.key}</dt>
+            {row.entries.map((e) => (
+              <dd class="factgrid__entry">
+                <span class="factgrid__entry-label t-label-01">{e.label}</span>
+                <span class="factgrid__entry-value t-heading-03">{e.value}</span>
+              </dd>
+            ))}
+          </dl>
+        </cds-tile>
+      ) : (
+        <cds-tile class="factgrid__item">
+          <dl class="factgrid__pair">
+            <dt class="factgrid__key t-label-01">{row.key}</dt>
+            <dd class="factgrid__val t-heading-03">
+              {row.href ? (
+                <cds-link href={row.href} size="lg" target="_blank" rel="noopener">
+                  {row.linkLabel ?? row.value}
+                  <Fragment set:html={launchIcon} />
+                </cds-link>
+              ) : row.value}
+            </dd>
+          </dl>
+        </cds-tile>
+      )
+    ))}
+  </div>
+) : (
+  <dl class="factgrid" style={`--min:${min}`}>
+    {visibleRows.map((row) => (
+      <div class="factgrid__item">
+        <dt class="factgrid__key t-label-01">{row.key}</dt>
+        <dd class="factgrid__val t-body-01">
+          {row.href ? (
+            <cds-link href={row.href} target="_blank" rel="noopener">
+              {row.linkLabel ?? row.value}
+              <Fragment set:html={launchIcon} />
+            </cds-link>
+          ) : row.value}
+        </dd>
+      </div>
+    ))}
+  </dl>
+)}
 
 <style>
   .factgrid {
@@ -26,8 +90,25 @@ const { rows, min = '15rem' } = Astro.props;
     gap: 1rem 1.5rem;
     margin: 0;
   }
+  /* Tile variant: even gap between cards; the tile owns each item's surface
+     and padding, so the pair's own margin is zeroed. */
+  .factgrid--tiles {
+    gap: 1rem;
+  }
+  .factgrid__pair {
+    margin: 0;
+  }
   .factgrid__item {
     min-width: 0;
+  }
+  /* Affirmative yes/no flag: the label is the whole statement (no eyebrow/value
+     split), so the tile centers it as a single line of content. */
+  .factgrid__flag {
+    margin: 0;
+  }
+  .factgrid__item--flag {
+    display: flex;
+    align-items: center;
   }
   .factgrid__key {
     margin: 0;
@@ -37,5 +118,18 @@ const { rows, min = '15rem' } = Astro.props;
     margin: 0.25rem 0 0;
     color: var(--cds-text-primary, #161616);
     overflow-wrap: break-word;
+  }
+  /* Stacked sub-values (e.g. Start over End dates) within one tile: a quiet
+     sub-label above each value, entries separated by a small gap. */
+  .factgrid__entry {
+    margin: 0.5rem 0 0;
+  }
+  .factgrid__entry-label {
+    display: block;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .factgrid__entry-value {
+    display: block;
+    color: var(--cds-text-primary, #161616);
   }
 </style>

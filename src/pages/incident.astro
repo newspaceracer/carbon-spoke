@@ -28,9 +28,9 @@ export const prototype = {
 
 <BaseLayout title={`${incident.id} — ${incident.title}`}>
   <main class="page">
-    <cds-stack gap="7">
+    <div class="cds--css-grid cds--css-grid--with-row-gap">
       <!-- Breadcrumb -->
-      <cds-breadcrumb>
+      <cds-breadcrumb class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
         <cds-breadcrumb-item>
           <cds-breadcrumb-link href="#">Incidents</cds-breadcrumb-link>
         </cds-breadcrumb-item>
@@ -43,7 +43,7 @@ export const prototype = {
       </cds-breadcrumb>
 
       <!-- Page header -->
-      <header class="page__head">
+      <header class="page__head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
         <div class="page__tags">
           <cds-tag type={incident.severity.tone}>{incident.severity.label}</cds-tag>
           <cds-tag id="status-tag" type={incident.status.tone}>{incident.status.label}</cds-tag>
@@ -54,7 +54,7 @@ export const prototype = {
       </header>
 
       <!-- Action row -->
-      <div class="page__actions">
+      <div class="page__actions cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
         <cds-button id="open-triage">Resolve incident</cds-button>
         <cds-button kind="tertiary">Assign</cds-button>
         <cds-button kind="ghost">Escalate</cds-button>
@@ -62,6 +62,7 @@ export const prototype = {
 
       <!-- Confirmation banner (hidden until a resolution is applied) -->
       <cds-inline-notification
+        class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12"
         id="triage-confirmation"
         hidden
         kind="success"
@@ -70,11 +71,13 @@ export const prototype = {
         low-contrast
       ></cds-inline-notification>
 
-      <!-- Key facts -->
-      <IncidentFacts facts={incident.facts} />
+      <!-- Key facts (IncidentFacts stays an auto-fit stat strip, placed in a column) -->
+      <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+        <IncidentFacts facts={incident.facts} />
+      </div>
 
       <!-- Metadata -->
-      <section>
+      <section class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
         <h2 class="section__title">Details</h2>
         <cds-structured-list condensed>
           <cds-structured-list-body>
@@ -89,14 +92,14 @@ export const prototype = {
       </section>
 
       <!-- Activity timeline -->
-      <cds-contained-list id="activity-list" label="Activity" kind="on-page">
+      <cds-contained-list class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" id="activity-list" label="Activity" kind="on-page">
         {incident.activity.map((entry) => (
           <cds-contained-list-item>
             <span class="act__time">{entry.time}</span>{entry.text}
           </cds-contained-list-item>
         ))}
       </cds-contained-list>
-    </cds-stack>
+    </div>
   </main>
 
   <!-- Triage action modal -->
@@ -180,10 +183,9 @@ export const prototype = {
 
 <style>
   /* Page-level layout only — component styling lives in the cds-* legos. */
+  /* Width + horizontal margins owned by the 2x Grid (.cds--css-grid). */
   .page {
-    max-width: 56rem;
-    margin: 0 auto;
-    padding: 2.5rem 1.5rem 6rem;
+    padding-block: 2.5rem 6rem;
   }
   .page__tags {
     display: flex;

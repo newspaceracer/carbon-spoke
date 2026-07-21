@@ -13,7 +13,20 @@ export interface Badge {
 
 export interface MetaRow {
   key: string;
-  value: string;
+  value?: string;
+  /** When set, the value renders as a link to this document (view/download). */
+  href?: string;
+  /** Optional visible link text; defaults to `value`. */
+  linkLabel?: string;
+  /** When set, the row renders as a contact tile (ContactCard), `key` as role. */
+  contact?: Contact;
+  /** How to render a `contact` row: a person (default) or a facility/place. */
+  contactKind?: 'person' | 'facility';
+  /** A yes/no fact: hidden when the answer is "No"; when "Yes" the tile simply
+   *  states `key` — the affirmative is the message, with no redundant "Yes". */
+  boolean?: boolean;
+  /** Sub-values stacked within a single tile (e.g. Start over End dates). */
+  entries?: { label: string; value: string }[];
 }
 
 export interface Contact {
@@ -40,17 +53,26 @@ export interface HistoryPhase {
 
 const invented = 'Invented for this prototype — not real contact information.';
 
+// The uploaded Study Proposal — several facts are "answered" there, so they link
+// to it. Single source of truth shared by those facts and the file list below.
+const proposalHref = '/docs/coralline-diversity-proposal.pdf';
+
+// The PI also serves as the responsible official for both curation and lab work.
+const reyesContact: Contact = { name: 'Dr. Alena Reyes', phone: '(707) 555-0142', email: 'areyes@humboldt.edu' };
+
 export const permit = {
   id: '26-635-017',
   name: 'Diversity of coralline algae in northern California and their reproductive systems',
   // State, not a category — rendered as cds-icon-indicator (icon + label).
   status: { label: 'Under Review', kind: 'in-progress' },
   category: 'Marine Aquatic Resources',
-  activeWindow: { start: 'Jul 22, 2026', end: 'Jul 22, 2027' },
+  // Dates the applicant REQUESTED. Display strings drive the at-a-glance stat;
+  // the ISO pair prefills the approval modal's confirmation date-range picker.
+  activeWindow: { start: 'Jul 22, 2026', end: 'Jul 22, 2027', startISO: '2026-07-22', endISO: '2027-07-22' },
 
   // Header classification badges — reflect THIS application.
   infoTags: [
-    { label: 'Single-district', type: 'teal' },
+    { label: 'Multi-district', type: 'teal' },
     { label: 'Marine Aquatic Resources', type: 'purple' },
   ] as Badge[],
   // Compliance flags (rendered with a warning icon). Only the ones that apply:
@@ -64,12 +86,30 @@ export const permit = {
     // Internal review team assigned to analyze the application (invented).
     // Internal reviewers. `status` is a sign-off timestamp once reviewed, else
     // "Pending review". `highlight` marks the current reviewer (you).
+    // `id` keys each row to the shared user directory (src/data/user.ts) so the
+    // "add reviewer" control can offer only users not already on the team.
     analysisTeam: [
-      { role: 'Lead analyst', name: 'J. Okafor', detail: 'Natural Resources Division', status: 'Jul 2, 2026 11:59 AM', highlight: true },
-      { role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', status: 'Pending review' },
-      { role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', status: 'Pending review' },
-      { role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', status: 'Jul 5, 2026 8:45 AM' },
+      { id: 'okafor', role: 'Lead analyst', name: 'J. Okafor', detail: 'Natural Resources Division', status: 'Jul 2, 2026 11:59 AM', highlight: true },
+      { id: 'santos', role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', status: 'Pending review' },
+      { id: 'cheng', role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', status: 'Pending review' },
+      { id: 'delgado', role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', status: 'Jul 5, 2026 8:45 AM' },
     ],
+
+    // Reviewer-applied handling tags. `tagOptions` is the curated vocabulary an
+    // analyst can toggle on the permit (triage/coordination labels); `tags` seeds
+    // the ones already applied. Distinct from the header's classification badges:
+    // those describe WHAT the permit is; these are how the team is HANDLING it.
+    tagOptions: [
+      'Priority',
+      'Needs site visit',
+      'Coastal zone',
+      'Awaiting external permit',
+      'Sensitive species',
+      'Tribal consultation',
+      'Expedited',
+      'Multi-year',
+    ],
+    tags: ['Priority', 'Awaiting external permit'],
 
     // Internal review comments (invented).
     comments: [
@@ -148,10 +188,14 @@ export const permit = {
   projectInfo: {
     details: [
       { key: 'Project category', value: 'Marine Aquatic Resources (e.g. tidepools, coastal wetlands)' },
-      { key: 'Project start date', value: 'Jul 22, 2026' },
-      { key: 'Project end date', value: 'Jul 22, 2027' },
-      { key: 'Permit requested start date', value: 'Jul 22, 2026' },
-      { key: 'Permit requested end date', value: 'Jul 22, 2027' },
+      { key: 'Project dates', entries: [
+        { label: 'Start', value: 'Jul 22, 2026' },
+        { label: 'End', value: 'Jul 22, 2027' },
+      ] },
+      { key: 'Permit requested dates', entries: [
+        { label: 'Start', value: 'Jul 22, 2026' },
+        { label: 'End', value: 'Jul 22, 2027' },
+      ] },
       { key: 'Annual report tentative completion', value: 'Aug 31, 2027' },
     ] as MetaRow[],
     purpose:
@@ -244,17 +288,26 @@ export const permit = {
 
   // ── Data collection tab ──────────────────────────────────────────────────
   dataCollection: {
-    facts: [
-      { key: 'Involves collection of specimens', value: 'Yes' },
-      { key: 'Collection rationale', value: 'Answered in proposal' },
-      { key: 'Curation facility', value: 'HSU Cryptogamic Herbarium' },
-      { key: 'Curation — responsible official', value: 'Dr. Alena Reyes · (707) 555-0142 · areyes@humboldt.edu' },
-      { key: 'Involves laboratory work', value: 'Yes' },
-      { key: 'Laboratory facility', value: 'Cal Poly Humboldt, AMH 171' },
-      { key: 'Laboratory — responsible official', value: 'Dr. Alena Reyes · (707) 555-0142 · areyes@humboldt.edu' },
+    // Gate flags: a "No" hides the whole subsection rather than rendering a
+    // redundant "Involves …: No" tile — the section's presence is the "Yes".
+    involvesCollection: true,
+    involvesLaboratory: true,
+    // Collection & curation — where and how specimens are taken and held.
+    collection: [
+      { key: 'Collection rationale', value: 'Answered in study proposal', href: proposalHref },
+      { key: 'Curation facility', value: 'HSU Cryptogamic Herbarium', contactKind: 'facility',
+        contact: { name: 'HSU Cryptogamic Herbarium', address: '1 Harpst St, Arcata, CA 95521' } },
+      { key: 'Curation — responsible official', value: 'Dr. Alena Reyes · (707) 555-0142 · areyes@humboldt.edu', contact: reyesContact },
+    ] as MetaRow[],
+    // Laboratory & analysis — where and how specimens are studied, and where the
+    // resulting data lives.
+    laboratory: [
+      { key: 'Laboratory facility', value: 'Cal Poly Humboldt, AMH 171', contactKind: 'facility',
+        contact: { name: 'Cal Poly Humboldt, AMH 171', address: '1 Harpst St, Arcata, CA 95521' } },
+      { key: 'Laboratory — responsible official', value: 'Dr. Alena Reyes · (707) 555-0142 · areyes@humboldt.edu', contact: reyesContact },
       { key: 'Lab study window', value: 'Jul 22, 2026 – Jul 22, 2027' },
-      { key: 'Study procedures', value: 'Answered in proposal' },
-      { key: 'Location of data & data products', value: 'Answered in proposal' },
+      { key: 'Study procedures', value: 'Answered in study proposal', href: proposalHref },
+      { key: 'Location of data & data products', value: 'Answered in study proposal', href: proposalHref },
     ] as MetaRow[],
     specimens: [
       { species: 'Bossiella chiloensis', quantity: '5', portion: 'single frond', condition: 'vegetative' },
@@ -275,20 +328,20 @@ export const permit = {
   // ── Additional documentation tab ─────────────────────────────────────────
   additionalDocs: {
     facts: [
-      { key: 'Involves soil disturbance', value: 'No' },
-      { key: 'Requires additional federal/state/local permits', value: 'Yes' },
-      { key: 'Budget', value: 'Answered in proposal' },
-      { key: 'Literature cited', value: 'Answered in proposal' },
-      { key: 'Activities beyond simple use (aircraft/drones, diving, trapping, etc.)', value: 'No' },
+      { key: 'Involves soil disturbance', value: 'No', boolean: true },
+      { key: 'Requires additional federal/state/local permits', value: 'Yes', boolean: true },
+      { key: 'Budget', value: 'Answered in study proposal', href: proposalHref },
+      { key: 'Literature cited', value: 'Answered in study proposal', href: proposalHref },
+      { key: 'Activities beyond simple use (aircraft/drones, diving, trapping, etc.)', value: 'No', boolean: true },
     ] as MetaRow[],
     files: [
-      { name: 'Coralline Diversity & Reproductive Systems Proposal.pdf', type: 'Study Proposal', size: '322.36 KB', by: 'A. Reyes', date: 'Jul 8, 2026' },
-      { name: 'CV_Jun2025.pdf', type: 'Principal Investigator Resume', size: '200.08 KB', by: 'A. Reyes', date: 'Jun 3, 2025' },
-      { name: 'False Klamath Cove Study Area Map.pdf', type: 'Study Area Supporting Documentation', size: '2.62 MB', by: 'A. Reyes', date: 'Jul 9, 2026' },
-      { name: 'Additional-Permit-Details.pdf', type: 'Additional Permit Supporting Documentation', size: '157.61 KB', by: 'A. Reyes', date: 'Jul 9, 2026' },
-      { name: 'Liability-Waiver-Addendum-DPR65B.pdf', type: 'Optional Liability Waiver Addendum (DPR65B)', size: '292.25 KB', by: 'A. Reyes', date: 'Jul 14, 2026' },
-      { name: 'standard_conditions_agreement-signed.pdf', type: 'Standard Conditions Agreement Form', size: '178.64 KB', by: 'A. Reyes', date: 'Jul 9, 2026' },
-      { name: 'waiver_and_indemnity_agreement-signed.pdf', type: 'Waiver and Indemnity Agreement Form', size: '200.07 KB', by: 'A. Reyes', date: 'Jul 9, 2026' },
+      { name: 'Coralline Diversity & Reproductive Systems Proposal.pdf', type: 'Study Proposal', size: '322.36 KB', by: 'A. Reyes', date: 'Jul 8, 2026', href: proposalHref },
+      { name: 'CV_Jun2025.pdf', type: 'Principal Investigator Resume', size: '200.08 KB', by: 'A. Reyes', date: 'Jun 3, 2025', href: '/docs/cv-jun-2025.pdf' },
+      { name: 'False Klamath Cove Study Area Map.pdf', type: 'Study Area Supporting Documentation', size: '2.62 MB', by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/false-klamath-cove-study-area-map.pdf' },
+      { name: 'Additional-Permit-Details.pdf', type: 'Additional Permit Supporting Documentation', size: '157.61 KB', by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/additional-permit-details.pdf' },
+      { name: 'Liability-Waiver-Addendum-DPR65B.pdf', type: 'Optional Liability Waiver Addendum (DPR65B)', size: '292.25 KB', by: 'A. Reyes', date: 'Jul 14, 2026', href: '/docs/liability-waiver-addendum-dpr65b.pdf' },
+      { name: 'standard_conditions_agreement-signed.pdf', type: 'Standard Conditions Agreement Form', size: '178.64 KB', by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/standard-conditions-agreement-signed.pdf' },
+      { name: 'waiver_and_indemnity_agreement-signed.pdf', type: 'Waiver and Indemnity Agreement Form', size: '200.07 KB', by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/waiver-and-indemnity-agreement-signed.pdf' },
     ],
   },
 

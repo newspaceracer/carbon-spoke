@@ -1,0 +1,769 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell).
+     header: identity banner (g100) — "Manage district" + district name + crumb.
+     spine:  main.page > .cds--css-grid (single full-width column)
+     sections:
+       - Scope bar  -> who you're acting as (District lead vs HQ system admin) and,
+                       for HQ, a district switcher. The console is ONE screen filtered
+                       by scope: a lead is locked to their district; HQ picks any.
+       - District information -> office address + phone/email (field-grid form)
+       - Members    -> the district's people: a cds-table (name, role, auto-assignment,
+                       point-of-contact) with per-row Edit/Remove + an "Add member"
+                       cds-modal. Role drives permit behaviour; assistants get an
+                       auto-assignment policy; any member can be flagged a contact.
+     Parks are NOT editable here — a district's park roster is managed on its own
+     screen; this console only reads the roster for member auto-assignment.
+   Everything is prototype-local: "Save changes" writes the whole district record to
+   localStorage (shared key with the /district detail screen, so edits show there).
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitSection from '../components/PermitSection.astro';
+import { district, districtDirectory } from '../data/district';
+import { states } from '../data/user';
+
+export const prototype = {
+  title: 'Manage district',
+  summary:
+    'The scoped admin console for a district — edit its office, manage its members ' +
+    '(roles + permit auto-assignment), and choose its points of contact. ' +
+    'District leads manage their own; HQ admins manage any.',
+  tag: 'Internal tool',
+};
+
+const d = district;
+---
+
+<BaseLayout title={`Manage ${d.name}`}>
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <cds-breadcrumb no-trailing-slash class="banner__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/districts">Districts</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/district">{d.name}</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">Manage</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <p class="banner__eyebrow t-label-01">District administration</p>
+        <h1 class="banner__name t-heading-05" id="banner-name">{d.name}</h1>
+      </div>
+    </header>
+
+    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+      <div class="col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <!-- ── Scope bar: who is acting, and on which district ──────────────── -->
+        <cds-tile class="scope">
+          <div class="scope__row">
+            <cds-dropdown id="acting-as" title-text="Acting as" value="lead">
+              <cds-dropdown-item value="lead">District lead — {d.name}</cds-dropdown-item>
+              <cds-dropdown-item value="hq">HQ system admin</cds-dropdown-item>
+            </cds-dropdown>
+
+            <div id="switcher-wrap" class="scope__switcher" hidden>
+              <cds-dropdown id="district-switcher" title-text="District" value={d.id}>
+                {districtDirectory.map((row) => (
+                  <cds-dropdown-item value={row.id}>{row.name}</cds-dropdown-item>
+                ))}
+              </cds-dropdown>
+            </div>
+          </div>
+          <p class="scope__note t-label-01" id="scope-note">
+            A district lead is scoped to their own district — the "mini system admin"
+            for its information, members, and contacts.
+          </p>
+          <cds-inline-notification
+            id="switcher-note"
+            hidden
+            kind="info"
+            low-contrast
+            hide-close-button
+            title="Prototype scope"
+            subtitle="Only North Coast Redwoods District is populated in this prototype; picking another district would scope this same console to it."
+          ></cds-inline-notification>
+        </cds-tile>
+
+        <!-- Save confirmation. -->
+        <cds-inline-notification
+          id="save-notice"
+          hidden
+          kind="success"
+          low-contrast
+          title="District saved"
+          subtitle="Your changes to this district have been saved."
+        ></cds-inline-notification>
+
+        <!-- ── District information ─────────────────────────────────────────── -->
+        <PermitSection title="District information">
+          <p class="section-hint t-body-01">The district office address and contact details shown on its detail screen.</p>
+          <div class="field-grid">
+            <div class="field-grid__wide">
+              <cds-text-input id="e-street" label="Street address"></cds-text-input>
+            </div>
+            <div class="field-grid__wide">
+              <cds-text-input id="e-unit" label="Suite / unit (optional)"></cds-text-input>
+            </div>
+            <cds-text-input id="e-city" label="City"></cds-text-input>
+            <cds-dropdown id="e-state" title-text="State">
+              {states.map((s) => (
+                <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>
+              ))}
+            </cds-dropdown>
+            <cds-text-input id="e-zip" label="ZIP code"></cds-text-input>
+            <div class="field-grid__wide"><div class="field-divider"></div></div>
+            <cds-text-input id="e-phone" type="tel" label="District phone"></cds-text-input>
+            <cds-text-input id="e-email" type="email" label="District email"></cds-text-input>
+          </div>
+        </PermitSection>
+
+        <!-- ── Members ──────────────────────────────────────────────────────── -->
+        <PermitSection title="Members">
+          <cds-button slot="aside" id="add-member" kind="tertiary" size="sm">Add member</cds-button>
+          <p class="section-hint t-body-01">
+            The people assigned to this district. A member's <strong>role</strong> sets how they join a permit's
+            analysis team: the <strong>lead</strong> reviewer leads single-district permits (supporting on
+            multi-district); <strong>assistant</strong> reviewers are added as supporting analysts when a
+            requested park matches their auto-assignment. Members marked a <strong>point of contact</strong> appear
+            on the district's detail screen.
+          </p>
+          <div class="table-wrap">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Member</cds-table-header-cell>
+                  <cds-table-header-cell>Role</cds-table-header-cell>
+                  <cds-table-header-cell>Permit auto-assignment</cds-table-header-cell>
+                  <cds-table-header-cell>Point of contact</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="members-tbody"></cds-table-body>
+            </cds-table>
+          </div>
+        </PermitSection>
+
+        <div class="form__actions">
+          <cds-button id="cancel-btn" kind="ghost" href="/district">Cancel</cds-button>
+          <cds-button id="save-btn" type="button">Save changes</cds-button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Add / edit member modal ────────────────────────────────────────── -->
+    <cds-modal id="member-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label id="member-modal-label">District member</cds-modal-label>
+        <cds-modal-heading id="member-modal-heading">Add member</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <cds-inline-notification
+          id="member-warning"
+          hidden
+          kind="warning"
+          low-contrast
+          hide-close-button
+          title=""
+          subtitle=""
+        ></cds-inline-notification>
+
+        <div class="modal-grid">
+          <!-- Members are existing users only — pick, never type. Identity is
+               owned by the user's account (read-only here). -->
+          <cds-combo-box id="m-user" title-text="User" label="Search users by name…"></cds-combo-box>
+          <div id="m-identity" class="identity" hidden>
+            <p class="identity__name t-heading-compact-01" id="m-id-name"></p>
+            <p class="identity__meta t-body-01">
+              <span id="m-id-email"></span>
+              <span id="m-id-phone"></span>
+            </p>
+            <p class="identity__note t-label-01">Identity comes from this user's account — edit it from their profile, not here.</p>
+          </div>
+
+          <!-- Options are built client-side, scoped to who's acting: a district
+               lead can only appoint assistants; HQ can set lead or assistant. -->
+          <cds-dropdown id="m-role" title-text="Role"></cds-dropdown>
+          <!-- carbon-checked: scope note for the role field — plain helper prose, no cds-* fits. -->
+          <p class="modal-hint t-label-01" id="role-lock-note" hidden>
+            Only HQ can change the district lead — a lead is an HQ appointment.
+          </p>
+
+          <!-- carbon-checked: prose helper for the lead role — no cds-* component
+               fits an explanatory line; a <p> with the Carbon type role is the
+               house pattern (see PermitHeader/profile modals). -->
+          <p class="modal-hint t-label-01" id="lead-note" hidden>
+            Leads cover all parks and lead every single-district permit for this district
+            (supporting analyst on multi-district permits). No per-park setting.
+          </p>
+
+          <div id="autoassign-block" hidden>
+            <cds-radio-button-group
+              id="m-autoassign"
+              name="m-autoassign"
+              orientation="vertical"
+              label-text="Permit auto-assignment"
+              value="none"
+            >
+              <cds-radio-button label-text="Do not auto-assign" value="none"></cds-radio-button>
+              <cds-radio-button label-text="Auto-assign to specific parks" value="specific"></cds-radio-button>
+              <cds-radio-button label-text="Auto-assign to all parks in the district" value="all"></cds-radio-button>
+            </cds-radio-button-group>
+            <div id="specific-parks" class="park-checks" hidden></div>
+          </div>
+
+          <cds-checkbox id="m-published" label-text="Show as a district point of contact"></cds-checkbox>
+        </div>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="m-save">Save member</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+
+    <!-- ── Remove-member confirmation ─────────────────────────────────────── -->
+    <cds-modal id="remove-modal" size="xs" danger>
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>District member</cds-modal-label>
+        <cds-modal-heading id="remove-heading">Remove member</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: confirmation prose has no cds-* component; a <p> with the
+             Carbon type role is the house pattern for modal body copy. -->
+        <p class="modal-hint t-body-01" id="remove-body">
+          Remove this member from the district? They'll no longer be auto-assigned to permits or listed as a contact.
+        </p>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="danger" id="remove-confirm">Remove member</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+  </main>
+</BaseLayout>
+
+<script>
+  import { district, roleMeta, assignableRoles, memberRoles } from '../data/district';
+  import { directory, findUser } from '../data/user';
+
+  // ── Prototype-local district record (shared with the /district detail) ────
+  // A member REFERENCES a user by id; name/email/phone are resolved from the
+  // directory, never stored here — so identity can't drift or be free-typed.
+  type Address = { street: string; unit: string; city: string; state: string; zip: string };
+  type Office = { address: Address; phone: string; email: string };
+  type Park = { name: string; designation: string; acreage: string };
+  type AutoAssign = { mode: 'none' | 'specific' | 'all'; parks: string[] };
+  type Member = { userId: string; role: string; autoAssign: AutoAssign; published: boolean };
+  type State = { office: Office; parks: Park[]; members: Member[] };
+
+  const KEY = `manage-district-${district.id}`;
+
+  const seed = (): State => ({
+    office: {
+      address: { ...district.office.address },
+      phone: district.office.phone,
+      email: district.office.email,
+    },
+    parks: district.parks.map((p) => ({ ...p })),
+    members: district.members.map((m) => ({
+      userId: m.userId, role: m.role,
+      autoAssign: { mode: m.autoAssign.mode, parks: [...m.autoAssign.parks] },
+      published: m.published,
+    })),
+  });
+
+  // A member record is only trustworthy if it references a real user AND a known
+  // role. Records saved by an earlier build (inline name/email, no userId, or a
+  // since-removed role) fail this and are discarded — so stale localStorage can't
+  // poison the UI (unknown-user rows, duplicate role options).
+  const memberOk = (m: any): boolean =>
+    !!m && typeof m.userId === 'string' && !!findUser(m.userId) && memberRoles.some((r) => r.value === m.role);
+
+  const loadState = (): State => {
+    const base = seed();
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (saved && typeof saved === 'object') {
+        const savedMembers = Array.isArray(saved.members) ? saved.members : null;
+        // Use saved members only if EVERY one is valid (an empty list is a valid,
+        // intentional "no members"); otherwise the save is stale → fall back.
+        const membersUsable = savedMembers && savedMembers.every(memberOk);
+        return {
+          office: saved.office ?? base.office,
+          parks: Array.isArray(saved.parks) ? saved.parks : base.parks,
+          members: membersUsable ? savedMembers : base.members,
+        };
+      }
+    } catch { /* malformed — fall back to seed */ }
+    return base;
+  };
+
+  let state: State = loadState();
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const $ = (id: string) => document.getElementById(id);
+  const esc = (s = '') =>
+    s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+  const roleLabel = (v: string) => roleMeta(v).label;
+  const roleTag = (v: string) => {
+    const meta = roleMeta(v);
+    if (meta.level === 'lead') return 'blue';
+    if (meta.level === 'assistant') return 'teal';
+    return 'cool-gray';
+  };
+  const shortPark = (name: string) => name.replace(/\s+(Redwoods\s+)?State\s+Park$/i, '').replace(/\s+State\s+(Natural\s+Reserve|Beach|Recreation\s+Area)$/i, '');
+  const autoAssignText = (m: Member) => {
+    const meta = roleMeta(m.role);
+    if (meta.level === 'lead') return 'All parks · leads single-district permits';
+    if (meta.level === 'assistant') {
+      if (m.autoAssign.mode === 'all') return 'All parks in district';
+      if (m.autoAssign.mode === 'specific')
+        return m.autoAssign.parks.length ? m.autoAssign.parks.map(shortPark).join(', ') : 'Specific parks — none chosen';
+      return 'Not auto-assigned';
+    }
+    return '—'; // non-reviewer staff
+  };
+
+  // The district's park roster — read-only here (edited on its own screen).
+  // The member modal's "specific parks" picker draws from it.
+  const currentParkNames = (): string[] => state.parks.map((p) => p.name);
+
+  // ── Members table ──────────────────────────────────────────────────────────
+  const renderMembers = () => {
+    const tbody = $('members-tbody');
+    if (!tbody) return;
+    tbody.replaceChildren(
+      ...state.members.map((m, i) => {
+        const row = document.createElement('cds-table-row');
+
+        const user = findUser(m.userId);
+        const nameCell = document.createElement('cds-table-cell');
+        nameCell.innerHTML = `<span class="m-name">${esc(user?.name ?? '(unknown user)')}</span><span class="m-sub">${esc(user?.email ?? '')}</span>`;
+
+        const roleCell = document.createElement('cds-table-cell');
+        roleCell.innerHTML = `<cds-tag type="${roleTag(m.role)}" size="sm">${esc(roleLabel(m.role))}</cds-tag>`;
+
+        const aaCell = document.createElement('cds-table-cell');
+        aaCell.textContent = autoAssignText(m);
+
+        const pocCell = document.createElement('cds-table-cell');
+        pocCell.innerHTML = m.published ? `<cds-tag type="green" size="sm">Contact</cds-tag>` : '<span class="m-sub">—</span>';
+
+        const actionCell = document.createElement('cds-table-cell');
+        const wrap = document.createElement('div');
+        wrap.className = 'row-actions';
+        const edit = document.createElement('cds-button');
+        edit.setAttribute('kind', 'ghost'); edit.setAttribute('size', 'sm');
+        edit.textContent = 'Edit';
+        edit.addEventListener('click', () => openMemberModal(i));
+        const rm = document.createElement('cds-button');
+        rm.setAttribute('kind', 'danger-ghost'); rm.setAttribute('size', 'sm');
+        rm.textContent = 'Remove';
+        rm.addEventListener('click', () => openRemoveModal(i));
+        wrap.append(edit, rm);
+        actionCell.appendChild(wrap);
+
+        row.append(nameCell, roleCell, aaCell, pocCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
+  // ── Office fields ──────────────────────────────────────────────────────────
+  const setVal = (id: string, v: string) => {
+    const el = $(id) as any;
+    if (!el) return;
+    el.setAttribute('value', v);
+    el.value = v;
+  };
+  const valOf = (id: string) => (($(id) as any)?.value ?? '').toString().trim();
+  const populateOffice = () => {
+    const a = state.office.address;
+    setVal('e-street', a.street); setVal('e-unit', a.unit); setVal('e-city', a.city);
+    setVal('e-state', a.state); setVal('e-zip', a.zip);
+    setVal('e-phone', state.office.phone); setVal('e-email', state.office.email);
+  };
+
+  // ── Member modal ───────────────────────────────────────────────────────────
+  const modal = $('member-modal') as any;
+  const mWarn = $('member-warning') as any;
+  let editingIndex = -1;
+  let selectedUserId = '';
+
+  const roleEl = () => $('m-role') as any;
+  const aaGroup = () => $('m-autoassign') as any;
+  const userBox = () => $('m-user') as any;
+
+  const currentScope = (): 'lead' | 'hq' => ((($('acting-as') as any)?.value === 'hq') ? 'hq' : 'lead');
+
+  // Role options are scoped to the ACTOR: a district lead can only appoint
+  // assistants; HQ can set lead or assistant. When editing, the member's current
+  // role is always shown — and locked if the actor isn't allowed to change it
+  // (a lead is an HQ appointment, so a lead can't reassign the lead role).
+  const buildRoleOptions = (currentRole: string) => {
+    const dd = roleEl();
+    if (!dd) return;
+    const scope = currentScope();
+    // Dedupe by role value so an option can never appear twice.
+    const byValue = new Map<string, { value: string; label: string }>();
+    assignableRoles(scope).forEach((r) => byValue.set(r.value, { value: r.value, label: r.label }));
+    // Always keep the member's CURRENT role selectable — but only if it's a REAL
+    // role (an unknown/stale role is not injected, which is what caused a phantom
+    // duplicate assistant via the roleMeta fallback).
+    const cur = memberRoles.find((r) => r.value === currentRole);
+    if (cur) byValue.set(cur.value, { value: cur.value, label: cur.label });
+
+    const roles = [...byValue.values()];
+    dd.innerHTML = roles.map((r) => `<cds-dropdown-item value="${r.value}">${esc(r.label)}</cds-dropdown-item>`).join('');
+    dd.value = byValue.has(currentRole) ? currentRole : (roles[0]?.value ?? 'district-assistant');
+
+    const lockLead = scope !== 'hq' && currentRole === 'district-lead';
+    if (lockLead) dd.setAttribute('disabled', '');
+    else dd.removeAttribute('disabled');
+    const note = $('role-lock-note');
+    if (note) note.hidden = !lockLead;
+  };
+
+  // The read-only identity panel reflects the picked user's account.
+  const showIdentity = (userId: string) => {
+    const u = findUser(userId);
+    const wrap = $('m-identity');
+    const nameEl = $('m-id-name');
+    const emailEl = $('m-id-email');
+    const phoneEl = $('m-id-phone');
+    if (nameEl) nameEl.textContent = u?.name ?? '';
+    if (emailEl) emailEl.textContent = u?.email ?? '';
+    if (phoneEl) phoneEl.textContent = u?.phone ?? '';
+    if (wrap) wrap.hidden = !u;
+  };
+
+  // Populate the picker with users who ARE existing accounts and are NOT already
+  // members of this district (in add mode). Members are picked, never typed.
+  const buildUserOptions = () => {
+    const box = userBox();
+    if (!box) return;
+    const taken = new Set(state.members.map((m) => m.userId));
+    box.innerHTML = directory
+      .filter((u) => !taken.has(u.id))
+      .map((u) => `<cds-combo-box-item value="${esc(u.id)}">${esc(u.name)} · ${esc(u.email)}</cds-combo-box-item>`)
+      .join('');
+    box.value = '';
+  };
+
+  const buildParkChecks = (selected: string[]) => {
+    const box = $('specific-parks');
+    if (!box) return;
+    box.innerHTML = currentParkNames()
+      .map((name) => `<cds-checkbox class="pk" data-park="${esc(name)}" label-text="${esc(name)}"${selected.includes(name) ? ' checked' : ''}></cds-checkbox>`)
+      .join('');
+  };
+
+  const updateAutoAssignUI = () => {
+    const specific = aaGroup()?.value === 'specific';
+    const box = $('specific-parks');
+    if (box) box.hidden = !specific;
+  };
+
+  const updateRoleUI = () => {
+    const meta = roleMeta(roleEl()?.value ?? '');
+    const leadNote = $('lead-note');
+    const aaBlock = $('autoassign-block');
+    if (leadNote) leadNote.hidden = meta.level !== 'lead';
+    if (aaBlock) aaBlock.hidden = meta.level !== 'assistant';
+    if (meta.level === 'assistant') updateAutoAssignUI();
+  };
+
+  const showWarn = (title: string, subtitle: string) => {
+    if (!mWarn) return;
+    mWarn.title = title;
+    mWarn.subtitle = subtitle;
+    mWarn.hidden = false;
+  };
+
+  const openMemberModal = (index: number) => {
+    editingIndex = index;
+    const blank: Member = { userId: '', role: 'district-assistant', autoAssign: { mode: 'none', parks: [] }, published: false };
+    const m = index >= 0 ? state.members[index] : blank;
+
+    // Make it unmistakable WHO is being edited — editing the wrong person's role
+    // is exactly the dangerous mistake to prevent.
+    const heading = $('member-modal-heading');
+    const label = $('member-modal-label');
+    if (index >= 0) {
+      const who = findUser(m.userId)?.name ?? 'this member';
+      if (label) label.textContent = 'Edit member';
+      if (heading) heading.textContent = `Edit ${who}`;
+    } else {
+      if (label) label.textContent = 'District member';
+      if (heading) heading.textContent = 'Add member';
+    }
+    if (mWarn) mWarn.hidden = true;
+
+    selectedUserId = m.userId;
+    const box = userBox();
+    if (index >= 0) {
+      // Editing: the person is fixed — hide the picker, show their identity.
+      if (box) box.hidden = true;
+      showIdentity(m.userId);
+    } else {
+      // Adding: pick from users who aren't already members.
+      buildUserOptions();
+      if (box) box.hidden = false;
+      showIdentity(''); // nothing until they pick
+    }
+
+    buildRoleOptions(m.role);
+    if (aaGroup()) aaGroup().value = m.autoAssign.mode || 'none';
+    buildParkChecks(m.autoAssign.parks);
+    const pub = $('m-published') as any;
+    if (pub) pub.checked = m.published;
+
+    updateRoleUI();
+    modal.open = true;
+  };
+
+  const saveMember = () => {
+    // In add mode the user comes from the picker; in edit mode it's fixed.
+    const userId = editingIndex >= 0 ? selectedUserId : (userBox()?.value || '');
+    if (!userId || !findUser(userId)) {
+      showWarn('Select a user', 'District members are existing users — search and select one.');
+      return;
+    }
+
+    const role = roleEl()?.value ?? 'district-assistant';
+    const meta = roleMeta(role);
+
+    // Exactly one lead per district — the single-district lead-analyst rule.
+    if (meta.level === 'lead') {
+      const other = state.members.find((x, i) => i !== editingIndex && roleMeta(x.role).level === 'lead');
+      if (other) {
+        const otherName = findUser(other.userId)?.name ?? 'Another member';
+        showWarn('This district already has a lead', `${otherName} is the district lead. Change their role before assigning a new one.`);
+        return;
+      }
+    }
+
+    let autoAssign: AutoAssign = { mode: 'none', parks: [] };
+    if (meta.level === 'assistant') {
+      const mode = (aaGroup()?.value ?? 'none') as AutoAssign['mode'];
+      const parks = mode === 'specific'
+        ? Array.from(document.querySelectorAll('#specific-parks .pk'))
+            .filter((c) => (c as any).checked)
+            .map((c) => (c as HTMLElement).dataset.park ?? '')
+            .filter(Boolean)
+        : [];
+      autoAssign = { mode, parks };
+    } else if (meta.level === 'lead') {
+      autoAssign = { mode: 'all', parks: [] };
+    }
+
+    const member: Member = {
+      userId,
+      role,
+      autoAssign,
+      published: !!($('m-published') as any)?.checked,
+    };
+
+    if (editingIndex >= 0) state.members[editingIndex] = member;
+    else state.members.push(member);
+
+    renderMembers();
+    modal.open = false;
+  };
+
+  // ── Remove member (confirm first) ──────────────────────────────────────────
+  const removeModal = $('remove-modal') as any;
+  let pendingRemove = -1;
+
+  const openRemoveModal = (index: number) => {
+    pendingRemove = index;
+    const m = state.members[index];
+    const who = findUser(m?.userId)?.name ?? 'this member';
+    const body = $('remove-body');
+    if (body) body.textContent = `Remove ${who} from ${district.name}? They'll no longer be auto-assigned to permits or listed as a contact.`;
+    if (removeModal) removeModal.open = true;
+  };
+
+  $('remove-confirm')?.addEventListener('click', () => {
+    if (pendingRemove >= 0) {
+      state.members.splice(pendingRemove, 1);
+      pendingRemove = -1;
+      renderMembers();
+    }
+    if (removeModal) removeModal.open = false;
+  });
+
+  // ── Collect + persist (single "Save changes") ──────────────────────────────
+  const collect = (): State => ({
+    office: {
+      address: { street: valOf('e-street'), unit: valOf('e-unit'), city: valOf('e-city'), state: valOf('e-state'), zip: valOf('e-zip') },
+      phone: valOf('e-phone'),
+      email: valOf('e-email'),
+    },
+    parks: state.parks, // read-only here — carried through untouched
+    members: state.members,
+  });
+
+  // ── Scope bar ──────────────────────────────────────────────────────────────
+  const actingAs = $('acting-as') as any;
+  const switcherWrap = $('switcher-wrap');
+  const scopeNote = $('scope-note');
+  const switcher = $('district-switcher') as any;
+  const switcherNote = $('switcher-note') as any;
+
+  const applyScope = () => {
+    const hq = actingAs?.value === 'hq';
+    if (switcherWrap) switcherWrap.hidden = !hq;
+    if (scopeNote) {
+      scopeNote.textContent = hq
+        ? 'HQ system admins manage every district. Pick a district to administer it.'
+        : 'A district lead is scoped to their own district — the "mini system admin" for its information, members, and contacts.';
+    }
+    if (!hq && switcherNote) switcherNote.hidden = true;
+  };
+
+  // ── Wire everything ────────────────────────────────────────────────────────
+  populateOffice();
+  renderMembers();
+  applyScope();
+
+  actingAs?.addEventListener('cds-dropdown-selected', applyScope);
+  switcher?.addEventListener('cds-dropdown-selected', () => {
+    const bannerName = $('banner-name');
+    const picked = switcher.value;
+    if (bannerName) {
+      const found = Array.from(switcher.querySelectorAll('cds-dropdown-item')).find((o: any) => o.value === picked) as HTMLElement | undefined;
+      bannerName.textContent = found?.textContent?.trim() || district.name;
+    }
+    if (switcherNote) switcherNote.hidden = picked === district.id;
+  });
+
+  roleEl()?.addEventListener('cds-dropdown-selected', updateRoleUI);
+  aaGroup()?.addEventListener('cds-radio-button-group-changed', updateAutoAssignUI);
+  userBox()?.addEventListener('cds-combo-box-selected', () => {
+    selectedUserId = userBox()?.value || '';
+    showIdentity(selectedUserId);
+    if (selectedUserId && mWarn) mWarn.hidden = true;
+  });
+
+  $('add-member')?.addEventListener('click', () => openMemberModal(-1));
+  $('m-save')?.addEventListener('click', saveMember);
+
+  $('save-btn')?.addEventListener('click', () => {
+    state = collect();
+    localStorage.setItem(KEY, JSON.stringify(state));
+    const notice = $('save-notice') as any;
+    if (notice) { notice.hidden = false; notice.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  });
+</script>
+
+<style>
+  .page { padding-block: 0 6rem; }
+
+  /* Identity banner — same construction as the other screens. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__crumb { display: block; margin-bottom: var(--cds-spacing-05, 1rem); }
+  .banner__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+  .banner__name { margin: 0; }
+
+  .body { margin-top: var(--cds-spacing-07, 2rem); }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+    min-width: 0;
+  }
+
+  /* Scope bar — a cds-tile; layout only. */
+  .scope__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    align-items: flex-end;
+  }
+  .scope__row cds-dropdown { min-width: 18rem; }
+  .scope__switcher { min-width: 18rem; }
+  .scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
+  #switcher-note { margin-top: 1rem; }
+  #switcher-note[hidden], #switcher-wrap[hidden], #save-notice[hidden] { display: none; }
+  #save-notice { max-width: 48rem; }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 52rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* District-information form. */
+  .field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+    max-width: 44rem;
+  }
+  .field-grid__wide { grid-column: 1 / -1; }
+  .field-divider { height: 1px; background: var(--cds-border-subtle-01, #e0e0e0); margin: 0.25rem 0; }
+  @media (max-width: 42rem) { .field-grid { grid-template-columns: 1fr; } }
+
+  /* Members table. */
+  .table-wrap { overflow-x: auto; }
+  :global(.m-name) { display: block; color: var(--cds-text-primary, #161616); }
+  :global(.m-sub) { display: block; font-size: 0.75rem; color: var(--cds-text-secondary, #525252); }
+  :global(.row-actions) { display: flex; gap: 0.25rem; }
+
+  /* Member modal internals. */
+  .modal-grid { display: flex; flex-direction: column; gap: 1.25rem; }
+  #m-identity[hidden] { display: none; }
+  .identity {
+    padding: 1rem;
+    background: var(--cds-layer-01, #f4f4f4);
+    border-left: 3px solid var(--cds-border-interactive, #0f62fe);
+  }
+  .identity__name { margin: 0; color: var(--cds-text-primary, #161616); }
+  .identity__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    margin: 0.25rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .identity__note { margin: 0.5rem 0 0; color: var(--cds-text-secondary, #525252); }
+  #member-warning { margin-bottom: 0.5rem; }
+  #member-warning[hidden], #lead-note[hidden], #autoassign-block[hidden], #specific-parks[hidden] { display: none; }
+  .modal-hint { margin: 0; color: var(--cds-text-secondary, #525252); }
+  /* Single-column list — always one park per row so it stays easy to scan
+     no matter how long the roster grows. */
+  .park-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-top: 0.75rem;
+    padding-left: 1.5rem;
+  }
+
+  .form__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+</style>

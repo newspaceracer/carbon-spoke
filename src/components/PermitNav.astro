@@ -1,0 +1,109 @@
+---
+// The permit-prototype top navigation bar (CA State Parks Research & Collection
+// Permits), composed from Carbon's UI Shell (cds-header-*). Shared by every page
+// of this prototype (permit detail, search) so the bar is defined ONCE and can't
+// drift between screens.
+//
+// It carries the site search (`cds-search#site-search`); each page wires its own
+// behavior on that element — the permit page navigates to /search on Enter, the
+// search page filters results live.
+//
+// Rendered via BaseLayout's `nav` slot: a page that includes <PermitNav slot="nav"/>
+// suppresses BaseLayout's generic AppHeader, so there's exactly one bar.
+interface NavLink {
+  label: string;
+  href: string;
+}
+
+const primaryNav: NavLink[] = [
+  { label: 'Permits', href: '/permits' },
+  { label: 'Resource category tags', href: '#' },
+  { label: 'Districts', href: '/districts' },
+  { label: 'Special conditions', href: '/special-conditions' },
+  { label: 'Help', href: '#' },
+];
+
+const adminTools: NavLink[] = [
+  { label: 'Manage internal users', href: '/users' },
+  { label: 'Manage public users', href: '#' },
+  { label: 'Manage district information and users', href: '/districts' },
+  { label: 'Maintenance mode admin console', href: '#' },
+];
+---
+
+<cds-header aria-label="CA State Parks Scientific Research and Collection Permits">
+  <!-- Hamburger: Carbon shows it only below the `lg` breakpoint (1056px), where
+       cds-header-nav is display:none. It toggles the collapsible side nav below,
+       so the same links stay reachable on tablets/phones. -->
+  <cds-header-menu-button
+    button-label-active="Close menu"
+    button-label-inactive="Open menu"
+  ></cds-header-menu-button>
+
+  <cds-header-name href="/" prefix="CA State Parks">Research &amp; Collection Permits</cds-header-name>
+
+  <cds-header-nav menu-bar-label="Primary navigation">
+    {primaryNav.map((item) => (
+      <cds-header-nav-item href={item.href}>{item.label}</cds-header-nav-item>
+    ))}
+    <cds-header-menu menu-label="Admin tools" trigger-content="Admin tools">
+      {adminTools.map((item) => (
+        <cds-header-menu-item href={item.href}>{item.label}</cds-header-menu-item>
+      ))}
+    </cds-header-menu>
+  </cds-header-nav>
+
+  <!-- Small-viewport nav: a non-persistent overlay rail (hidden >= lg) mirroring
+       the top nav so no link is lost when cds-header-nav collapses. -->
+  <cds-side-nav is-not-persistent aria-label="Primary navigation" collapse-mode="responsive">
+    <cds-header-side-nav-items>
+      {primaryNav.map((item) => (
+        <cds-side-nav-link href={item.href}>{item.label}</cds-side-nav-link>
+      ))}
+      <cds-side-nav-menu title="Admin tools">
+        {adminTools.map((item) => (
+          <cds-side-nav-menu-item href={item.href}>{item.label}</cds-side-nav-menu-item>
+        ))}
+      </cds-side-nav-menu>
+    </cds-header-side-nav-items>
+  </cds-side-nav>
+
+  <div class="header__search">
+    <cds-search id="site-search" size="lg" label-text="Search permits" placeholder="Search permits, applicants, sites"></cds-search>
+  </div>
+
+  <cds-header-global-action aria-label="Profile" tooltip-text="Profile" href="/profile">
+    <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+      <path d="M16,4a5,5,0,1,1-5,5,5,5,0,0,1,5-5m0-2a7,7,0,1,0,7,7A7,7,0,0,0,16,2Z"/>
+      <path d="M26,30H24V25a5,5,0,0,0-5-5H13a5,5,0,0,0-5,5v5H6V25a7,7,0,0,1,7-7h6a7,7,0,0,1,7,7Z"/>
+    </svg>
+  </cds-header-global-action>
+  <cds-header-global-action aria-label="Log out" tooltip-text="Log out">
+    <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+      <path d="M6,30H18a2.0023,2.0023,0,0,0,2-2V25H18v3H6V4H18V7h2V4a2.0023,2.0023,0,0,0-2-2H6A2.0023,2.0023,0,0,0,4,4V28A2.0023,2.0023,0,0,0,6,30Z"/>
+      <path d="M20.586 20.586 24.172 17 10 17 10 15 24.172 15 20.586 11.414 22 10 28 16 22 22 20.586 20.586z"/>
+    </svg>
+  </cds-header-global-action>
+</cds-header>
+
+<!-- No toggle script needed: cds-header-menu-button dispatches a bubbling,
+     composed `cds-header-menu-button-toggled` event and cds-side-nav host-listens
+     on the document root to update its own `expanded` — Carbon wires the pair. -->
+<style>
+  /* Push the search to the right of the nav and cap its width. */
+  .header__search {
+    margin-left: auto;
+    max-width: 22rem;
+    width: 100%;
+  }
+  /* Below the nav breakpoint (1056px) the primary nav collapses into the
+     hamburger + side nav, so the search no longer competes with nav items for
+     the row. Let it shrink gracefully and drop its width cap on narrow screens
+     so the input stays tappable instead of overflowing. */
+  @media (max-width: 42rem) {
+    .header__search {
+      max-width: none;
+      min-width: 0;
+    }
+  }
+</style>

@@ -1,45 +1,21 @@
 ---
 // carbon-checked: Carbon ships no avatar/identity component; an initials chip is
 // the reusable home for person identity in contact cards and the comment thread.
-// Initials avatar — a neutral, token-styled identity chip. Presentational only.
+// Identity chip — initials by default, or a supplied glyph (e.g. a building for a
+// facility). Neutral, token-styled, presentational only. The initials rule and the
+// chip's STYLES are shared (src/lib/avatar.ts + the global `.avatar` rules in
+// src/styles/theme.css) so this component and the client-rendered chips never drift.
+import { initials as computeInitials } from '../lib/avatar';
 interface Props {
   name: string;
-  /** Diameter token step: sm (1.5rem) or md (2rem). */
-  size?: 'sm' | 'md';
+  /** Diameter token step: sm (1.5rem), md (2rem), or lg (4rem, for identity headers). */
+  size?: 'sm' | 'md' | 'lg';
+  /** Render this inline SVG instead of initials — for non-person entities. */
+  icon?: string;
 }
-const { name, size = 'md' } = Astro.props;
-const initials = name
-  .replace(/^(Dr\.?|Prof\.?)\s+/i, '')
-  .split(/\s+/)
-  .filter(Boolean)
-  .slice(0, 2)
-  .map((w) => w[0]?.toUpperCase() ?? '')
-  .join('');
+const { name, size = 'md', icon } = Astro.props;
 ---
 
-<span class:list={['avatar', `avatar--${size}`]} aria-hidden="true">{initials}</span>
-
-<style>
-  .avatar {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    border-radius: 50%;
-    background: var(--cds-layer-accent-01, #e0e0e0);
-    color: var(--cds-text-primary, #161616);
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    user-select: none;
-  }
-  .avatar--sm {
-    width: 1.75rem;
-    height: 1.75rem;
-    font-size: 0.6875rem;
-  }
-  .avatar--md {
-    width: 2.25rem;
-    height: 2.25rem;
-    font-size: 0.8125rem;
-  }
-</style>
+<span class:list={['avatar', `avatar--${size}`]} aria-hidden="true">
+  {icon ? <Fragment set:html={icon} /> : computeInitials(name)}
+</span>

@@ -28,6 +28,15 @@ const adminTools: NavLink[] = [
 ---
 
 <cds-header aria-label={name}>
+  <!-- Hamburger: Carbon shows it only below the `lg` breakpoint (1056px), where
+       cds-header-nav is display:none. It toggles the side nav below so the same
+       links stay reachable on tablets/phones. Carbon auto-wires the pair (the
+       button's bubbling `cds-header-menu-button-toggled` event drives the rail). -->
+  <cds-header-menu-button
+    button-label-active="Close menu"
+    button-label-inactive="Open menu"
+  ></cds-header-menu-button>
+
   <cds-header-name href={nameHref} prefix="">{name}</cds-header-name>
   <cds-header-nav menu-bar-label={name}>
     <cds-header-menu trigger-content="Admin tools" menu-label="Admin tools">
@@ -36,4 +45,16 @@ const adminTools: NavLink[] = [
       ))}
     </cds-header-menu>
   </cds-header-nav>
+
+  <!-- Small-viewport nav: a non-persistent overlay rail (hidden >= lg) mirroring
+       the top nav so no link is lost when cds-header-nav collapses. -->
+  <cds-side-nav is-not-persistent aria-label={name} collapse-mode="responsive">
+    <cds-header-side-nav-items>
+      <cds-side-nav-menu title="Admin tools">
+        {adminTools.map((item) => (
+          <cds-side-nav-menu-item href={item.href}>{item.label}</cds-side-nav-menu-item>
+        ))}
+      </cds-side-nav-menu>
+    </cds-header-side-nav-items>
+  </cds-side-nav>
 </cds-header>

@@ -2,8 +2,8 @@
 /* manifest:
      spine: main.page > cds-stack(gap 6)
      sections:
-       - shell header  -> cds-header (ui-shell): name + nav + cds-search (the site
-                          search; navigating here from any page lands on this screen)
+       - shell header  -> PermitNav.astro (shared cds-header): name + nav + Admin
+                          tools + cds-search#site-search + profile/logout actions
        - results head  -> inline (heading + result count + query echo)
        - results list  -> <ul> of cds-tile rows, each composing
                           cds-icon-indicator (status) + cds-tag (category) + cds-link
@@ -14,6 +14,7 @@
    type). Search keyword to try: "Monarch".
 */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
 import { permits } from '../data/search';
 
 // Home-page card metadata — the hub globs pages and reads this to self-list.
@@ -45,29 +46,11 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
 ---
 
 <BaseLayout title="Search permits">
-  <!-- Nav bar (ui-shell header) — the site search lives here -->
-  <cds-header aria-label="CA State Parks Scientific Research and Collection Permits">
-    <cds-header-name href="/" prefix="CA State Parks">Research &amp; Collection Permits</cds-header-name>
-
-    <cds-header-nav menu-bar-label="Primary navigation">
-      <cds-header-nav-item href="#">Resource category tags</cds-header-nav-item>
-      <cds-header-nav-item href="#">Districts</cds-header-nav-item>
-      <cds-header-nav-item href="#">Help</cds-header-nav-item>
-    </cds-header-nav>
-
-    <div class="header__search">
-      <cds-search
-        id="site-search"
-        size="lg"
-        label-text="Search permits"
-        placeholder="Search permits, applicants, sites"
-      ></cds-search>
-    </div>
-  </cds-header>
+  <PermitNav slot="nav" />
 
   <main class="page">
-    <cds-stack gap="6">
-      <cds-breadcrumb>
+    <div class="cds--css-grid cds--css-grid--with-row-gap">
+      <cds-breadcrumb class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
         <cds-breadcrumb-item>
           <cds-breadcrumb-link href="/">Permits</cds-breadcrumb-link>
         </cds-breadcrumb-item>
@@ -76,14 +59,14 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
         </cds-breadcrumb-item>
       </cds-breadcrumb>
 
-      <header class="results-head">
+      <header class="results-head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
         <h1 class="results-head__title" id="results-title">Search results</h1>
         <p class="results-head__count t-body-01" id="results-count" aria-live="polite">
           {rows.length} permits
         </p>
       </header>
 
-      <ul class="results" id="results" role="list">
+      <ul class="results cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" id="results" role="list">
         {rows.map((p) => (
           <li class="result" data-haystack={p.haystack}>
             <cds-clickable-tile href="/permit">
@@ -116,14 +99,14 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
         ))}
       </ul>
 
-      <div class="empty" id="empty" hidden>
+      <div class="empty cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" id="empty" hidden>
         <p class="empty__title t-heading-compact-02">No permits found</p>
         <p class="empty__hint t-body-01">
           No permit matches <span id="empty-query" class="empty__query"></span>.
           Try a broader term — for example <strong>Monarch</strong>.
         </p>
       </div>
-    </cds-stack>
+    </div>
   </main>
 </BaseLayout>
 
@@ -181,15 +164,9 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
 <style>
   /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens.
      body already offsets the fixed ui-shell header (theme.css padding-top). */
+  /* Width + horizontal margins owned by the 2x Grid (.cds--css-grid). */
   .page {
-    max-width: 60rem;
-    margin: 0 auto;
-    padding: 1.5rem 1.5rem 6rem;
-  }
-  .header__search {
-    margin-left: auto;
-    max-width: 22rem;
-    width: 100%;
+    padding-block: 1.5rem 6rem;
   }
   .results-head {
     display: flex;
@@ -214,6 +191,15 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
     display: grid;
     gap: 0.75rem;
   }
+  /* The whole tile is one link; suppress the link underline on its text in every
+     interactive state. Styled via the component's public `part="link"` hook — not a
+     `.cds--*` internal override. */
+  .result cds-clickable-tile::part(link),
+  .result cds-clickable-tile::part(link):hover,
+  .result cds-clickable-tile::part(link):focus,
+  .result cds-clickable-tile::part(link):active {
+    text-decoration: none;
+  }
   .result__row {
     /* Leave the bottom-right corner clear for the clickable-tile arrow icon. */
     padding-inline-end: 1.5rem;
@@ -221,7 +207,6 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
   .result__head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 0.75rem;
   }
   .result__id {
@@ -249,6 +234,13 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
     padding: 2.5rem 1rem;
     text-align: center;
     border: 1px dashed var(--cds-border-subtle, #c6c6c6);
+  }
+  /* The empty state also carries `.cds--*:col-span-N`, and every col-span class
+     sets `display: block` — an author rule that overrides the UA `[hidden]`
+     rule, so the `hidden` attribute alone can't hide it. This class+attribute
+     selector out-specifies col-span and restores hidden's meaning. */
+  .empty[hidden] {
+    display: none;
   }
   .empty__title {
     margin: 0;

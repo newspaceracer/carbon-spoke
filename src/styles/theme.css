@@ -20,13 +20,19 @@
 /* ---- RADIX BRAND RESKIN --------------------------------------------------
    Remaps Carbon's semantic --cds-* color tokens onto Radix Colors (Slate +
    Iris, P3). Loaded AFTER Carbon so its zone-scoped overrides win. This IS the
-   brand hook for this spoke — see src/styles/radix.css. */
-@import './radix.css';
+   brand hook for this spoke — see src/styles/radix.css.
+
+   TEMPORARILY DISABLED to work against the stock Carbon look (default colors,
+   backgrounds, tags). Re-enable this import to restore the brand reskin. */
+/* @import './radix.css'; */
 
 /* ---- SANS-SERIF OVERRIDE -------------------------------------------------
    Aliases the 'IBM Plex Sans' family name to self-hosted Inria Sans (loaded
-   after Carbon so it wins). See src/styles/fonts.css. Plex Mono is untouched. */
-@import './fonts.css';
+   after Carbon so it wins). See src/styles/fonts.css. Plex Mono is untouched.
+
+   TEMPORARILY DISABLED alongside the reskin above so type renders in stock
+   IBM Plex Sans. Re-enable to restore the custom font. */
+/* @import './fonts.css'; */
 
 /* ---- BRAND HOOK ----------------------------------------------------------
    To reskin, map your brand onto Carbon's semantic tokens. Example:
@@ -100,10 +106,30 @@ body {
 .t-label-01 { font-size: 0.75rem; font-weight: 400; line-height: 1.33333; letter-spacing: 0.32px; }
 .t-helper-text-01 { font-size: 0.75rem; font-weight: 400; line-height: 1.33333; letter-spacing: 0.32px; }
 
-/* carbon-checked: cds-header-nav is display:none below the lg breakpoint (1056px)
-   by design — Carbon expects a hamburger + side-nav there. This spoke wants the
-   Admin tools menu visible at every width, so show the host nav always. This
-   overrides the shell's :host display rule, not any component-internal part. */
-cds-header-nav {
-  display: block;
+/* Identity chip (Avatar) — ONE home for the round initials/glyph chip used by the
+   <Avatar> component AND client-rendered chips (see src/lib/avatar.ts). Defined
+   globally so chips created at runtime (JS-built table rows / cards) are styled
+   too. Carbon ships no avatar component, so this is the sanctioned bespoke piece. */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--cds-layer-accent-01, #e0e0e0);
+  color: var(--cds-text-primary, #161616);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  user-select: none;
 }
+.avatar--sm { width: 1.75rem; height: 1.75rem; font-size: 0.6875rem; }
+.avatar--md { width: 2.25rem; height: 2.25rem; font-size: 0.8125rem; }
+.avatar--lg { width: 4rem;    height: 4rem;    font-size: 1.375rem; }
+/* Glyph variant (facility, etc.) — scale the supplied SVG to the chip. */
+.avatar svg { width: 55%; height: 55%; fill: currentColor; }
+
+/* NOTE: we intentionally do NOT override cds-header-nav's display here. Carbon
+   hides the top nav below the lg breakpoint (1056px) and shows the hamburger +
+   cds-side-nav instead (see AppHeader.astro / PermitNav.astro). Forcing the host
+   nav visible at all widths would render BOTH the bar items AND the hamburger on
+   small viewports. Admin tools stay reachable everywhere via the side-nav rail. */

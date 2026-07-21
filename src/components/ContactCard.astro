@@ -1,20 +1,30 @@
 ---
-// A single contact rendered as an editorial data block (NOT a tile): a role
-// eyebrow, avatar + name, quiet contact lines, and the email as a cds-link. A
-// contact is a data record, not a "digestible content piece," so no tile surface.
+// A single contact/entity rendered as a cds-tile: a role eyebrow, identity chip +
+// name, and quiet contact lines with the email as a cds-link. `kind="facility"`
+// swaps the person-initials chip for a building glyph. The tile provides the
+// surface, padding, and border; the rules below only lay out its content.
 import type { Contact } from '../data/permit';
 import Avatar from './Avatar.astro';
 interface Props {
   role: string;
   contact: Contact;
+  /** 'facility' shows a building glyph instead of person initials. */
+  kind?: 'person' | 'facility';
 }
-const { role, contact } = Astro.props;
+const { role, contact, kind = 'person' } = Astro.props;
+
+// Carbon `building` 20 glyph — marks a facility/place rather than a person.
+const buildingIcon =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">' +
+  '<path d="M28,2H16a2.002,2.002,0,0,0-2,2V14H4a2.002,2.002,0,0,0-2,2V30H30V4A2.0023,2.0023,0,0,0,28,2ZM9,28V21h4v7Zm19,0H15V20a1,1,0,0,0-1-1H8a1,1,0,0,0-1,1v8H4V16H16V4H28Z"/>' +
+  '<path d="M18 8H20V10H18z"/><path d="M24 8H26V10H24z"/><path d="M18 14H20V16H18z"/>' +
+  '<path d="M24 14H26V16H24z"/><path d="M18 20H20V22H18z"/><path d="M24 20H26V22H24z"/></svg>';
 ---
 
-<div class="contact">
+<cds-tile class="contact">
   <p class="contact__role t-label-01">{role}</p>
   <div class="contact__id">
-    <Avatar name={contact.name} />
+    <Avatar name={contact.name} icon={kind === 'facility' ? buildingIcon : undefined} />
     <p class="contact__name t-heading-compact-01">{contact.name}</p>
   </div>
   <div class="contact__meta t-body-01">
@@ -22,13 +32,10 @@ const { role, contact } = Astro.props;
     {contact.address && <span>{contact.address}</span>}
     {contact.email && <cds-link href={`mailto:${contact.email}`}>{contact.email}</cds-link>}
   </div>
-</div>
+</cds-tile>
 
 <style>
-  .contact {
-    padding-top: 0.875rem;
-    border-top: 2px solid var(--cds-border-subtle-01, #e0e0e0);
-  }
+  /* Surface/padding/border are the tile's — these rules lay out its content. */
   .contact__role {
     margin: 0 0 0.625rem;
     color: var(--cds-text-secondary, #525252);

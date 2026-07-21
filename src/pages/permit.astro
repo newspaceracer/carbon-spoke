@@ -3,9 +3,9 @@
      shell:  cds-header (ui-shell)  — name + nav + Admin tools menu + cds-search
              + profile/logout global actions
      spine:  main.page > cds-stack(gap 6)
-     Editorial layout: sections are headings + whitespace, NOT boxed tiles. Data
-     records (contacts, people, sites, dates) render as editorial blocks /
-     structured lists / tables — cds-tag only for genuine classifications.
+     Sections mix editorial blocks (heading + whitespace), structured lists, and
+     tiles/cards — chosen per section for the clearest hierarchy. cds-tag only for
+     genuine classifications.
      sections:
        - breadcrumb    -> cds-breadcrumb  (Permits / 26-635-017)
        - permit header -> PermitHeader.astro  (title, status indicator, actions,
@@ -14,21 +14,26 @@
            overview      -> Application summary (prose), Analysis team (person
                             blocks), Comments (thread), Application history
                             (cds-progress-indicator, vertical)
-           study areas   -> Parks (list), Collection sites (place blocks)
+           study areas   -> Parks (list), Collection sites (cds-tile card grid)
            special cond. -> standard conditions (numbered list)
-           project info  -> Research team (contact blocks + participants structured
-                            list), Project details (FactGrid + prose), Field
+           project info  -> Project details (FactGrid + prose), Research team
+                            (contact cds-tiles + participants cds-table), Field
                             occurrences (date list)
-           data collect. -> facts (FactGrid), specimens (cds-table)
-           add. docs     -> compliance (FactGrid), files (cds-table)
+           data collect. -> collection + laboratory (FactGrid tiles; proposal-
+                            answered facts link to the doc), specimens (cds-table)
+           add. docs     -> compliance (FactGrid tiles; proposal-answered facts
+                            link to the doc), files (cds-table)
 */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
 import PermitSection from '../components/PermitSection.astro';
 import FactGrid from '../components/FactGrid.astro';
 import ContactCard from '../components/ContactCard.astro';
 import Avatar from '../components/Avatar.astro';
 import { permit } from '../data/permit';
+import { userDirectory } from '../data/user';
+import { districtKey } from '../data/conditions';
 
 export const prototype = {
   title: 'Permit detail',
@@ -40,56 +45,61 @@ export const prototype = {
 
 const tabs = [
   { value: 'overview', label: 'Overview' },
+  { value: 'project-information', label: 'Project information' },
   { value: 'study-areas', label: 'Study areas' },
   { value: 'special-conditions', label: 'Special conditions' },
-  { value: 'project-information', label: 'Project information' },
   { value: 'data-collection', label: 'Data collection' },
   { value: 'additional-documentation', label: 'Additional documentation' },
 ];
 
+// Responsible analyst = the lead/highlighted member of the analysis team (the
+// "responsible agent" in the history). Derived from the same roster so they agree.
+const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight);
+
 const stats = [
   { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
   { label: 'Submitted', value: 'Jul 9, 2026' },
+  { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
 ];
 
+// Activities this permit involves. The Data-collection sections that used to
+// state these are now gated (hidden when not involved), so surface them as
+// header classification badges — derived from the SAME flags, so they agree.
+const involvementTags = [
+  ...(permit.dataCollection.involvesCollection ? [{ label: 'Specimen collection', type: 'blue' }] : []),
+  ...(permit.dataCollection.involvesLaboratory ? [{ label: 'Laboratory work', type: 'blue' }] : []),
+];
+const infoTags = [...permit.infoTags, ...involvementTags];
+
+// The signed-in reviewer (the highlighted analysis-team member) authors new comments.
+const currentUser = permit.overview.analysisTeam.find((m) => m.highlight)?.name ?? 'You';
+
+// Analysis-team editing: the roster can add/remove valid EXISTING users. The
+// combo-box offers directory users not already assigned; the client keeps this
+// in sync as rows are added/removed. `teamStorageKey` persists edits per permit.
+const seededTeamIds = new Set(permit.overview.analysisTeam.map((m) => m.id));
+const eligibleUsers = userDirectory.filter((u) => !seededTeamIds.has(u.id));
+const teamStorageKey = `permit-team-${permit.id}`;
+
+// Permit tags: applied from a curated set on the Overview tab. `appliedTags` seeds
+// the row + the multi-select's selected state; edits persist per permit.
+const appliedTags = permit.overview.tagOptions.filter((t) => permit.overview.tags.includes(t));
+const tagStorageKey = `permit-tags-${permit.id}`;
+
 const t = permit.researchTeam;
+
+// Special conditions: the districts on this permit, each keyed to its condition
+// catalog. Drives the "Acting as" scope options + the per-district blocks; the
+// client script recomputes the same keys so the two surfaces agree.
+const permitDistricts = permit.studyAreas.districts.map((d) => ({
+  name: d.name,
+  key: districtKey(d.name),
+  parks: d.parks.length,
+}));
 ---
 
 <BaseLayout title={`${permit.id} — ${permit.name}`}>
-  <!-- Nav bar (ui-shell header) -->
-  <cds-header aria-label="CA State Parks Scientific Research and Collection Permits">
-    <cds-header-name href="#" prefix="CA State Parks">Research &amp; Collection Permits</cds-header-name>
-
-    <cds-header-nav menu-bar-label="Primary navigation">
-      <cds-header-nav-item href="#">Resource category tags</cds-header-nav-item>
-      <cds-header-nav-item href="#">Districts</cds-header-nav-item>
-      <cds-header-nav-item href="#">Help</cds-header-nav-item>
-      <cds-header-menu menu-label="Admin tools" trigger-content="Admin tools">
-        <cds-header-menu-item href="#">User management</cds-header-menu-item>
-        <cds-header-menu-item href="#">Permit templates</cds-header-menu-item>
-        <cds-header-menu-item href="#">Resource categories</cds-header-menu-item>
-        <cds-header-menu-item href="#">Audit log</cds-header-menu-item>
-        <cds-header-menu-item href="#">System settings</cds-header-menu-item>
-      </cds-header-menu>
-    </cds-header-nav>
-
-    <div class="header__search">
-      <cds-search id="site-search" size="lg" label-text="Search" placeholder="Search permits, applicants, sites"></cds-search>
-    </div>
-
-    <cds-header-global-action aria-label="Profile" tooltip-text="Profile">
-      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
-        <path d="M16,4a5,5,0,1,1-5,5,5,5,0,0,1,5-5m0-2a7,7,0,1,0,7,7A7,7,0,0,0,16,2Z"/>
-        <path d="M26,30H24V25a5,5,0,0,0-5-5H13a5,5,0,0,0-5,5v5H6V25a7,7,0,0,1,7-7h6a7,7,0,0,1,7,7Z"/>
-      </svg>
-    </cds-header-global-action>
-    <cds-header-global-action aria-label="Log out" tooltip-text="Log out">
-      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
-        <path d="M6,30H18a2.0023,2.0023,0,0,0,2-2V25H18v3H6V4H18V7h2V4a2.0023,2.0023,0,0,0-2-2H6A2.0023,2.0023,0,0,0,4,4V28A2.0023,2.0023,0,0,0,6,30Z"/>
-        <path d="M20.586 20.586 24.172 17 10 17 10 15 24.172 15 20.586 11.414 22 10 28 16 22 22 20.586 20.586z"/>
-      </svg>
-    </cds-header-global-action>
-  </cds-header>
+  <PermitNav slot="nav" />
 
   <main class="page">
     <cds-stack gap="6">
@@ -98,11 +108,12 @@ const t = permit.researchTeam;
         name={permit.name}
         organization={permit.researchTeam.organization.name}
         status={permit.status}
-        infoTags={permit.infoTags}
+        infoTags={infoTags}
         flagTags={permit.flagTags}
         stats={stats}
+        requestedWindow={permit.activeWindow}
       >
-        <cds-breadcrumb slot="breadcrumb">
+        <cds-breadcrumb slot="breadcrumb" no-trailing-slash>
           <cds-breadcrumb-item>
             <cds-breadcrumb-link href="#">Permits</cds-breadcrumb-link>
           </cds-breadcrumb-item>
@@ -111,21 +122,59 @@ const t = permit.researchTeam;
           </cds-breadcrumb-item>
         </cds-breadcrumb>
 
-        <cds-tabs slot="tabs" id="permit-tabs" value="overview">
-          {tabs.map((tab) => (
-            <cds-tab id={`tab-${tab.value}`} value={tab.value}>{tab.label}</cds-tab>
-          ))}
-        </cds-tabs>
       </PermitHeader>
+
+      <!-- carbon-checked: .tabbar is NOT a tab component — the tabs are the stock
+           cds-tabs/cds-tab below. It is only a full-bleed STICKY background layer
+           that pins the tab strip below the compact header bar and gives it an
+           opaque backdrop over scrolling panel content; no cds-* component provides
+           a page-level sticky background band. -->
+      <div class="tabbar">
+        <div class="cds--css-grid">
+          <cds-tabs class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" id="permit-tabs" value="overview">
+            {tabs.map((tab) => (
+              <cds-tab id={`tab-${tab.value}`} value={tab.value}>{tab.label}</cds-tab>
+            ))}
+          </cds-tabs>
+        </div>
+      </div>
 
       <section>
         <div class="panels">
           <!-- ── Overview ─────────────────────────────────────────────── -->
           <div class="panel" data-panel="overview" role="tabpanel" aria-labelledby="tab-overview">
-            <div class="overview-grid">
-              <div class="overview-main">
+            <div class="cds--css-grid cds--css-grid--with-row-gap">
+              <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-11 overview-main">
               <PermitSection title="Application summary">
                 <p class="lede t-body-02">{permit.projectInfo.purpose}</p>
+              </PermitSection>
+
+              <PermitSection title="Tags">
+                <p class="section-hint t-body-01">Reviewer-applied labels for triage and coordination — internal handling tags, separate from the permit's classification badges. Choose from the set; applied tags show below and can be dismissed.</p>
+                <div class="tagger">
+                  <cds-multi-select
+                    id="permit-tag-select"
+                    class="tagger__select"
+                    filterable
+                    title-text="Choose tags"
+                    label="Search tags…"
+                    value={appliedTags.join(',')}
+                  >
+                    {/* Selection is driven by the parent multi-select's `value`
+                        (the component reconciles each item on first render), so
+                        items carry no per-item `selected` — avoids Astro emitting
+                        a stringy selected="false" that Lit would read as truthy. */}
+                    {permit.overview.tagOptions.map((tag) => (
+                      <cds-multi-select-item value={tag}>{tag}</cds-multi-select-item>
+                    ))}
+                  </cds-multi-select>
+                  <div class="tagger__applied" id="permit-tag-row" data-storage-key={tagStorageKey} aria-label="Applied tags">
+                    {appliedTags.map((tag) => (
+                      <cds-dismissible-tag type="cool-gray" size="md" text={tag} data-tag={tag}></cds-dismissible-tag>
+                    ))}
+                  </div>
+                  <p class="tagger__empty t-body-01" id="permit-tag-empty" hidden>No tags applied.</p>
+                </div>
               </PermitSection>
 
               <PermitSection title="Analysis team">
@@ -137,22 +186,99 @@ const t = permit.researchTeam;
                   </svg>
                   Internal only
                 </span>
-                <ul class="roster">
+                <ul class="roster" id="team-roster" data-storage-key={teamStorageKey}>
                   {permit.overview.analysisTeam.map((m) => (
-                    <li class:list={['roster__row', m.highlight && 'roster__row--active']}>
+                    <li class:list={['roster__row', m.highlight && 'roster__row--active']} data-user-id={m.id}>
                       <div class="roster__person">
                         <p class="roster__name t-heading-compact-01">{m.name}</p>
                         <p class="roster__role t-body-01">{m.role}</p>
                         {m.detail && <p class="roster__detail t-body-01">{m.detail}</p>}
                       </div>
-                      <span class="roster__status t-body-01">{m.status}</span>
+                      <div class="roster__end">
+                        <span class="roster__status t-body-01">{m.status}</span>
+                        {!m.highlight && (
+                          <cds-icon-button class="roster__remove" kind="ghost" size="sm" align="left" data-remove>
+                            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
+                              <path d="M12 12H14V24H12zM18 12H20V24H18z"/>
+                              <path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/>
+                            </svg>
+                            <span slot="tooltip-content">Remove {m.name}</span>
+                          </cds-icon-button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
+
+                <!-- Add an existing user to the team. The combo-box lists only
+                     directory users not already assigned; the script rebuilds its
+                     items after every add/remove so it never offers a duplicate. -->
+                <form class="team-add" id="team-add" data-storage-key={teamStorageKey}>
+                  <cds-combo-box
+                    id="team-add-select"
+                    class="team-add__select"
+                    title-text="Add an existing user"
+                    label="Search the user directory…"
+                    helper-text="Only users not already on the analysis team appear here."
+                  >
+                    {eligibleUsers.map((u) => (
+                      <cds-combo-box-item value={u.id}>{u.name} — {u.role}</cds-combo-box-item>
+                    ))}
+                  </cds-combo-box>
+                  <cds-button id="team-add-btn" kind="tertiary" size="md" type="button">Add to team</cds-button>
+                </form>
+
+                <!-- Template for JS-added roster rows: rendered inert here so its
+                     markup carries Astro's scoped-style attributes, then cloned. -->
+                <template id="roster-row-template">
+                  <li class="roster__row" data-user-id="">
+                    <div class="roster__person">
+                      <p class="roster__name t-heading-compact-01"></p>
+                      <p class="roster__role t-body-01"></p>
+                      <p class="roster__detail t-body-01"></p>
+                    </div>
+                    <div class="roster__end">
+                      <span class="roster__status t-body-01">Pending review</span>
+                      <cds-icon-button class="roster__remove" kind="ghost" size="sm" align="left" data-remove>
+                        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
+                          <path d="M12 12H14V24H12zM18 12H20V24H18z"/>
+                          <path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/>
+                        </svg>
+                        <span slot="tooltip-content"></span>
+                      </cds-icon-button>
+                    </div>
+                  </li>
+                </template>
+
+                <!-- The valid existing users, for the client to rebuild rows and
+                     refresh the combo-box as the team changes. -->
+                <script type="application/json" id="user-directory" set:html={JSON.stringify(userDirectory)}></script>
               </PermitSection>
 
               <PermitSection title="Comments">
-                <ul class="thread">
+                <!-- Composer: stock cds-textarea + cds-button. New comments are
+                     authored by the signed-in reviewer and persisted client-side. -->
+                <form
+                  class="composer"
+                  id="comment-composer"
+                  data-author={currentUser}
+                  data-storage-key={`permit-comments-${permit.id}`}
+                >
+                  <Avatar name={currentUser} size="sm" />
+                  <div class="composer__field">
+                    <cds-textarea
+                      id="comment-input"
+                      label="Add a comment"
+                      placeholder="Share a note with the review team…"
+                      rows="2"
+                    ></cds-textarea>
+                    <div class="composer__actions">
+                      <cds-button id="comment-submit" size="sm" type="button">Comment</cds-button>
+                    </div>
+                  </div>
+                </form>
+
+                <ul class="thread" id="comment-thread">
                   {permit.overview.comments.map((c) => (
                     <li class="comment">
                       <Avatar name={c.author} size="sm" />
@@ -163,36 +289,50 @@ const t = permit.researchTeam;
                     </li>
                   ))}
                 </ul>
+
+                <!-- Template for JS-added comments: rendered inert here so its
+                     markup carries Astro's scoped-style attributes (both this
+                     page's .comment styles and the Avatar's), then cloned. -->
+                <template id="comment-template">
+                  <li class="comment">
+                    <Avatar name="?" size="sm" />
+                    <div class="comment__body">
+                      <p class="comment__meta t-label-01"><span class="comment__author"></span> · <span class="comment__time"></span></p>
+                      <p class="comment__text t-body-01"></p>
+                    </div>
+                  </li>
+                </template>
               </PermitSection>
               </div>
 
-              <aside class="overview-aside">
-                <PermitSection title="Application history">
-                  <div class="phases">
-                    {permit.overview.history.map((phase) => (
-                      <div class="phase">
-                        <h3 class="phase__title t-heading-01">{phase.phase}</h3>
-                        <cds-progress-indicator vertical>
-                          {phase.steps.map((s) => (
-                            <cds-progress-step
-                              complete={s.state === 'complete'}
-                              current={s.state === 'current'}
-                              label={s.label}
-                              secondary-label-text={[s.decision, s.date].filter(Boolean).join(' · ')}
-                            ></cds-progress-step>
-                          ))}
-                        </cds-progress-indicator>
-                      </div>
-                    ))}
-                  </div>
-                </PermitSection>
+              <aside class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5">
+                <cds-tile class="history">
+                  <h2 class="history__title t-heading-03">Application history</h2>
+                    <div class="phases">
+                      {permit.overview.history.map((phase) => (
+                        <div class="phase">
+                          <h3 class="phase__title t-heading-01">{phase.phase}</h3>
+                          <cds-progress-indicator vertical>
+                            {phase.steps.map((s) => (
+                              <cds-progress-step
+                                complete={s.state === 'complete'}
+                                current={s.state === 'current'}
+                                label={s.label}
+                                secondary-label-text={[s.decision, s.date].filter(Boolean).join(' · ')}
+                              ></cds-progress-step>
+                            ))}
+                          </cds-progress-indicator>
+                        </div>
+                      ))}
+                    </div>
+                </cds-tile>
               </aside>
             </div>
           </div>
 
           <!-- ── Study areas ──────────────────────────────────────────── -->
-          <div class="panel" data-panel="study-areas" role="tabpanel" aria-labelledby="tab-study-areas" hidden>
-            <div class="stack">
+          <div class="panel cds--css-grid" data-panel="study-areas" role="tabpanel" aria-labelledby="tab-study-areas" hidden>
+            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
               <PermitSection title="Authorized parks" editable>
                 <p class="section-hint t-body-01">Parks where research and collection are authorized, grouped by administering district and its research coordinator.</p>
                 <cds-structured-list>
@@ -230,11 +370,11 @@ const t = permit.researchTeam;
               <PermitSection title="Collection sites">
                 <div class="site-grid">
                   {permit.studyAreas.sites.map((s) => (
-                    <div class="site">
+                    <cds-tile class="site">
                       <p class="site__name t-heading-compact-01">{s.name}</p>
                       <p class="site__coords t-body-01">{s.coords}</p>
                       <p class="site__note t-body-01">{s.note}</p>
-                    </div>
+                    </cds-tile>
                   ))}
                 </div>
               </PermitSection>
@@ -242,46 +382,64 @@ const t = permit.researchTeam;
           </div>
 
           <!-- ── Special conditions ───────────────────────────────────── -->
-          <div class="panel" data-panel="special-conditions" role="tabpanel" aria-labelledby="tab-special-conditions" hidden>
-            <div class="stack">
-              <PermitSection title="Universal conditions" editable>
+          <!-- Reworked into a review workflow: HQ + each district curate their own
+               conditions, pulled from a reusable catalog (/special-conditions) or
+               typed with the sc-rich-text editor. Default catalog items auto-attach
+               on submission; approval freezes the whole tab read-only. The lists
+               and district blocks are rendered client-side from localStorage; see
+               the "Special conditions" script block below. -->
+          <div class="panel cds--css-grid" data-panel="special-conditions" role="tabpanel" aria-labelledby="tab-special-conditions" hidden>
+            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+              <cds-inline-notification
+                id="sc-locked-notice"
+                hidden
+                kind="info"
+                low-contrast
+                hide-close-button
+                title="Conditions are final"
+                subtitle="This permit is approved — its special conditions are now part of the permit and can no longer be changed."
+              ></cds-inline-notification>
+
+              <!-- Scope: reviewers act either for HQ or as a district's rep. The
+                   scope governs which block exposes its add/edit controls. -->
+              <cds-tile class="sc-scope" id="sc-scope-tile">
+                <div class="sc-scope__row">
+                  <cds-dropdown id="sc-acting-as" title-text="Acting as" value="hq">
+                    <cds-dropdown-item value="hq">HQ reviewer</cds-dropdown-item>
+                    {permitDistricts.map((d) => (
+                      <cds-dropdown-item value={d.key}>{d.name} representative</cds-dropdown-item>
+                    ))}
+                  </cds-dropdown>
+                </div>
+                <p class="sc-scope__note t-label-01" id="sc-scope-note">
+                  HQ reviewers manage the universal conditions that apply everywhere on this permit.
+                </p>
+              </cds-tile>
+
+              <PermitSection title="Headquarters conditions">
                 <p class="section-hint t-body-01">Apply to all locations covered by this permit.</p>
-                <cds-contained-list id="universal-conditions" label={`${permit.specialConditions.length} conditions`} kind="on-page">
-                  <cds-search
-                    slot="action"
-                    size="lg"
-                    placeholder="Filter conditions"
-                    label-text="Filter universal conditions"
-                    close-button-label-text="Clear filter"
-                  ></cds-search>
-                  {permit.specialConditions.map((c) => (
-                    <cds-contained-list-item class="condition-item">{c}</cds-contained-list-item>
-                  ))}
-                </cds-contained-list>
+                <cds-contained-list id="sc-hq-list" kind="on-page" label="Universal conditions"></cds-contained-list>
+                <p class="sc-empty t-body-01" id="sc-hq-empty" hidden>No headquarters conditions on this permit yet.</p>
               </PermitSection>
 
               <PermitSection title="District special conditions">
-                <p class="section-hint t-body-01">Additional conditions apply within each district. Expand a district to review them.</p>
-                <div class="district-conditions">
-                  {permit.studyAreas.districts.map((d) => (
-                    <cds-contained-list kind="on-page">
-                      <div slot="label" class="district-label">
-                        <span class="district-label__name">{d.name}</span>
-                        <span class="district-label__count t-label-01">{d.parks.length} parks where research activities are permitted</span>
-                      </div>
-                      {d.conditions.map((c) => (
-                        <cds-contained-list-item>{c}</cds-contained-list-item>
-                      ))}
-                    </cds-contained-list>
-                  ))}
-                </div>
+                <p class="section-hint t-body-01">Additional conditions apply within each district on this permit.</p>
+                <div class="district-conditions" id="sc-district-blocks"></div>
               </PermitSection>
             </div>
           </div>
 
           <!-- ── Project information ──────────────────────────────────── -->
-          <div class="panel" data-panel="project-information" role="tabpanel" aria-labelledby="tab-project-information" hidden>
-            <div class="stack">
+          <div class="panel cds--css-grid" data-panel="project-information" role="tabpanel" aria-labelledby="tab-project-information" hidden>
+            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+              <PermitSection title="Project details" editable>
+                <FactGrid rows={permit.projectInfo.details} tiles />
+                <h3 class="subhead t-heading-01">Project purpose</h3>
+                <p class="lede t-body-02">{permit.projectInfo.purpose}</p>
+                <h3 class="subhead t-heading-01">Anticipated benefits to the State Park System</h3>
+                <p class="lede t-body-02">{permit.projectInfo.benefits}</p>
+              </PermitSection>
+
               <PermitSection title="Research team" editable>
                 <div class="contact-grid">
                   <ContactCard role="Organization" contact={t.organization} />
@@ -289,34 +447,26 @@ const t = permit.researchTeam;
                   <ContactCard role="Person in charge of field work" contact={t.fieldLead} />
                 </div>
                 <h3 class="subhead t-heading-01">Additional participants</h3>
-                <cds-structured-list condensed>
-                  <cds-structured-list-head>
-                    <cds-structured-list-header-row>
-                      <cds-structured-list-header-cell>Name</cds-structured-list-header-cell>
-                      <cds-structured-list-header-cell>Phone</cds-structured-list-header-cell>
-                      <cds-structured-list-header-cell>Email</cds-structured-list-header-cell>
-                    </cds-structured-list-header-row>
-                  </cds-structured-list-head>
-                  <cds-structured-list-body>
+                <cds-table>
+                  <cds-table-head>
+                    <cds-table-header-row>
+                      <cds-table-header-cell>Name</cds-table-header-cell>
+                      <cds-table-header-cell>Phone</cds-table-header-cell>
+                      <cds-table-header-cell>Email</cds-table-header-cell>
+                    </cds-table-header-row>
+                  </cds-table-head>
+                  <cds-table-body>
                     {t.participants.map((p) => (
-                      <cds-structured-list-row>
-                        <cds-structured-list-cell>{p.name}</cds-structured-list-cell>
-                        <cds-structured-list-cell>{p.phone || '—'}</cds-structured-list-cell>
-                        <cds-structured-list-cell>
+                      <cds-table-row>
+                        <cds-table-cell>{p.name}</cds-table-cell>
+                        <cds-table-cell>{p.phone || '—'}</cds-table-cell>
+                        <cds-table-cell>
                           <cds-link href={`mailto:${p.email}`}>{p.email}</cds-link>
-                        </cds-structured-list-cell>
-                      </cds-structured-list-row>
+                        </cds-table-cell>
+                      </cds-table-row>
                     ))}
-                  </cds-structured-list-body>
-                </cds-structured-list>
-              </PermitSection>
-
-              <PermitSection title="Project details" editable>
-                <FactGrid rows={permit.projectInfo.details} />
-                <h3 class="subhead t-heading-01">Project purpose</h3>
-                <p class="lede t-body-02">{permit.projectInfo.purpose}</p>
-                <h3 class="subhead t-heading-01">Anticipated benefits to the State Park System</h3>
-                <p class="lede t-body-02">{permit.projectInfo.benefits}</p>
+                  </cds-table-body>
+                </cds-table>
               </PermitSection>
 
               <PermitSection title="Field investigation occurrences">
@@ -330,11 +480,19 @@ const t = permit.researchTeam;
           </div>
 
           <!-- ── Data collection ──────────────────────────────────────── -->
-          <div class="panel" data-panel="data-collection" role="tabpanel" aria-labelledby="tab-data-collection" hidden>
-            <div class="stack">
-              <PermitSection title="Collection & facilities" editable>
-                <FactGrid rows={permit.dataCollection.facts} min="20rem" />
-              </PermitSection>
+          <div class="panel cds--css-grid" data-panel="data-collection" role="tabpanel" aria-labelledby="tab-data-collection" hidden>
+            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+              {permit.dataCollection.involvesCollection && (
+                <PermitSection title="Collection & curation" editable>
+                  <FactGrid rows={permit.dataCollection.collection} min="20rem" tiles />
+                </PermitSection>
+              )}
+
+              {permit.dataCollection.involvesLaboratory && (
+                <PermitSection title="Laboratory & analysis" editable>
+                  <FactGrid rows={permit.dataCollection.laboratory} min="20rem" tiles />
+                </PermitSection>
+              )}
 
               <PermitSection title="Specimens to be collected">
                 <cds-table>
@@ -362,10 +520,10 @@ const t = permit.researchTeam;
           </div>
 
           <!-- ── Additional documentation ─────────────────────────────── -->
-          <div class="panel" data-panel="additional-documentation" role="tabpanel" aria-labelledby="tab-additional-documentation" hidden>
-            <div class="stack">
+          <div class="panel cds--css-grid" data-panel="additional-documentation" role="tabpanel" aria-labelledby="tab-additional-documentation" hidden>
+            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
               <PermitSection title="Compliance" editable>
-                <FactGrid rows={permit.additionalDocs.facts} min="20rem" />
+                <FactGrid rows={permit.additionalDocs.facts} min="20rem" tiles />
               </PermitSection>
 
               <PermitSection title="Uploaded files">
@@ -377,6 +535,7 @@ const t = permit.researchTeam;
                       <cds-table-header-cell>Size</cds-table-header-cell>
                       <cds-table-header-cell>Uploaded by</cds-table-header-cell>
                       <cds-table-header-cell>Date</cds-table-header-cell>
+                      <cds-table-header-cell>Actions</cds-table-header-cell>
                     </cds-table-header-row>
                   </cds-table-head>
                   <cds-table-body>
@@ -387,6 +546,37 @@ const t = permit.researchTeam;
                         <cds-table-cell>{f.size}</cds-table-cell>
                         <cds-table-cell>{f.by}</cds-table-cell>
                         <cds-table-cell>{f.date}</cds-table-cell>
+                        <cds-table-cell>
+                          <div class="doc-actions">
+                            <cds-button
+                              kind="ghost"
+                              size="sm"
+                              href={f.href}
+                              target="_blank"
+                              rel="noopener"
+                              tooltip-text={`View ${f.name} in browser`}
+                              tooltip-position="left"
+                            >
+                              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                                <path d="M15.5,7.8C14.3,4.7,11.3,2.6,8,2.5C4.7,2.6,1.7,4.7,0.5,7.8c0,0.1,0,0.2,0,0.3c1.2,3.1,4.1,5.2,7.5,5.3c3.3-0.1,6.3-2.2,7.5-5.3C15.5,8.1,15.5,7.9,15.5,7.8z M8,12.5c-2.7,0-5.4-2-6.5-4.5c1-2.5,3.8-4.5,6.5-4.5s5.4,2,6.5,4.5C13.4,10.5,10.6,12.5,8,12.5z"/>
+                                <path d="M8,5C6.3,5,5,6.3,5,8s1.3,3,3,3s3-1.3,3-3S9.7,5,8,5z M8,10c-1.1,0-2-0.9-2-2s0.9-2,2-2s2,0.9,2,2S9.1,10,8,10z"/>
+                              </svg>
+                            </cds-button>
+                            <cds-button
+                              kind="ghost"
+                              size="sm"
+                              href={f.href}
+                              download={f.name}
+                              tooltip-text={`Download ${f.name}`}
+                              tooltip-position="left"
+                            >
+                              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                                <path d="M13 7 12.3 6.3 8.5 10.1 8.5 1 7.5 1 7.5 10.1 3.7 6.3 3 7 8 12z"/>
+                                <path d="M13,12v2H3v-2H2v2l0,0c0,0.6,0.4,1,1,1h10c0.6,0,1-0.4,1-1l0,0v-2H13z"/>
+                              </svg>
+                            </cds-button>
+                          </div>
+                        </cds-table-cell>
                       </cds-table-row>
                     ))}
                   </cds-table-body>
@@ -397,6 +587,51 @@ const t = permit.researchTeam;
         </div>
       </section>
     </cds-stack>
+
+    <!-- ── Add / edit a special condition (shared by HQ + district blocks) ── -->
+    <cds-modal id="sc-condition-modal" size="md">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label id="sc-modal-label">Headquarters</cds-modal-label>
+        <cds-modal-heading id="sc-modal-heading">Add condition</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <cds-inline-notification
+          id="sc-modal-warning"
+          hidden
+          kind="warning"
+          low-contrast
+          hide-close-button
+          title="Nothing to add"
+          subtitle="Pick a condition from the catalog or write one below."
+        ></cds-inline-notification>
+
+        <cds-stack gap="6">
+          <div id="sc-pick-block">
+            <cds-multi-select
+              id="sc-pick"
+              title-text="Add from the catalog"
+              label="Select saved conditions"
+              filterable
+            ></cds-multi-select>
+            <p class="sc-or t-label-01">or write a new one</p>
+          </div>
+
+          <cds-text-input id="sc-title" label="Title (optional)" placeholder="Short label for this condition"></cds-text-input>
+
+          <div>
+            <p class="field-label t-label-01">Condition text</p>
+            <sc-rich-text id="sc-body" placeholder="Write a condition. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
+          </div>
+
+          <cds-checkbox id="sc-save-catalog" label-text="Also save to the catalog for reuse"></cds-checkbox>
+        </cds-stack>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="sc-modal-save">Save condition</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
   </main>
 </BaseLayout>
 
@@ -418,33 +653,620 @@ const t = permit.researchTeam;
     window.location.href = q ? `/search?q=${encodeURIComponent(q)}` : '/search';
   });
 
-  // Universal conditions: filter the contained-list items by the header search.
-  const conditionsList = document.getElementById('universal-conditions');
-  const conditionItems = Array.from(
-    conditionsList?.querySelectorAll<HTMLElement>('.condition-item') ?? [],
-  );
-  conditionsList?.addEventListener('cds-search-input', (e) => {
-    const q = ((e as CustomEvent).detail?.value ?? '').trim().toLowerCase();
-    conditionItems.forEach((item) => {
-      item.hidden = q !== '' && !(item.textContent ?? '').toLowerCase().includes(q);
+  // ── Comments: add + persist (prototype-local, newest-first, no editing) ──
+  // A static Astro prototype has no backend, so "saved" means localStorage:
+  // new comments survive reloads, keyed per permit.
+  const composer = document.getElementById('comment-composer') as HTMLFormElement | null;
+  const commentInput = document.getElementById('comment-input') as any;
+  const commentSubmit = document.getElementById('comment-submit');
+  const thread = document.getElementById('comment-thread');
+  const commentTemplate = document.getElementById('comment-template') as HTMLTemplateElement | null;
+
+  if (composer && commentInput && commentSubmit && thread && commentTemplate) {
+    const author = composer.dataset.author || 'You';
+    const storageKey = composer.dataset.storageKey || 'permit-comments';
+
+    interface StoredComment { author: string; time: string; text: string; }
+
+    const initials = (name: string) =>
+      name
+        .replace(/^(Dr\.?|Prof\.?)\s+/i, '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase() ?? '')
+        .join('');
+
+    const todayLabel = () =>
+      new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // Clone the scoped template so both this page's and the Avatar's styles apply.
+    const buildComment = (c: StoredComment): HTMLElement => {
+      const li = commentTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      li.querySelector('.avatar')!.textContent = initials(c.author);
+      li.querySelector('.comment__author')!.textContent = c.author;
+      li.querySelector('.comment__time')!.textContent = c.time;
+      li.querySelector('.comment__text')!.textContent = c.text;
+      return li;
+    };
+
+    const load = (): StoredComment[] => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+    const save = (list: StoredComment[]) => localStorage.setItem(storageKey, JSON.stringify(list));
+
+    // Seed comments are newest-first; user comments are newer still, so they go
+    // above the first seed. Rendering the stored array (newest-first) in order
+    // before that anchor preserves newest-first.
+    const firstSeed = thread.firstElementChild;
+    load().forEach((c) => thread.insertBefore(buildComment(c), firstSeed));
+
+    const addComment = () => {
+      const text = (commentInput.value ?? '').trim();
+      if (!text) {
+        commentInput.focus();
+        return;
+      }
+      const comment: StoredComment = { author, time: todayLabel(), text };
+      const list = load();
+      list.unshift(comment);
+      save(list);
+      thread.insertBefore(buildComment(comment), thread.firstElementChild);
+      commentInput.value = '';
+      commentInput.focus();
+    };
+
+    commentSubmit.addEventListener('click', addComment);
+    commentInput.addEventListener('keydown', (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        addComment();
+      }
     });
+  }
+
+  // ── Analysis team: add / remove valid existing users (prototype-local) ──
+  // The roster starts from the server-rendered seed rows; edits (a removed seed,
+  // or an added directory user) persist to localStorage keyed per permit, so the
+  // team survives reloads. Only EXISTING directory users can be added — the
+  // combo-box is rebuilt after every change to exclude whoever is already on.
+  const roster = document.getElementById('team-roster');
+  const teamAddSelect = document.getElementById('team-add-select') as any;
+  const teamAddBtn = document.getElementById('team-add-btn');
+  const rowTemplate = document.getElementById('roster-row-template') as HTMLTemplateElement | null;
+  const directoryEl = document.getElementById('user-directory');
+
+  if (roster && teamAddSelect && teamAddBtn && rowTemplate && directoryEl) {
+    interface DirUser { id: string; name: string; role: string; detail: string; email: string; }
+    interface TeamEdits { removed: string[]; added: DirUser[]; }
+
+    const storageKey = (roster as HTMLElement).dataset.storageKey || 'permit-team';
+    let directory: DirUser[] = [];
+    try { directory = JSON.parse(directoryEl.textContent || '[]'); } catch { directory = []; }
+    const byId = new Map(directory.map((u) => [u.id, u]));
+
+    // Seed ids = the rows the server rendered, captured before any stored edit is
+    // applied. Used to tell a removed *seed* (tracked in `removed`) from a removed
+    // *added* user (just dropped from `added`).
+    const seedIds = new Set(
+      Array.from(roster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!),
+    );
+
+    const load = (): TeamEdits => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        return { removed: Array.isArray(parsed.removed) ? parsed.removed : [], added: Array.isArray(parsed.added) ? parsed.added : [] };
+      } catch {
+        return { removed: [], added: [] };
+      }
+    };
+    const save = (edits: TeamEdits) => localStorage.setItem(storageKey, JSON.stringify(edits));
+    let edits = load();
+
+    const teamIds = () =>
+      new Set(Array.from(roster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!));
+
+    // Rebuild the combo-box items to the directory users NOT on the team.
+    const refreshCombo = () => {
+      const onTeam = teamIds();
+      teamAddSelect.value = '';
+      teamAddSelect.innerHTML = '';
+      directory
+        .filter((u) => !onTeam.has(u.id))
+        .forEach((u) => {
+          const item = document.createElement('cds-combo-box-item');
+          item.setAttribute('value', u.id);
+          item.textContent = `${u.name} — ${u.role}`;
+          teamAddSelect.appendChild(item);
+        });
+    };
+
+    const removeMember = (id: string, row: HTMLElement) => {
+      row.remove();
+      if (seedIds.has(id)) {
+        if (!edits.removed.includes(id)) edits.removed.push(id);
+      } else {
+        edits.added = edits.added.filter((u) => u.id !== id);
+      }
+      save(edits);
+      refreshCombo();
+    };
+
+    const wireRemove = (row: HTMLElement) => {
+      const btn = row.querySelector('[data-remove]');
+      btn?.addEventListener('click', () => removeMember(row.dataset.userId!, row));
+    };
+
+    const buildRow = (u: DirUser): HTMLElement => {
+      const li = rowTemplate.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      li.dataset.userId = u.id;
+      li.querySelector('.roster__name')!.textContent = u.name;
+      li.querySelector('.roster__role')!.textContent = u.role;
+      const detail = li.querySelector('.roster__detail')!;
+      if (u.detail) detail.textContent = u.detail;
+      else detail.remove();
+      li.querySelector('[slot="tooltip-content"]')!.textContent = `Remove ${u.name}`;
+      wireRemove(li);
+      return li;
+    };
+
+    // Wire the seed rows' remove buttons.
+    roster.querySelectorAll<HTMLElement>('[data-user-id]').forEach(wireRemove);
+
+    // Replay stored edits: drop removed seeds, append added users (in stored order).
+    edits.removed.forEach((id) => {
+      const row = roster.querySelector<HTMLElement>(`[data-user-id="${id}"]`);
+      row?.remove();
+    });
+    edits.added.forEach((u) => roster.appendChild(buildRow(u)));
+
+    const addMember = () => {
+      const id = teamAddSelect.value;
+      const user = id && byId.get(id);
+      if (!user || teamIds().has(id)) return;
+      roster.appendChild(buildRow(user));
+      if (edits.removed.includes(id)) {
+        edits.removed = edits.removed.filter((r) => r !== id); // re-adding a removed seed
+      } else if (!edits.added.some((u) => u.id === id)) {
+        edits.added.push(user);
+      }
+      save(edits);
+      refreshCombo();
+    };
+
+    teamAddBtn.addEventListener('click', addMember);
+    refreshCombo();
+  }
+
+  // ── Permit tags: apply / remove from a curated set (prototype-local) ──
+  // A cds-multi-select is the control; applied tags mirror below as dismissible
+  // cds-tags. The applied set is the single source of truth: setting the
+  // multi-select's `value` (comma-joined) reconciles its checkboxes + count, so
+  // dismissing a tag and unchecking it stay in sync. Persists per permit.
+  const tagSelect = document.getElementById('permit-tag-select') as any;
+  const tagRow = document.getElementById('permit-tag-row');
+  const tagEmpty = document.getElementById('permit-tag-empty');
+
+  if (tagSelect && tagRow && tagEmpty) {
+    const storageKey = (tagRow as HTMLElement).dataset.storageKey || 'permit-tags';
+    // Canonical order = the option order, so the applied row is stable.
+    const optionOrder = Array.from(
+      tagSelect.querySelectorAll('cds-multi-select-item'),
+    ).map((i: any) => i.getAttribute('value') as string);
+    const sortByOption = (tags: string[]) => optionOrder.filter((o) => tags.includes(o));
+
+    const load = (): string[] | null => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        return Array.isArray(parsed) ? parsed.filter((t) => typeof t === 'string') : null;
+      } catch {
+        return null;
+      }
+    };
+    const save = (tags: string[]) => localStorage.setItem(storageKey, JSON.stringify(tags));
+
+    const buildTag = (label: string): HTMLElement => {
+      const tag = document.createElement('cds-dismissible-tag');
+      tag.setAttribute('type', 'cool-gray');
+      tag.setAttribute('size', 'md');
+      tag.setAttribute('text', label);
+      (tag as HTMLElement).dataset.tag = label;
+      tag.addEventListener('cds-dismissible-tag-closed', () => setTags(applied.filter((t) => t !== label)));
+      return tag;
+    };
+
+    // Seed from storage if present, else from the server-rendered row.
+    let applied = load() ?? sortByOption(
+      Array.from(tagRow.querySelectorAll<HTMLElement>('[data-tag]')).map((el) => el.dataset.tag!),
+    );
+
+    const setTags = (tags: string[]) => {
+      applied = sortByOption([...new Set(tags)]);
+      save(applied);
+      tagRow.replaceChildren(...applied.map(buildTag));
+      tagRow.hidden = applied.length === 0;
+      (tagEmpty as HTMLElement).hidden = applied.length !== 0;
+      // Reconcile the multi-select's checkboxes + field count to the applied set.
+      const next = applied.join(',');
+      if (tagSelect.value !== next) tagSelect.value = next;
+    };
+
+    // A user check/uncheck: the component has already updated its own `value`.
+    tagSelect.addEventListener('cds-multi-select-selected', () => {
+      setTags((tagSelect.value || '').split(',').filter(Boolean));
+    });
+
+    setTags(applied); // apply stored state over the seed on load
+  }
+
+</script>
+
+<!-- ── Special conditions: the review workflow ─────────────────────────────
+     HQ + each district curate their applied conditions (pulled from the shared
+     catalog or typed with sc-rich-text). Defaults are auto-seeded on first load;
+     approval freezes everything read-only. Prototype-local (localStorage). -->
+<script>
+  import '../components/sc-rich-text.ts';
+  import { permit } from '../data/permit';
+  import {
+    districtKey,
+    ownerLabel,
+    loadInventory,
+    saveInventory,
+    loadPermitConditions,
+    savePermitConditions,
+    permitStatusKey,
+    newConditionId,
+    type ConditionOwner,
+    type PermitCondition,
+  } from '../data/conditions';
+
+  const $ = (id: string) => document.getElementById(id);
+  const permitId = permit.id;
+  const districts = permit.studyAreas.districts.map((d) => ({
+    name: d.name,
+    key: districtKey(d.name),
+    parks: d.parks.length,
+  }));
+  const reviewer =
+    permit.overview.analysisTeam.find((m) => (m as any).highlight)?.name ?? 'Reviewer';
+
+  let conditions: PermitCondition[] = loadPermitConditions(
+    permitId,
+    districts.map((d) => d.key),
+  );
+  let locked = localStorage.getItem(permitStatusKey(permitId)) === 'Approved';
+
+  const scopeEl = $('sc-acting-as') as any;
+  const currentScope = (): ConditionOwner => scopeEl?.value || 'hq';
+  const canEdit = (owner: ConditionOwner) => !locked && currentScope() === owner;
+
+  const persist = () => savePermitConditions(permitId, conditions);
+
+  const sourceLabel = (c: PermitCondition) =>
+    c.source === 'default' ? 'Standard' : c.source === 'inventory' ? 'From catalog' : 'Custom';
+
+  // ── Render a single condition item into a contained-list ──────────────────
+  const buildItem = (c: PermitCondition, ownerConds: PermitCondition[], idxInOwner: number) => {
+    const item = document.createElement('cds-contained-list-item');
+
+    const content = document.createElement('div');
+    content.className = 'cond';
+    const body = document.createElement('div');
+    body.className = 'cond__body';
+    body.innerHTML = c.body; // sanitized on author / from our own seeds
+    const meta = document.createElement('div');
+    meta.className = 'cond__meta';
+    meta.innerHTML =
+      `<cds-tag type="cool-gray" size="sm">${sourceLabel(c)}</cds-tag>` +
+      `<span class="cond__by t-label-01">${c.addedBy}</span>`;
+    content.append(body, meta);
+    item.appendChild(content);
+
+    if (canEdit(c.owner)) {
+      const actions = document.createElement('div');
+      actions.className = 'cond__actions';
+      actions.slot = 'action';
+
+      const mkBtn = (label: string, kind: string, disabled: boolean, onClick: () => void) => {
+        const b = document.createElement('cds-button');
+        b.setAttribute('kind', kind);
+        b.setAttribute('size', 'sm');
+        if (disabled) b.setAttribute('disabled', '');
+        b.textContent = label;
+        if (!disabled) b.addEventListener('click', onClick);
+        return b;
+      };
+
+      const globalIndex = () => conditions.indexOf(c);
+      const move = (dir: -1 | 1) => {
+        const target = ownerConds[idxInOwner + dir];
+        if (!target) return;
+        const a = conditions.indexOf(c);
+        const b = conditions.indexOf(target);
+        [conditions[a], conditions[b]] = [conditions[b], conditions[a]];
+        persist();
+        render();
+      };
+
+      actions.append(
+        mkBtn('↑', 'ghost', idxInOwner === 0, () => move(-1)),
+        mkBtn('↓', 'ghost', idxInOwner === ownerConds.length - 1, () => move(1)),
+        mkBtn('Edit', 'ghost', false, () => openModal(c.owner, globalIndex())),
+        mkBtn('Remove', 'danger-ghost', false, () => {
+          conditions.splice(globalIndex(), 1);
+          persist();
+          render();
+        }),
+      );
+      item.appendChild(actions);
+    }
+    return item;
+  };
+
+  // ── Render one owner's list (HQ or a district) ────────────────────────────
+  const renderList = (listEl: Element, owner: ConditionOwner, emptyEl?: Element | null) => {
+    const owned = conditions.filter((c) => c.owner === owner);
+    // Keep any existing slot="action" add button; clear only the items.
+    Array.from(listEl.querySelectorAll('cds-contained-list-item')).forEach((n) => n.remove());
+    owned.forEach((c, i) => listEl.appendChild(buildItem(c, owned, i)));
+    if (emptyEl) (emptyEl as HTMLElement).hidden = owned.length > 0 || canEdit(owner);
+  };
+
+  // The add button that lives in a list's slot="action".
+  const ensureAddButton = (listEl: Element, owner: ConditionOwner) => {
+    let btn = listEl.querySelector('cds-button[slot="action"]') as HTMLElement | null;
+    const editable = canEdit(owner);
+    if (editable && !btn) {
+      btn = document.createElement('cds-button');
+      btn.setAttribute('slot', 'action');
+      btn.setAttribute('kind', 'tertiary');
+      btn.setAttribute('size', 'sm');
+      btn.textContent = 'Add condition';
+      btn.addEventListener('click', () => openModal(owner, -1));
+      listEl.appendChild(btn);
+    } else if (!editable && btn) {
+      btn.remove();
+    }
+  };
+
+  const render = () => {
+    // HQ block.
+    const hqList = $('sc-hq-list');
+    if (hqList) {
+      ensureAddButton(hqList, 'hq');
+      renderList(hqList, 'hq', $('sc-hq-empty'));
+    }
+
+    // District blocks — one contained-list per district on the permit.
+    const container = $('sc-district-blocks');
+    if (container) {
+      container.replaceChildren(
+        ...districts.map((d) => {
+          const list = document.createElement('cds-contained-list');
+          list.setAttribute('kind', 'on-page');
+
+          const label = document.createElement('div');
+          label.slot = 'label';
+          label.className = 'district-label';
+          label.innerHTML =
+            `<span class="district-label__name">${d.name}</span>` +
+            `<span class="district-label__count t-label-01">${d.parks} parks where research activities are permitted</span>`;
+          list.appendChild(label);
+
+          ensureAddButton(list, d.key);
+          renderList(list, d.key, null);
+
+          if (!conditions.some((c) => c.owner === d.key)) {
+            const empty = document.createElement('cds-contained-list-item');
+            empty.innerHTML = `<span class="cond__by t-label-01">No conditions for this district yet.</span>`;
+            list.appendChild(empty);
+          }
+          return list;
+        }),
+      );
+    }
+
+    // Lock banner.
+    const notice = $('sc-locked-notice') as any;
+    if (notice) notice.hidden = !locked;
+    const scopeTile = $('sc-scope-tile') as HTMLElement | null;
+    if (scopeTile) scopeTile.hidden = locked;
+  };
+
+  // ── Scope note ────────────────────────────────────────────────────────────
+  const applyScope = () => {
+    const owner = currentScope();
+    const note = $('sc-scope-note');
+    if (note) {
+      note.textContent =
+        owner === 'hq'
+          ? 'HQ reviewers manage the universal conditions that apply everywhere on this permit.'
+          : `You are acting for ${ownerLabel(owner)} — you can add and edit only that district's conditions.`;
+    }
+    render();
+  };
+
+  // ── Add / edit modal ──────────────────────────────────────────────────────
+  const modal = $('sc-condition-modal') as any;
+  const pickBlock = $('sc-pick-block') as HTMLElement | null;
+  const pickEl = () => $('sc-pick') as any;
+  const titleEl = () => $('sc-title') as any;
+  const bodyEl = () => $('sc-body') as any;
+  const saveCatalogEl = () => $('sc-save-catalog') as any;
+  const warnEl = $('sc-modal-warning') as any;
+  let modalOwner: ConditionOwner = 'hq';
+  let editingGlobalIndex = -1;
+
+  // Populate the catalog multi-select with this owner's saved items not already
+  // applied to the permit.
+  const buildPicker = (owner: ConditionOwner) => {
+    const el = pickEl();
+    if (!el) return;
+    const appliedInvIds = new Set(conditions.filter((c) => c.inventoryId).map((c) => c.inventoryId));
+    const available = loadInventory(owner).filter((it) => !appliedInvIds.has(it.id));
+    el.innerHTML = available
+      .map((it) => `<cds-multi-select-item value="${it.id}">${it.title}</cds-multi-select-item>`)
+      .join('');
+  };
+
+  const openModal = (owner: ConditionOwner, globalIndex: number) => {
+    modalOwner = owner;
+    editingGlobalIndex = globalIndex;
+    const editing = globalIndex >= 0;
+    const c = editing ? conditions[globalIndex] : null;
+
+    const heading = $('sc-modal-heading');
+    if (heading) heading.textContent = editing ? 'Edit condition' : 'Add condition';
+    const label = $('sc-modal-label');
+    if (label) label.textContent = ownerLabel(owner);
+    if (warnEl) warnEl.hidden = true;
+
+    // Catalog picker + "save to catalog" only make sense when adding.
+    if (pickBlock) pickBlock.hidden = editing;
+    if (saveCatalogEl()) saveCatalogEl().parentElement && ((saveCatalogEl() as HTMLElement).hidden = editing);
+    if (!editing) {
+      buildPicker(owner);
+      if (saveCatalogEl()) saveCatalogEl().checked = false;
+    }
+
+    const tEl = titleEl();
+    if (tEl) { tEl.value = c?.title ?? ''; tEl.setAttribute('value', c?.title ?? ''); }
+    if (bodyEl()) bodyEl().value = c?.body ?? '';
+
+    modal.open = true;
+  };
+
+  const selectedInventoryIds = (): string[] => {
+    const el = pickEl();
+    if (!el) return [];
+    return Array.from(el.querySelectorAll('cds-multi-select-item'))
+      .filter((i) => (i as any).selected)
+      .map((i) => (i as HTMLElement).getAttribute('value') || '')
+      .filter(Boolean);
+  };
+
+  const saveFromModal = () => {
+    const title = (titleEl()?.value ?? '').toString().trim();
+    const body = (bodyEl()?.value ?? '').toString().trim();
+
+    if (editingGlobalIndex >= 0) {
+      conditions[editingGlobalIndex] = {
+        ...conditions[editingGlobalIndex],
+        title: title || conditions[editingGlobalIndex].title,
+        body: body || conditions[editingGlobalIndex].body,
+      };
+      persist();
+      render();
+      modal.open = false;
+      return;
+    }
+
+    // Add mode: catalog picks + an optional typed condition.
+    const picks = selectedInventoryIds();
+    const inventory = loadInventory(modalOwner);
+    let added = 0;
+
+    picks.forEach((invId) => {
+      const it = inventory.find((x) => x.id === invId);
+      if (!it) return;
+      conditions.push({
+        id: newConditionId('c'),
+        owner: modalOwner,
+        source: 'inventory',
+        inventoryId: it.id,
+        title: it.title,
+        body: it.body,
+        addedBy: reviewer,
+        addedAt: new Date().toISOString(),
+      });
+      added++;
+    });
+
+    if (body) {
+      conditions.push({
+        id: newConditionId('c'),
+        owner: modalOwner,
+        source: 'custom',
+        title: title || 'Custom condition',
+        body,
+        addedBy: reviewer,
+        addedAt: new Date().toISOString(),
+      });
+      added++;
+      if (saveCatalogEl()?.checked) {
+        const inv = loadInventory(modalOwner);
+        inv.push({
+          id: newConditionId(modalOwner === 'hq' ? 'hq' : modalOwner),
+          owner: modalOwner,
+          title: title || 'Custom condition',
+          body,
+          isDefault: false,
+        });
+        saveInventory(modalOwner, inv);
+      }
+    }
+
+    if (added === 0) {
+      if (warnEl) warnEl.hidden = false;
+      return;
+    }
+    persist();
+    render();
+    modal.open = false;
+  };
+
+  // ── Wire + init ───────────────────────────────────────────────────────────
+  scopeEl?.addEventListener('cds-dropdown-selected', applyScope);
+  $('sc-modal-save')?.addEventListener('click', saveFromModal);
+
+  // Approval (fired by PermitHeader) freezes the tab without a reload.
+  window.addEventListener('permit-status-changed', (e) => {
+    if ((e as CustomEvent).detail?.status === 'Approved') {
+      locked = true;
+      render();
+    }
   });
+
+  applyScope();
 </script>
 
 <style>
   /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens.
      body already offsets the fixed ui-shell header (theme.css padding-top). */
+  /* Width + horizontal margins owned by the 2x Grid (.cds--css-grid on each
+     panel + the full-bleed banner). This wrapper sets only vertical padding. */
   .page {
-    max-width: 68rem;
-    margin: 0 auto;
-    padding: 1.5rem 1.5rem 6rem;
+    padding-block: 1.5rem 6rem;
   }
-  .header__search {
-    margin-left: auto;
-    max-width: 22rem;
-    width: 100%;
+
+  /* Sticky tab strip: pins at 6rem = the fixed UI-Shell header (3rem) + the
+     compact header bar (3rem), so it lands flush beneath the compact bar once the
+     full header has scrolled away. Its opaque full-bleed background (page bg)
+     covers panel content scrolling underneath; the inner grid re-centers. z-index
+     sits below the compact bar (95) and the UI-Shell header. */
+  .tabbar {
+    position: sticky;
+    top: calc(var(--cds-spacing-09, 3rem) * 2);
+    z-index: 90;
+    background: var(--cds-background, #f4f4f4);
+    padding-top: var(--cds-spacing-05, 1rem);
   }
+
   .panels { margin-top: 1.5rem; }
+  /* Row action buttons sit flush-right and tight; the buttons themselves are
+     stock cds-button (ghost, icon-only) — this only handles their grouping. */
+  .doc-actions { display: flex; gap: 0.25rem; justify-content: flex-end; }
+  /* Panels are now .cds--css-grid (display:grid), whose author rule would
+     override the [hidden] attribute's UA `display:none` — re-assert hiding so
+     the tab script's p.hidden toggle still switches panels. Higher specificity
+     than .cds--css-grid, so it wins. */
+  .panel[hidden] { display: none; }
 
   /* Editorial rhythm — sections separated by whitespace, not boxes. */
   .stack {
@@ -452,25 +1274,15 @@ const t = permit.researchTeam;
     flex-direction: column;
     gap: 2.75rem;
   }
-  /* Overview: main content column + Application-history rail down the right.
-     The rail runs the full height of the panel alongside summary/team/comments. */
-  .overview-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 2.75rem;
-  }
+  /* Overview: main content column + Application-history rail, laid out on
+     Carbon's 2x Grid (.cds--css-grid). Main spans 11 of 16 columns at lg, the
+     rail 5; both go full-width and stack at md/sm. Only the main column's
+     internal section rhythm below is bespoke — the columns are Carbon's. */
   .overview-main {
     display: flex;
     flex-direction: column;
     gap: 2.75rem;
     min-width: 0;
-  }
-  @media (min-width: 60rem) {
-    .overview-grid {
-      grid-template-columns: minmax(0, 1fr) 18rem;
-      gap: 3rem;
-      align-items: start;
-    }
   }
 
   .lede {
@@ -534,21 +1346,80 @@ const t = permit.researchTeam;
     margin: 0.0625rem 0 0;
     color: var(--cds-text-secondary, #525252);
   }
-  .roster__status {
+  /* Right end of a roster row: sign-off status + the remove control. */
+  .roster__end {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
     flex: 0 0 auto;
+  }
+  .roster__status {
     color: var(--cds-text-secondary, #525252);
     white-space: nowrap;
+  }
+
+  /* Permit tags — a multi-select control above the applied dismissible tags.
+     Layout only; the field and tags are Carbon legos. */
+  .tagger {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 34rem;
+  }
+  .tagger__select {
+    max-width: 24rem;
+  }
+  .tagger__applied {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  .tagger__empty {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* Add-an-existing-user control: the combo-box grows; the button sits on the
+     field row (offset past the combo's label). Layout only — Carbon owns the
+     field and button looks. */
+  .team-add {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    max-width: 34rem;
+  }
+  .team-add__select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .team-add cds-button {
+    flex: 0 0 auto;
+    margin-top: 1.5rem;
   }
 
   /* Application history — phases (Presubmittal, In review, …), each a labeled
      group with its own vertical cds-progress-indicator. Layout/spacing only;
      the step rail, dots, and states are Carbon's. */
+  /* History card owns its own title (inside the tile), then the phases. */
+  .history__title { margin: 0 0 1.25rem; }
   .phases {
     display: flex;
     flex-direction: column;
     gap: 1.75rem;
   }
   .phase__title { margin: 0 0 0.75rem; }
+
+  /* Comment composer — avatar beside a stock cds-textarea, action flush-right.
+     Layout only; the field + button are Carbon legos. */
+  .composer {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .composer__field { flex: 1 1 auto; min-width: 0; }
+  .composer__actions { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
 
   /* Comment thread. */
   .thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1rem; }
@@ -584,12 +1455,9 @@ const t = permit.researchTeam;
     gap: 0.375rem;
   }
 
-  /* Study sites — editorial place blocks (no tiles). */
-  .site-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.25rem; }
-  .site {
-    padding-top: 0.875rem;
-    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-  }
+  /* Study sites — a card grid of discrete places, each a cds-tile surface.
+     Layout only; the tile's surface, padding, and border are Carbon's. */
+  .site-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
   .site__name { margin: 0; }
   .site__coords { margin: 0.25rem 0 0.5rem; color: var(--cds-text-secondary, #525252); }
   .site__note { margin: 0; color: var(--cds-text-secondary, #525252); }
@@ -605,11 +1473,40 @@ const t = permit.researchTeam;
   .district-label { display: flex; flex-direction: column; gap: 0.125rem; }
   .district-label__count { color: var(--cds-text-secondary, #525252); }
 
-  /* Research team — lead contacts as editorial data blocks (no tiles). */
+  /* Special-conditions review workflow — layout only; look is cds-* + tokens. */
+  .sc-scope__row { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: flex-end; }
+  .sc-scope__row cds-dropdown { min-width: 20rem; }
+  .sc-scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
+  #sc-locked-notice[hidden], #sc-scope-tile[hidden], #sc-hq-empty[hidden], #sc-pick-block[hidden] { display: none; }
+  .sc-empty { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
+
+  /* One applied condition: rich-text body over a quiet source/author meta line;
+     row actions sit in the item's action slot. */
+  .cond { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+  :global(.cond__body) { color: var(--cds-text-primary, #161616); }
+  :global(.cond__body p) { margin: 0 0 0.375rem; }
+  :global(.cond__body p:last-child) { margin-bottom: 0; }
+  :global(.cond__body ul), :global(.cond__body ol) { margin: 0 0 0.375rem; padding-left: 1.5rem; }
+  :global(.cond__body ul) { list-style: disc; }
+  :global(.cond__body ol) { list-style: decimal; }
+  :global(.cond__body h1), :global(.cond__body h2), :global(.cond__body h3) { font-size: 1rem; font-weight: 600; margin: 0 0 0.375rem; }
+  :global(.cond__body blockquote) { margin: 0 0 0.375rem; padding-left: 0.75rem; border-left: 3px solid var(--cds-border-subtle-01, #e0e0e0); color: var(--cds-text-secondary, #525252); }
+  :global(.cond__body code) { font-family: var(--cds-code-01-font-family, 'IBM Plex Mono', monospace); background: var(--cds-layer-accent-01, #e0e0e0); padding: 0.05rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; }
+  :global(.cond__body a) { color: var(--cds-link-primary, #0f62fe); }
+  .cond__meta { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  :global(.cond__by) { color: var(--cds-text-secondary, #525252); }
+  :global(.cond__actions) { display: flex; gap: 0.125rem; align-items: center; }
+
+  /* Add/edit modal internals. */
+  .sc-or { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
+  .field-label { display: block; margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
+
+  /* Research team — lead contacts as a card grid (ContactCard = cds-tile);
+     participants render below as a cds-table (its own chrome, no tile). */
   .contact-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: 1.5rem;
+    gap: 1rem;
     margin-bottom: 0.5rem;
   }
 

@@ -17,12 +17,16 @@ interface Props {
   infoTags: Badge[];
   flagTags: Badge[];
   stats: Stat[];
+  /** Dates the applicant requested — shown as a reminder in the approve modal
+   *  and used to prefill its confirmation date-range picker (ISO pair). */
+  requestedWindow: { start: string; end: string; startISO: string; endISO: string };
 }
 
-const { id, name, organization, status, infoTags, flagTags, stats } = Astro.props;
+const { id, name, organization, status, infoTags, flagTags, stats, requestedWindow } =
+  Astro.props;
 ---
 
-<header class="banner cds--g100">
+<header class="banner cds--g100" id="permit-banner" data-permit-id={id}>
   <div class="banner__inner">
   <div class="banner__crumb"><slot name="breadcrumb" /></div>
   <div class="banner__main">
@@ -31,12 +35,12 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
       <h1 class="banner__title t-heading-05">{name}</h1>
       <div class="banner__id-row">
         <span class="banner__number t-heading-03">{id}</span>
-        <cds-icon-indicator size="20" kind={status.kind} label={status.label}></cds-icon-indicator>
+        <cds-icon-indicator class="permit-status-indicator" size="20" kind={status.kind} label={status.label}></cds-icon-indicator>
       </div>
       <div class="banner__tags">
-        {infoTags.map((tag) => <cds-tag type={tag.type} size="sm">{tag.label}</cds-tag>)}
+        {infoTags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
         {flagTags.map((tag) => (
-          <cds-tag type={tag.type} size="sm">
+          <cds-tag type={tag.type} size="lg">
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
               <path d="M14.5,14h-13c-0.2,0-0.3-0.1-0.4-0.2c-0.1-0.2-0.1-0.3,0-0.5l6.5-12C7.7,1,8,0.9,8.2,1.1c0.1,0,0.2,0.1,0.2,0.2l6.5,12 c0.1,0.2,0.1,0.3,0,0.5C14.9,13.9,14.7,14,14.5,14z M2.3,13h11.3L8,2.5L2.3,13z"/>
               <path d="M7.5 6H8.5V9.5H7.5z"/>
@@ -51,7 +55,10 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
     <!-- One primary anchor (Approve); demoted actions live in the attached menu.
          Reject stays flagged as danger inside the menu. -->
     <div class="banner__actions">
-      <cds-combo-button id="permit-actions" size="md" label="Approve permit" menu-alignment="bottom-end">
+      <!-- tooltip-alignment=bottom: the caret's "Additional actions" tooltip
+           defaults to opening upward, which is clipped once the header is a pinned
+           bar at the top of the viewport — open it downward instead. -->
+      <cds-combo-button id="permit-actions" class="permit-actions" size="md" label="Approve permit" menu-alignment="bottom-end" tooltip-alignment="bottom">
         <cds-menu>
           <cds-menu-item label="Request changes"></cds-menu-item>
           <cds-menu-item label="Download"></cds-menu-item>
@@ -70,28 +77,125 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
       </div>
     ))}
   </dl>
-  <div class="banner__foot"><slot name="tabs" /></div>
   </div>
 </header>
 
+<!-- Compact bar — a SEPARATE, position:fixed bar (constant height, out of normal
+     flow) that fades in once the full header above has scrolled away. Because it
+     never enters document flow, showing/hiding it can't change the page height,
+     so it can't trigger the scroll-anchoring feedback that makes a *resizing*
+     sticky header oscillate. Shows number + requested window + the action. -->
+<div class="compactbar cds--g100" id="permit-compactbar" aria-hidden="true">
+  <div class="compactbar__inner">
+    <span class="compactbar__number t-heading-03">{id}</span>
+    <cds-icon-indicator class="permit-status-indicator" size="16" kind={status.kind} label={status.label}></cds-icon-indicator>
+    <span class="compactbar__window t-body-01">{requestedWindow.start} – {requestedWindow.end}</span>
+    <div class="compactbar__spacer"></div>
+    <cds-combo-button class="permit-actions" size="sm" label="Approve permit" menu-alignment="bottom-end" tooltip-alignment="bottom">
+      <cds-menu>
+        <cds-menu-item label="Request changes"></cds-menu-item>
+        <cds-menu-item label="Download"></cds-menu-item>
+        <cds-menu-item-divider></cds-menu-item-divider>
+        <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
+      </cds-menu>
+    </cds-combo-button>
+  </div>
+</div>
+
 <!-- Confirmation dialogs for the two decision actions. Overlays live outside
      normal flow; Carbon owns the focus trap + return and the accessible heading. -->
-<cds-modal id="approve-permit-modal" size="sm">
+<cds-modal id="approve-permit-modal" size="md">
   <cds-modal-header>
     <cds-modal-close-button></cds-modal-close-button>
     <cds-modal-label>Permit {id}</cds-modal-label>
     <cds-modal-heading>Approve this permit?</cds-modal-heading>
   </cds-modal-header>
   <cds-modal-body>
-    <p class="t-body-01">
-      Approving authorizes the applicant to begin the requested research and
-      collection under the stated conditions. The applicant and all assigned
-      reviewers will be notified.
-    </p>
+    <cds-stack gap="7">
+      <p class="t-body-01">
+        Approving authorizes the applicant to begin the requested research and
+        collection under the stated conditions. The applicant and all assigned
+        reviewers will be notified.
+      </p>
+
+      <!-- Effective validity window the reviewer confirms — prefilled with the
+           requested dates, editable. Range mode is auto-detected by the from/to
+           inputs; the container `value` seeds both (ISO `start/end`). The
+           requested dates repeat below as a reminder. -->
+      <cds-stack gap="3">
+        <cds-date-picker value={`${requestedWindow.startISO}/${requestedWindow.endISO}`}>
+          <cds-date-picker-input
+            kind="from"
+            label-text="Permit start date"
+            placeholder="mm/dd/yyyy"
+          ></cds-date-picker-input>
+          <cds-date-picker-input
+            kind="to"
+            label-text="Permit end date"
+            placeholder="mm/dd/yyyy"
+          ></cds-date-picker-input>
+        </cds-date-picker>
+        <p class="requested-reminder t-label-01">
+          Applicant requested {requestedWindow.start} – {requestedWindow.end}
+        </p>
+      </cds-stack>
+
+      <!-- CEQA determination — a required either/or, so a radio group, defaulting
+           to N/A (the common case for scientific collection permits). -->
+      <cds-radio-button-group
+        name="ceqa"
+        legend-text="CEQA"
+        orientation="horizontal"
+        value="na"
+      >
+        <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+        <cds-radio-button label-text="N/A" value="na"></cds-radio-button>
+      </cds-radio-button-group>
+    </cds-stack>
   </cds-modal-body>
   <cds-modal-footer>
     <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-    <cds-modal-footer-button kind="primary" data-modal-close>Approve permit</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="approve-confirm" data-modal-close>Approve permit</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<cds-modal id="request-changes-modal" size="md">
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label>Permit {id}</cds-modal-label>
+    <cds-modal-heading>Request changes</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <cds-stack gap="7">
+      <p class="t-body-01">
+        Return the application to the applicant with the items to address.
+        They’ll be notified and can resubmit once the requested changes are made.
+      </p>
+
+      <!-- Reasons are not mutually exclusive, so a checkbox group. -->
+      <cds-checkbox-group legend-text="What’s needed">
+        <cds-checkbox value="dpr65a" label-text="DPR65A form submission"></cds-checkbox>
+        <cds-checkbox value="dpr65b" label-text="DPR65B form submission"></cds-checkbox>
+        <cds-checkbox
+          value="missing-docs"
+          label-text="Additional documentation requested / missing documents"
+        ></cds-checkbox>
+        <cds-checkbox
+          value="other"
+          label-text="Other information or changes requested"
+        ></cds-checkbox>
+      </cds-checkbox-group>
+
+      <cds-textarea
+        label="Additional information"
+        placeholder="Describe what the applicant needs to change or provide…"
+        rows="4"
+      ></cds-textarea>
+    </cds-stack>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" data-modal-close>Send request</cds-modal-footer-button>
   </cds-modal-footer>
 </cds-modal>
 
@@ -115,18 +219,67 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
 
 <script>
   // Combo-button fires onClick for its primary button AND for menu-item picks;
-  // route each to the matching confirmation modal. (Cancel / X / confirm all
-  // close natively via [data-modal-close].)
-  const combo = document.getElementById('permit-actions') as any;
+  // route each to the matching confirmation modal. Both the full header and the
+  // compact bar carry a `.permit-actions` combo-button, so wire them all.
+  // (Cancel / X / confirm all close natively via [data-modal-close].)
   const approveModal = document.getElementById('approve-permit-modal') as any;
   const rejectModal = document.getElementById('reject-permit-modal') as any;
-  if (combo) {
-    combo.onClick = (e: Event) => {
+  const requestModal = document.getElementById('request-changes-modal') as any;
+  document.querySelectorAll('.permit-actions').forEach((combo) => {
+    (combo as any).onClick = (e: Event) => {
       const item = (e.target as HTMLElement).closest?.('cds-menu-item');
       const label = item?.getAttribute('label');
       if (label === 'Reject permit') rejectModal.open = true;
+      else if (label === 'Request changes') requestModal.open = true;
       else if (!item) approveModal.open = true; // primary "Approve permit"
     };
+  });
+
+  // ── Approval → freeze the permit ──
+  // Approving persists the permit's status (prototype-local). Other surfaces that
+  // must lock on approval — notably the Special conditions tab — read this key and
+  // also listen for the live `permit-status-changed` event so they freeze without
+  // a reload. On load we reflect an already-approved status in the indicators.
+  const permitId = document.getElementById('permit-banner')?.dataset.permitId ?? '';
+  const statusKey = `permit-status-${permitId}`;
+
+  const applyApprovedUI = () => {
+    document.querySelectorAll('.permit-status-indicator').forEach((el) => {
+      el.setAttribute('kind', 'succeeded');
+      el.setAttribute('label', 'Approved');
+    });
+  };
+
+  if (permitId && localStorage.getItem(statusKey) === 'Approved') applyApprovedUI();
+
+  document.getElementById('approve-confirm')?.addEventListener('click', () => {
+    if (permitId) localStorage.setItem(statusKey, 'Approved');
+    applyApprovedUI();
+    window.dispatchEvent(new CustomEvent('permit-status-changed', { detail: { status: 'Approved' } }));
+  });
+
+  // ── Compact bar reveal ──
+  // Show the compact bar once the full header has scrolled out of view. This is
+  // NOT a resize: the full header simply scrolls away (constant height) and the
+  // compact bar is position:fixed (out of flow, constant height). Nothing changes
+  // the document height on scroll, so there's no scroll-anchoring feedback and no
+  // content jump — the two failure modes that made a *resizing* sticky header
+  // oscillate. An IntersectionObserver on the header flips a single class.
+  const banner = document.getElementById('permit-banner');
+  const compactbar = document.getElementById('permit-compactbar');
+  if (banner && compactbar && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        const gone = !entry.isIntersecting;
+        compactbar.classList.toggle('compactbar--shown', gone);
+        compactbar.setAttribute('aria-hidden', String(!gone));
+      },
+      // Reveal once the header's bottom passes the sticky line for the tab bar
+      // (fixed UI-Shell 48px + compact bar 48px = 96px), so the compact bar takes
+      // over exactly as the tabs pin beneath it.
+      { rootMargin: '-96px 0px 0px 0px', threshold: 0 },
+    );
+    io.observe(banner);
   }
 </script>
 
@@ -141,23 +294,75 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
        spans the whole viewport width. .banner__inner re-centers the content so
        it stays aligned with the rest of the page. */
     margin-inline: calc(50% - 50vw);
-    padding-block: 1.75rem;
+    padding-block: var(--cds-spacing-07, 2rem); /* 32px, on-scale */
+    /* The full header just scrolls away normally — no sticky, no resize. The
+       compact bar below takes over the pinned role. */
   }
-  .banner__inner {
-    max-width: 68rem;
+
+  /* ── Compact bar ─────────────────────────────────────────────────────────
+     A position:fixed bar pinned under the UI-Shell header (48px). Constant
+     height, out of normal flow — so revealing/hiding it never changes document
+     height (that's what kills the scroll-anchoring oscillation). Fades in once
+     the full header has scrolled away. Its 48px height + the 48px UI-Shell header
+     define the tab strip's sticky offset (6rem) on the page. */
+  .compactbar {
+    position: fixed;
+    top: var(--cds-spacing-09, 3rem);
+    left: 0;
+    right: 0;
+    height: var(--cds-spacing-09, 3rem);
+    background: var(--cds-background, #161616);
+    z-index: 95;
+    opacity: 0;
+    transform: translateY(-0.5rem);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .compactbar--shown {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  .compactbar__inner {
+    max-inline-size: 99rem;
+    height: 100%;
     margin-inline: auto;
-    padding-inline: 1.5rem;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-04, 0.75rem);
+  }
+  .compactbar__number {
+    color: var(--cds-text-primary, #f4f4f4);
+    white-space: nowrap;
+  }
+  .compactbar__window {
+    color: var(--cds-text-secondary, #c6c6c6);
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .compactbar__spacer {
+    flex: 1 1 auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .compactbar {
+      transition: none;
+    }
+  }
+
+  /* Re-center the full-bleed banner's content to match the 2x Grid: same 99rem
+     cap and responsive page margin as .cds--css-grid, so the header lines up
+     with the panels below. */
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
   }
   /* Breadcrumb row sits above the title, inside the dark header. */
   .banner__crumb {
-    margin-bottom: 1rem;
-  }
-  /* Tab strip sits at the bottom edge of the dark header; the small negative
-     bottom margin pulls it flush with the banner's lower edge so its underline
-     reads as the header's baseline. Panels render below, on the page. */
-  .banner__foot {
-    margin-top: 1.5rem;
-    margin-bottom: -1.75rem;
+    margin-bottom: var(--cds-spacing-05, 1rem); /* 16px */
   }
   .banner__main {
     display: flex;
@@ -173,7 +378,7 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
   /* Organization eyebrow — sits above the title, subordinate to it (secondary
      value, not a hue). Meaningful content, not an ornamental micro-label. */
   .banner__eyebrow {
-    margin: 0 0 0.375rem;
+    margin: 0 0 var(--cds-spacing-03, 0.5rem); /* 8px */
     color: var(--cds-text-secondary, #525252);
   }
   .banner__title {
@@ -183,8 +388,8 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
   .banner__id-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
+    gap: var(--cds-spacing-04, 0.75rem);
+    margin-top: var(--cds-spacing-03, 0.5rem); /* 8px */
   }
   .banner__number {
     color: var(--cds-text-primary, #161616);
@@ -192,8 +397,8 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
   .banner__tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
-    margin-top: 0.875rem;
+    gap: var(--cds-spacing-02, 0.25rem);
+    margin-top: var(--cds-spacing-05, 1rem); /* 16px, on-scale */
   }
   .banner__actions {
     display: flex;
@@ -204,9 +409,9 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
   .banner__stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    gap: 1.5rem;
-    margin: 1.5rem 0 0;
-    padding-top: 1.25rem;
+    gap: var(--cds-spacing-06, 1.5rem);
+    margin: var(--cds-spacing-07, 2rem) 0 0;      /* 32px above the divider */
+    padding-top: var(--cds-spacing-06, 1.5rem);   /* 24px, on-scale */
     border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   }
   .stat {
@@ -219,5 +424,13 @@ const { id, name, organization, status, infoTags, flagTags, stats } = Astro.prop
   .stat__value {
     margin: 0.25rem 0 0;
     color: var(--cds-text-primary, #161616);
+  }
+
+  /* Approve modal: quiet reminder of the applicant's requested window, sitting
+     directly under the editable confirmation date range. Secondary value only —
+     it's context, not the field. */
+  .requested-reminder {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
   }
 </style>

@@ -40,11 +40,19 @@ Do NOT hand-roll a control Carbon ships: raw `<input>`→`cds-text-input`,
 
 ## Grids
 Two different things — don't conflate:
-- **Layout grid** (page columns): the Web-Components grid is **CSS-class-based** —
-  `cds--grid` › `cds--row` › `cds--col-lg-N cds--col-md-N cds--col-sm-N` on `<div>`s
-  (no JS import; ships with `@carbon/styles`). **`<cds-row>` does not exist.** The
-  element grid (`<cds-grid>`/`<cds-column>`, no row level) needs an explicit import
-  and is only for when a task calls for it. Or, for simple pages, container + `cds-stack`.
+- **Layout grid** (page columns): the 2x Grid is **CSS-class-based** and ships with
+  `@carbon/styles` (already loaded, no JS import). The prebuilt stylesheet ships the
+  **CSS-Grid** flavor, so the classes are:
+  `cds--css-grid` (container) › `cds--css-grid-column` + span classes
+  `cds--col-span-N` / `cds--sm:col-span-N cds--md:col-span-N cds--lg:col-span-N`
+  (16 cols @ lg, 8 @ md, 4 @ sm; also `xlg`/`max`, and `cds--{bp}:col-start-N` for
+  offsets). Container modifiers: `--condensed`, `--narrow`, `--full-width`,
+  `--with-row-gap`. Example: `permit.astro` Overview (main `cds--lg:col-span-11`,
+  rail `cds--lg:col-span-5`).
+  **The legacy flexbox classes `cds--row` / `cds--col-lg-N` are NOT in the prebuilt
+  CSS — do not use them (they render as unstyled divs). `<cds-row>` does not exist.**
+  The element grid (`<cds-grid>`/`<cds-column>`) needs an explicit import and is only
+  for when a task calls for it. Or, for simple pages, container + `cds-stack`.
 - **Data grid** (tabular data): the spoke sanctions **two** options, chosen by job:
   - **`cds-table`** — simple/display tables, native Carbon look, already installed.
   - **AG Grid** via **`<DataGrid columns rows height />`** (`src/components/DataGrid.astro`)

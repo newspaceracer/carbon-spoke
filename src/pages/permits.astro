@@ -1,0 +1,76 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — the "Permits" nav item links here.
+     spine:  main.page > 2x Grid (full-width)
+     sections:
+       - header       -> breadcrumb (Home / Permits) + title + lede
+       - register     -> <PermitsGrid/> — the heavy AG Grid + its Carbon toolbar
+                         (scope switcher, in-grid search, column manager, reset).
+
+   Why a grid, not tiles: the register holds 900+ permits — far past the point
+   where cards scan. This is the "interactive / large" case the spoke routes to
+   AG Grid (see CLAUDE.md "Grids"). All 960 rows render server-side into the grid
+   config; AG Grid virtualizes them and the toolbar filters on the client.
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitsGrid from '../components/PermitsGrid.astro';
+
+// Home-page card metadata — the hub globs pages and reads this to self-list.
+export const prototype = {
+  title: 'Permits register',
+  summary:
+    'The full permit register as a data grid (900+ rows): filter by scope — ' +
+    'my permits, my district, or all — search in-table, and customize columns.',
+  tag: 'Internal tool',
+};
+---
+
+<BaseLayout title="Permits register">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <div class="cds--css-grid cds--css-grid--full-width cds--css-grid--with-row-gap">
+      <cds-breadcrumb no-trailing-slash class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link aria-current="page">Permits</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+      </cds-breadcrumb>
+
+      <header class="head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+        <h1 class="head__title">Permits</h1>
+        <p class="head__lede t-body-01">
+          Every Scientific Research &amp; Collection permit in the register. Narrow to the
+          permits you hold a role on or those in your districts, search within the table,
+          and tailor the columns to how you work.
+        </p>
+      </header>
+
+      <div class="register cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <PermitsGrid />
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  /* Page-level LAYOUT only. Width + horizontal margins owned by the 2x Grid;
+     body already offsets the fixed ui-shell header (theme.css padding-top). */
+  .page {
+    padding-block: 1.5rem 4rem;
+  }
+  .head__title {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 400;
+    line-height: 1.15;
+  }
+  .head__lede {
+    margin: 0.75rem 0 0;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

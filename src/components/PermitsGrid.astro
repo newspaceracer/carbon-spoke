@@ -1,0 +1,344 @@
+---
+// Permits register — the heavy, interactive index table (900+ rows), composed
+// AROUND the sanctioned Carbon-themed AG Grid (<carbon-ag-grid>). This section
+// owns the TOOLBAR that drives the grid, all from stock cds-* components:
+//   • cds-content-switcher — scope segments (My permits / My district / All),
+//     filtered via each row's `_buckets` (see carbon-ag-grid.ts / permits.ts).
+//   • cds-search           — in-grid quick search (AG Grid quickFilterText).
+//   • cds-popover          — a column manager: per-column show/hide (cds-checkbox)
+//                            + pin (cds-icon-button). Non-modal, so the grid
+//                            updates live behind it.
+//   • cds-button (Reset)   — restore default columns + clear scope/search.
+// Preferences (column state, scope, query) persist to localStorage, so "Reset"
+// is meaningful — it clears a remembered view.
+//
+// The wiring <script> talks to the grid element's imperative API + events; the
+// grid renders itself in the browser, so this is all client-side glue.
+import { permits, permitColumns, scopeCounts } from '../data/permits';
+
+interface Props {
+  /** CSS height of the grid viewport. */
+  height?: string;
+}
+const { height = 'clamp(480px, calc(100vh - 340px), 900px)' } = Astro.props;
+
+const config = JSON.stringify({ columns: permitColumns, rows: permits });
+
+// Carbon icon paths (from @carbon/icons/svg/32), inlined like every other icon
+// in this spoke.
+const icons = {
+  column: [
+    'M24 4H26V28H24z',
+    'M18,6V26H14V6h4m0-2H14a2,2,0,0,0-2,2V26a2,2,0,0,0,2,2h4a2,2,0,0,0,2-2V6a2,2,0,0,0-2-2Z',
+    'M6 4H8V28H6z',
+  ],
+  reset:
+    'M18,28A12,12,0,1,0,6,16v6.2L2.4,18.6,1,20l6,6,6-6-1.4-1.4L8,22.2V16H8A10,10,0,1,1,18,26Z',
+  pin:
+    'M28.59,13.31,30,11.9,20,2,18.69,3.42,19.87,4.6,8.38,14.32,6.66,12.61,5.25,14l5.66,5.68L2,28.58,3.41,30l8.91-8.91L18,26.75l1.39-1.42-1.71-1.71L27.4,12.13ZM16.26,22.2,9.8,15.74,21.29,6,26,10.71Z',
+};
+---
+
+<section class="permits-grid">
+  <p class="permits-grid__count t-body-01" id="pg-count" data-total={scopeCounts.all} aria-live="polite">
+    {scopeCounts.all} permits
+  </p>
+
+  <div class="permits-grid__toolbar">
+    <!-- Scope — filters rows by the reviewer's relationship to each permit. -->
+    <cds-content-switcher id="pg-scope" class="permits-grid__scope" value="all" size="lg" aria-label="Permit scope">
+      <cds-content-switcher-item value="mine">My permits · {scopeCounts.mine}</cds-content-switcher-item>
+      <cds-content-switcher-item value="district">My district · {scopeCounts.district}</cds-content-switcher-item>
+      <cds-content-switcher-item value="all">All permits · {scopeCounts.all}</cds-content-switcher-item>
+    </cds-content-switcher>
+
+    <div class="permits-grid__tools">
+      <cds-search
+        id="pg-search"
+        size="lg"
+        label-text="Search permits"
+        placeholder="Search this table"
+      ></cds-search>
+
+      <!-- Column manager — a non-modal popover panel. -->
+      <cds-popover id="pg-colman" align="bottom-right">
+        <cds-button id="pg-colman-trigger" kind="tertiary" size="lg" aria-haspopup="dialog" aria-expanded="false">
+          Columns
+          <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
+            {icons.column.map((d) => <path d={d} />)}
+          </svg>
+        </cds-button>
+        <cds-popover-content>
+          <div class="colman" role="group" aria-label="Show, hide, and pin columns">
+            <p class="colman__title t-heading-compact-01">Columns</p>
+            <ul class="colman__list">
+              {permitColumns.map((c) => (
+                <li class="colman__row">
+                  <cds-checkbox
+                    class="colman__vis"
+                    data-col={c.field}
+                    label-text={c.headerName}
+                    checked={!('hide' in c && c.hide)}
+                  ></cds-checkbox>
+                  <cds-icon-button
+                    class="colman__pin"
+                    data-col={c.field}
+                    kind="ghost"
+                    size="sm"
+                    align="left"
+                    isselected={'pinned' in c && c.pinned === 'left' ? true : undefined}
+                  >
+                    <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
+                      <path d={icons.pin} />
+                    </svg>
+                    <span slot="tooltip-content">Pin {c.headerName}</span>
+                  </cds-icon-button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </cds-popover-content>
+      </cds-popover>
+
+      <cds-button id="pg-reset" kind="ghost" size="lg">
+        Reset
+        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
+          <path d={icons.reset} />
+        </svg>
+      </cds-button>
+    </div>
+  </div>
+
+  <carbon-ag-grid id="pg-grid" height={height}>
+    <script type="application/json" set:html={config} is:inline></script>
+  </carbon-ag-grid>
+</section>
+
+<script>
+  import '../components/carbon-ag-grid.ts';
+
+  const STORE_KEY = 'carbon-spoke:permits-grid';
+
+  interface Prefs {
+    columnState?: unknown[];
+    bucket?: string;
+    query?: string;
+  }
+  const loadPrefs = (): Prefs => {
+    try {
+      return JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  };
+  const savePrefs = (patch: Prefs) => {
+    const next = { ...loadPrefs(), ...patch };
+    localStorage.setItem(STORE_KEY, JSON.stringify(next));
+  };
+
+  // The grid element exposes an imperative API (see carbon-ag-grid.ts).
+  const grid = document.getElementById('pg-grid') as HTMLElement & {
+    whenReady(): Promise<unknown>;
+    setBucket(b: string): void;
+    setQuickFilter(t: string): void;
+    getColumns(): { colId: string; headerName: string; visible: boolean; pinned: string | null }[];
+    setColumnVisible(id: string, v: boolean): void;
+    setColumnPinned(id: string, p: 'left' | null): void;
+    getColumnState(): unknown[];
+    applyColumnState(s: unknown[]): void;
+    resetColumns(): void;
+    getDisplayedRowCount(): number;
+  };
+
+  const scope = document.getElementById('pg-scope') as HTMLElement & { value: string };
+  const search = document.getElementById('pg-search') as HTMLElement & { value: string };
+  const popover = document.getElementById('pg-colman') as HTMLElement & { open: boolean };
+  const colTrigger = document.getElementById('pg-colman-trigger')!;
+  const resetBtn = document.getElementById('pg-reset')!;
+  const countEl = document.getElementById('pg-count')!;
+
+  const ALL = Number(countEl.dataset.total || '0');
+
+  // Keep the column-manager checkboxes + pin buttons in sync with the grid's
+  // actual column state (also fired after applyColumnState / reset).
+  function syncColumnManager() {
+    const cols = grid.getColumns();
+    const byId = new Map(cols.map((c) => [c.colId, c]));
+    document.querySelectorAll<HTMLElement & { checked: boolean }>('.colman__vis').forEach((cb) => {
+      const col = byId.get(cb.dataset.col || '');
+      if (col) cb.checked = col.visible;
+    });
+    document.querySelectorAll<HTMLElement & { isSelected: boolean }>('.colman__pin').forEach((btn) => {
+      const col = byId.get(btn.dataset.col || '');
+      const pinned = col?.pinned === 'left';
+      // Ghost-button pressed state (cds--btn--selected) — the correct "on" affordance.
+      btn.isSelected = pinned;
+      btn.setAttribute('aria-pressed', String(pinned));
+    });
+  }
+
+  function updateCount(shown: number) {
+    countEl.textContent =
+      shown === Number(ALL) ? `${shown} permits` : `${shown} of ${ALL} permits`;
+  }
+
+  grid.whenReady().then(() => {
+    const prefs = loadPrefs();
+
+    // Restore remembered view.
+    if (Array.isArray(prefs.columnState) && prefs.columnState.length) {
+      grid.applyColumnState(prefs.columnState);
+    }
+    const bucket = prefs.bucket || 'all';
+    scope.value = bucket;
+    grid.setBucket(bucket);
+
+    const query = prefs.query || '';
+    if (query) {
+      search.value = query;
+      grid.setQuickFilter(query);
+    }
+
+    syncColumnManager();
+    updateCount(grid.getDisplayedRowCount());
+  });
+
+  // Row count follows every filter / search change.
+  grid.addEventListener('grid-model-updated', (e) => {
+    updateCount((e as CustomEvent).detail.count);
+  });
+
+  // Column visibility / pin / order / width changed → re-sync UI + persist.
+  grid.addEventListener('grid-columns-changed', () => {
+    syncColumnManager();
+    savePrefs({ columnState: grid.getColumnState() });
+  });
+
+  // Scope switcher.
+  scope.addEventListener('cds-content-switcher-selected', (e) => {
+    const value = (e as CustomEvent).detail?.item?.value ?? scope.value;
+    grid.setBucket(value);
+    savePrefs({ bucket: value });
+  });
+
+  // In-grid search.
+  search.addEventListener('cds-search-input', (e) => {
+    const value = (e as CustomEvent).detail?.value ?? search.value ?? '';
+    grid.setQuickFilter(value);
+    savePrefs({ query: value });
+  });
+
+  // Column-manager checkbox → toggle visibility.
+  document.querySelectorAll('.colman__vis').forEach((cb) => {
+    cb.addEventListener('cds-checkbox-changed', (e) => {
+      const col = (cb as HTMLElement).dataset.col!;
+      grid.setColumnVisible(col, (e as CustomEvent).detail.checked);
+    });
+  });
+
+  // Column-manager pin → toggle left-pin.
+  document.querySelectorAll('.colman__pin').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const col = (btn as HTMLElement).dataset.col!;
+      const current = grid.getColumns().find((c) => c.colId === col);
+      grid.setColumnPinned(col, current?.pinned === 'left' ? null : 'left');
+    });
+  });
+
+  // Popover open / close.
+  const setOpen = (open: boolean) => {
+    popover.open = open;
+    colTrigger.setAttribute('aria-expanded', String(open));
+  };
+  colTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setOpen(!popover.open);
+  });
+  document.addEventListener('click', (e) => {
+    if (popover.open && !popover.contains(e.target as Node)) setOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && popover.open) setOpen(false);
+  });
+
+  // Reset every preference: default columns, All scope, empty search.
+  resetBtn.addEventListener('click', () => {
+    localStorage.removeItem(STORE_KEY);
+    grid.resetColumns();
+    grid.setBucket('all');
+    scope.value = 'all';
+    grid.setQuickFilter('');
+    search.value = '';
+    syncColumnManager();
+    setOpen(false);
+  });
+</script>
+
+<style>
+  /* Page/section LAYOUT only — the controls are cds-* + --cds-* tokens. */
+  .permits-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .permits-grid__count {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .permits-grid__toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  /* Carbon hard-codes cds-content-switcher to inline-size:100% (it's built to
+     fill its container, with equal-width buttons). Left unbounded in the toolbar
+     it sprawls the whole row, so cap it — max-width is a separate property from
+     inline-size, so it bounds the fill cleanly without a cascade fight. It still
+     shrinks below this on narrow viewports (the toolbar wraps). */
+  .permits-grid__scope {
+    flex: 0 1 auto;
+    max-width: 30rem;
+  }
+  .permits-grid__tools {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+    flex: 1 1 22rem;
+    min-width: 0;
+    /* Right-align the search + column/reset controls opposite the scope. */
+    justify-content: flex-end;
+  }
+  .permits-grid__tools cds-search {
+    max-width: 20rem;
+    flex: 1 1 12rem;
+  }
+
+  /* Column-manager panel inside the popover. */
+  .colman {
+    padding: 1rem;
+    width: 17rem;
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+  .colman__title {
+    margin: 0 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .colman__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .colman__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .colman__vis {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+</style>

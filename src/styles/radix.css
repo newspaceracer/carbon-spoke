@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Radix Colors -> Carbon token bridge  (Slate neutral + Iris accent)
+   Radix Colors -> Carbon token bridge  (Slate neutral + Blue accent)
    ==========================================================================
    Carbon components read SEMANTIC --cds-* tokens. This file redefines the
    high-impact color tokens to reference Radix's 12-step scales, so the whole
@@ -79,7 +79,7 @@
   --cds-border-subtle-selected-01: var(--slate-7);
   --cds-border-strong-01: var(--slate-8);
   --cds-border-strong-02: var(--slate-8);
-  --cds-border-interactive: var(--iris-9);
+  --cds-border-interactive: var(--blue-9);
   --cds-border-inverse: var(--slate-12);
 
   /* Text */
@@ -98,24 +98,24 @@
   --cds-icon-on-color: #ffffff;
 
   /* Links (step 11 = accessible link text on a light surface) */
-  --cds-link-primary: var(--iris-11);
-  --cds-link-primary-hover: var(--iris-12);
-  --cds-link-secondary: var(--iris-11);
-  --cds-link-visited: var(--iris-11);
+  --cds-link-primary: var(--blue-11);
+  --cds-link-primary-hover: var(--blue-12);
+  --cds-link-secondary: var(--blue-11);
+  --cds-link-visited: var(--blue-11);
 
   /* Interactive / brand / buttons (step 9 = solid fill, 10 hover, 11 active) */
-  --cds-interactive: var(--iris-9);
-  --cds-background-brand: var(--iris-9);
-  --cds-button-primary: var(--iris-9);
-  --cds-button-primary-hover: var(--iris-10);
-  --cds-button-primary-active: var(--iris-11);
+  --cds-interactive: var(--blue-9);
+  --cds-background-brand: var(--blue-9);
+  --cds-button-primary: var(--blue-9);
+  --cds-button-primary-hover: var(--blue-10);
+  --cds-button-primary-active: var(--blue-11);
   --cds-button-secondary: var(--slate-12);
   --cds-button-secondary-hover: var(--slate-11);
-  --cds-button-tertiary: var(--iris-9);
-  --cds-button-tertiary-hover: var(--iris-10);
+  --cds-button-tertiary: var(--blue-9);
+  --cds-button-tertiary-hover: var(--blue-10);
 
   /* Focus ring */
-  --cds-focus: var(--iris-9);
+  --cds-focus: var(--blue-9);
   --cds-focus-inset: var(--slate-1);
 
   /* Status / support (solid step 9; error text uses step 11 for contrast) */

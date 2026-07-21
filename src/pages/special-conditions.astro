@@ -1,0 +1,369 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell).
+     header: identity banner (g100) — "Special conditions" + crumb.
+     spine:  main.page > .cds--css-grid (single full-width column)
+     sections:
+       - Scope bar  -> who you're acting as (HQ reviewer vs a District
+                       representative). The console is ONE screen filtered by
+                       scope: HQ curates the org-wide catalog; a district rep
+                       curates only their district's catalog. Mirrors the
+                       manage-district "Acting as" pattern.
+       - Condition inventory -> the reusable catalog for the active scope: a
+                       cds-table (Title, Preview, Default?, Actions) with per-row
+                       Edit/Remove + an "Add condition" cds-modal whose body is
+                       the bespoke sc-rich-text editor. "Default" items auto-attach
+                       to a permit the moment it enters review.
+   Everything is prototype-local: adds/edits/removes persist immediately to
+   localStorage (per-owner keys), which the permit's Special conditions tab reads.
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitSection from '../components/PermitSection.astro';
+import { districtOptions } from '../data/conditions';
+
+export const prototype = {
+  title: 'Manage special conditions',
+  summary:
+    'The catalog console for special conditions — the reusable text items reviewers ' +
+    'attach to permits. HQ curates the org-wide inventory; each district curates ' +
+    'its own. Items flagged "default" auto-attach when a permit enters review.',
+  tag: 'Internal tool',
+};
+---
+
+<BaseLayout title="Manage special conditions">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <cds-breadcrumb no-trailing-slash class="banner__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">Special conditions</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <p class="banner__eyebrow t-label-01">Permit administration</p>
+        <h1 class="banner__name t-heading-05">Special conditions</h1>
+      </div>
+    </header>
+
+    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+      <div class="col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <!-- ── Scope bar: who is curating, and whose catalog ────────────────── -->
+        <cds-tile class="scope">
+          <div class="scope__row">
+            <cds-dropdown id="acting-as" title-text="Acting as" value="hq">
+              <cds-dropdown-item value="hq">HQ reviewer</cds-dropdown-item>
+              <cds-dropdown-item value="district">District representative</cds-dropdown-item>
+            </cds-dropdown>
+
+            <div id="switcher-wrap" class="scope__switcher" hidden>
+              <cds-dropdown id="district-switcher" title-text="District" value={districtOptions[0]?.key}>
+                {districtOptions.map((o) => (
+                  <cds-dropdown-item value={o.key}>{o.name}</cds-dropdown-item>
+                ))}
+              </cds-dropdown>
+            </div>
+          </div>
+          <p class="scope__note t-label-01" id="scope-note">
+            HQ reviewers curate the org-wide catalog that applies to every permit.
+          </p>
+        </cds-tile>
+
+        <!-- Auto-save confirmation. -->
+        <cds-inline-notification
+          id="save-notice"
+          hidden
+          kind="success"
+          low-contrast
+          hide-close-button
+          title="Inventory updated"
+          subtitle="Your changes save automatically and are available on every permit."
+        ></cds-inline-notification>
+
+        <!-- ── Condition inventory ──────────────────────────────────────────── -->
+        <PermitSection title="Condition inventory">
+          <cds-button slot="aside" id="add-condition" kind="tertiary" size="sm">Add condition</cds-button>
+          <p class="section-hint t-body-01" id="inv-hint">
+            Reusable conditions for <strong id="inv-owner">Headquarters</strong>. Reviewers pull these onto
+            a permit without retyping. Items marked <strong>Default</strong> attach automatically when a
+            permit enters review.
+          </p>
+          <!-- carbon-checked: .table-wrap is NOT a table — the table is the stock
+               cds-table below. It is only a horizontal-scroll container so the
+               cds-table overflows gracefully on narrow viewports (same pattern as
+               manage-district.astro). -->
+          <div class="table-wrap">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Condition</cds-table-header-cell>
+                  <cds-table-header-cell>Preview</cds-table-header-cell>
+                  <cds-table-header-cell>Applies</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="inv-tbody"></cds-table-body>
+            </cds-table>
+          </div>
+          <p class="empty-note t-body-01" id="inv-empty" hidden>
+            No conditions in this catalog yet. Use <strong>Add condition</strong> to create the first one.
+          </p>
+        </PermitSection>
+      </div>
+    </div>
+
+    <!-- ── Add / edit condition modal ─────────────────────────────────────── -->
+    <cds-modal id="condition-modal" size="md">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label id="condition-modal-label">Headquarters catalog</cds-modal-label>
+        <cds-modal-heading id="condition-modal-heading">Add condition</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <cds-inline-notification
+          id="condition-warning"
+          hidden
+          kind="warning"
+          low-contrast
+          hide-close-button
+          title="Add some text"
+          subtitle="A condition needs a title and body before it can be saved."
+        ></cds-inline-notification>
+
+        <cds-stack gap="6">
+          <cds-text-input id="c-title" label="Title" placeholder="Short label shown in the picker"></cds-text-input>
+
+          <div>
+            <p class="field-label t-label-01">Condition text</p>
+            <sc-rich-text id="c-body" placeholder="Write the condition. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
+          </div>
+
+          <cds-checkbox id="c-default" label-text="Default — attach to every applicable permit on submission"></cds-checkbox>
+        </cds-stack>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="c-save">Save condition</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+  </main>
+</BaseLayout>
+
+<script>
+  import '../components/sc-rich-text.ts';
+  import {
+    districtOptions,
+    ownerLabel,
+    loadInventory,
+    saveInventory,
+    newConditionId,
+    plainText,
+    type ConditionInventoryItem,
+    type ConditionOwner,
+  } from '../data/conditions';
+
+  const $ = (id: string) => document.getElementById(id);
+  const esc = (s = '') =>
+    s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+
+  // ── Scope ───────────────────────────────────────────────────────────────
+  const actingAs = $('acting-as') as any;
+  const switcherWrap = $('switcher-wrap');
+  const switcher = $('district-switcher') as any;
+  const scopeNote = $('scope-note');
+
+  const currentOwner = (): ConditionOwner =>
+    actingAs?.value === 'district' ? (switcher?.value || districtOptions[0]?.key) : 'hq';
+
+  // ── Inventory state (the active owner's catalog) ────────────────────────
+  let items: ConditionInventoryItem[] = [];
+
+  const flashSaved = () => {
+    const n = $('save-notice') as any;
+    if (n) n.hidden = false;
+  };
+
+  const persist = () => {
+    saveInventory(currentOwner(), items);
+    flashSaved();
+  };
+
+  const renderInventory = () => {
+    const owner = currentOwner();
+    items = loadInventory(owner);
+
+    const label = ownerLabel(owner);
+    const ownerEl = $('inv-owner');
+    if (ownerEl) ownerEl.textContent = label;
+
+    const tbody = $('inv-tbody');
+    const empty = $('inv-empty');
+    if (empty) empty.hidden = items.length > 0;
+    if (!tbody) return;
+
+    tbody.replaceChildren(
+      ...items.map((it, i) => {
+        const row = document.createElement('cds-table-row');
+
+        const titleCell = document.createElement('cds-table-cell');
+        titleCell.innerHTML = `<span class="c-title">${esc(it.title || '(untitled)')}</span>`;
+
+        const prevCell = document.createElement('cds-table-cell');
+        const preview = plainText(it.body);
+        prevCell.innerHTML = `<span class="c-preview">${esc(preview.length > 90 ? preview.slice(0, 90) + '…' : preview)}</span>`;
+
+        const defCell = document.createElement('cds-table-cell');
+        defCell.innerHTML = it.isDefault
+          ? `<cds-tag type="cool-gray" size="sm">Default</cds-tag>`
+          : `<span class="c-muted">As needed</span>`;
+
+        const actionCell = document.createElement('cds-table-cell');
+        const wrap = document.createElement('div');
+        wrap.className = 'row-actions';
+        const edit = document.createElement('cds-button');
+        edit.setAttribute('kind', 'ghost'); edit.setAttribute('size', 'sm');
+        edit.textContent = 'Edit';
+        edit.addEventListener('click', () => openModal(i));
+        const rm = document.createElement('cds-button');
+        rm.setAttribute('kind', 'danger-ghost'); rm.setAttribute('size', 'sm');
+        rm.textContent = 'Remove';
+        rm.addEventListener('click', () => { items.splice(i, 1); persist(); renderInventory(); });
+        wrap.append(edit, rm);
+        actionCell.appendChild(wrap);
+
+        row.append(titleCell, prevCell, defCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
+  const applyScope = () => {
+    const isDistrict = actingAs?.value === 'district';
+    if (switcherWrap) switcherWrap.hidden = !isDistrict;
+    if (scopeNote) {
+      scopeNote.textContent = isDistrict
+        ? 'District representatives curate only their own district catalog. Pick your district.'
+        : 'HQ reviewers curate the org-wide catalog that applies to every permit.';
+    }
+    renderInventory();
+  };
+
+  // ── Add / edit modal ─────────────────────────────────────────────────────
+  const modal = $('condition-modal') as any;
+  const titleEl = () => $('c-title') as any;
+  const bodyEl = () => $('c-body') as any;
+  const defaultEl = () => $('c-default') as any;
+  const warnEl = $('condition-warning') as any;
+  let editingIndex = -1;
+
+  const openModal = (index: number) => {
+    editingIndex = index;
+    const it = index >= 0 ? items[index] : null;
+
+    const heading = $('condition-modal-heading');
+    if (heading) heading.textContent = index >= 0 ? 'Edit condition' : 'Add condition';
+    const label = $('condition-modal-label');
+    if (label) label.textContent = `${ownerLabel(currentOwner())} catalog`;
+    if (warnEl) warnEl.hidden = true;
+
+    const t = titleEl();
+    if (t) { t.value = it?.title ?? ''; t.setAttribute('value', it?.title ?? ''); }
+    if (bodyEl()) bodyEl().value = it?.body ?? '';
+    const d = defaultEl();
+    if (d) d.checked = !!it?.isDefault;
+
+    modal.open = true;
+  };
+
+  const saveCondition = () => {
+    const title = (titleEl()?.value ?? '').toString().trim();
+    const body = (bodyEl()?.value ?? '').toString().trim();
+    if (!title || !body) {
+      if (warnEl) warnEl.hidden = false;
+      return;
+    }
+    const owner = currentOwner();
+    const isDefault = !!defaultEl()?.checked;
+
+    if (editingIndex >= 0) {
+      items[editingIndex] = { ...items[editingIndex], title, body, isDefault };
+    } else {
+      items.push({ id: newConditionId(owner === 'hq' ? 'hq' : owner), owner, title, body, isDefault });
+    }
+    persist();
+    renderInventory();
+    modal.open = false;
+  };
+
+  // ── Wire ─────────────────────────────────────────────────────────────────
+  applyScope();
+  actingAs?.addEventListener('cds-dropdown-selected', applyScope);
+  switcher?.addEventListener('cds-dropdown-selected', renderInventory);
+  $('add-condition')?.addEventListener('click', () => openModal(-1));
+  $('c-save')?.addEventListener('click', saveCondition);
+</script>
+
+<style>
+  .page { padding-block: 0 6rem; }
+
+  /* Identity banner — same construction as the other admin screens. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__crumb { display: block; margin-bottom: var(--cds-spacing-05, 1rem); }
+  .banner__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+  .banner__name { margin: 0; }
+
+  .body { margin-top: var(--cds-spacing-07, 2rem); }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+    min-width: 0;
+  }
+
+  /* Scope bar — a cds-tile; layout only. */
+  .scope__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    align-items: flex-end;
+  }
+  .scope__row cds-dropdown { min-width: 18rem; }
+  .scope__switcher { min-width: 18rem; }
+  .scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
+  #switcher-wrap[hidden], #save-notice[hidden], #inv-empty[hidden] { display: none; }
+  #save-notice { max-width: 48rem; }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 52rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty-note { margin: 1rem 0 0; color: var(--cds-text-secondary, #525252); }
+
+  /* Inventory table wrapper — see carbon-checked note in the markup above. */
+  .table-wrap { overflow-x: auto; }
+  :global(.c-title) { color: var(--cds-text-primary, #161616); }
+  :global(.c-preview) { color: var(--cds-text-secondary, #525252); }
+  :global(.c-muted) { color: var(--cds-text-secondary, #525252); }
+  :global(.row-actions) { display: flex; gap: 0.25rem; }
+
+  /* Modal internals. */
+  #condition-warning { margin-bottom: 1rem; }
+  #condition-warning[hidden] { display: none; }
+  .field-label { display: block; margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
+</style>

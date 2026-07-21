@@ -1,0 +1,323 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — the "Districts" roster links here.
+     header: identity banner (g100 zone) — building-glyph Avatar, district name,
+             region eyebrow, at-a-glance counts (parks, points of contact, HQ).
+     spine:  main.page > .cds--css-grid  (main col 11 / rail col 5)
+     sections:
+       - Parks in this district (main) -> cds-table (name, designation, acreage)
+       - Point of contact (main)       -> contact-card grid (published members)
+       - District office (rail)         -> cds-tile: structured address + phone/email
+   READ-ONLY detail. Editing lives in the scoped "Manage district" console
+   (/manage-district); the "Manage district" action routes there. Both read from
+   the same prototype-local record (localStorage), so console edits show here.
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitSection from '../components/PermitSection.astro';
+import Avatar from '../components/Avatar.astro';
+import { district } from '../data/district';
+
+export const prototype = {
+  title: 'District detail',
+  summary:
+    'An administrative district at a glance — its office address, the parks it ' +
+    'administers, and its points of contact. Editing is handled by the Manage ' +
+    'district console.',
+  tag: 'Internal tool',
+};
+
+const d = district;
+const a = d.office.address;
+const phoneHref = `tel:${d.office.phone.replace(/[^0-9+]/g, '')}`;
+const publishedCount = d.members.filter((m) => m.published).length;
+
+// Facility identity glyph (a building) — the Avatar renders a supplied SVG in
+// place of initials for non-person entities.
+const buildingIcon = `<svg viewBox="0 0 32 32" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M6 3h20v26H6z M10 7h4v4h-4z M18 7h4v4h-4z M10 15h4v4h-4z M18 15h4v4h-4z M14 23h4v6h-4z"/></svg>`;
+---
+
+<BaseLayout title={`${d.name} — District detail`}>
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <!-- Identity banner — dark g100 zone, same construction as the permit/profile
+         headers so the screens read as one system. -->
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <cds-breadcrumb no-trailing-slash class="banner__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/districts">Districts</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">{d.name}</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <div class="banner__id">
+          <Avatar name={d.name} size="lg" icon={buildingIcon} />
+          <div class="banner__lead">
+            <p class="banner__eyebrow t-label-01">{d.region} region</p>
+            <h1 class="banner__name t-heading-05">{d.name}</h1>
+          </div>
+        </div>
+
+        <dl class="banner__stats">
+          <div class="stat">
+            <dt class="stat__label t-label-01">Parks administered</dt>
+            <dd class="stat__value t-body-01" id="stat-parks">{d.parks.length}</dd>
+          </div>
+          <div class="stat">
+            <dt class="stat__label t-label-01">Points of contact</dt>
+            <dd class="stat__value t-body-01" id="stat-contacts">{publishedCount}</dd>
+          </div>
+          <div class="stat">
+            <dt class="stat__label t-label-01">Headquarters</dt>
+            <dd class="stat__value t-body-01" id="stat-hq">{a.city}, {a.state}</dd>
+          </div>
+        </dl>
+      </div>
+    </header>
+
+    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+      <!-- ── Main column ─────────────────────────────────────────────────── -->
+      <div class="main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-11">
+        <!-- Internal/admin affordance: the detail page is read-only; editing is
+             the scoped Manage district console. -->
+        <div class="admin-bar">
+          <p class="admin-bar__note t-label-01">Internal / admin view — district leads and HQ admins can edit this district.</p>
+          <cds-button id="manage-btn" kind="tertiary" size="sm" href="/manage-district">Manage district</cds-button>
+        </div>
+
+        <PermitSection title="Parks in this district">
+          <p class="section-hint t-body-01">State park units administered by {d.name}. Research and collection under a district permit is authorized within these units.</p>
+          <cds-table>
+            <cds-table-head>
+              <cds-table-header-row>
+                <cds-table-header-cell>Park</cds-table-header-cell>
+                <cds-table-header-cell>Designation</cds-table-header-cell>
+                <cds-table-header-cell>Approx. area</cds-table-header-cell>
+              </cds-table-header-row>
+            </cds-table-head>
+            <!-- Rows rendered client-side from the shared district record. -->
+            <cds-table-body id="parks-tbody"></cds-table-body>
+          </cds-table>
+        </PermitSection>
+
+        <PermitSection title="Point of contact">
+          <p class="section-hint t-body-01">Who to reach for this district. Applicants and reviewers coordinate permits through these contacts, chosen from the district's members.</p>
+          <!-- Cards rendered client-side (published members). -->
+          <div class="contact-grid" id="contacts-grid"></div>
+        </PermitSection>
+      </div>
+
+      <!-- Rail: district office -->
+      <aside class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5">
+        <cds-tile class="office">
+          <h2 class="office__title t-heading-03">District office</h2>
+          <address class="office__address t-body-01" id="office-address">
+            {a.street}<br />
+            {a.unit && <>{a.unit}<br /></>}
+            {a.city}, {a.state} {a.zip}
+          </address>
+          <dl class="office__meta">
+            <div class="office__row">
+              <dt class="stat__label t-label-01">Phone</dt>
+              <dd class="office__value t-body-01"><cds-link id="o-phone" href={phoneHref}>{d.office.phone}</cds-link></dd>
+            </div>
+            <div class="office__row">
+              <dt class="stat__label t-label-01">Email</dt>
+              <dd class="office__value t-body-01"><cds-link id="o-email" href={`mailto:${d.office.email}`}>{d.office.email}</cds-link></dd>
+            </div>
+          </dl>
+        </cds-tile>
+      </aside>
+    </div>
+  </main>
+</BaseLayout>
+
+<script>
+  import { district, roleMeta, memberRoles } from '../data/district';
+  import { findUser } from '../data/user';
+  import { avatarHTML } from '../lib/avatar';
+
+  // Read-only hydration from the shared prototype-local record the Manage district
+  // console writes. Seed = module data; any saved edits override it.
+  type Address = { street: string; unit: string; city: string; state: string; zip: string };
+  type Park = { name: string; designation: string; acreage: string };
+  type AutoAssign = { mode: string; parks: string[] };
+  type Member = { userId: string; role: string; autoAssign: AutoAssign; published: boolean };
+  type State = {
+    office: { address: Address; phone: string; email: string };
+    parks: Park[];
+    members: Member[];
+  };
+
+  const KEY = `manage-district-${district.id}`;
+
+  const seed = (): State => ({
+    office: { address: { ...district.office.address }, phone: district.office.phone, email: district.office.email },
+    parks: district.parks.map((p) => ({ ...p })),
+    members: district.members.map((m) => ({ ...m, autoAssign: { ...m.autoAssign } })),
+  });
+
+  // Discard member records saved by an earlier build (no userId / removed role) so
+  // stale localStorage can't render unknown contacts. Matches the console's guard.
+  const memberOk = (m: any): boolean =>
+    !!m && typeof m.userId === 'string' && !!findUser(m.userId) && memberRoles.some((r) => r.value === m.role);
+
+  const load = (): State => {
+    const base = seed();
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (saved && typeof saved === 'object') {
+        const savedMembers = Array.isArray(saved.members) ? saved.members : null;
+        const membersUsable = savedMembers && savedMembers.every(memberOk);
+        return {
+          office: saved.office ?? base.office,
+          parks: Array.isArray(saved.parks) ? saved.parks : base.parks,
+          members: membersUsable ? savedMembers : base.members,
+        };
+      }
+    } catch { /* malformed — seed */ }
+    return base;
+  };
+
+  const state = load();
+
+  const $ = (id: string) => document.getElementById(id);
+  const esc = (s = '') =>
+    s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+  const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, '')}`;
+
+  // Parks table
+  const tbody = $('parks-tbody');
+  if (tbody) {
+    tbody.replaceChildren(
+      ...state.parks.map((p) => {
+        const row = document.createElement('cds-table-row');
+        [p.name, p.designation, p.acreage].forEach((v) => {
+          const cell = document.createElement('cds-table-cell');
+          cell.textContent = v ?? '';
+          row.appendChild(cell);
+        });
+        return row;
+      }),
+    );
+  }
+
+  // Point-of-contact cards — published members (mirror ContactCard; global classes).
+  const grid = $('contacts-grid');
+  if (grid) {
+    const contacts = state.members.filter((m) => m.published);
+    grid.replaceChildren(
+      ...contacts.map((c) => {
+        const u = findUser(c.userId);
+        const name = u?.name ?? '';
+        const tile = document.createElement('cds-tile');
+        tile.className = 'dcontact';
+        tile.innerHTML =
+          `<p class="dcontact__role t-label-01">${esc(roleMeta(c.role).label)}</p>` +
+          `<div class="dcontact__id">` +
+            avatarHTML(name) +
+            `<p class="dcontact__name t-heading-compact-01">${esc(name)}</p>` +
+          `</div>` +
+          `<div class="dcontact__meta t-body-01">` +
+            (u?.phone ? `<span>${esc(u.phone)}</span>` : '') +
+            (u?.email ? `<cds-link href="mailto:${esc(u.email)}">${esc(u.email)}</cds-link>` : '') +
+          `</div>`;
+        return tile;
+      }),
+    );
+  }
+
+  // Office rail
+  const a = state.office.address;
+  const addr = $('office-address');
+  if (addr) addr.innerHTML = [esc(a.street), a.unit ? esc(a.unit) : null, `${esc(a.city)}, ${esc(a.state)} ${esc(a.zip)}`].filter(Boolean).join('<br>');
+  const phone = $('o-phone');
+  if (phone) { phone.textContent = state.office.phone; phone.setAttribute('href', telHref(state.office.phone)); }
+  const email = $('o-email');
+  if (email) { email.textContent = state.office.email; email.setAttribute('href', `mailto:${state.office.email}`); }
+
+  // Banner stats
+  const setText = (id: string, v: string) => { const el = $(id); if (el) el.textContent = v; };
+  setText('stat-parks', String(state.parks.length));
+  setText('stat-contacts', String(state.members.filter((m) => m.published).length));
+  setText('stat-hq', `${a.city}, ${a.state}`);
+</script>
+
+<style>
+  /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens. */
+  .page { padding-block: 0 6rem; }
+
+  /* Identity banner — full-bleed dark g100 band, re-centered to the 2x Grid. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__crumb { display: block; margin-bottom: var(--cds-spacing-05, 1rem); }
+  .banner__id { display: flex; align-items: center; gap: var(--cds-spacing-05, 1rem); }
+  .banner__lead { min-width: 0; }
+  .banner__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+  .banner__name { margin: 0; }
+  .banner__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: var(--cds-spacing-06, 1.5rem);
+    margin: var(--cds-spacing-06, 1.5rem) 0 0;
+    padding-top: var(--cds-spacing-06, 1.5rem);
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .stat { min-width: 0; }
+  .stat__label { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .stat__value { margin: 0.25rem 0 0; color: var(--cds-text-primary, #161616); word-break: break-word; }
+
+  /* Body grid sits below the full-bleed banner. */
+  .body { margin-top: var(--cds-spacing-07, 2rem); }
+  .main { display: flex; flex-direction: column; gap: 2.75rem; min-width: 0; }
+
+  /* Internal/admin affordance bar above the read sections. */
+  .admin-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: -0.75rem;
+  }
+  .admin-bar__note { margin: 0; color: var(--cds-text-secondary, #525252); }
+
+  .section-hint { margin: 0 0 1.25rem; max-width: 44rem; color: var(--cds-text-secondary, #525252); }
+
+  /* Point-of-contact cards — client-rendered, so their layout classes are global. */
+  .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+  :global(.dcontact__role) { margin: 0 0 0.625rem; color: var(--cds-text-secondary, #525252); }
+  :global(.dcontact__id) { display: flex; align-items: center; gap: 0.625rem; margin-bottom: 0.75rem; }
+  :global(.dcontact__name) { margin: 0; }
+  :global(.dcontact__meta) { display: flex; flex-direction: column; gap: 0.25rem; color: var(--cds-text-secondary, #525252); }
+  /* The identity chip (.avatar) is styled globally in theme.css — one source. */
+
+  /* District office rail — a cds-tile; these rules lay out its content. */
+  .office__title { margin: 0 0 1rem; }
+  .office__address { margin: 0 0 1.25rem; font-style: normal; color: var(--cds-text-primary, #161616); line-height: 1.5; }
+  .office__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: 0;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .office__row { min-width: 0; }
+  .office__value { margin: 0.25rem 0 0; word-break: break-word; }
+</style>

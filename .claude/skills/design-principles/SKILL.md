@@ -1,6 +1,6 @@
 ---
 name: design-principles
-description: The aesthetic, accessibility, and correctness rules for this Carbon spoke — load before styling, reviewing, or building ANY UI, and during /ship reviews. Covers token-first discipline (var(--cds-*) not SCSS $vars, never target .cds-- internals), Carbon's type scale (no imposed 16px floor), status meaning (colored Tag is NOT a status — use cds-icon-indicator/cds-shape-indicator; never color alone), the Web-Components grid (.cds--grid/.cds--row/.cds--col-* classes; <cds-row> does not exist), the WCAG 2.2 accessibility contract, icon-name verification, and mock-data rules. Distilled from IBM's Carbon guidance reconciled with the house rules. carbon-first owns the component lookup order; this skill owns how the result looks and behaves.
+description: The aesthetic, accessibility, and correctness rules for this Carbon spoke — load before styling, reviewing, or building ANY UI, and during /ship reviews. Covers token-first discipline (var(--cds-*) not SCSS $vars, never target .cds-- internals), Carbon's type scale (no imposed 16px floor), status meaning (colored Tag is NOT a status — use cds-icon-indicator/cds-shape-indicator; never color alone), the 2x Grid (CSS-Grid flavor: .cds--css-grid/.cds--css-grid-column/.cds--{bp}:col-span-N; the legacy .cds--row/.cds--col-lg-N are NOT in the prebuilt CSS), the WCAG 2.2 accessibility contract, icon-name verification, and mock-data rules. Distilled from IBM's Carbon guidance reconciled with the house rules. carbon-first owns the component lookup order; this skill owns how the result looks and behaves.
 ---
 
 # Design Principles (Carbon spoke)
@@ -64,13 +64,17 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
 
 ## 4. Layout & grid (Must)
 
-1. **The Carbon Web-Components grid is CSS-class-based by default:** put
-   `cds--grid` → `cds--row` → `cds--col-lg-N cds--col-md-N cds--col-sm-N` on
-   `<div>`s. No JS import needed (comes with `@carbon/styles`).
-2. **`<cds-row>` does not exist.** The element grid is a *two-level* system
-   (`<cds-grid>` → `<cds-column>`) and needs an explicit import
-   (`@carbon/web-components/es/components/grid/index.js`). Prefer the CSS classes;
-   only use the element grid if a task specifically calls for it.
+1. **The 2x Grid is CSS-class-based (CSS-Grid flavor) and ships with
+   `@carbon/styles`** (already loaded, no JS import). Container `cds--css-grid`,
+   children `cds--css-grid-column` + span classes `cds--col-span-N` /
+   `cds--sm:col-span-N cds--md:col-span-N cds--lg:col-span-N` (16 cols @ lg, 8 @ md,
+   4 @ sm; `cds--{bp}:col-start-N` for offsets). Container modifiers: `--condensed`,
+   `--narrow`, `--full-width`, `--with-row-gap`. Reference: `permit.astro` Overview.
+2. **The legacy flexbox classes `cds--row` / `cds--col-lg-N` are NOT in the prebuilt
+   CSS** — they render as unstyled `<div>`s. Do not use them. **`<cds-row>` does not
+   exist** either; the element grid is a *two-level* system (`<cds-grid>` →
+   `<cds-column>`) needing an explicit import
+   (`@carbon/web-components/es/components/grid/index.js`) — prefer the CSS classes.
 3. **Specify spans for all breakpoints** (`sm`/`md`/`lg`) on every column.
 4. **One grid per logical content group.** A header, a tile row, and a footer are
    three separate grids — don't co-mingle groups that shouldn't wrap together.
@@ -119,12 +123,17 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
 
 ## 7. House aesthetic (Should — on top of Carbon)
 
-- **Polish is subtractive.** Cut per-item icons, non-informative chips, taglines,
-  helper blurbs. If an element carries no information, remove it. Icons mark
-  *structure* (section headers), never every row.
-- **Surfaces stay neutral; color lives in content and the one primary action.**
-  Layer neutrals with `--cds-background` / `--cds-layer-01/02` (value, not hue);
-  reserve saturated color for the single primary button and for data.
+- **Surfaces are a design tool — use them with intent.** Tiles (`cds-tile`),
+  value layers (`--cds-layer-01/02`), and boxed cards are legitimate ways to
+  group, separate, or elevate content — Carbon ships them for exactly this.
+  Reach for one when it clarifies structure or creates useful hierarchy; skip it
+  when a plain editorial block (heading + whitespace) already reads clearly.
+  Neither "always box it" nor "never box it" is the rule — decide per section.
+- **Color can carry meaning and identity, not just the primary action.** Layer
+  neutrals with `--cds-background` / `--cds-layer-01/02` for value; use hue where
+  it helps — data, categories, accents, expressive moments. Keep enough restraint
+  that status color (§3) still reads, and that saturated color stays meaningful
+  rather than decorative noise.
 - **Tags are compact and quiet** — Carbon's default `cds-tag` is already right;
   don't bulk it up. Vertically center tags in table cells.
 - **Sibling controls match** in rendered height and size across a row/bar; default

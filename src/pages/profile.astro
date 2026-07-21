@@ -1,0 +1,657 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — the Profile global action links here.
+     header: identity banner (g100 zone) — avatar, name, role · division, contact facts.
+     spine:  main.page > .cds--css-grid  (main col 11 / rail col 5, mirrors permit Overview)
+     sections:
+       - Personal information (main) -> editable form: cds-text-input + cds-dropdown,
+                                        Save/Cancel (cds-button), cds-inline-notification on save
+       - Notification preferences (main) -> per-event Email / In-app cds-toggle grid
+       - Role & access (rail) -> READ-ONLY cds-tile: role/permission cds-tags + assigned
+                                 districts; changing access is an admin action, so stated
+   All fields are prototype-local: edits persist to localStorage (like permit comments).
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitSection from '../components/PermitSection.astro';
+import Avatar from '../components/Avatar.astro';
+import { currentUser, divisions, states, requestableRoles } from '../data/user';
+import { districtDirectory } from '../data/district';
+
+export const prototype = {
+  title: 'My profile',
+  summary:
+    'The signed-in reviewer manages their own account — personal details, ' +
+    'notification delivery, and a read-only view of their role and assigned districts.',
+  tag: 'Internal tool',
+};
+
+const u = currentUser;
+const fullName = `${u.firstName} ${u.lastName}`;
+const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? '';
+---
+
+<BaseLayout title={`My profile — ${fullName}`}>
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <!-- Identity banner — dark g100 zone, consistent with the permit header. -->
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <cds-breadcrumb no-trailing-slash class="banner__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">My profile</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <div class="banner__id">
+          <span id="banner-avatar"><Avatar name={fullName} size="lg" /></span>
+          <div class="banner__lead">
+            <h1 class="banner__name t-heading-05" id="banner-name">{fullName}</h1>
+            <p class="banner__sub t-body-02" id="banner-sub">{u.title} · {divisionLabel}</p>
+          </div>
+        </div>
+
+        <dl class="banner__stats">
+          <div class="stat">
+            <dt class="stat__label t-label-01">Email</dt>
+            <dd class="stat__value t-body-01" id="stat-email">{u.email}</dd>
+          </div>
+          <div class="stat">
+            <dt class="stat__label t-label-01">Office phone</dt>
+            <dd class="stat__value t-body-01" id="stat-phone">{u.phone}</dd>
+          </div>
+          <div class="stat">
+            <dt class="stat__label t-label-01">Member since</dt>
+            <dd class="stat__value t-body-01">{u.memberSince}</dd>
+          </div>
+        </dl>
+      </div>
+    </header>
+
+    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+      <!-- ── Main column ─────────────────────────────────────────────────── -->
+      <div class="main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-11">
+        <PermitSection title="Personal information">
+          <p class="section-hint t-body-01">Update how you appear to applicants and other reviewers across the permitting system.</p>
+
+          <!-- Confirmation of a save. Hidden until the form is submitted. -->
+          <cds-inline-notification
+            id="save-notice"
+            hidden
+            kind="success"
+            low-contrast
+            title="Changes saved"
+            subtitle="Your profile has been updated."
+          ></cds-inline-notification>
+
+          <form id="profile-form" class="form" data-storage-key="profile-personal">
+            <div class="field-grid">
+              <cds-text-input id="f-firstName" label="First name" value={u.firstName}></cds-text-input>
+              <cds-text-input id="f-lastName" label="Last name" value={u.lastName}></cds-text-input>
+              <cds-text-input id="f-title" label="Job title" value={u.title}></cds-text-input>
+              <cds-dropdown id="f-division" title-text="Division" value={u.division}>
+                {divisions.map((d) => (
+                  <cds-dropdown-item value={d.value}>{d.label}</cds-dropdown-item>
+                ))}
+              </cds-dropdown>
+              <cds-text-input id="f-email" type="email" label="Email address" value={u.email}></cds-text-input>
+              <cds-text-input id="f-phone" type="tel" label="Office phone" value={u.phone}></cds-text-input>
+
+              <h3 class="form__subhead field-grid__wide t-heading-01">Mailing address</h3>
+              <div class="field-grid__wide">
+                <cds-text-input id="f-street" label="Street address" value={u.address.street}></cds-text-input>
+              </div>
+              <div class="field-grid__wide">
+                <cds-text-input id="f-unit" label="Suite / unit (optional)" value={u.address.unit}></cds-text-input>
+              </div>
+              <cds-text-input id="f-city" label="City" value={u.address.city}></cds-text-input>
+              <cds-dropdown id="f-state" title-text="State" value={u.address.state}>
+                {states.map((s) => (
+                  <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>
+                ))}
+              </cds-dropdown>
+              <cds-text-input id="f-zip" label="ZIP code" value={u.address.zip}></cds-text-input>
+            </div>
+
+            <div class="form__actions">
+              <cds-button id="profile-reset" kind="ghost" type="button">Cancel</cds-button>
+              <cds-button id="profile-save" type="button">Save changes</cds-button>
+            </div>
+          </form>
+        </PermitSection>
+
+        <PermitSection title="Appearance">
+          <p class="section-hint t-body-01">Choose how the permitting system looks. Your preference is saved to this browser and applies across every page.</p>
+
+          <div class="prefs" id="appearance-prefs">
+            <div class="prefs__row">
+              <div class="prefs__info">
+                <p class="prefs__label t-heading-compact-01">Dark mode</p>
+                <p class="prefs__desc t-body-01">Switch from the default light theme to a dark color theme.</p>
+              </div>
+              <cds-toggle
+                id="theme-toggle"
+                class="prefs__toggle"
+                size="sm"
+                label-text="Dark mode"
+                hide-label
+              ></cds-toggle>
+            </div>
+          </div>
+        </PermitSection>
+
+        <PermitSection title="Notification preferences">
+          <p class="section-hint t-body-01">Choose which permit activity you're notified about. All notifications are sent by email to <span class="prefs__email" id="prefs-email">{u.email}</span>.</p>
+
+          <div class="prefs" id="notification-prefs" data-storage-key="profile-notifications">
+            {u.notifications.map((n) => (
+              <div class="prefs__row">
+                <div class="prefs__info">
+                  <p class="prefs__label t-heading-compact-01">{n.label}</p>
+                  <p class="prefs__desc t-body-01">{n.description}</p>
+                </div>
+                <cds-toggle
+                  class="prefs__toggle"
+                  data-key={n.key}
+                  size="sm"
+                  label-text={`Email me: ${n.label}`}
+                  hide-label
+                  toggled={n.enabled || undefined}
+                ></cds-toggle>
+              </div>
+            ))}
+          </div>
+        </PermitSection>
+      </div>
+
+      <!-- ── Rail: role & access (read-only) ─────────────────────────────── -->
+      <aside class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5">
+        <cds-tile class="access">
+          <h2 class="access__title t-heading-03">Role &amp; access</h2>
+
+          <dl class="access__facts">
+            <div class="access__fact">
+              <dt class="stat__label t-label-01">Role</dt>
+              <dd><cds-tag type="blue" size="md" id="role-tag">{u.role}</cds-tag></dd>
+            </div>
+            <div class="access__fact">
+              <dt class="stat__label t-label-01">Permission level</dt>
+              <dd><cds-tag type="cool-gray" size="md">{u.permissionLevel}</cds-tag></dd>
+            </div>
+          </dl>
+
+          <h3 class="access__subhead t-heading-01">Assigned districts</h3>
+          <ul class="district-list">
+            {u.districts.map((d) => (
+              <li class="district">
+                <cds-link class="district__name" href="/district">{d.name}</cds-link>
+                <cds-tag type="gray" size="sm">{d.parks} parks</cds-tag>
+              </li>
+            ))}
+          </ul>
+
+          <!-- Pending-request banner, revealed after a role change is submitted. -->
+          <cds-inline-notification
+            id="role-pending"
+            hidden
+            kind="info"
+            low-contrast
+            hide-close-button
+            title="Role change requested"
+            subtitle=""
+          ></cds-inline-notification>
+
+          <p class="access__note t-label-01">
+            Your role and district assignments are managed by an administrator.
+          </p>
+          <cds-button id="request-role-btn" kind="tertiary" size="sm">Request role change</cds-button>
+        </cds-tile>
+      </aside>
+    </div>
+
+    <!-- Role-change request. The user can only REQUEST a role; an admin approves
+         it — so this submits a request rather than reassigning anything. Carbon
+         owns the focus trap + return and the accessible heading. -->
+    <cds-modal id="role-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Role &amp; access</cds-modal-label>
+        <cds-modal-heading>Request a role change</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: prose intro text has no cds-* component; a <p> with the
+             Carbon type role is the standard pattern (see PermitHeader's modals). -->
+        <p class="modal-hint t-body-01">
+          Your current role is <strong id="current-role-name">{u.role}</strong>. Choose the role you're requesting;
+          an administrator will review and approve it.
+        </p>
+        <cds-radio-button-group
+          id="role-choice"
+          name="requested-role"
+          orientation="vertical"
+          label-text="Requested role"
+        >
+          {requestableRoles.map((r) => (
+            <cds-radio-button label-text={r.label} value={r.value}></cds-radio-button>
+          ))}
+        </cds-radio-button-group>
+        <!-- carbon-checked: the radio group has no per-option helper-text slot, so
+             this <p> is the reusable home for the selected role's description. -->
+        <p class="modal-desc t-body-01" id="role-desc" hidden></p>
+
+        <!-- District picker — shown only for a district-scoped role (lead /
+             assistant), which is always the lead/assistant OF a district. -->
+        <div id="role-district-wrap" class="modal-district" hidden>
+          <cds-dropdown id="role-district" title-text="District" value="north-coast-redwoods">
+            {districtDirectory.map((d) => (
+              <cds-dropdown-item value={d.id}>{d.name}</cds-dropdown-item>
+            ))}
+          </cds-dropdown>
+        </div>
+
+        <cds-textarea
+          id="role-reason"
+          class="modal-reason"
+          label="Reason for request (optional)"
+          placeholder="Briefly explain why you're requesting this role…"
+          rows="3"
+        ></cds-textarea>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="role-submit">Submit request</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+  </main>
+</BaseLayout>
+
+<script>
+  import { currentUser, requestableRoles, accountRoleMeta } from '../data/user';
+  import { pendingForUser, submitRequest, accountRoleDisplay, roleDisplay } from '../data/requests';
+
+  // ── Personal information: edit + persist (prototype-local) ──────────────
+  // A static Astro prototype has no backend, so "saved" means localStorage —
+  // the same convention the permit comment thread uses. Edits survive reloads
+  // and update the identity banner live.
+  const form = document.getElementById('profile-form') as HTMLFormElement | null;
+  const saveBtn = document.getElementById('profile-save');
+  const resetBtn = document.getElementById('profile-reset');
+  const notice = document.getElementById('save-notice') as any;
+
+  const fieldIds = ['firstName', 'lastName', 'title', 'division', 'email', 'phone', 'street', 'unit', 'city', 'state', 'zip'] as const;
+  type FieldKey = (typeof fieldIds)[number];
+  const fieldEl = (k: FieldKey) => document.getElementById(`f-${k}`) as any;
+
+  // Baseline = the seeded defaults; Cancel restores to these.
+  const defaults: Record<FieldKey, string> = {
+    firstName: currentUser.firstName,
+    lastName: currentUser.lastName,
+    title: currentUser.title,
+    division: currentUser.division,
+    email: currentUser.email,
+    phone: currentUser.phone,
+    street: currentUser.address.street,
+    unit: currentUser.address.unit,
+    city: currentUser.address.city,
+    state: currentUser.address.state,
+    zip: currentUser.address.zip,
+  };
+  const divisionLabels: Record<string, string> = {
+    'natural-resources': 'Natural Resources Division',
+    'cultural-resources': 'Cultural Resources Division',
+    'permitting': 'Statewide Permitting Office',
+    'park-operations': 'Park Operations Division',
+    'science': 'Office of Scientific Review',
+  };
+
+  if (form && saveBtn && resetBtn && notice) {
+    const storageKey = form.dataset.storageKey || 'profile-personal';
+
+    const readStored = (): Partial<Record<FieldKey, string>> => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    };
+
+    const setFields = (values: Record<FieldKey, string>) => {
+      fieldIds.forEach((k) => {
+        const el = fieldEl(k);
+        if (el) el.value = values[k];
+      });
+    };
+
+    // Banner echoes the identity fields — keep it in sync so a save is visible.
+    const initials = (first: string, last: string) =>
+      `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
+    const syncBanner = (v: Record<FieldKey, string>) => {
+      const name = `${v.firstName} ${v.lastName}`.trim();
+      const nameEl = document.getElementById('banner-name');
+      const subEl = document.getElementById('banner-sub');
+      const emailEl = document.getElementById('stat-email');
+      const phoneEl = document.getElementById('stat-phone');
+      const prefsEmailEl = document.getElementById('prefs-email');
+      const avatarEl = document.querySelector('#banner-avatar .avatar');
+      if (nameEl) nameEl.textContent = name;
+      if (subEl) subEl.textContent = `${v.title} · ${divisionLabels[v.division] ?? ''}`;
+      if (emailEl) emailEl.textContent = v.email;
+      if (phoneEl) phoneEl.textContent = v.phone;
+      if (prefsEmailEl) prefsEmailEl.textContent = v.email;
+      if (avatarEl) avatarEl.textContent = initials(v.firstName, v.lastName);
+    };
+
+    const current = (): Record<FieldKey, string> => {
+      const out = {} as Record<FieldKey, string>;
+      fieldIds.forEach((k) => {
+        const el = fieldEl(k);
+        out[k] = (el?.value ?? defaults[k]).toString();
+      });
+      return out;
+    };
+
+    // Hydrate from any previously saved edits.
+    setFields({ ...defaults, ...readStored() });
+    syncBanner(current());
+
+    saveBtn.addEventListener('click', () => {
+      const values = current();
+      localStorage.setItem(storageKey, JSON.stringify(values));
+      syncBanner(values);
+      notice.hidden = false;
+      notice.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+
+    resetBtn.addEventListener('click', () => {
+      setFields(defaults);
+      syncBanner(defaults);
+      localStorage.removeItem(storageKey);
+      notice.hidden = true;
+    });
+  }
+
+  // ── Appearance: light/dark theme preference (device-local, global) ──────
+  // Persist a single 'theme-preference' flag; BaseLayout reads it on every page
+  // load and sets the matching Carbon zone class on <body> before paint. Here we
+  // reflect the saved state on the toggle and apply the change live.
+  const themeToggle = document.getElementById('theme-toggle') as any;
+  if (themeToggle) {
+    const THEME_KEY = 'theme-preference';
+    const applyTheme = (dark: boolean) => {
+      document.body.classList.remove('cds--white', 'cds--g10', 'cds--g90', 'cds--g100');
+      document.body.classList.add(dark ? 'cds--g90' : 'cds--g10');
+    };
+    themeToggle.toggled = localStorage.getItem(THEME_KEY) === 'dark';
+    themeToggle.addEventListener('cds-toggle-changed', () => {
+      const dark = !!themeToggle.toggled;
+      localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+      applyTheme(dark);
+    });
+  }
+
+  // ── Notification preferences: persist each toggle by key + channel ───────
+  const prefs = document.getElementById('notification-prefs');
+  if (prefs) {
+    const prefsKey = prefs.dataset.storageKey || 'profile-notifications';
+    const toggles = Array.from(prefs.querySelectorAll<HTMLElement>('cds-toggle'));
+
+    const stored = (() => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(prefsKey) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    })();
+
+    const cellId = (t: HTMLElement) => t.dataset.key ?? '';
+
+    // Apply any saved state on load.
+    toggles.forEach((t) => {
+      const saved = stored[cellId(t)];
+      if (typeof saved === 'boolean') (t as any).toggled = saved;
+    });
+
+    const persist = () => {
+      const state: Record<string, boolean> = {};
+      toggles.forEach((t) => { state[cellId(t)] = !!(t as any).toggled; });
+      localStorage.setItem(prefsKey, JSON.stringify(state));
+    };
+    prefs.addEventListener('cds-toggle-changed', persist);
+  }
+
+  // ── Role-change request (prototype-local, shared with the /users console) ──
+  // The user REQUESTS one of the requestable roles; an admin resolves it in the
+  // users console. The request + the resulting account role live in the shared
+  // requests store (src/data/requests.ts), so this profile and that console read
+  // and write the same source of truth — request here, approve there, and the
+  // Role tag + pending banner below reflect it.
+  const roleBtn = document.getElementById('request-role-btn');
+  const roleModal = document.getElementById('role-modal') as any;
+  const roleChoice = document.getElementById('role-choice') as any;
+  const roleReason = document.getElementById('role-reason') as any;
+  const rolePending = document.getElementById('role-pending') as any;
+  const roleSubmit = document.getElementById('role-submit');
+  const roleTag = document.getElementById('role-tag');
+  const roleDesc = document.getElementById('role-desc');
+  const districtWrap = document.getElementById('role-district-wrap');
+  const districtEl = document.getElementById('role-district') as any;
+
+  // The Role tag + modal intro reflect the shared account role — so an admin
+  // approval in the users console shows up here on the next load.
+  if (roleTag) roleTag.textContent = accountRoleDisplay(currentUser.id);
+  const currentRoleName = document.getElementById('current-role-name');
+  if (currentRoleName) currentRoleName.textContent = accountRoleDisplay(currentUser.id);
+
+  if (roleBtn && roleModal && roleChoice && roleSubmit && rolePending) {
+    const isScoped = (value: string) => !!accountRoleMeta(value)?.scoped;
+
+    // A district role needs a district; a global one doesn't — show the picker
+    // only when the chosen role is district-scoped.
+    const syncForRole = (value: string) => {
+      if (roleDesc) {
+        const desc = requestableRoles.find((r) => r.value === value)?.description ?? '';
+        roleDesc.textContent = desc;
+        roleDesc.hidden = !desc;
+      }
+      if (districtWrap) districtWrap.hidden = !isScoped(value);
+    };
+    roleChoice.addEventListener('cds-radio-button-group-changed', () => syncForRole(roleChoice.value));
+
+    // Reflect the user's open request (if any) on load — with its district.
+    const showPending = (value: string, district?: string) => {
+      rolePending.subtitle = `Requested: ${roleDisplay(value, district)} · Pending admin approval`;
+      rolePending.hidden = false;
+    };
+    const existing = pendingForUser(currentUser.id);
+    if (existing) showPending(existing.role, existing.district);
+
+    roleBtn.addEventListener('click', () => {
+      // Preselect a previously requested role (and district), if any.
+      const open = pendingForUser(currentUser.id);
+      if (open) {
+        roleChoice.value = open.role;
+        if (districtEl && open.district) districtEl.value = open.district;
+      }
+      syncForRole(roleChoice.value);
+      roleModal.open = true;
+    });
+
+    roleSubmit.addEventListener('click', () => {
+      const role = roleChoice.value;
+      if (!role) return; // require a selection before submitting
+      const district = isScoped(role) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
+      submitRequest(currentUser.id, role, (roleReason?.value ?? '').trim(), district);
+      roleModal.open = false;
+      showPending(role, district);
+    });
+  }
+</script>
+
+<style>
+  /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens.
+     body already offsets the fixed ui-shell header (theme.css padding-top). */
+  .page {
+    padding-block: 0 6rem;
+  }
+
+  /* Identity banner — full-bleed dark g100 band, re-centered to the 2x Grid, the
+     same construction as PermitHeader so the two headers read as one system. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__crumb {
+    display: block;
+    margin-bottom: var(--cds-spacing-05, 1rem);
+  }
+  .banner__id {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-05, 1rem);
+  }
+  .banner__lead { min-width: 0; }
+  .banner__name { margin: 0; }
+  .banner__sub {
+    margin: var(--cds-spacing-02, 0.25rem) 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .banner__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: var(--cds-spacing-06, 1.5rem);
+    margin: var(--cds-spacing-06, 1.5rem) 0 0;
+    padding-top: var(--cds-spacing-06, 1.5rem);
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .stat { min-width: 0; }
+  .stat__label { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .stat__value {
+    margin: 0.25rem 0 0;
+    color: var(--cds-text-primary, #161616);
+    word-break: break-word;
+  }
+
+  /* Body grid sits below the full-bleed banner. */
+  .body { margin-top: var(--cds-spacing-07, 2rem); }
+
+  /* Editorial rhythm within the main column — sections separated by whitespace. */
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+    min-width: 0;
+  }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 44rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* Personal-information form — a responsive two-up field grid; the fields
+     themselves are stock cds-text-input / cds-dropdown. */
+  #save-notice { margin-bottom: 1.25rem; max-width: 44rem; }
+  #save-notice[hidden] { display: none; }
+  .field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+    max-width: 44rem;
+  }
+  .field-grid__wide { grid-column: 1 / -1; }
+  /* Subheading that groups the address fields within the form. */
+  .form__subhead {
+    margin: 0.5rem 0 0;
+  }
+  @media (max-width: 42rem) {
+    .field-grid { grid-template-columns: 1fr; }
+  }
+  .form__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1.75rem;
+    max-width: 44rem;
+  }
+
+  /* Notification preferences — one event per row with a single email on/off
+     toggle. Layout only; the control is a stock cds-toggle. */
+  .prefs { max-width: 44rem; }
+  .prefs__email { color: var(--cds-text-primary, #161616); }
+  .prefs__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 0;
+  }
+  .prefs__row + .prefs__row {
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .prefs__info { min-width: 0; }
+  .prefs__label { margin: 0; }
+  .prefs__desc {
+    margin: 0.125rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .prefs__toggle { justify-self: end; }
+
+  /* Role & access rail — a read-only cds-tile. Surface/padding are the tile's;
+     these rules lay out its content (facts, district list, note). */
+  .access__title { margin: 0 0 1.25rem; }
+  .access__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem 2rem;
+    margin: 0 0 1.5rem;
+  }
+  .access__fact dd { margin: 0.375rem 0 0; }
+  .access__subhead {
+    margin: 0 0 0.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .district-list {
+    list-style: none;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .district {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .district__name { min-width: 0; }
+  .access__note {
+    margin: 0 0 1rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  /* Pending role-request banner, shown after submission. */
+  #role-pending { margin: 0 0 1.25rem; }
+  #role-pending[hidden] { display: none; }
+
+  /* Role-request modal — layout only; the fields are stock cds-* components. */
+  .modal-hint { margin: 0 0 1.25rem; }
+  .modal-desc {
+    margin: 0.75rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .modal-desc[hidden] { display: none; }
+  .modal-reason { display: block; margin-top: 1.5rem; }
+</style>
