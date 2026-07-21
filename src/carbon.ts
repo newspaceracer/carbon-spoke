@@ -1,0 +1,35 @@
+// ---------------------------------------------------------------------------
+// Carbon component registry for this spoke.
+//
+// Importing a Carbon component's `index.js` calls customElements.define() for
+// its tag(s) (e.g. cds-button, cds-table, ...). This barrel is imported ONCE
+// from BaseLayout in a client <script>, so every cds-* tag used anywhere in the
+// app is registered and upgrades in the browser.
+//
+// Carbon-first workflow: when you reach for a NEW cds-* component, add its line
+// here. Keep it alphabetical. Full catalog:
+//   ls node_modules/@carbon/web-components/es/components/
+// ---------------------------------------------------------------------------
+import '@carbon/web-components/es/components/breadcrumb/index.js';
+import '@carbon/web-components/es/components/button/index.js';
+import '@carbon/web-components/es/components/combo-button/index.js';
+import '@carbon/web-components/es/components/contained-list/index.js';
+import '@carbon/web-components/es/components/data-table/index.js';
+import '@carbon/web-components/es/components/dropdown/index.js';
+import '@carbon/web-components/es/components/form-group/index.js';
+import '@carbon/web-components/es/components/icon-indicator/index.js';
+import '@carbon/web-components/es/components/layer/index.js';
+import '@carbon/web-components/es/components/link/index.js';
+import '@carbon/web-components/es/components/menu/index.js';
+import '@carbon/web-components/es/components/modal/index.js';
+import '@carbon/web-components/es/components/notification/index.js';
+import '@carbon/web-components/es/components/progress-indicator/index.js';
+import '@carbon/web-components/es/components/search/index.js';
+import '@carbon/web-components/es/components/stack/index.js';
+import '@carbon/web-components/es/components/structured-list/index.js';
+import '@carbon/web-components/es/components/tabs/index.js';
+import '@carbon/web-components/es/components/tag/index.js';
+import '@carbon/web-components/es/components/text-input/index.js';
+import '@carbon/web-components/es/components/textarea/index.js';
+import '@carbon/web-components/es/components/tile/index.js';
+import '@carbon/web-components/es/components/ui-shell/index.js';

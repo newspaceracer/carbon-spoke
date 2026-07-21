@@ -1,0 +1,44 @@
+---
+// At-a-glance facts row for an incident. Composes cds-tile legos — one tile per
+// fact — on a responsive grid. Component styling stays in cds-*; only the grid
+// track layout lives here (page-level layout CSS, permitted).
+interface Fact {
+  label: string;
+  value: string;
+}
+interface Props {
+  facts: Fact[];
+}
+const { facts } = Astro.props;
+---
+
+<div class="facts">
+  {facts.map((fact) => (
+    <cds-tile>
+      <p class="facts__label">{fact.label}</p>
+      <p class="facts__value">{fact.value}</p>
+    </cds-tile>
+  ))}
+</div>
+
+<style>
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1rem;
+  }
+  .facts__label {
+    margin: 0;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .facts__value {
+    margin: 0.25rem 0 0;
+    font-size: 1.75rem;
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--cds-text-primary, #161616);
+  }
+</style>

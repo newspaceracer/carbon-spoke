@@ -1,0 +1,236 @@
+---
+/* manifest:
+     spine: main.page > cds-stack(gap 7)
+     sections:
+       - breadcrumb    -> cds-breadcrumb + cds-breadcrumb-item/link  (Incidents / INC-2087)
+       - page header   -> inline (heading + lede) composing cds-tag x2 (severity, status)
+       - action row    -> cds-button x3  (Resolve = primary -> opens modal, Assign, Escalate)
+       - key facts     -> IncidentFacts.astro  (composes cds-tile x4)
+       - metadata      -> cds-structured-list  (key/value pairs)
+       - activity      -> cds-contained-list + cds-contained-list-item  (timeline)
+       - confirmation  -> cds-inline-notification  (hidden until a resolution is applied)
+       - triage modal  -> cds-modal  (cds-dropdown resolution + cds-textarea notes)
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import IncidentFacts from '../components/IncidentFacts.astro';
+import { incident } from '../data/incident';
+
+// Home-page card metadata. The hub (src/pages/index.astro) globs pages and reads
+// this export to list the prototype automatically — add it to every new screen.
+export const prototype = {
+  title: 'Incident triage',
+  summary:
+    'An on-call engineer reviews a single incident — status, facts, timeline — and ' +
+    'resolves it through a modal action flow.',
+  tag: 'Internal tool',
+};
+---
+
+<BaseLayout title={`${incident.id} — ${incident.title}`}>
+  <main class="page">
+    <cds-stack gap="7">
+      <!-- Breadcrumb -->
+      <cds-breadcrumb>
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link href="#">Incidents</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link href="#">Active</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link aria-current="page">{incident.id}</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+      </cds-breadcrumb>
+
+      <!-- Page header -->
+      <header class="page__head">
+        <div class="page__tags">
+          <cds-tag type={incident.severity.tone}>{incident.severity.label}</cds-tag>
+          <cds-tag id="status-tag" type={incident.status.tone}>{incident.status.label}</cds-tag>
+        </div>
+        <p class="page__eyebrow">{incident.id}</p>
+        <h1 class="page__title">{incident.title}</h1>
+        <p class="page__lede">{incident.summary}</p>
+      </header>
+
+      <!-- Action row -->
+      <div class="page__actions">
+        <cds-button id="open-triage">Resolve incident</cds-button>
+        <cds-button kind="tertiary">Assign</cds-button>
+        <cds-button kind="ghost">Escalate</cds-button>
+      </div>
+
+      <!-- Confirmation banner (hidden until a resolution is applied) -->
+      <cds-inline-notification
+        id="triage-confirmation"
+        hidden
+        kind="success"
+        title="Resolution applied"
+        subtitle=""
+        low-contrast
+      ></cds-inline-notification>
+
+      <!-- Key facts -->
+      <IncidentFacts facts={incident.facts} />
+
+      <!-- Metadata -->
+      <section>
+        <h2 class="section__title">Details</h2>
+        <cds-structured-list condensed>
+          <cds-structured-list-body>
+            {incident.metadata.map((row) => (
+              <cds-structured-list-row>
+                <cds-structured-list-cell class="meta__key">{row.key}</cds-structured-list-cell>
+                <cds-structured-list-cell>{row.value}</cds-structured-list-cell>
+              </cds-structured-list-row>
+            ))}
+          </cds-structured-list-body>
+        </cds-structured-list>
+      </section>
+
+      <!-- Activity timeline -->
+      <cds-contained-list id="activity-list" label="Activity" kind="on-page">
+        {incident.activity.map((entry) => (
+          <cds-contained-list-item>
+            <span class="act__time">{entry.time}</span>{entry.text}
+          </cds-contained-list-item>
+        ))}
+      </cds-contained-list>
+    </cds-stack>
+  </main>
+
+  <!-- Triage action modal -->
+  <cds-modal id="triage-modal">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>{incident.id} · {incident.severity.label}</cds-modal-label>
+      <cds-modal-heading>Triage incident</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <cds-stack gap="5">
+        <p class="body-lede">
+          Choose how to resolve this incident. The activity log and status will update
+          when you apply.
+        </p>
+        <cds-dropdown id="triage-resolution" title-text="Resolution" label="Select an action">
+          {incident.resolutions.map((option) => (
+            <cds-dropdown-item value={option.value}>{option.text}</cds-dropdown-item>
+          ))}
+        </cds-dropdown>
+        <cds-textarea
+          id="triage-notes"
+          label="Notes"
+          placeholder="Context for the timeline — what you did and why"
+          rows="3"
+        ></cds-textarea>
+      </cds-stack>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="triage-confirm">Apply resolution</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+</BaseLayout>
+
+<script>
+  // Wire the triage flow: open the modal, apply a resolution, reflect it on the
+  // page (status tag flips, a timeline entry is added, a success banner shows).
+  const modal = document.getElementById('triage-modal') as any;
+  const openBtn = document.getElementById('open-triage');
+  const confirmBtn = document.getElementById('triage-confirm');
+
+  openBtn?.addEventListener('click', () => { if (modal) modal.open = true; });
+
+  modal?.querySelectorAll('[data-close]').forEach((btn: Element) =>
+    btn.addEventListener('click', () => { modal.open = false; })
+  );
+
+  confirmBtn?.addEventListener('click', () => {
+    const dropdown = document.getElementById('triage-resolution') as any;
+    const notes = document.getElementById('triage-notes') as any;
+    const label = dropdown?.querySelector(`cds-dropdown-item[value="${dropdown?.value}"]`)?.textContent?.trim()
+      ?? 'Resolution applied';
+
+    // Flip the status tag to a resolved state.
+    const statusTag = document.getElementById('status-tag') as any;
+    if (statusTag) {
+      statusTag.setAttribute('type', 'green');
+      statusTag.textContent = 'Resolved';
+    }
+
+    // Prepend a new timeline entry describing the action.
+    const list = document.getElementById('activity-list');
+    if (list) {
+      const item = document.createElement('cds-contained-list-item');
+      const noteText = notes?.value ? ` — ${notes.value}` : '';
+      item.innerHTML = `<span class="act__time">now</span>Resolution applied: ${label}${noteText}`;
+      list.insertBefore(item, list.firstChild);
+    }
+
+    // Show the success banner.
+    const banner = document.getElementById('triage-confirmation') as any;
+    if (banner) {
+      banner.subtitle = label;
+      banner.hidden = false;
+    }
+
+    if (modal) modal.open = false;
+  });
+</script>
+
+<style>
+  /* Page-level layout only — component styling lives in the cds-* legos. */
+  .page {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 6rem;
+  }
+  .page__tags {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .page__eyebrow {
+    margin: 0;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .page__title {
+    margin: 0.25rem 0 0;
+    font-size: 2.25rem;
+    font-weight: 400;
+    line-height: 1.15;
+  }
+  .page__lede {
+    margin: 0.75rem 0 0;
+    max-width: 44rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .body-lede {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .section__title {
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 400;
+  }
+  .page__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .meta__key {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .act__time {
+    display: inline-block;
+    min-width: 3.5rem;
+    margin-right: 0.75rem;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

@@ -1,0 +1,35 @@
+---
+// The one shell every page uses. Pulls in the Carbon theme (tokens + Plex +
+// theme-zone classes) and registers the cds-* web components client-side.
+import '../styles/theme.css';
+import AppHeader from '../components/AppHeader.astro';
+
+interface Props {
+  title?: string;
+}
+const { title = 'Carbon Spoke' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+  </head>
+  <!-- Carbon requires a theme class on <body> so nested theme zones
+       (cds--g90 / cds--g100) resolve correctly. We use the g10 zone: a gray
+       page with WHITE raised layers (tiles/fields/cards), so elements contrast
+       against the background for free — Carbon's value-layering model. -->
+  <body class="cds--g10">
+    <AppHeader />
+    <slot />
+
+    <!-- Registers every cds-* custom element used in the app. Astro bundles
+         this and it runs in the browser, where the components upgrade. -->
+    <script>
+      import '../carbon.ts';
+    </script>
+  </body>
+</html>

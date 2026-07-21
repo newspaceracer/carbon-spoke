@@ -1,0 +1,296 @@
+// Mock data for the permit detail prototype — a CA State Parks Scientific
+// Research & Collection Permit. The structure mirrors a real application, but all
+// PERSONAL details (names, emails, phone numbers, addresses) are INVENTED — this
+// repo is public and the house rules forbid copying/lightly-sanitizing real data.
+// Public scientific facts (taxa, categories, site coordinates) are kept for
+// domain credibility. Deterministic: same output every build.
+
+export interface Badge {
+  label: string;
+  /** cds-tag `type` — Carbon tag color token. */
+  type: string;
+}
+
+export interface MetaRow {
+  key: string;
+  value: string;
+}
+
+export interface Contact {
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+}
+
+/** One lifecycle stage. `state` drives the Carbon progress-step visual. */
+export interface HistoryStep {
+  label: string;
+  date?: string;
+  /** Shown alongside the date once a decision is reached. */
+  decision?: string;
+  state: 'complete' | 'current' | 'incomplete';
+}
+
+/** A named group of lifecycle stages (Presubmittal, In review, …). */
+export interface HistoryPhase {
+  phase: string;
+  steps: HistoryStep[];
+}
+
+const invented = 'Invented for this prototype — not real contact information.';
+
+export const permit = {
+  id: '26-635-017',
+  name: 'Diversity of coralline algae in northern California and their reproductive systems',
+  // State, not a category — rendered as cds-icon-indicator (icon + label).
+  status: { label: 'Under Review', kind: 'in-progress' },
+  category: 'Marine Aquatic Resources',
+  activeWindow: { start: 'Jul 22, 2026', end: 'Jul 22, 2027' },
+
+  // Header classification badges — reflect THIS application.
+  infoTags: [
+    { label: 'Single-district', type: 'teal' },
+    { label: 'Marine Aquatic Resources', type: 'purple' },
+  ] as Badge[],
+  // Compliance flags (rendered with a warning icon). Only the ones that apply:
+  // soil disturbance = No and beyond-simple-use (drones/diving) = No here.
+  flagTags: [
+    { label: 'Additional permit required', type: 'high-contrast' },
+  ] as Badge[],
+
+  // ── Overview tab ─────────────────────────────────────────────────────────
+  overview: {
+    // Internal review team assigned to analyze the application (invented).
+    // Internal reviewers. `status` is a sign-off timestamp once reviewed, else
+    // "Pending review". `highlight` marks the current reviewer (you).
+    analysisTeam: [
+      { role: 'Lead analyst', name: 'J. Okafor', detail: 'Natural Resources Division', status: 'Jul 2, 2026 11:59 AM', highlight: true },
+      { role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', status: 'Pending review' },
+      { role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', status: 'Pending review' },
+      { role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', status: 'Jul 5, 2026 8:45 AM' },
+    ],
+
+    // Internal review comments (invented).
+    comments: [
+      { author: 'M. Santos', time: 'Jul 12, 2026', text: 'Study area is within Del Norte Coast Redwoods SP intertidal — confirm collection stays outside the marine reserve boundary at False Klamath Cove.' },
+      { author: 'J. Okafor', time: 'Jul 10, 2026', text: 'Additional-permit flag set: applicant references a separate collecting authorization (GM-2333...). Awaiting confirmation it is in hand before approval.' },
+      { author: 'Dr. L. Cheng', time: 'Jul 9, 2026', text: 'Species list and quantities are proportionate for a diversity survey; the 50-frond Corallina vancouveriensis allotment supports the reproductive case study.' },
+    ],
+
+    // Application lifecycle, grouped into phases. Each step's `state` drives the
+    // Carbon progress-step visual (complete / current / incomplete). This permit
+    // is mid-review, so the current step sits inside "In review"; everything from
+    // "Decision reached" onward is still pending.
+    history: [
+      {
+        phase: 'Presubmittal',
+        steps: [
+          { label: 'Application started', date: 'Jul 5, 2026', state: 'complete' },
+          { label: 'Application signed', date: 'Jul 8, 2026', state: 'complete' },
+          { label: 'Application submitted', date: 'Jul 9, 2026', state: 'complete' },
+        ],
+      },
+      {
+        phase: 'In review',
+        steps: [
+          { label: 'Responsible agent review completed', date: 'Jul 12, 2026', state: 'complete' },
+          { label: 'Supporting agents review completed', state: 'current' },
+          { label: 'Decision reached', state: 'incomplete' },
+        ],
+      },
+      {
+        phase: 'Signature',
+        steps: [
+          { label: 'Permit active in effect', state: 'incomplete' },
+        ],
+      },
+      {
+        phase: 'Active permit',
+        steps: [
+          { label: 'Permit active', state: 'incomplete' },
+          { label: 'Permit expired', state: 'incomplete' },
+          { label: 'Annual report submitted', state: 'incomplete' },
+          { label: 'Renewal processed', state: 'incomplete' },
+        ],
+      },
+    ] as HistoryPhase[],
+  },
+
+  // ── Project information tab ──────────────────────────────────────────────
+  researchTeam: {
+    organization: {
+      name: 'Cal Poly Humboldt — Dept. of Biological Sciences',
+      phone: '(707) 555-0142',
+      email: 'marine-lab@humboldt.edu',
+      address: '1 Harpst St, Arcata, CA 95521',
+    } as Contact,
+    principalInvestigator: {
+      name: 'Dr. Alena Reyes',
+      phone: '(707) 555-0142',
+      email: 'areyes@humboldt.edu',
+      address: '1 Harpst St, Arcata, CA 95521',
+    } as Contact,
+    fieldLead: {
+      name: 'Dr. Alena Reyes',
+      phone: '(707) 555-0142',
+      email: 'areyes@humboldt.edu',
+      address: '1 Harpst St, Arcata, CA 95521',
+    } as Contact,
+    participants: [
+      { name: 'Priya Nadar', phone: '(707) 555-0173', email: 'pnadar@humboldt.edu' },
+      { name: 'Helena Marsh', phone: '(510) 555-0128', email: 'hmarsh@humboldt.edu' },
+      { name: 'Marcus Webb', phone: '(916) 555-0184', email: 'mwebb@humboldt.edu' },
+      { name: 'Fiona Blake', phone: '', email: 'fblake@humboldt.edu' },
+    ] as Contact[],
+  },
+
+  projectInfo: {
+    details: [
+      { key: 'Project category', value: 'Marine Aquatic Resources (e.g. tidepools, coastal wetlands)' },
+      { key: 'Project start date', value: 'Jul 22, 2026' },
+      { key: 'Project end date', value: 'Jul 22, 2027' },
+      { key: 'Permit requested start date', value: 'Jul 22, 2026' },
+      { key: 'Permit requested end date', value: 'Jul 22, 2027' },
+      { key: 'Annual report tentative completion', value: 'Aug 31, 2027' },
+    ] as MetaRow[],
+    purpose:
+      'Coralline red algae are calcifying macroalgae found in every ocean basin and ' +
+      'contribute substantially to carbon cycling, reef stability, and settlement ' +
+      'substrate and refuge for marine invertebrates — yet their cryptic morphology has ' +
+      'left their diversity in northern California poorly documented. This project will ' +
+      '(1) catalog intertidal coralline diversity in northern California using molecular ' +
+      'identification, and (2) examine the reproductive system of the common coralline ' +
+      'Corallina vancouveriensis as a case study. Specimens will be collected and ' +
+      'genetically identified from two intertidal sites, updating decades-old surveys ' +
+      'that lacked genetic confirmation.',
+    benefits:
+      'The study raises awareness of an overlooked but ecologically important group of ' +
+      'seaweeds, supporting shared stewardship of healthy coastal ecosystems within the ' +
+      'State Park System.',
+    fieldOccurrences: [
+      'Jul 30, 2026',
+      'Aug 13 – 15, 2026',
+      'Sep 29, 2026',
+      'Oct 27, 2026',
+      'Nov 25, 2026',
+      'Dec 9, 2026',
+      'Jan 22, 2027',
+      'Feb 19, 2027',
+      'Mar 19, 2027',
+      'Apr 10, 2027',
+      'May 8, 2027',
+      'Jun 7, 2027',
+    ],
+  },
+
+  // ── Study areas tab ──────────────────────────────────────────────────────
+  // Collection is authorized by DISTRICT. Each district groups the parks where
+  // work may occur, the district-specific collection conditions, and the DPR
+  // research coordinator who administers the permit in that district.
+  studyAreas: {
+    districts: [
+      {
+        name: 'North Coast Redwoods District',
+        coordinator: {
+          name: 'M. Santos',
+          phone: '(707) 555-0119',
+          email: 'm.santos@parks.ca.gov',
+        } as Contact,
+        parks: [
+          'Del Norte Coast Redwoods SP',
+          'Prairie Creek Redwoods SP',
+          'Tolowa Dunes SP',
+        ],
+        conditions: [
+          'No collection within the False Klamath Cove marine reserve boundary.',
+          'Intertidal access must be coordinated with the district ranger at least 48 hours in advance.',
+          'Vehicles restricted to designated day-use lots; no driving on the beach or dunes.',
+        ],
+      },
+      {
+        name: 'Mendocino District',
+        coordinator: {
+          name: 'T. Alvarado',
+          phone: '(707) 555-0164',
+          email: 't.alvarado@parks.ca.gov',
+        } as Contact,
+        parks: [
+          'MacKerricher SP',
+          'Van Damme SP',
+        ],
+        conditions: [
+          'Collection limited to rocky intertidal below the mean high-water line.',
+          'No disturbance of harbor-seal haul-out areas at MacKerricher.',
+        ],
+      },
+    ],
+    sites: [
+      { name: 'Baker Beach', coords: '41.049, -124.128', note: 'Highly accessible; intertidal impacted by purple sea urchin and heavy visitor use.' },
+      { name: 'False Klamath Cove', coords: '41.603, -124.102', note: 'Comparable diversity expected with less human impact (~15 mi from nearest town).' },
+    ],
+  },
+
+  // ── Special conditions tab ───────────────────────────────────────────────
+  // No applicant-supplied data — standard CA State Parks scientific-collection
+  // conditions (invented, generic).
+  specialConditions: [
+    'The signed permit must be carried by field personnel during all activities and presented on request.',
+    'Collection is limited to the approved study areas and the taxa and quantities listed under Data Collection.',
+    'No collection within posted marine reserve or special-closure boundaries.',
+    'All collected specimens are State property and must be curated at the approved facility.',
+    'An annual report is due by Aug 31, 2027.',
+  ],
+
+  // ── Data collection tab ──────────────────────────────────────────────────
+  dataCollection: {
+    facts: [
+      { key: 'Involves collection of specimens', value: 'Yes' },
+      { key: 'Collection rationale', value: 'Answered in proposal' },
+      { key: 'Curation facility', value: 'HSU Cryptogamic Herbarium' },
+      { key: 'Curation — responsible official', value: 'Dr. Alena Reyes · (707) 555-0142 · areyes@humboldt.edu' },
+      { key: 'Involves laboratory work', value: 'Yes' },
+      { key: 'Laboratory facility', value: 'Cal Poly Humboldt, AMH 171' },
+      { key: 'Laboratory — responsible official', value: 'Dr. Alena Reyes · (707) 555-0142 · areyes@humboldt.edu' },
+      { key: 'Lab study window', value: 'Jul 22, 2026 – Jul 22, 2027' },
+      { key: 'Study procedures', value: 'Answered in proposal' },
+      { key: 'Location of data & data products', value: 'Answered in proposal' },
+    ] as MetaRow[],
+    specimens: [
+      { species: 'Bossiella chiloensis', quantity: '5', portion: 'single frond', condition: 'vegetative' },
+      { species: 'Bossiella dichotoma', quantity: '5', portion: 'single frond', condition: 'vegetative' },
+      { species: 'Bossiella orbigniana', quantity: '5', portion: 'single frond', condition: 'vegetative' },
+      { species: 'Calliarthron tuberculosum', quantity: '5', portion: 'single frond', condition: 'vegetative' },
+      { species: 'Corallina chilensis', quantity: '5', portion: 'single frond', condition: 'vegetative' },
+      { species: 'Corallina vancouveriensis', quantity: '50', portion: '25 single frond, 25 entire individual', condition: 'reproductive and vegetative' },
+      { species: 'Lithophyllum dispar', quantity: '5', portion: 'single frond', condition: 'vegetative' },
+      { species: 'Lithophyllum impressum', quantity: '5', portion: '1 cm²', condition: 'vegetative' },
+      { species: 'Lithothamnion phymatodium', quantity: '5', portion: '1 cm²', condition: 'vegetative' },
+      { species: 'Melobesia mediocris', quantity: '5', portion: 'single frond', condition: 'vegetative' },
+      { species: 'Mesophyllum conchatum', quantity: '5', portion: '1 cm²', condition: 'vegetative' },
+      { species: 'Neopolyporolithon reclinatum', quantity: '5', portion: 'single crust', condition: 'vegetative' },
+    ],
+  },
+
+  // ── Additional documentation tab ─────────────────────────────────────────
+  additionalDocs: {
+    facts: [
+      { key: 'Involves soil disturbance', value: 'No' },
+      { key: 'Requires additional federal/state/local permits', value: 'Yes' },
+      { key: 'Budget', value: 'Answered in proposal' },
+      { key: 'Literature cited', value: 'Answered in proposal' },
+      { key: 'Activities beyond simple use (aircraft/drones, diving, trapping, etc.)', value: 'No' },
+    ] as MetaRow[],
+    files: [
+      { name: 'Coralline Diversity & Reproductive Systems Proposal.pdf', type: 'Study Proposal', size: '322.36 KB', by: 'A. Reyes', date: 'Jul 8, 2026' },
+      { name: 'CV_Jun2025.pdf', type: 'Principal Investigator Resume', size: '200.08 KB', by: 'A. Reyes', date: 'Jun 3, 2025' },
+      { name: 'False Klamath Cove Study Area Map.pdf', type: 'Study Area Supporting Documentation', size: '2.62 MB', by: 'A. Reyes', date: 'Jul 9, 2026' },
+      { name: 'Additional-Permit-Details.pdf', type: 'Additional Permit Supporting Documentation', size: '157.61 KB', by: 'A. Reyes', date: 'Jul 9, 2026' },
+      { name: 'Liability-Waiver-Addendum-DPR65B.pdf', type: 'Optional Liability Waiver Addendum (DPR65B)', size: '292.25 KB', by: 'A. Reyes', date: 'Jul 14, 2026' },
+      { name: 'standard_conditions_agreement-signed.pdf', type: 'Standard Conditions Agreement Form', size: '178.64 KB', by: 'A. Reyes', date: 'Jul 9, 2026' },
+      { name: 'waiver_and_indemnity_agreement-signed.pdf', type: 'Waiver and Indemnity Agreement Form', size: '200.07 KB', by: 'A. Reyes', date: 'Jul 9, 2026' },
+    ],
+  },
+
+  _dataNote: invented,
+} as const;

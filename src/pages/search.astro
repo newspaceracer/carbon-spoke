@@ -1,0 +1,260 @@
+---
+/* manifest:
+     spine: main.page > cds-stack(gap 6)
+     sections:
+       - shell header  -> cds-header (ui-shell): name + nav + cds-search (the site
+                          search; navigating here from any page lands on this screen)
+       - results head  -> inline (heading + result count + query echo)
+       - results list  -> <ul> of cds-tile rows, each composing
+                          cds-icon-indicator (status) + cds-tag (category) + cds-link
+       - empty state   -> inline (hidden until a query matches nothing)
+
+   Static build: query params aren't known at build time, so all records render
+   server-side and a client <script> filters them by the ?q= term (and live as you
+   type). Search keyword to try: "Monarch".
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { permits } from '../data/search';
+
+// Home-page card metadata — the hub globs pages and reads this to self-list.
+export const prototype = {
+  title: 'Permit search',
+  summary:
+    'A reviewer searches the permit register and scans a results page — status, ' +
+    'category, and district per hit. Try the keyword "Monarch".',
+  tag: 'Internal tool',
+};
+
+// Lowercased haystack per record so the client filter can match any visible field.
+const rows = permits.map((p) => ({
+  ...p,
+  haystack: [p.id, p.name, p.organization, p.district, p.category, p.summary, ...p.keywords]
+    .join(' ')
+    .toLowerCase(),
+}));
+
+// Status shown as a pill (cds-tag). It carries a color AND the exact glyph Carbon's
+// icon-indicator maps to each `kind` AND the text label — so state is never conveyed
+// by color alone (WCAG 1.4.1 / house status rule), while reading as a pill.
+const statusStyle: Record<string, { type: string; viewBox: string; path: string }> = {
+  succeeded:     { type: 'green', viewBox: '0 0 16 16', path: 'M8,1C4.1,1,1,4.1,1,8c0,3.9,3.1,7,7,7s7-3.1,7-7C15,4.1,11.9,1,8,1z M7,11L4.3,8.3l0.9-0.8L7,9.3l4-3.9l0.9,0.8L7,11z' },
+  'in-progress': { type: 'blue',  viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14.0158,14.0158,0,0,0,16,2Zm0,26A12,12,0,0,1,16,4V16l8.4812,8.4814A11.9625,11.9625,0,0,1,16,28Z' },
+  pending:       { type: 'gray',  viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14,14,0,0,0,16,2ZM8,18a2,2,0,1,1,2-2A2,2,0,0,1,8,18Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,16,18Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,24,18Z' },
+  failed:        { type: 'red',   viewBox: '0 0 16 16', path: 'M8,1C4.1,1,1,4.1,1,8s3.1,7,7,7s7-3.1,7-7S11.9,1,8,1z M10.7,11.5L4.5,5.3l0.8-0.8l6.2,6.2L10.7,11.5z' },
+};
+---
+
+<BaseLayout title="Search permits">
+  <!-- Nav bar (ui-shell header) — the site search lives here -->
+  <cds-header aria-label="CA State Parks Scientific Research and Collection Permits">
+    <cds-header-name href="/" prefix="CA State Parks">Research &amp; Collection Permits</cds-header-name>
+
+    <cds-header-nav menu-bar-label="Primary navigation">
+      <cds-header-nav-item href="#">Resource category tags</cds-header-nav-item>
+      <cds-header-nav-item href="#">Districts</cds-header-nav-item>
+      <cds-header-nav-item href="#">Help</cds-header-nav-item>
+    </cds-header-nav>
+
+    <div class="header__search">
+      <cds-search
+        id="site-search"
+        size="lg"
+        label-text="Search permits"
+        placeholder="Search permits, applicants, sites"
+      ></cds-search>
+    </div>
+  </cds-header>
+
+  <main class="page">
+    <cds-stack gap="6">
+      <cds-breadcrumb>
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link href="/">Permits</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link aria-current="page">Search</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+      </cds-breadcrumb>
+
+      <header class="results-head">
+        <h1 class="results-head__title" id="results-title">Search results</h1>
+        <p class="results-head__count t-body-01" id="results-count" aria-live="polite">
+          {rows.length} permits
+        </p>
+      </header>
+
+      <ul class="results" id="results" role="list">
+        {rows.map((p) => (
+          <li class="result" data-haystack={p.haystack}>
+            <cds-clickable-tile href="/permit">
+              <div class="result__row">
+                <div class="result__head">
+                  <p class="result__id t-label-01">{p.id}</p>
+                  <cds-tag class="result__status" type={statusStyle[p.status.kind]?.type ?? 'gray'}>
+                    <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox={statusStyle[p.status.kind]?.viewBox ?? '0 0 16 16'} width="16" height="16" aria-hidden="true">
+                      <path d={statusStyle[p.status.kind]?.path} />
+                    </svg>
+                    {p.status.label}
+                  </cds-tag>
+                </div>
+                <h2 class="result__title t-heading-03">{p.name}</h2>
+                <p class="result__summary t-body-01">{p.summary}</p>
+                <p class="result__meta t-label-01">
+                  <cds-tag type="cool-gray">{p.category}</cds-tag>
+                  <span>{p.organization}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{p.district}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Submitted {p.submitted}</span>
+                </p>
+              </div>
+              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                <path d="M9.3 3.7 13.1 7.5 1 7.5 1 8.5 13.1 8.5 9.3 12.3 10 13 15 8 10 3z"/>
+              </svg>
+            </cds-clickable-tile>
+          </li>
+        ))}
+      </ul>
+
+      <div class="empty" id="empty" hidden>
+        <p class="empty__title t-heading-compact-02">No permits found</p>
+        <p class="empty__hint t-body-01">
+          No permit matches <span id="empty-query" class="empty__query"></span>.
+          Try a broader term — for example <strong>Monarch</strong>.
+        </p>
+      </div>
+    </cds-stack>
+  </main>
+</BaseLayout>
+
+<script>
+  // Static build: filter the server-rendered rows on the client, from the ?q=
+  // param on load and live as the user types. Enter updates the URL so the search
+  // is linkable/refreshable.
+  const search = document.getElementById('site-search') as any;
+  const results = Array.from(document.querySelectorAll<HTMLElement>('#results .result'));
+  const countEl = document.getElementById('results-count')!;
+  const titleEl = document.getElementById('results-title')!;
+  const emptyEl = document.getElementById('empty')!;
+  const emptyQueryEl = document.getElementById('empty-query')!;
+
+  function apply(raw: string) {
+    const q = raw.trim().toLowerCase();
+    let matches = 0;
+    results.forEach((row) => {
+      const hit = q === '' || (row.dataset.haystack ?? '').includes(q);
+      row.hidden = !hit;
+      if (hit) matches++;
+    });
+
+    const label = matches === 1 ? '1 permit' : `${matches} permits`;
+    countEl.textContent = q === '' ? `${label}` : `${label} for “${raw.trim()}”`;
+    titleEl.textContent = q === '' ? 'Search results' : `Results for “${raw.trim()}”`;
+
+    const noHits = matches === 0 && q !== '';
+    emptyEl.hidden = !noHits;
+    if (noHits) emptyQueryEl.textContent = `“${raw.trim()}”`;
+  }
+
+  // Seed from the URL (?q=Monarch) on first paint.
+  const initial = new URLSearchParams(window.location.search).get('q') ?? '';
+  if (search) search.value = initial;
+  apply(initial);
+
+  // Live filter as the user types.
+  search?.addEventListener('cds-search-input', (e: Event) => {
+    apply((e as CustomEvent).detail?.value ?? '');
+  });
+
+  // Enter persists the query to the URL (linkable / refresh-safe).
+  search?.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key !== 'Enter') return;
+    const value = search.value ?? '';
+    const url = new URL(window.location.href);
+    if (value.trim()) url.searchParams.set('q', value.trim());
+    else url.searchParams.delete('q');
+    window.history.replaceState({}, '', url);
+    apply(value);
+  });
+</script>
+
+<style>
+  /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens.
+     body already offsets the fixed ui-shell header (theme.css padding-top). */
+  .page {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 1.5rem 1.5rem 6rem;
+  }
+  .header__search {
+    margin-left: auto;
+    max-width: 22rem;
+    width: 100%;
+  }
+  .results-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .results-head__title {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 400;
+    line-height: 1.2;
+  }
+  .results-head__count {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+  .result__row {
+    /* Leave the bottom-right corner clear for the clickable-tile arrow icon. */
+    padding-inline-end: 1.5rem;
+  }
+  .result__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .result__id {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .result__title {
+    margin: 0.125rem 0 0;
+    color: var(--cds-text-primary, #161616);
+  }
+  .result__summary {
+    margin: 0.375rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+    max-width: 46rem;
+  }
+  .result__meta {
+    margin: 0.625rem 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    border: 1px dashed var(--cds-border-subtle, #c6c6c6);
+  }
+  .empty__title {
+    margin: 0;
+  }
+  .empty__hint {
+    margin: 0.5rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

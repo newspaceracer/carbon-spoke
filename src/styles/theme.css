@@ -1,0 +1,109 @@
+/* ==========================================================================
+   Carbon Spoke — global theme entry
+   ==========================================================================
+   1. Pull in the full Carbon stylesheet. This ships:
+        - every design token as a --cds-* custom property (the SEMANTIC layer),
+        - IBM Plex @font-face rules + type/spacing/motion tokens,
+        - the White theme on :root, and the theme-ZONE classes
+          .cds--white / .cds--g10 / .cds--g90 / .cds--g100 you can put on any
+          wrapper to switch a region light<->dark.
+   2. The BRAND HOOK below is where a spoke reskins Carbon. Overriding the
+      --cds-* semantic tokens under a scope restyles EVERY cds-* component at
+      once — the same "override the semantic layer under a [data-*] scope"
+      mechanic Ecology uses, but Carbon already owns the token set.
+
+   Right now the hook is intentionally EMPTY -> you get the default Carbon look.
+   ========================================================================== */
+
+@import '@carbon/styles/css/styles.css';
+
+/* ---- RADIX BRAND RESKIN --------------------------------------------------
+   Remaps Carbon's semantic --cds-* color tokens onto Radix Colors (Slate +
+   Iris, P3). Loaded AFTER Carbon so its zone-scoped overrides win. This IS the
+   brand hook for this spoke — see src/styles/radix.css. */
+@import './radix.css';
+
+/* ---- SANS-SERIF OVERRIDE -------------------------------------------------
+   Aliases the 'IBM Plex Sans' family name to self-hosted Inria Sans (loaded
+   after Carbon so it wins). See src/styles/fonts.css. Plex Mono is untouched. */
+@import './fonts.css';
+
+/* ---- BRAND HOOK ----------------------------------------------------------
+   To reskin, map your brand onto Carbon's semantic tokens. Example:
+
+     :root {
+       --cds-interactive:   #0f62fe;   // primary action
+       --cds-link-primary:  #0f62fe;
+       --cds-background:     #ffffff;
+       --cds-text-primary:   #161616;
+       --cds-border-subtle:  #e0e0e0;
+     }
+     [data-brand="acme"] {
+       --cds-interactive:   #6f2da8;   // one scoped override reskins everything
+       --cds-link-primary:  #6f2da8;
+     }
+
+   Full token list: https://carbondesignsystem.com/elements/color/tokens/
+   -------------------------------------------------------------------------- */
+
+/* A few page-level niceties (not component styling — that lives in cds-*). The
+   page background itself is owned by the g10 theme zone on <body> (see
+   BaseLayout): Carbon paints it via `.cds--g10 { background-color:
+   var(--cds-background) }`, and g10 maps --cds-background to a gray, with the
+   --cds-layer-* tokens mapped to white — so raised elements contrast for free. */
+body {
+  margin: 0;
+  color: var(--cds-text-primary, #161616);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+}
+
+/* The UI-Shell header (<AppHeader/>) is position:fixed at the top, so offset the
+   page content below it by the header's height (Carbon token, 48px/3rem). */
+body {
+  padding-top: var(--cds-spacing-09, 3rem);
+}
+
+/* ---- TYPE SCALE ----------------------------------------------------------
+   Carbon v11 type sets as font-only utility classes. The prebuilt CSS exposes
+   these values only INSIDE component shadow styles, not as global tokens, so
+   these are checked hard-codes that track Carbon's scale exactly (size / weight
+   / line-height / letter-spacing). Colour and margin stay contextual — these
+   classes set type ONLY. One role per element; never invent an off-scale size.
+
+     t-heading-05          32px / 400  — page title (h1)
+     t-heading-04          28px / 400  — display heading (hero / large section)
+     t-heading-03          20px / 400  — section header (h2)
+     t-heading-02          16px / 600  — emphasized 16px heading
+     t-heading-compact-02  16px / 600  — strong 16px inline label (tight leading)
+     t-heading-01          14px / 600  — sub-section header (h3)
+     t-heading-compact-01  14px / 600  — strong inline label (name, author)
+     t-body-02             16px / 400  — reading prose
+     t-body-compact-02     16px / 400  — 16px prose, tight leading (dense blocks)
+     t-body-01             14px / 400  — UI/content/data text
+     t-body-compact-01     14px / 400  — dense UI/list/table text (tight leading)
+     t-label-02            14px / 400  — larger label / metadata
+     t-label-01            12px / 400  — labels, keys, eyebrows, timestamps
+     t-helper-text-01      12px / 400  — form helper / caption text
+   -------------------------------------------------------------------------- */
+.t-heading-05 { font-size: 2rem;     font-weight: 400; line-height: 1.25;    letter-spacing: 0; }
+.t-heading-04 { font-size: 1.75rem;  font-weight: 400; line-height: 1.28572; letter-spacing: 0; }
+.t-heading-03 { font-size: 1.25rem;  font-weight: 400; line-height: 1.4;     letter-spacing: 0; }
+.t-heading-02 { font-size: 1rem;     font-weight: 600; line-height: 1.5;     letter-spacing: 0; }
+.t-heading-compact-02 { font-size: 1rem; font-weight: 600; line-height: 1.375; letter-spacing: 0; }
+.t-heading-01 { font-size: 0.875rem; font-weight: 600; line-height: 1.42857; letter-spacing: 0.16px; }
+.t-heading-compact-01 { font-size: 0.875rem; font-weight: 600; line-height: 1.28572; letter-spacing: 0.16px; }
+.t-body-02 { font-size: 1rem;     font-weight: 400; line-height: 1.5;     letter-spacing: 0; }
+.t-body-compact-02 { font-size: 1rem; font-weight: 400; line-height: 1.375; letter-spacing: 0; }
+.t-body-01 { font-size: 0.875rem; font-weight: 400; line-height: 1.42857; letter-spacing: 0.16px; }
+.t-body-compact-01 { font-size: 0.875rem; font-weight: 400; line-height: 1.28572; letter-spacing: 0.16px; }
+.t-label-02 { font-size: 0.875rem; font-weight: 400; line-height: 1.28572; letter-spacing: 0.16px; }
+.t-label-01 { font-size: 0.75rem; font-weight: 400; line-height: 1.33333; letter-spacing: 0.32px; }
+.t-helper-text-01 { font-size: 0.75rem; font-weight: 400; line-height: 1.33333; letter-spacing: 0.32px; }
+
+/* carbon-checked: cds-header-nav is display:none below the lg breakpoint (1056px)
+   by design — Carbon expects a hamburger + side-nav there. This spoke wants the
+   Admin tools menu visible at every width, so show the host nav always. This
+   overrides the shell's :host display rule, not any component-internal part. */
+cds-header-nav {
+  display: block;
+}

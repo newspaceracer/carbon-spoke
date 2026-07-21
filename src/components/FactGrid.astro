@@ -1,0 +1,41 @@
+---
+// A scannable key/value grid — label above value, wrapping into responsive
+// columns. The default read for permit facts inside a section card.
+import type { MetaRow } from '../data/permit';
+interface Props {
+  rows: MetaRow[];
+  /** Minimum column width; wider for long values (e.g. contact strings). */
+  min?: string;
+}
+const { rows, min = '15rem' } = Astro.props;
+---
+
+<dl class="factgrid" style={`--min:${min}`}>
+  {rows.map((row) => (
+    <div class="factgrid__item">
+      <dt class="factgrid__key t-label-01">{row.key}</dt>
+      <dd class="factgrid__val t-body-01">{row.value}</dd>
+    </div>
+  ))}
+</dl>
+
+<style>
+  .factgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--min, 15rem), 1fr));
+    gap: 1rem 1.5rem;
+    margin: 0;
+  }
+  .factgrid__item {
+    min-width: 0;
+  }
+  .factgrid__key {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .factgrid__val {
+    margin: 0.25rem 0 0;
+    color: var(--cds-text-primary, #161616);
+    overflow-wrap: break-word;
+  }
+</style>

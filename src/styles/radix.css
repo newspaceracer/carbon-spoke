@@ -1,0 +1,203 @@
+/* ==========================================================================
+   Radix Colors -> Carbon token bridge  (Slate neutral + Iris accent)
+   ==========================================================================
+   Carbon components read SEMANTIC --cds-* tokens. This file redefines the
+   high-impact color tokens to reference Radix's 12-step scales, so the whole
+   catalog reskins with zero component CSS (carbon-first / design-principles:
+   reskin through tokens, never internals).
+
+   How it fits together:
+   - Light Radix scales load on :root/.light (imported below). Each scale file
+     ships sRGB values with a P3 (display-p3) upgrade under @supports — so on a
+     wide-gamut display you get the P3 color space automatically.
+   - Dark Radix scales are re-scoped onto Carbon's dark zones (.cds--g90/.g100)
+     in ./radix-dark-zones.css, so one Carbon zone class still flips everything.
+   - The MAP below is written once and applied on every Carbon theme zone. It
+     references scale STEPS (e.g. --slate-12 = high-contrast text); the step's
+     value flips per zone, so the same map serves light and dark.
+
+   Radix step semantics used here:
+     1-2 app background · 2-4 raised surfaces / fields · 6 subtle border ·
+     8 strong border · 9 solid fill (brand/status) · 10 solid hover ·
+     11 low-contrast text / link · 12 high-contrast text.
+
+   Scope: surfaces, text, borders, brand/interactive, links, focus, the four
+   status colors, and the full 10-hue tag palette (below). Data-viz colors are
+   NOT remapped — @carbon/styles ships none; that palette only exists once
+   @carbon/charts is added, at which point it gets its own bridge.
+   ========================================================================== */
+
+/* --- Radix light scales (sRGB + P3 upgrade baked in) --- */
+/* base: neutral + accent + status */
+@import '@radix-ui/colors/slate.css';
+@import '@radix-ui/colors/iris.css';
+@import '@radix-ui/colors/red.css';
+@import '@radix-ui/colors/grass.css';
+@import '@radix-ui/colors/amber.css';
+@import '@radix-ui/colors/blue.css';
+/* extra hues for the tag palette */
+@import '@radix-ui/colors/gray.css';
+@import '@radix-ui/colors/cyan.css';
+@import '@radix-ui/colors/teal.css';
+@import '@radix-ui/colors/crimson.css';
+@import '@radix-ui/colors/purple.css';
+@import '@radix-ui/colors/sand.css';
+
+/* --- Radix dark scales, re-scoped to Carbon's .cds--g90 / .cds--g100 zones --- */
+@import './radix-dark-zones.css';
+
+/* --- The map: Carbon semantic token -> Radix step. Declared on every Carbon
+       theme zone so it overrides Carbon's own zone tokens (same specificity,
+       loaded later = wins). --------------------------------------------------- */
+:root,
+.cds--white,
+.cds--g10,
+.cds--g90,
+.cds--g100 {
+  /* Backgrounds & surfaces (value, not hue — neutrals do the layering) */
+  --cds-background: var(--slate-1);
+  --cds-background-hover: var(--slate-4);
+  --cds-background-active: var(--slate-5);
+  --cds-background-selected: var(--slate-4);
+  --cds-background-selected-hover: var(--slate-5);
+  --cds-background-inverse: var(--slate-12);
+  --cds-layer-01: var(--slate-2);
+  --cds-layer-02: var(--slate-3);
+  --cds-layer-03: var(--slate-4);
+  --cds-layer-hover-01: var(--slate-4);
+  --cds-layer-hover-02: var(--slate-5);
+  --cds-layer-active-01: var(--slate-5);
+  --cds-layer-accent-01: var(--slate-3);
+  --cds-field-01: var(--slate-2);
+  --cds-field-02: var(--slate-3);
+  --cds-field-hover-01: var(--slate-4);
+
+  /* Borders */
+  --cds-border-subtle-00: var(--slate-6);
+  --cds-border-subtle-01: var(--slate-6);
+  --cds-border-subtle-02: var(--slate-6);
+  --cds-border-subtle-selected-01: var(--slate-7);
+  --cds-border-strong-01: var(--slate-8);
+  --cds-border-strong-02: var(--slate-8);
+  --cds-border-interactive: var(--iris-9);
+  --cds-border-inverse: var(--slate-12);
+
+  /* Text */
+  --cds-text-primary: var(--slate-12);
+  --cds-text-secondary: var(--slate-11);
+  --cds-text-placeholder: var(--slate-9);
+  --cds-text-helper: var(--slate-11);
+  --cds-text-disabled: var(--slate-8);
+  --cds-text-on-color: #ffffff;
+  --cds-text-inverse: var(--slate-1);
+  --cds-text-error: var(--red-11);
+
+  /* Icons */
+  --cds-icon-primary: var(--slate-12);
+  --cds-icon-secondary: var(--slate-11);
+  --cds-icon-on-color: #ffffff;
+
+  /* Links (step 11 = accessible link text on a light surface) */
+  --cds-link-primary: var(--iris-11);
+  --cds-link-primary-hover: var(--iris-12);
+  --cds-link-secondary: var(--iris-11);
+  --cds-link-visited: var(--iris-11);
+
+  /* Interactive / brand / buttons (step 9 = solid fill, 10 hover, 11 active) */
+  --cds-interactive: var(--iris-9);
+  --cds-background-brand: var(--iris-9);
+  --cds-button-primary: var(--iris-9);
+  --cds-button-primary-hover: var(--iris-10);
+  --cds-button-primary-active: var(--iris-11);
+  --cds-button-secondary: var(--slate-12);
+  --cds-button-secondary-hover: var(--slate-11);
+  --cds-button-tertiary: var(--iris-9);
+  --cds-button-tertiary-hover: var(--iris-10);
+
+  /* Focus ring */
+  --cds-focus: var(--iris-9);
+  --cds-focus-inset: var(--slate-1);
+
+  /* Status / support (solid step 9; error text uses step 11 for contrast) */
+  --cds-support-error: var(--red-9);
+  --cds-support-success: var(--grass-9);
+  --cds-support-warning: var(--amber-9);
+  --cds-support-info: var(--blue-9);
+}
+
+/* --- Tag palette: Carbon's 10 hues -> Radix soft-tag recipe -------------------
+   Carbon tags are "soft" (tinted fill + readable text). Radix's soft recipe:
+   background = step 3, hover = step 4, border = step 6, text = step 11 — the
+   same values flip per zone via the scale, so this serves light and dark.
+   Hue pairing: cool-gray->slate, gray->gray, warm-gray->sand, green->grass,
+   magenta->crimson; the rest map to their same-named Radix scale. --------------*/
+:root,
+.cds--white,
+.cds--g10,
+.cds--g90,
+.cds--g100 {
+  --cds-tag-background-blue: var(--blue-3);
+  --cds-tag-hover-blue: var(--blue-4);
+  --cds-tag-border-blue: var(--blue-6);
+  --cds-tag-color-blue: var(--blue-11);
+
+  --cds-tag-background-cyan: var(--cyan-3);
+  --cds-tag-hover-cyan: var(--cyan-4);
+  --cds-tag-border-cyan: var(--cyan-6);
+  --cds-tag-color-cyan: var(--cyan-11);
+
+  --cds-tag-background-teal: var(--teal-3);
+  --cds-tag-hover-teal: var(--teal-4);
+  --cds-tag-border-teal: var(--teal-6);
+  --cds-tag-color-teal: var(--teal-11);
+
+  --cds-tag-background-green: var(--grass-3);
+  --cds-tag-hover-green: var(--grass-4);
+  --cds-tag-border-green: var(--grass-6);
+  --cds-tag-color-green: var(--grass-11);
+
+  --cds-tag-background-red: var(--red-3);
+  --cds-tag-hover-red: var(--red-4);
+  --cds-tag-border-red: var(--red-6);
+  --cds-tag-color-red: var(--red-11);
+
+  --cds-tag-background-magenta: var(--crimson-3);
+  --cds-tag-hover-magenta: var(--crimson-4);
+  --cds-tag-border-magenta: var(--crimson-6);
+  --cds-tag-color-magenta: var(--crimson-11);
+
+  --cds-tag-background-purple: var(--purple-3);
+  --cds-tag-hover-purple: var(--purple-4);
+  --cds-tag-border-purple: var(--purple-6);
+  --cds-tag-color-purple: var(--purple-11);
+
+  --cds-tag-background-gray: var(--gray-3);
+  --cds-tag-hover-gray: var(--gray-4);
+  --cds-tag-border-gray: var(--gray-6);
+  --cds-tag-color-gray: var(--gray-11);
+
+  --cds-tag-background-cool-gray: var(--slate-3);
+  --cds-tag-hover-cool-gray: var(--slate-4);
+  --cds-tag-border-cool-gray: var(--slate-6);
+  --cds-tag-color-cool-gray: var(--slate-11);
+
+  --cds-tag-background-warm-gray: var(--sand-3);
+  --cds-tag-hover-warm-gray: var(--sand-4);
+  --cds-tag-border-warm-gray: var(--sand-6);
+  --cds-tag-color-warm-gray: var(--sand-11);
+}
+
+/* --- Default app surface: g10-style gray page with white raised layers -------
+   The app <body> uses .cds--g10 (see BaseLayout) so the DEFAULT background is a
+   quiet gray (slate-2), with white/near-white raised surfaces — tiles, panels,
+   fields — sitting on top. This is Carbon's g10 model: the inverse of the White
+   theme's white-page / gray-layers. Overrides only the surface grays here; text,
+   borders, brand, and status colors come from the shared map above. --------------*/
+.cds--g10 {
+  --cds-background: var(--slate-3);
+  --cds-layer-01: var(--slate-1);
+  --cds-layer-02: var(--slate-3);
+  --cds-layer-03: var(--slate-1);
+  --cds-field-01: var(--slate-1);
+  --cds-field-02: var(--slate-3);
+}

@@ -1,0 +1,27 @@
+---
+// A key/value block rendered as a Carbon structured list. The one place we shape
+// permit facts into a scannable two-column read.
+import type { MetaRow } from '../data/permit';
+interface Props {
+  rows: MetaRow[];
+}
+const { rows } = Astro.props;
+---
+
+<cds-structured-list condensed>
+  <cds-structured-list-body>
+    {rows.map((row) => (
+      <cds-structured-list-row>
+        <cds-structured-list-cell class="meta__key">{row.key}</cds-structured-list-cell>
+        <cds-structured-list-cell>{row.value}</cds-structured-list-cell>
+      </cds-structured-list-row>
+    ))}
+  </cds-structured-list-body>
+</cds-structured-list>
+
+<style>
+  .meta__key {
+    color: var(--cds-text-secondary, #525252);
+    width: 40%;
+  }
+</style>

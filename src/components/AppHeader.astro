@@ -1,0 +1,39 @@
+---
+// Reusable top navigation bar, composed from Carbon's UI Shell (cds-header-*).
+// Drop <AppHeader /> at the top of any page. The Admin tools menu is a stock
+// cds-header-menu dropdown; each entry is a cds-header-menu-item link.
+//
+// Nav model lives here so every page renders the same bar. `adminTools` are the
+// dropdown entries; add/reorder by editing the array.
+interface NavLink {
+  label: string;
+  href: string;
+}
+
+interface Props {
+  /** Product name shown at the left of the bar. */
+  name?: string;
+  /** Where the product name links to. */
+  nameHref?: string;
+}
+
+const { name = 'Carbon Spoke', nameHref = '/' } = Astro.props;
+
+const adminTools: NavLink[] = [
+  { label: 'Manage internal users', href: '/admin/internal-users' },
+  { label: 'Manage public users', href: '/admin/public-users' },
+  { label: 'Manage district information and users', href: '/admin/districts' },
+  { label: 'Maintenance mode admin console', href: '/admin/maintenance-mode' },
+];
+---
+
+<cds-header aria-label={name}>
+  <cds-header-name href={nameHref} prefix="">{name}</cds-header-name>
+  <cds-header-nav menu-bar-label={name}>
+    <cds-header-menu trigger-content="Admin tools" menu-label="Admin tools">
+      {adminTools.map((item) => (
+        <cds-header-menu-item href={item.href}>{item.label}</cds-header-menu-item>
+      ))}
+    </cds-header-menu>
+  </cds-header-nav>
+</cds-header>

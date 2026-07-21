@@ -1,0 +1,223 @@
+---
+// Permit detail header — editorial layout on the page background (no tiles):
+// number eyebrow, name, status indicator, action buttons, badge rows, then an
+// at-a-glance strip of labeled facts (plain data, not boxed content pieces).
+import type { Badge } from '../data/permit';
+
+interface Stat {
+  label: string;
+  value: string;
+}
+
+interface Props {
+  id: string;
+  name: string;
+  organization: string;
+  status: { label: string; kind: string };
+  infoTags: Badge[];
+  flagTags: Badge[];
+  stats: Stat[];
+}
+
+const { id, name, organization, status, infoTags, flagTags, stats } = Astro.props;
+---
+
+<header class="banner cds--g100">
+  <div class="banner__inner">
+  <div class="banner__crumb"><slot name="breadcrumb" /></div>
+  <div class="banner__main">
+    <div class="banner__lead">
+      <p class="banner__eyebrow t-heading-compact-01">{organization}</p>
+      <h1 class="banner__title t-heading-05">{name}</h1>
+      <div class="banner__id-row">
+        <span class="banner__number t-heading-03">{id}</span>
+        <cds-icon-indicator size="20" kind={status.kind} label={status.label}></cds-icon-indicator>
+      </div>
+      <div class="banner__tags">
+        {infoTags.map((tag) => <cds-tag type={tag.type} size="sm">{tag.label}</cds-tag>)}
+        {flagTags.map((tag) => (
+          <cds-tag type={tag.type} size="sm">
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path d="M14.5,14h-13c-0.2,0-0.3-0.1-0.4-0.2c-0.1-0.2-0.1-0.3,0-0.5l6.5-12C7.7,1,8,0.9,8.2,1.1c0.1,0,0.2,0.1,0.2,0.2l6.5,12 c0.1,0.2,0.1,0.3,0,0.5C14.9,13.9,14.7,14,14.5,14z M2.3,13h11.3L8,2.5L2.3,13z"/>
+              <path d="M7.5 6H8.5V9.5H7.5z"/>
+              <path d="M8,10.8c-0.4,0-0.8,0.3-0.8,0.8s0.3,0.8,0.8,0.8c0.4,0,0.8-0.3,0.8-0.8S8.4,10.8,8,10.8z"/>
+            </svg>
+            {tag.label}
+          </cds-tag>
+        ))}
+      </div>
+    </div>
+
+    <!-- One primary anchor (Approve); demoted actions live in the attached menu.
+         Reject stays flagged as danger inside the menu. -->
+    <div class="banner__actions">
+      <cds-combo-button id="permit-actions" size="md" label="Approve permit" menu-alignment="bottom-end">
+        <cds-menu>
+          <cds-menu-item label="Request changes"></cds-menu-item>
+          <cds-menu-item label="Download"></cds-menu-item>
+          <cds-menu-item-divider></cds-menu-item-divider>
+          <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
+        </cds-menu>
+      </cds-combo-button>
+    </div>
+  </div>
+
+  <dl class="banner__stats">
+    {stats.map((s) => (
+      <div class="stat">
+        <dt class="stat__label t-label-01">{s.label}</dt>
+        <dd class="stat__value t-body-01">{s.value}</dd>
+      </div>
+    ))}
+  </dl>
+  <div class="banner__foot"><slot name="tabs" /></div>
+  </div>
+</header>
+
+<!-- Confirmation dialogs for the two decision actions. Overlays live outside
+     normal flow; Carbon owns the focus trap + return and the accessible heading. -->
+<cds-modal id="approve-permit-modal" size="sm">
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label>Permit {id}</cds-modal-label>
+    <cds-modal-heading>Approve this permit?</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <p class="t-body-01">
+      Approving authorizes the applicant to begin the requested research and
+      collection under the stated conditions. The applicant and all assigned
+      reviewers will be notified.
+    </p>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" data-modal-close>Approve permit</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<cds-modal id="reject-permit-modal" size="sm" alert>
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label>Permit {id}</cds-modal-label>
+    <cds-modal-heading>Reject this permit?</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <p class="t-body-01">
+      Rejecting closes this application. The applicant will be notified and must
+      submit a new application to reapply. This can’t be undone.
+    </p>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+    <cds-modal-footer-button kind="danger" data-modal-close>Reject permit</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<script>
+  // Combo-button fires onClick for its primary button AND for menu-item picks;
+  // route each to the matching confirmation modal. (Cancel / X / confirm all
+  // close natively via [data-modal-close].)
+  const combo = document.getElementById('permit-actions') as any;
+  const approveModal = document.getElementById('approve-permit-modal') as any;
+  const rejectModal = document.getElementById('reject-permit-modal') as any;
+  if (combo) {
+    combo.onClick = (e: Event) => {
+      const item = (e.target as HTMLElement).closest?.('cds-menu-item');
+      const label = item?.getAttribute('label');
+      if (label === 'Reject permit') rejectModal.open = true;
+      else if (!item) approveModal.open = true; // primary "Approve permit"
+    };
+  }
+</script>
+
+<style>
+  /* Dark banner panel — the header carries the g100 dark theme zone (see the
+     `cds--g100` class on the element), so its background is the near-black base
+     (--cds-background) and Carbon flips the text, tags, and button to their
+     light dark-zone values automatically. Number sits UNDER the name. */
+  .banner {
+    background: var(--cds-background, #161616);
+    /* Full-bleed: break out of the constrained page column so the gray band
+       spans the whole viewport width. .banner__inner re-centers the content so
+       it stays aligned with the rest of the page. */
+    margin-inline: calc(50% - 50vw);
+    padding-block: 1.75rem;
+  }
+  .banner__inner {
+    max-width: 68rem;
+    margin-inline: auto;
+    padding-inline: 1.5rem;
+  }
+  /* Breadcrumb row sits above the title, inside the dark header. */
+  .banner__crumb {
+    margin-bottom: 1rem;
+  }
+  /* Tab strip sits at the bottom edge of the dark header; the small negative
+     bottom margin pulls it flush with the banner's lower edge so its underline
+     reads as the header's baseline. Panels render below, on the page. */
+  .banner__foot {
+    margin-top: 1.5rem;
+    margin-bottom: -1.75rem;
+  }
+  .banner__main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+  }
+  .banner__lead {
+    min-width: 0;
+    flex: 1 1 22rem;
+  }
+  /* Organization eyebrow — sits above the title, subordinate to it (secondary
+     value, not a hue). Meaningful content, not an ornamental micro-label. */
+  .banner__eyebrow {
+    margin: 0 0 0.375rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .banner__title {
+    margin: 0;
+    max-width: 46rem;
+  }
+  .banner__id-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+  .banner__number {
+    color: var(--cds-text-primary, #161616);
+  }
+  .banner__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.875rem;
+  }
+  .banner__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    flex: 0 0 auto;
+  }
+  .banner__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1.5rem;
+    margin: 1.5rem 0 0;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .stat {
+    min-width: 0;
+  }
+  .stat__label {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .stat__value {
+    margin: 0.25rem 0 0;
+    color: var(--cds-text-primary, #161616);
+  }
+</style>

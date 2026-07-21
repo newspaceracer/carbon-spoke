@@ -1,0 +1,30 @@
+---
+// Reusable data-grid section — the SANCTIONED heavy-table option.
+//
+// Use this for large / sortable / filterable / editable data. For a simple
+// display table, use cds-table instead (see CLAUDE.md "Grids" for the rule).
+//
+// The client script below registers the AG Grid wrapper. Astro only ships it on pages
+// that actually render <DataGrid/>, so AG Grid does NOT bloat grid-less pages.
+interface Column {
+  field: string;
+  headerName?: string;
+  [key: string]: unknown;
+}
+interface Props {
+  columns: Column[];
+  rows: Record<string, unknown>[];
+  /** CSS height of the grid viewport. */
+  height?: string;
+}
+const { columns, rows, height = '400px' } = Astro.props;
+const config = JSON.stringify({ columns, rows });
+---
+
+<carbon-ag-grid height={height}>
+  <script type="application/json" set:html={config} is:inline></script>
+</carbon-ag-grid>
+
+<script>
+  import '../components/carbon-ag-grid.ts';
+</script>

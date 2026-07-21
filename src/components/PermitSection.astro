@@ -1,0 +1,45 @@
+---
+// A titled section within a permit tab — editorial Carbon layout: a heading with
+// a hairline rule and an optional "Make changes" action, then content flowing in
+// whitespace (NOT boxed in a tile). Tiles are reserved for genuinely tile-like
+// content (stats, people, sites) composed inside the slot.
+interface Props {
+  title: string;
+  /** Show the "Make changes" ghost action. */
+  editable?: boolean;
+}
+const { title, editable = false } = Astro.props;
+---
+
+<section class="sec">
+  <div class="sec__head">
+    <h2 class="sec__title t-heading-03">{title}</h2>
+    <div class="sec__aside">
+      <slot name="aside" />
+      {editable && <cds-button kind="ghost" size="sm">Make changes</cds-button>}
+    </div>
+  </div>
+  <slot />
+</section>
+
+<style>
+  /* Layout only — type/color from --cds-* tokens; content composes cds-* legos. */
+  .sec__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .sec__title {
+    margin: 0;
+  }
+  .sec__aside {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 0 0 auto;
+  }
+</style>

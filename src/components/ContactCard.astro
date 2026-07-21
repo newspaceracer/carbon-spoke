@@ -1,0 +1,51 @@
+---
+// A single contact rendered as an editorial data block (NOT a tile): a role
+// eyebrow, avatar + name, quiet contact lines, and the email as a cds-link. A
+// contact is a data record, not a "digestible content piece," so no tile surface.
+import type { Contact } from '../data/permit';
+import Avatar from './Avatar.astro';
+interface Props {
+  role: string;
+  contact: Contact;
+}
+const { role, contact } = Astro.props;
+---
+
+<div class="contact">
+  <p class="contact__role t-label-01">{role}</p>
+  <div class="contact__id">
+    <Avatar name={contact.name} />
+    <p class="contact__name t-heading-compact-01">{contact.name}</p>
+  </div>
+  <div class="contact__meta t-body-01">
+    {contact.phone && <span>{contact.phone}</span>}
+    {contact.address && <span>{contact.address}</span>}
+    {contact.email && <cds-link href={`mailto:${contact.email}`}>{contact.email}</cds-link>}
+  </div>
+</div>
+
+<style>
+  .contact {
+    padding-top: 0.875rem;
+    border-top: 2px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .contact__role {
+    margin: 0 0 0.625rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .contact__id {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    margin-bottom: 0.75rem;
+  }
+  .contact__name {
+    margin: 0;
+  }
+  .contact__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

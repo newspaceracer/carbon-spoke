@@ -1,0 +1,20 @@
+{
+  "name": "carbon-spoke",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "description": "A Carbon Design System spoke — an Astro shell that composes @carbon/web-components (cds-*) as its default component layer, with a re-pointed Claude 'carbon-first' plugin for building UIs fast.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@carbon/styles": "^1.72.0",
+    "@carbon/web-components": "^2.24.0",
+    "@fontsource/inria-sans": "^5.3.0",
+    "@radix-ui/colors": "^3.0.0",
+    "ag-grid-community": "^36.0.1",
+    "astro": "^5.6.0"
+  }
+}

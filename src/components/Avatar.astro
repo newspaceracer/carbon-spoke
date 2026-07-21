@@ -1,0 +1,45 @@
+---
+// carbon-checked: Carbon ships no avatar/identity component; an initials chip is
+// the reusable home for person identity in contact cards and the comment thread.
+// Initials avatar — a neutral, token-styled identity chip. Presentational only.
+interface Props {
+  name: string;
+  /** Diameter token step: sm (1.5rem) or md (2rem). */
+  size?: 'sm' | 'md';
+}
+const { name, size = 'md' } = Astro.props;
+const initials = name
+  .replace(/^(Dr\.?|Prof\.?)\s+/i, '')
+  .split(/\s+/)
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((w) => w[0]?.toUpperCase() ?? '')
+  .join('');
+---
+
+<span class:list={['avatar', `avatar--${size}`]} aria-hidden="true">{initials}</span>
+
+<style>
+  .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--cds-layer-accent-01, #e0e0e0);
+    color: var(--cds-text-primary, #161616);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    user-select: none;
+  }
+  .avatar--sm {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.6875rem;
+  }
+  .avatar--md {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 0.8125rem;
+  }
+</style>

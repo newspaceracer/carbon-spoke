@@ -1,0 +1,188 @@
+---
+// Spoke hub — the front door. Two jobs:
+//   1. Auto-list every prototype. import.meta.glob picks up src/pages/**; each
+//      page's `export const prototype` supplies its card copy. Add a screen and
+//      it appears here — no manual list to maintain.
+//   2. A short design-system orientation (the carbon-first rule + token theming),
+//      composed from cds-* legos. Deep guidance lives in CLAUDE.md + the skill.
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Glob sibling pages eagerly so we can read each one's `prototype` export.
+const modules = import.meta.glob('./**/*.astro', { eager: true });
+
+const prototypes = Object.entries(modules)
+  .filter(([path]) => path !== './index.astro')
+  .map(([path, mod]) => {
+    const href = path.replace(/^\.\//, '/').replace(/\.astro$/, '').replace(/\/index$/, '');
+    const slug = href.split('/').filter(Boolean).pop() ?? href;
+    const meta = (mod as Record<string, any>).prototype ?? {};
+    return {
+      href,
+      title: meta.title ?? slug.replace(/[-_]/g, ' ').replace(/^\w/, (c: string) => c.toUpperCase()),
+      summary: meta.summary ?? '',
+      tag: meta.tag ?? '',
+    };
+  })
+  .sort((a, b) => a.title.localeCompare(b.title));
+
+// Orientation cards — the three rules this spoke runs on.
+const principles = [
+  {
+    title: 'Carbon-first',
+    body: 'Every control is a stock cds-* web component. Walk the catalog before building anything — it almost always exists.',
+  },
+  {
+    title: 'Reskin via tokens',
+    body: 'Theme by overriding --cds-* tokens and switching light/dark zones. Never hand-roll component CSS.',
+  },
+  {
+    title: 'Compose, fast',
+    body: 'Assemble screens from Carbon legos. A section no single component covers becomes a small src/components/* piece.',
+  },
+];
+---
+
+<BaseLayout title="Carbon Spoke">
+  <main class="page">
+    <cds-stack gap="8">
+      <header class="head">
+        <p class="head__eyebrow">Carbon Spoke</p>
+        <h1 class="head__title">Prototypes</h1>
+        <p class="head__lede">
+          A design workspace for building UIs fast by composing the Carbon Design
+          System's stock, accessible <code>cds-*</code> components. Every screen below
+          is assembled from that catalog — no bespoke controls.
+        </p>
+      </header>
+
+      <!-- Prototype directory (auto-generated from src/pages/**) -->
+      <section>
+        <div class="section-head">
+          <h2 class="section-head__title">Screens</h2>
+          <cds-tag type="cool-gray">{prototypes.length} prototype{prototypes.length === 1 ? '' : 's'}</cds-tag>
+        </div>
+
+        {prototypes.length === 0 ? (
+          <p class="muted">No prototypes yet. Add a page under <code>src/pages/</code> and it shows up here.</p>
+        ) : (
+          <div class="grid">
+            {prototypes.map((proto) => (
+              <a class="proto" href={proto.href}>
+                <cds-tile>
+                  <cds-stack gap="3">
+                    {proto.tag && <cds-tag type="teal">{proto.tag}</cds-tag>}
+                    <h3 class="proto__name">{proto.title}</h3>
+                    {proto.summary && <p class="proto__summary">{proto.summary}</p>}
+                    <span class="proto__go">Open&nbsp;→</span>
+                  </cds-stack>
+                </cds-tile>
+              </a>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <!-- Orientation: how this spoke works -->
+      <section>
+        <div class="section-head">
+          <h2 class="section-head__title">How this spoke works</h2>
+        </div>
+        <div class="grid">
+          {principles.map((rule) => (
+            <cds-tile>
+              <cds-stack gap="3">
+                <h3 class="proto__name">{rule.title}</h3>
+                <p class="proto__summary">{rule.body}</p>
+              </cds-stack>
+            </cds-tile>
+          ))}
+        </div>
+        <p class="muted foot">
+          Full detail lives in <code>CLAUDE.md</code> and the <code>carbon-first</code> skill.
+          To add a screen: create <code>src/pages/&lt;slug&gt;.astro</code> and give it an
+          <code>export const prototype</code> — it lists itself here.
+        </p>
+      </section>
+    </cds-stack>
+  </main>
+</BaseLayout>
+
+<style>
+  /* Page-level layout only — component styling lives in the cds-* legos. */
+  .page {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 6rem;
+  }
+  .head__eyebrow {
+    margin: 0;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .head__title {
+    margin: 0.25rem 0 0;
+    font-size: 2.5rem;
+    font-weight: 400;
+    line-height: 1.1;
+  }
+  .head__lede {
+    margin: 0.75rem 0 0;
+    max-width: 42rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .section-head__title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 400;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1rem;
+  }
+  /* The whole card is a link; the cds-tile inside carries the surface + tokens. */
+  .proto {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    transition: transform 120ms ease;
+  }
+  .proto:hover {
+    transform: translateY(-2px);
+  }
+  .proto__name {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: var(--cds-text-primary, #161616);
+  }
+  .proto__summary {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .proto__go {
+    color: var(--cds-link-primary, #0f62fe);
+    font-size: 0.875rem;
+  }
+  .muted {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .foot {
+    margin-top: 1rem;
+    font-size: 0.875rem;
+  }
+  code {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.9em;
+  }
+</style>
