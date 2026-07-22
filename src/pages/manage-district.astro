@@ -266,7 +266,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   // directory, never stored here — so identity can't drift or be free-typed.
   type Address = { street: string; unit: string; city: string; state: string; zip: string };
   type Office = { address: Address; phone: string; email: string };
-  type Park = { name: string; designation: string; acreage: string };
+  type Park = { name: string; designation: string };
   type AutoAssign = { mode: 'none' | 'specific' | 'all'; parks: string[] };
   type Member = { userId: string; role: string; autoAssign: AutoAssign; published: boolean };
   type State = { office: Office; parks: Park[]; members: Member[] };

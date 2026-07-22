@@ -134,8 +134,8 @@ export const prototype = {
           class="wizard-intro"
           kind="info"
           low-contrast
-          title="Filling out this application"
-          subtitle="Complete the sections in any order — click a section on the left to jump to it. Your progress saves automatically before you navigate, even when a section is incomplete, so you can leave and return anytime; use Save and continue to move to the next section. Every field is marked required or optional, and you must complete all required fields before you can submit."
+          title="You can leave and come back anytime"
+          subtitle="Your progress saves automatically, so you can finish later. Complete sections in any order, or use Save and continue to move ahead. Optional fields are labeled — everything else is required."
         ></cds-inline-notification>
 
         <section class="step" data-step="research-team">
@@ -205,8 +205,8 @@ export const prototype = {
       </cds-modal-header>
       <cds-modal-body>
         <p class="t-body-01">
-          Withdrawing discards this draft and everything saved so far. This can't be undone. Your
-          answers save automatically, so you can leave and return to finish later instead.
+          This permanently discards your draft and can't be undone. Since your answers save
+          automatically, you can simply leave and return to finish later instead.
         </p>
       </cds-modal-body>
       <cds-modal-footer>
@@ -228,8 +228,8 @@ export const prototype = {
       <cds-modal-body>
         <p class="incomplete__lead t-heading-compact-02">Missing required information</p>
         <p class="t-body-01">
-          This section was saved, but the application is still incomplete and can't continue to the
-          review section. Please return to the following pages and fill out any missed requirements.
+          Your work is saved, but some required fields are still empty. Fill in the pages below, then
+          continue to review and submit.
         </p>
         <ul id="incomplete-list" class="incomplete-list"></ul>
       </cds-modal-body>
@@ -248,6 +248,16 @@ export const prototype = {
 <script>
   import { applicationSteps, applicationIssues } from '../data/application';
   import { withBase } from '../lib/base';
+
+  // DEV/TEST escape hatch: `?bypass` (or `#bypass`) on the URL lifts the two
+  // validation gates so the whole workflow can be walked without filling every
+  // field — (1) the completeness gate that blocks the review step, and (2) the
+  // certify-to-submit gate. Absent the flag, behavior is unchanged, so this never
+  // leaks into normal use. Remove before production if that matters to you.
+  const bypassValidation =
+    new URLSearchParams(location.search).has('bypass') || location.hash === '#bypass';
+  // Treat the draft as complete when bypassing; otherwise use the real issues.
+  const issues = bypassValidation ? [] : applicationIssues;
 
   const steps = applicationSteps.map((s) => s.id);
   const progress = document.getElementById('wizard-progress') as any;
@@ -297,7 +307,7 @@ export const prototype = {
     nextBtn.textContent = last ? 'Submit application' : 'Save and continue';
     // On the review step, Submit stays disabled until the applicant certifies the
     // application; every other step's primary is always enabled.
-    nextBtn.disabled = last ? !certify?.checked : false;
+    nextBtn.disabled = last ? !(bypassValidation || certify?.checked) : false;
     // The top of the step area is the useful scroll target when the page changes
     // (skipped on the initial load so we don't jump past the banner).
     if (scroll) {
@@ -318,7 +328,7 @@ export const prototype = {
   // missing surfaces the "Application incomplete" modal instead of advancing, and
   // reveals each incomplete page's error banner so the fixes are visible on return.
   const tryGoTo = (i: number) => {
-    if (i >= reviewIndex && applicationIssues.length) {
+    if (i >= reviewIndex && issues.length) {
       showIncomplete();
       return;
     }
@@ -329,7 +339,7 @@ export const prototype = {
   // banner names exactly what is missing, so a returning applicant sees the fixes
   // in context — not just the modal's page list.
   const revealErrors = () => {
-    applicationIssues.forEach((issue) => {
+    issues.forEach((issue) => {
       const panel = panels.get(issue.stepId);
       if (!panel || panel.querySelector('.step-error')) return;
       const note = document.createElement('cds-inline-notification') as any;
@@ -349,7 +359,7 @@ export const prototype = {
     revealErrors();
     if (incompleteList) {
       incompleteList.innerHTML = '';
-      applicationIssues.forEach((issue) => {
+      issues.forEach((issue) => {
         const li = document.createElement('li');
         const link = document.createElement('cds-link') as any;
         link.href = '#';

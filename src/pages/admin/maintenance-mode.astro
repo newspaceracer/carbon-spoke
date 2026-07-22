@@ -1,0 +1,343 @@
+---
+// Maintenance Mode admin console — the one screen that takes the whole site into
+// (and out of) maintenance. Only a System Administrator may use it; a non-admin
+// who reaches the URL is denied client-side (the guard only redirects during an
+// active outage, so live-site access must be blocked here too).
+//
+// Site state has no backend in this prototype, so it lives in localStorage via
+// src/lib/maintenance.ts — the same store the global guard + shell read. Setting
+// or clearing maintenance reloads the page so the guard and shell (banner,
+// collapsed nav) re-run from the new state; the admin stays on this console.
+//
+// The page renders both status views and lets client JS reflect the stored
+// state: LIVE → offer "Activate Maintenance Mode"; MAINTENANCE → offer a return
+// to production. Controls are stock cds-* (radio group, textarea, buttons, modal).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PermitNav from '../../components/PermitNav.astro';
+import PermitSection from '../../components/PermitSection.astro';
+import { withBase } from '../../lib/base';
+import { PUBLIC_MESSAGE_LIMIT } from '../../lib/maintenance';
+
+export const prototype = {
+  title: 'Maintenance mode admin console',
+  summary:
+    'System administrators take the whole site into a maintenance state — all ' +
+    'pages route to a public notice — and restore it. Includes the public ' +
+    'maintenance notice and a prototype login for the logged-out-admin flow.',
+  tag: 'Admin tool',
+};
+---
+
+<BaseLayout title="Maintenance mode admin console">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <header class="head cds--css-grid">
+      <div class="head__col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+        <cds-breadcrumb no-trailing-slash class="head__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">Maintenance mode</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+        <h1 class="head__title t-heading-05">Maintenance Mode Console</h1>
+        <p class="head__lede t-body-02">
+          Take the CA State Parks Scientific Collecting Permit site into maintenance
+          mode, or restore it to production. While in maintenance, all pages route to
+          a public notice; you and other administrators keep access to this console.
+        </p>
+      </div>
+    </header>
+
+    <div class="body cds--css-grid">
+      <!-- Denied state — shown only to a non-admin who reaches this URL. -->
+      <div id="denied" class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8" hidden>
+        <cds-actionable-notification
+          kind="error"
+          low-contrast
+          hide-close-button
+          title="Access denied"
+          subtitle="You don’t have permission to access the Maintenance Mode Console. This tool is limited to system administrators."
+        >
+          <cds-actionable-notification-button slot="action" href={withBase('/')}>Return to site</cds-actionable-notification-button>
+        </cds-actionable-notification>
+      </div>
+
+      <!-- Console — the admin view. Hidden until client JS confirms admin. -->
+      <div id="console" class="console cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10" hidden>
+        <!-- Current-state banner: reveals when the site is already in maintenance. -->
+        <cds-inline-notification
+          id="active-notice"
+          hidden
+          kind="warning"
+          low-contrast
+          hide-close-button
+          title="Site is in maintenance mode"
+          subtitle=""
+        ></cds-inline-notification>
+
+        <PermitSection title="Site status">
+          <p class="section-hint t-body-01">
+            Choose the site’s status. Maintenance mode routes every page to the public
+            maintenance notice; the site can still be signed into and this console stays
+            available to administrators.
+          </p>
+
+          <cds-radio-button-group
+            id="status-group"
+            name="site-status"
+            orientation="vertical"
+            label-text="Site status"
+          >
+            <cds-radio-button label-text="Live" value="live"></cds-radio-button>
+            <cds-radio-button label-text="Maintenance mode" value="maintenance"></cds-radio-button>
+          </cds-radio-button-group>
+
+          <!-- Public message — revealed only when Maintenance mode is selected.
+               No max-count attribute on purpose: the admin CAN exceed 500 so the
+               over-limit error can be shown (a hard maxlength would prevent it). -->
+          <div id="message-wrap" class="message-wrap" hidden>
+            <cds-textarea
+              id="notice-message"
+              label="Maintenance Notice Public Message"
+              rows="4"
+              helper-text={`0/${PUBLIC_MESSAGE_LIMIT}`}
+              invalid-text={`Field text character limit exceeded. ${PUBLIC_MESSAGE_LIMIT} character limit only.`}
+            ></cds-textarea>
+          </div>
+
+          <div class="actions" id="actions">
+            <cds-button id="cancel-btn" kind="danger-tertiary" disabled>Cancel</cds-button>
+            <cds-button id="primary-btn" kind="danger" disabled>Activate Maintenance Mode</cds-button>
+          </div>
+        </PermitSection>
+      </div>
+    </div>
+
+    <!-- Confirm activation — a danger modal (Carbon owns the focus trap). -->
+    <cds-modal id="activate-modal" size="sm" danger>
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Site status</cds-modal-label>
+        <cds-modal-heading>Activate maintenance mode?</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: prose confirmation text; a <p> with the Carbon type
+             role is the standard pattern (see profile.astro's modals). -->
+        <p class="modal-hint t-body-01">
+          Every page will immediately route to the public maintenance notice for all
+          visitors. Users can still sign in, and administrators keep access to this
+          console. You can restore the site from here at any time.
+        </p>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="danger" id="activate-confirm">Activate maintenance mode</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+
+    <!-- Confirm return to production. -->
+    <cds-modal id="deactivate-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Site status</cds-modal-label>
+        <cds-modal-heading>Return site to production?</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <p class="modal-hint t-body-01">
+          Normal site access will be restored for everyone and the public maintenance
+          notice will be removed.
+        </p>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="deactivate-confirm">Return to production</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+  </main>
+</BaseLayout>
+
+<script>
+  import {
+    PUBLIC_MESSAGE_LIMIT,
+    defaultNotice,
+    readState,
+    writeState,
+    readIdentity,
+    formatUtc,
+  } from '../../lib/maintenance';
+  import { withBase } from '../../lib/base';
+
+  const deniedEl = document.getElementById('denied')!;
+  const consoleEl = document.getElementById('console')!;
+
+  // Access control: only an admin sees the console. The guard handles the
+  // maintenance-time redirect; this blocks non-admins when the site is LIVE too.
+  if (readIdentity() !== 'admin') {
+    deniedEl.hidden = false;
+    consoleEl.hidden = true;
+  } else {
+    deniedEl.hidden = true;
+    consoleEl.hidden = false;
+    initConsole();
+  }
+
+  function initConsole() {
+    const group = document.getElementById('status-group') as any;
+    const messageWrap = document.getElementById('message-wrap')!;
+    const textarea = document.getElementById('notice-message') as any;
+    const cancelBtn = document.getElementById('cancel-btn') as any;
+    const primaryBtn = document.getElementById('primary-btn') as any;
+    const activeNotice = document.getElementById('active-notice') as any;
+    const activateModal = document.getElementById('activate-modal') as any;
+    const deactivateModal = document.getElementById('deactivate-modal') as any;
+
+    const state = readState();
+    const currentStatus = state.status; // the site's committed status
+
+    // Reflect the committed status. If already in maintenance, seed the stored
+    // message + show the "currently down" banner with when it was posted.
+    group.value = currentStatus;
+    if (currentStatus === 'maintenance') {
+      textarea.value = state.message || defaultNotice();
+      const posted = state.postedAt ? formatUtc(new Date(state.postedAt)) : '';
+      activeNotice.subtitle = posted
+        ? `The public maintenance notice is live. Posted at ${posted}.`
+        : 'The public maintenance notice is live.';
+      activeNotice.hidden = false;
+    }
+
+    const len = () => (textarea.value || '').length;
+    const overLimit = () => len() > PUBLIC_MESSAGE_LIMIT;
+
+    // Keep the counter + invalid state in sync as the admin types.
+    const syncCounter = () => {
+      const over = overLimit();
+      textarea.helperText = `${len()}/${PUBLIC_MESSAGE_LIMIT}`;
+      textarea.invalid = over;
+      refresh();
+    };
+
+    // Recompute the visible message field + both buttons. The PRIMARY action is
+    // fixed by the committed status (activate while live / return while down);
+    // the selection only decides whether that action is currently available.
+    const refresh = () => {
+      const selected = group.value as 'live' | 'maintenance';
+      messageWrap.hidden = selected !== 'maintenance';
+
+      const changed = selected !== currentStatus;
+      const messageOk = len() > 0 && !overLimit();
+
+      if (currentStatus === 'live') {
+        // From live, the only action is to activate maintenance — enabled once
+        // maintenance is selected with a valid notice.
+        primaryBtn.kind = 'danger';
+        primaryBtn.textContent = 'Activate Maintenance Mode';
+        primaryBtn.disabled = !(changed && messageOk);
+      } else {
+        // From maintenance, the action is to restore production.
+        primaryBtn.kind = 'primary';
+        primaryBtn.textContent = 'Return site to production';
+        primaryBtn.disabled = !changed;
+      }
+      // Cancel mirrors "there is a pending change to discard".
+      cancelBtn.disabled = !changed;
+    };
+
+    group.addEventListener('cds-radio-button-group-changed', () => {
+      const selected = group.value as 'live' | 'maintenance';
+      // "…the following message by default every time a new maintenance mode is
+      // to be set": entering maintenance from LIVE seeds a fresh default notice.
+      if (selected === 'maintenance' && currentStatus === 'live' && !textarea.value) {
+        textarea.value = defaultNotice();
+      }
+      syncCounter();
+    });
+
+    textarea.addEventListener('input', syncCounter);
+
+    cancelBtn.addEventListener('click', () => {
+      group.value = currentStatus;
+      if (currentStatus === 'live') textarea.value = '';
+      else textarea.value = state.message || defaultNotice();
+      syncCounter();
+    });
+
+    primaryBtn.addEventListener('click', () => {
+      if (primaryBtn.disabled) return;
+      const selected = group.value as 'live' | 'maintenance';
+      if (selected === 'maintenance') activateModal.open = true;
+      else deactivateModal.open = true;
+    });
+
+    document.getElementById('activate-confirm')!.addEventListener('click', () => {
+      writeState({
+        status: 'maintenance',
+        message: (textarea.value || defaultNotice()).slice(0, PUBLIC_MESSAGE_LIMIT),
+        postedAt: new Date().toISOString(),
+      });
+      activateModal.open = false;
+      // Reload so the guard + shell re-run from the new state (banner, nav).
+      location.href = withBase('/admin/maintenance-mode');
+    });
+
+    document.getElementById('deactivate-confirm')!.addEventListener('click', () => {
+      writeState({ status: 'live', message: '', postedAt: null });
+      deactivateModal.open = false;
+      location.href = withBase('/admin/maintenance-mode');
+    });
+
+    // Initial paint.
+    syncCounter();
+  }
+</script>
+
+<style>
+  .page {
+    padding-block: 3rem 6rem;
+  }
+  .head__crumb {
+    display: block;
+    margin-bottom: var(--cds-spacing-05, 1rem);
+  }
+  .head__title {
+    margin: 0;
+  }
+  .head__lede {
+    margin: 0.75rem 0 0;
+    max-width: 42rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .body {
+    margin-top: var(--cds-spacing-08, 2.5rem);
+  }
+  /* Console reads as a form column, capped to a readable measure (like profile). */
+  .console {
+    max-width: 44rem;
+  }
+  #active-notice { margin-bottom: 1.5rem; }
+  #active-notice[hidden] { display: none; }
+  #denied[hidden] { display: none; }
+  #console[hidden] { display: none; }
+  .section-hint {
+    margin: 0 0 1.5rem;
+    max-width: 42rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .message-wrap {
+    margin-top: 1.5rem;
+  }
+  .message-wrap[hidden] { display: none; }
+  /* Action footer: a top hairline binds the two buttons to the section. */
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .modal-hint { margin: 0; }
+</style>

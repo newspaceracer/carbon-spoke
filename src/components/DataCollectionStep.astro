@@ -31,7 +31,7 @@ const cur = dc.curation;
     <cds-radio-button-group
       id="specimen-gate"
       name="specimen-gate"
-      legend-text="Will your project involve collection of specimens? (required)"
+      legend-text="Will your project involve collection of specimens?"
       orientation="horizontal"
       value={dc.collectsSpecimens ? 'yes' : 'no'}
     >
@@ -43,7 +43,7 @@ const cur = dc.curation;
       <!-- Specimen roster: same modal-add pattern as Additional participants. -->
       <div class="roster">
         <div class="roster__head">
-          <p class="field-label t-label-01">Types of specimens to be collected <span class="req">(required)</span></p>
+          <p class="field-label t-label-01">Types of specimens to be collected</p>
           <cds-button id="add-specimen" kind="tertiary" size="sm">Add specimen</cds-button>
         </div>
         <cds-table id="specimen-table">
@@ -66,7 +66,7 @@ const cur = dc.curation;
            sits between the shared label and the field, and collapses the textarea
            when set so the either/or is unmistakable. -->
       <div class="proposal-field" role="group" aria-labelledby="collection-rationale-label">
-        <p class="proposal-field__label t-label-01" id="collection-rationale-label">Collection rationale <span class="req">(required)</span></p>
+        <p class="proposal-field__label t-label-01" id="collection-rationale-label">Collection rationale</p>
         <cds-checkbox
           class="answered-in-proposal"
           data-target="collection-rationale"
@@ -78,7 +78,7 @@ const cur = dc.curation;
           hide-label
           label="Collection rationale"
           rows="5"
-          helper-text="Describe why collection is necessary, and the disposition of specimens collected. Provide power analysis to justify proposed sample size(s)."
+          helper-text="Describe why collection is necessary and the intended disposition of collected specimens. Include a power analysis to justify your sample size."
           value={dc.collectionRationale}
         ></cds-textarea>
       </div>
@@ -91,7 +91,7 @@ const cur = dc.curation;
           multiple
           accept=".pdf,.doc,.docx,.xls,.xlsx,.csv"
         >
-          Drag and drop files here or click to upload
+          Drag and drop files here, or click to upload
         </cds-file-uploader-drop-container>
         <div id="collection-docs-list" class="uploaded-list"></div>
       </div>
@@ -101,12 +101,12 @@ const cur = dc.curation;
         <p class="field-label t-label-01">Curation facility</p>
         <div class="field-grid">
           <div class="field-grid__wide">
-            <cds-text-input id="cur-facility" label="Facility name (required)" value={cur.facility}></cds-text-input>
+            <cds-text-input id="cur-facility" label="Facility name" value={cur.facility}></cds-text-input>
           </div>
-          <cds-text-input id="cur-official" label="Responsible official (required)" value={cur.official}></cds-text-input>
-          <cds-text-input id="cur-phone" type="tel" label="Phone number (required)" value={cur.phone}></cds-text-input>
+          <cds-text-input id="cur-official" label="Responsible official" value={cur.official}></cds-text-input>
+          <cds-text-input id="cur-phone" type="tel" label="Phone number" value={cur.phone}></cds-text-input>
           <div class="field-grid__wide">
-            <cds-text-input id="cur-email" type="email" label="Email address (required)" value={cur.email}></cds-text-input>
+            <cds-text-input id="cur-email" type="email" label="Email address" value={cur.email}></cds-text-input>
           </div>
         </div>
       </div>
@@ -118,7 +118,7 @@ const cur = dc.curation;
     <cds-radio-button-group
       id="lab-gate"
       name="lab-gate"
-      legend-text="Will your project involve laboratory work? (required)"
+      legend-text="Will your project involve laboratory work?"
       orientation="horizontal"
       value={dc.labWork ? 'yes' : 'no'}
     >
@@ -129,18 +129,18 @@ const cur = dc.curation;
     <div id="lab-yes" class="gate-body" hidden>
       <div class="field-grid">
         <div class="field-grid__wide">
-          <cds-text-input id="lab-facility" label="Laboratory facility name (required)" value={lab.facility}></cds-text-input>
+          <cds-text-input id="lab-facility" label="Laboratory facility name" value={lab.facility}></cds-text-input>
         </div>
-        <cds-text-input id="lab-official" label="Responsible official (required)" value={lab.official}></cds-text-input>
-        <cds-text-input id="lab-phone" type="tel" label="Phone number (required)" value={lab.phone}></cds-text-input>
+        <cds-text-input id="lab-official" label="Responsible official" value={lab.official}></cds-text-input>
+        <cds-text-input id="lab-phone" type="tel" label="Phone number" value={lab.phone}></cds-text-input>
         <div class="field-grid__wide">
-          <cds-text-input id="lab-email" type="email" label="Email address (required)" value={lab.email}></cds-text-input>
+          <cds-text-input id="lab-email" type="email" label="Email address" value={lab.email}></cds-text-input>
         </div>
       </div>
 
       <cds-date-picker class="lab-dates" value={`${lab.startDate}/${lab.endDate}`}>
-        <cds-date-picker-input kind="from" label-text="Lab study start date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
-        <cds-date-picker-input kind="to" label-text="Lab study end date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="from" label-text="Lab study start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="to" label-text="Lab study end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
       </cds-date-picker>
     </div>
   </PermitSection>
@@ -153,7 +153,7 @@ const cur = dc.curation;
     </p>
 
     <div class="proposal-field" role="group" aria-labelledby="study-procedures-label">
-      <p class="proposal-field__label t-label-01" id="study-procedures-label">Study procedures <span class="req">(required)</span></p>
+      <p class="proposal-field__label t-label-01" id="study-procedures-label">Study procedures</p>
       <cds-checkbox
         class="answered-in-proposal"
         data-target="study-procedures"
@@ -165,7 +165,7 @@ const cur = dc.curation;
         hide-label
         label="Study procedures"
         rows="6"
-        helper-text="Describe your study and sampling design, field and laboratory methods or protocols, treatments and controls, number of replicates, and statistical analyses and models, and include power analyses to justify proposed sample size(s) needed to answer the question(s)."
+        helper-text="Describe your sampling design, methods and protocols, treatments and controls, replicates, and statistical models. Include a power analysis to justify your sample size."
         value={dc.studyProcedures}
       ></cds-textarea>
     </div>
@@ -178,13 +178,13 @@ const cur = dc.curation;
         multiple
         accept=".pdf,.doc,.docx,.xls,.xlsx,.csv"
       >
-        Drag and drop files here or click to upload
+        Drag and drop files here, or click to upload
       </cds-file-uploader-drop-container>
       <div id="procedures-docs-list" class="uploaded-list"></div>
     </div>
 
     <div class="proposal-field" role="group" aria-labelledby="data-location-label">
-      <p class="proposal-field__label t-label-01" id="data-location-label">Location of data and data products collected under this permit <span class="req">(required)</span></p>
+      <p class="proposal-field__label t-label-01" id="data-location-label">Location of data and data products collected under this permit</p>
       <cds-checkbox
         class="answered-in-proposal"
         data-target="data-location"
@@ -196,7 +196,7 @@ const cur = dc.curation;
         hide-label
         label="Location of data and data products collected under this permit"
         rows="5"
-        helper-text="Describe anticipated products and deliverables resulting from this study, such as reports, publications, brochures, GIS layers, web tools, videos, etc., and how study results will be disseminated."
+        helper-text="Describe the products and deliverables you expect — reports, publications, brochures, GIS layers, web tools, videos, and so on — and how you'll share your results."
         value={dc.dataLocation}
       ></cds-textarea>
     </div>
@@ -214,12 +214,12 @@ const cur = dc.curation;
   <cds-modal-body>
     <div class="field-grid">
       <div class="field-grid__wide">
-        <cds-text-input id="ns-species" label="Species (required)"></cds-text-input>
+        <cds-text-input id="ns-species" label="Species"></cds-text-input>
       </div>
-      <cds-text-input id="ns-quantity" label="Quantity (required)"></cds-text-input>
-      <cds-text-input id="ns-size" label="Size (required)"></cds-text-input>
+      <cds-text-input id="ns-quantity" label="Quantity"></cds-text-input>
+      <cds-text-input id="ns-size" label="Size"></cds-text-input>
       <div class="field-grid__wide">
-        <cds-text-input id="ns-condition" label="Condition (required)"></cds-text-input>
+        <cds-text-input id="ns-condition" label="Condition"></cds-text-input>
       </div>
     </div>
   </cds-modal-body>

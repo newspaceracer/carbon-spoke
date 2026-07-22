@@ -52,7 +52,7 @@ const proposalSections = [
     <cds-radio-button-group
       id="soil-gate"
       name="soil-gate"
-      legend-text="Will your project involve soil disturbance (placement of stakes, collection of soil cores, etc.)? (required)"
+      legend-text="Will your project involve soil disturbance (placement of stakes, collection of soil cores, etc.)?"
       orientation="horizontal"
       value={ad.soilDisturbance ? 'yes' : 'no'}
     >
@@ -64,23 +64,23 @@ const proposalSections = [
       <div>
         <cds-textarea
           id="soil-details"
-          label="Soil disturbance details (required)"
+          label="Soil disturbance details"
           rows="5"
-          helper-text="Describe why the soil disturbance is necessary and the disposition of any material collected. Provide a power analysis to justify proposed sample size(s)."
+          helper-text="Describe why the soil disturbance is necessary and the intended disposition of any material collected. Include a power analysis to justify your sample size."
           value={ad.soilDisturbanceDetails}
         ></cds-textarea>
       </div>
 
       <div class="uploader">
         <p class="field-label t-label-01">
-          Soil disturbance areas and supporting documents <span class="req">(required)</span>
+          Soil disturbance areas and supporting documents
         </p>
         <cds-file-uploader-drop-container class="doc-drop" data-list="soil-docs-list" multiple accept=".pdf">
-          Drag and drop files here or click to upload
+          Drag and drop files here, or click to upload
         </cds-file-uploader-drop-container>
         <div id="soil-docs-list" class="uploaded-list"></div>
         <p class="uploader-hint t-label-01">
-          Identify each ground-disturbance area on a USGS 7.5-minute topographic map. Supported file
+          Identify each ground-disturbance area on a USGS 7.5-minute topographic map. Accepted file
           type: PDF.
         </p>
       </div>
@@ -92,7 +92,7 @@ const proposalSections = [
     <cds-radio-button-group
       id="permits-gate"
       name="permits-gate"
-      legend-text="Will your project require additional federal, state, or local permits? (required)"
+      legend-text="Will your project require additional federal, state, or local permits?"
       orientation="horizontal"
       value={ad.additionalPermits ? 'yes' : 'no'}
     >
@@ -106,11 +106,10 @@ const proposalSections = [
            while neither is provided. -->
       <div class="requirement" role="group" aria-labelledby="permits-req-label">
         <p class="field-label t-label-01" id="permits-req-label">
-          Additional permits and supporting documents <span class="req">(required)</span>
+          Additional permits and supporting documents
         </p>
         <p class="requirement__hint t-body-01">
-          Upload your existing additional permits and any supporting documents, and/or provide a
-          rationale below. At least one is required.
+          Upload any permits you already have, or explain your plan below. At least one is required.
         </p>
 
         <div class="uploader">
@@ -120,12 +119,12 @@ const proposalSections = [
             multiple
             accept=".pdf,.doc,.docx"
           >
-            Drag and drop files here or click to upload
+            Drag and drop files here, or click to upload
           </cds-file-uploader-drop-container>
           <div id="permits-docs-list" class="uploaded-list"></div>
           <p class="uploader-hint t-label-01">
             Upload copies of any additional permits already issued and any supporting documents.
-            Supported file types: PDF, DOC, DOCX.
+            Accepted file types: PDF, DOC, or DOCX.
           </p>
         </div>
 
@@ -133,7 +132,7 @@ const proposalSections = [
           id="permits-details"
           label="Rationale or additional information"
           rows="4"
-          helper-text="If you replied yes but do not have all the necessary permits prior to submission of this application, provide rationale or additional information here."
+          helper-text="Don't have all your permits yet? Explain your plan to obtain them here."
           value={ad.additionalPermitsDetails}
         ></cds-textarea>
 
@@ -143,7 +142,7 @@ const proposalSections = [
           low-contrast
           hide-close-button
           title="At least one response is required"
-          subtitle="Upload your additional permits or supporting documents, or provide a rationale, to complete this section."
+          subtitle="Upload a permit or supporting document, or provide a rationale, to complete this section."
           hidden
         ></cds-inline-notification>
       </div>
@@ -203,10 +202,10 @@ const proposalSections = [
         {proposalSections.map((s) => <li>{s}</li>)}
       </ul>
       <cds-file-uploader-drop-container class="doc-drop" data-list="proposal-docs-list" accept=".pdf">
-        Drag and drop a file here or click to upload
+        Drag and drop a file here, or click to upload
       </cds-file-uploader-drop-container>
       <div id="proposal-docs-list" class="uploaded-list"></div>
-      <p class="uploader-hint t-label-01">Supported file type: PDF.</p>
+      <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
     </div>
   </PermitSection>
 
@@ -214,23 +213,23 @@ const proposalSections = [
   <PermitSection title="Required documents">
     <div class="uploader">
       <p class="field-label t-label-01">
-        Signed standard condition agreement form <span class="req">(required)</span>
+        Signed standard condition agreement form
       </p>
       <p class="uploader-sub t-body-01">
         The Principal Investigator, {ad.principalInvestigator}, must sign this required document.
         Please upload the signed copy.
       </p>
       <cds-file-uploader-drop-container class="doc-drop" data-list="condition-docs-list" data-single accept=".pdf">
-        Drag and drop the signed form here or click to upload
+        Drag and drop the signed form here, or click to upload
       </cds-file-uploader-drop-container>
       <div id="condition-docs-list" class="uploaded-list"></div>
-      <p class="uploader-hint t-label-01">Supported file type: PDF.</p>
+      <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
       <cds-link class="doc-download" href="#">Download the unsigned standard condition agreement form</cds-link>
     </div>
 
     <div class="uploader">
       <p class="field-label t-label-01">
-        Signed waiver and indemnity agreement form <span class="req">(required)</span>
+        Signed waiver and indemnity agreement form
       </p>
       <p class="uploader-sub t-body-01">
         A representative of the organization authorized to agree to the indemnification terms must
@@ -238,10 +237,10 @@ const proposalSections = [
         upload the signed document.
       </p>
       <cds-file-uploader-drop-container class="doc-drop" data-list="waiver-docs-list" data-single accept=".pdf">
-        Drag and drop the signed form here or click to upload
+        Drag and drop the signed form here, or click to upload
       </cds-file-uploader-drop-container>
       <div id="waiver-docs-list" class="uploaded-list"></div>
-      <p class="uploader-hint t-label-01">Supported file type: PDF.</p>
+      <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
       <cds-link class="doc-download" href="#">Download the unsigned waiver and indemnity agreement form</cds-link>
     </div>
   </PermitSection>
@@ -249,16 +248,15 @@ const proposalSections = [
   <!-- ── Research activities beyond simple use ─────────────────────────────── -->
   <PermitSection title="Research activities beyond simple use">
     <p class="section-hint t-body-01">
-      Examples of activities beyond simple use include, but are not limited to, the use of aircraft or
-      drones, boats, high-risk vehicle use, scuba diving, climbing equipment, trapping, handling of
-      large and/or dangerous wildlife, collection of materials that create risk, and projects that
-      include large teams of volunteers.
+      Activities beyond simple use include aircraft or drones, boats, high-risk vehicle use, scuba
+      diving, climbing equipment, trapping, handling large or dangerous wildlife, collecting
+      hazardous materials, and large volunteer teams.
     </p>
 
     <cds-radio-button-group
       id="beyond-gate"
       name="beyond-gate"
-      legend-text="Will you conduct, or plan on conducting, research activities above and beyond simple use? (required)"
+      legend-text="Will you conduct, or plan on conducting, research activities above and beyond simple use?"
       orientation="horizontal"
       value={ad.beyondSimpleUse ? 'yes' : 'no'}
     >
@@ -268,12 +266,12 @@ const proposalSections = [
 
     <div id="beyond-yes" class="gate-body" hidden>
       <div class="uploader">
-        <p class="field-label t-label-01">Insurance addendum <span class="req">(required)</span></p>
+        <p class="field-label t-label-01">Insurance addendum</p>
         <cds-file-uploader-drop-container class="doc-drop" data-list="insurance-docs-list" data-single accept=".pdf">
-          Drag and drop the signed form here or click to upload
+          Drag and drop the signed form here, or click to upload
         </cds-file-uploader-drop-container>
         <div id="insurance-docs-list" class="uploaded-list"></div>
-        <p class="uploader-hint t-label-01">Supported file type: PDF.</p>
+        <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
         <cds-link class="doc-download" href="#">Download the unsigned insurance addendum</cds-link>
       </div>
     </div>

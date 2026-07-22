@@ -1,0 +1,86 @@
+---
+// Public maintenance notice — where the guard routes every page while the site
+// is down. Composed as a clean, centered Carbon notice (no Figma import): a
+// status glyph, heading, and the admin-authored public message.
+//
+// The nav treatment is role-driven and handled by the shell (src/lib/
+// maintenance-shell.ts): a logged-out visitor sees no bar at all; a logged-in
+// non-admin keeps a collapsed bar with only Log out. The public message is
+// stored client-side, so JS fills it in from the maintenance state.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import { defaultNotice } from '../lib/maintenance';
+
+export const prototype = {
+  title: 'Maintenance notice',
+  summary:
+    'The public notice every page routes to while the site is in maintenance ' +
+    'mode. Set the site status from the Maintenance mode admin console.',
+  tag: 'System',
+};
+---
+
+<BaseLayout title="Site under maintenance — CA State Parks">
+  <PermitNav slot="nav" />
+
+  <main class="notice">
+    <div class="notice__inner">
+      <span class="notice__glyph" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="48" height="48" fill="currentColor">
+          <path d="M28.83 14.83a4 4 0 0 0-5-5l-2-2a4 4 0 0 0-5-5L13 5.66 15.34 8 12 11.34 9.66 9 6.83 11.83a4 4 0 0 0 5 5l2 2a4 4 0 0 0 5 5L26 25.34 23.66 23 27 19.66 29.34 22ZM6 26a2 2 0 1 1 2-2 2 2 0 0 1-2 2Z" opacity="0"/>
+          <path d="M16 2A14 14 0 1 0 30 16 14 14 0 0 0 16 2Zm0 26a12 12 0 1 1 12-12 12 12 0 0 1-12 12Z"/>
+          <path d="M20.59 22 16 17.41V8h2v8.58l4 4.01L20.59 22z"/>
+        </svg>
+      </span>
+
+      <p class="notice__eyebrow t-label-01">CA State Parks · Scientific Collecting Permits</p>
+      <h1 class="notice__title t-heading-05">The site is undergoing maintenance</h1>
+      <p class="notice__message t-body-02" id="notice-message">{defaultNotice()}</p>
+    </div>
+  </main>
+</BaseLayout>
+
+<script>
+  import { readState, defaultNotice } from '../lib/maintenance';
+
+  // Show the admin-authored public message (falls back to the default notice).
+  const el = document.getElementById('notice-message');
+  if (el) {
+    const state = readState();
+    el.textContent = state.message?.trim() ? state.message : defaultNotice();
+  }
+</script>
+
+<style>
+  /* Full-height, centered notice. body already offsets the fixed header; when
+     there's no header (logged-out visitor) the flex centering still holds. */
+  .notice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: calc(100vh - var(--cds-spacing-09, 3rem));
+    padding: var(--cds-spacing-07, 2rem) var(--cds-spacing-05, 1rem);
+  }
+  .notice__inner {
+    max-inline-size: 34rem;
+    text-align: center;
+  }
+  .notice__glyph {
+    display: inline-flex;
+    color: var(--cds-icon-secondary, #525252);
+    margin-bottom: var(--cds-spacing-05, 1rem);
+  }
+  .notice__eyebrow {
+    margin: 0;
+    text-transform: uppercase;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .notice__title {
+    margin: var(--cds-spacing-03, 0.5rem) 0 0;
+    color: var(--cds-text-primary, #161616);
+  }
+  .notice__message {
+    margin: var(--cds-spacing-05, 1rem) 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

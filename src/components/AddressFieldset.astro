@@ -26,7 +26,7 @@ const initial = { country, ...(value ?? {}) };
 ---
 
 <div class="address-fieldset" data-address data-prefix={prefix} data-value={JSON.stringify(initial)}>
-  <cds-dropdown id={`${prefix}-country`} title-text="Country (required)" value={initial.country}>
+  <cds-dropdown id={`${prefix}-country`} title-text="Country" value={initial.country}>
     {countries.map((c) => (
       <cds-dropdown-item value={c.value}>{c.label}</cds-dropdown-item>
     ))}

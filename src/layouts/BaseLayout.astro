@@ -44,9 +44,19 @@ const { title = 'Carbon Spoke' } = Astro.props;
     <slot />
 
     <!-- Registers every cds-* custom element used in the app. Astro bundles
-         this and it runs in the browser, where the components upgrade. -->
+         this and it runs in the browser, where the components upgrade.
+
+         Maintenance mode runs FIRST: the guard redirects this page to the public
+         notice (or, for an admin, the console) when the site is down and this
+         page isn't allowed for the current role. If it doesn't redirect, we
+         register the components and paint the maintenance-aware shell treatments
+         (banner, collapsed nav, logout, dev identity switcher). -->
     <script>
-      import '../carbon.ts';
+      import { enforceMaintenance } from '../lib/maintenance';
+      if (!enforceMaintenance()) {
+        import('../carbon.ts');
+        import('../lib/maintenance-shell').then((m) => m.decorateShell());
+      }
     </script>
   </body>
 </html>

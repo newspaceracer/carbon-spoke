@@ -31,7 +31,7 @@ import { parks, seedStudyAreas } from '../data/parks';
         id="study-areas-select"
         filterable
         selection-feedback="fixed"
-        title-text="Parks (required)"
+        title-text="Parks"
         label="Search by park or district name"
         helper-text="Every park in the state park system, grouped by field district."
         value={seedStudyAreas.join(',')}
@@ -76,7 +76,7 @@ import { parks, seedStudyAreas } from '../data/parks';
         multiple
         accept=".zip,.shp,.shx,.dbf,.prj,.kml,.kmz,.geojson,.json,.gpkg,.gdb"
       >
-        Drag and drop GIS files here or click to upload
+        Drag and drop GIS files here, or click to upload
       </cds-file-uploader-drop-container>
       <div id="gis-list" class="uploaded-list"></div>
       <p class="uploader-hint t-label-01">

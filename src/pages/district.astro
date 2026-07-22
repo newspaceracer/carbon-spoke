@@ -6,7 +6,7 @@ import { withBase } from '../lib/base';
              region eyebrow, at-a-glance counts (parks, points of contact, HQ).
      spine:  main.page > .cds--css-grid  (main col 11 / rail col 5)
      sections:
-       - Parks in this district (main) -> cds-table (name, designation, acreage)
+       - Parks in this district (main) -> cds-table (name, designation)
        - Point of contact (main)       -> contact-card grid (published members)
        - District office (rail)         -> cds-tile: structured address + phone/email
    READ-ONLY detail. Editing lives in the scoped "Manage district" console
@@ -100,7 +100,6 @@ const buildingIcon = `<svg viewBox="0 0 32 32" fill="currentColor" fill-rule="ev
               <cds-table-header-row>
                 <cds-table-header-cell>Park</cds-table-header-cell>
                 <cds-table-header-cell>Designation</cds-table-header-cell>
-                <cds-table-header-cell>Approx. area</cds-table-header-cell>
               </cds-table-header-row>
             </cds-table-head>
             <!-- Rows rendered client-side from the shared district record. -->
@@ -148,7 +147,7 @@ const buildingIcon = `<svg viewBox="0 0 32 32" fill="currentColor" fill-rule="ev
   // Read-only hydration from the shared prototype-local record the Manage district
   // console writes. Seed = module data; any saved edits override it.
   type Address = { street: string; unit: string; city: string; state: string; zip: string };
-  type Park = { name: string; designation: string; acreage: string };
+  type Park = { name: string; designation: string };
   type AutoAssign = { mode: string; parks: string[] };
   type Member = { userId: string; role: string; autoAssign: AutoAssign; published: boolean };
   type State = {
@@ -200,7 +199,7 @@ const buildingIcon = `<svg viewBox="0 0 32 32" fill="currentColor" fill-rule="ev
     tbody.replaceChildren(
       ...state.parks.map((p) => {
         const row = document.createElement('cds-table-row');
-        [p.name, p.designation, p.acreage].forEach((v) => {
+        [p.name, p.designation].forEach((v) => {
           const cell = document.createElement('cds-table-cell');
           cell.textContent = v ?? '';
           row.appendChild(cell);

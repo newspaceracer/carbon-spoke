@@ -25,10 +25,10 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     </p>
     <div class="field-grid">
       <div class="field-grid__wide">
-        <cds-text-input id="org-name" label="Applicant organization (required)" value={applicantOrg.name}></cds-text-input>
+        <cds-text-input id="org-name" label="Applicant organization" value={applicantOrg.name}></cds-text-input>
       </div>
-      <cds-text-input id="org-phone" type="tel" label="Organization phone (required)" value={applicantOrg.phone}></cds-text-input>
-      <cds-text-input id="org-email" type="email" label="Organization email (required)" value={applicantOrg.email}></cds-text-input>
+      <cds-text-input id="org-phone" type="tel" label="Organization phone" value={applicantOrg.phone}></cds-text-input>
+      <cds-text-input id="org-email" type="email" label="Organization email" value={applicantOrg.email}></cds-text-input>
       <div class="field-grid__wide">
         <AddressFieldset prefix="org-addr" country={applicantOrg.address.country} value={applicantOrg.address} />
       </div>
@@ -45,14 +45,14 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     <cds-checkbox id="pi-is-me" label-text="I am the principal investigator for this project"></cds-checkbox>
 
     <div class="field-grid pi-grid">
-      <cds-text-input id="pi-first" label="First name (required)"></cds-text-input>
-      <cds-text-input id="pi-last" label="Last name (required)"></cds-text-input>
-      <cds-text-input id="pi-title" label="Title (required)"></cds-text-input>
+      <cds-text-input id="pi-first" label="First name"></cds-text-input>
+      <cds-text-input id="pi-last" label="Last name"></cds-text-input>
+      <cds-text-input id="pi-title" label="Title"></cds-text-input>
       <div class="field-grid__wide">
-        <PhoneField id="pi-phone" label="Phone number (required)" />
+        <PhoneField id="pi-phone" label="Phone number" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="pi-email" type="email" label="Email address (required)"></cds-text-input>
+        <cds-text-input id="pi-email" type="email" label="Email address"></cds-text-input>
       </div>
       <div class="field-grid__wide">
         <AddressFieldset prefix="pi-addr" country="US" />
@@ -60,12 +60,12 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     </div>
 
     <div class="uploader">
-      <p class="field-label t-label-01">Résumé or CV <span class="req">(required)</span></p>
+      <p class="field-label t-label-01">Résumé or CV</p>
       <cds-file-uploader-drop-container id="pi-resume-drop" accept=".pdf,.doc,.docx">
-        Drag and drop a file here or click to upload
+        Drag and drop a file here, or click to upload
       </cds-file-uploader-drop-container>
       <div id="pi-resume-list" class="uploaded-list"></div>
-      <p class="uploader-hint t-label-01">Accepted formats: PDF, DOC, or DOCX.</p>
+      <p class="uploader-hint t-label-01">Accepted file types: PDF, DOC, or DOCX.</p>
     </div>
 
     <!-- Offer to keep the PI's résumé on their profile — shown only once the
@@ -88,7 +88,7 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     <cds-radio-button-group
       id="picof-same-pi"
       name="picof-same-pi"
-      legend-text="Is this the same person as the principal investigator? (required)"
+      legend-text="Is this the same person as the principal investigator?"
       orientation="horizontal"
     >
       <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
@@ -101,15 +101,15 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
       kind="info"
       low-contrast
       hide-close-button
-      title="Directed by the principal investigator"
-      subtitle="No additional contact details are needed for field-work direction."
+      title="No extra details needed"
+      subtitle="The principal investigator directs field work, so there's nothing more to add here."
     ></cds-inline-notification>
 
     <div id="picof-submitter-q" hidden>
       <cds-radio-button-group
         id="picof-is-me"
         name="picof-is-me"
-        legend-text="Are you (the submitter) the person in direct charge of field work? (required)"
+        legend-text="Are you (the submitter) the person in direct charge of field work?"
         orientation="horizontal"
       >
         <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
@@ -123,19 +123,19 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
       kind="info"
       low-contrast
       hide-close-button
-      title="You'll be recorded for field-work direction"
-      subtitle="Your profile contact details will be used — no need to re-enter them."
+      title="We'll use your profile details"
+      subtitle="You're directing field work, so there's no need to re-enter your contact information."
     ></cds-inline-notification>
 
     <div id="picof-fields" class="field-grid" hidden>
-      <cds-text-input id="picof-first" label="First name (required)"></cds-text-input>
-      <cds-text-input id="picof-last" label="Last name (required)"></cds-text-input>
-      <cds-text-input id="picof-title" label="Title (required)"></cds-text-input>
+      <cds-text-input id="picof-first" label="First name"></cds-text-input>
+      <cds-text-input id="picof-last" label="Last name"></cds-text-input>
+      <cds-text-input id="picof-title" label="Title"></cds-text-input>
       <div class="field-grid__wide">
-        <PhoneField id="picof-phone" label="Phone number (required)" />
+        <PhoneField id="picof-phone" label="Phone number" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="picof-email" type="email" label="Email address (required)"></cds-text-input>
+        <cds-text-input id="picof-email" type="email" label="Email address"></cds-text-input>
       </div>
       <div class="field-grid__wide">
         <AddressFieldset prefix="picof-addr" country="US" value={{ country: 'US', region: 'CA' }} />
@@ -175,7 +175,7 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     <cds-radio-button-group
       id="personnel-insured"
       name="personnel-insured"
-      legend-text="Are all personnel employed or insured by the institution conducting the research? (required)"
+      legend-text="Are all personnel employed or insured by the institution conducting the research?"
       orientation="horizontal"
     >
       <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
@@ -183,14 +183,13 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     </cds-radio-button-group>
 
     <div id="waiver-wrap" class="uploader" hidden>
-      <p class="field-label t-label-01">Liability waiver addendum <span class="req">(required)</span></p>
+      <p class="field-label t-label-01">Liability waiver addendum</p>
       <cds-file-uploader-drop-container id="waiver-drop" accept=".pdf,.doc,.docx">
-        Drag and drop a file here or click to upload
+        Drag and drop a file here, or click to upload
       </cds-file-uploader-drop-container>
       <div id="waiver-list" class="uploaded-list"></div>
       <p class="uploader-hint t-label-01">
-        This document must be signed by ALL participants involved in research activities, so plan
-        accordingly.
+        Every participant in the research must sign this document, so plan ahead.
       </p>
       <cds-link id="waiver-download" href="#">Download the unsigned liability waiver addendum</cds-link>
     </div>
@@ -208,14 +207,14 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
   </cds-modal-header>
   <cds-modal-body>
     <div class="field-grid">
-      <cds-text-input id="np-first" label="First name (required)"></cds-text-input>
-      <cds-text-input id="np-last" label="Last name (required)"></cds-text-input>
+      <cds-text-input id="np-first" label="First name"></cds-text-input>
+      <cds-text-input id="np-last" label="Last name"></cds-text-input>
       <cds-text-input id="np-title" label="Title (optional)"></cds-text-input>
       <div class="field-grid__wide">
         <PhoneField id="np-phone" label="Phone number (optional)" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="np-email" type="email" label="Email address (required)"></cds-text-input>
+        <cds-text-input id="np-email" type="email" label="Email address"></cds-text-input>
       </div>
       <div class="field-grid__wide">
         <cds-textarea id="np-comments" label="Comments (optional)" rows="2"></cds-textarea>

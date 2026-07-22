@@ -146,3 +146,56 @@ cds-modal::part(dialog) {
    cds-side-nav instead (see AppHeader.astro / PermitNav.astro). Forcing the host
    nav visible at all widths would render BOTH the bar items AND the hamburger on
    small viewports. Admin tools stay reachable everywhere via the side-nav rail. */
+
+/* ---- MAINTENANCE MODE — banner + dev identity switcher -------------------
+   Both are bespoke shells (Carbon ships no full-bleed status bar and the demo
+   switcher is dev-only chrome, not product UI). Their FRAMES are laid out here;
+   every color/space is a --cds-* token so they follow the active theme zone.
+   carbon-checked: see src/lib/maintenance-shell.ts for why these are bespoke. */
+
+/* Full-width "Production site in Maintenance Mode" strip, fixed above the nav.
+   It sits over the fixed UI-Shell header (top:0, z 8000), so we push the header
+   and the page body down by its height while it's mounted. */
+.maintenance-banner {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cds-spacing-03, 0.5rem);
+  min-block-size: 2rem;
+  padding: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-05, 1rem);
+  background: var(--cds-support-error, #da1e28);
+  color: var(--cds-text-on-color, #ffffff);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.16px;
+  text-align: center;
+}
+.maintenance-banner svg { flex: 0 0 auto; }
+
+/* Make room for the banner: drop the fixed header below it and add its height to
+   the body's existing header offset (3rem -> 5rem). */
+body.has-maintenance-banner { padding-top: calc(var(--cds-spacing-09, 3rem) + 2rem); }
+body.has-maintenance-banner cds-header { inset-block-start: 2rem; }
+
+/* Dev-only identity switcher — a small floating panel, bottom-left, out of the
+   way of page content and the fixed header. */
+.demo-identity {
+  position: fixed;
+  inset-block-end: var(--cds-spacing-05, 1rem);
+  inset-inline-start: var(--cds-spacing-05, 1rem);
+  z-index: 9500;
+  min-inline-size: 13rem;
+  padding: var(--cds-spacing-04, 0.75rem);
+  background: var(--cds-layer-01, #ffffff);
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+.demo-identity__label {
+  margin: 0 0 var(--cds-spacing-02, 0.25rem);
+  color: var(--cds-text-secondary, #525252);
+  text-transform: uppercase;
+}

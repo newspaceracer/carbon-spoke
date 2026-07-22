@@ -1,6 +1,6 @@
 // Mock data for the district detail prototype — a CA State Parks administrative
 // district (North Coast Redwoods District). Park names and designations are
-// public facts kept for domain credibility; acreages are rounded approximations.
+// public facts kept for domain credibility.
 // Every PERSONAL detail (contact names, emails, phones) is INVENTED, per the
 // house no-real-data rule. The district office address is likewise invented.
 // Deterministic: same output every build.
@@ -19,7 +19,6 @@ export interface Park {
   name: string;
   /** Classification (State Park, State Natural Reserve, State Beach, …). */
   designation: string;
-  acreage: string;
 }
 
 // ── Members: the people assigned to a district ─────────────────────────────
@@ -145,13 +144,13 @@ export const district = {
 
   // Parks administered by the district (public names/designations).
   parks: [
-    { name: 'Jedediah Smith Redwoods State Park', designation: 'State Park', acreage: '10,430 ac' },
-    { name: 'Del Norte Coast Redwoods State Park', designation: 'State Park', acreage: '6,400 ac' },
-    { name: 'Prairie Creek Redwoods State Park', designation: 'State Park', acreage: '14,000 ac' },
-    { name: 'Tolowa Dunes State Park', designation: 'State Park', acreage: '5,000 ac' },
-    { name: 'Humboldt Lagoons State Park', designation: 'State Park', acreage: '2,700 ac' },
-    { name: 'Sue-meg State Park', designation: 'State Park', acreage: '640 ac' },
-    { name: 'Grizzly Creek Redwoods State Park', designation: 'State Park', acreage: '430 ac' },
+    { name: 'Jedediah Smith Redwoods State Park', designation: 'State Park' },
+    { name: 'Del Norte Coast Redwoods State Park', designation: 'State Park' },
+    { name: 'Prairie Creek Redwoods State Park', designation: 'State Park' },
+    { name: 'Tolowa Dunes State Park', designation: 'State Park' },
+    { name: 'Humboldt Lagoons State Park', designation: 'State Park' },
+    { name: 'Sue-meg State Park', designation: 'State Park' },
+    { name: 'Grizzly Creek Redwoods State Park', designation: 'State Park' },
   ] as Park[],
 
   // District members — the users assigned to this district as technical reviewers.

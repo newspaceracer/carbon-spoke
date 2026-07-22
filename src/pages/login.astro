@@ -1,0 +1,116 @@
+---
+// Prototype sign-in — the page a logged-out visitor reaches at /login (the
+// "url/admin" login in the ticket). It exists mainly for the logged-out-admin
+// maintenance flow: an admin who signs in here during an outage is taken to the
+// console; anyone else is told they lack access and is routed to the notice.
+//
+// There's no real auth in this static prototype, so an "Account" dropdown stands
+// in for credentials — it decides which identity you sign in as. Composed from
+// stock cds-* (tile, text inputs, dropdown, button, notification).
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+export const prototype = {
+  title: 'Sign in',
+  summary:
+    'Prototype sign-in page. Supports the logged-out-admin maintenance flow: an ' +
+    'admin signing in during an outage reaches the console; others are routed to ' +
+    'the public notice.',
+  tag: 'System',
+};
+---
+
+<BaseLayout title="Sign in — CA State Parks">
+  <!-- No app nav on the sign-in screen (empty nav slot suppresses AppHeader). -->
+  <Fragment slot="nav"></Fragment>
+
+  <main class="login">
+    <cds-tile class="login__card">
+      <p class="login__eyebrow t-label-01">CA State Parks · Scientific Collecting Permits</p>
+      <h1 class="login__title t-heading-04">Sign in</h1>
+
+      <cds-inline-notification
+        id="login-error"
+        hidden
+        kind="error"
+        low-contrast
+        hide-close-button
+        title="Insufficient permissions"
+        subtitle="Your account can’t access the site during maintenance. Redirecting you to the maintenance notice…"
+      ></cds-inline-notification>
+
+      <form id="login-form" class="login__form">
+        <cds-text-input id="login-email" type="email" label="Email" placeholder="name@parks.ca.gov" value="admin@parks.ca.gov"></cds-text-input>
+        <cds-text-input id="login-password" type="password" label="Password" placeholder="••••••••" value="prototype"></cds-text-input>
+
+        <!-- Prototype stand-in for credentials: which account you sign in as. -->
+        <cds-dropdown id="login-as" title-text="Account (prototype)" value="admin" helper-text="No real auth — choose the account to sign in as.">
+          <cds-dropdown-item value="admin">System Administrator</cds-dropdown-item>
+          <cds-dropdown-item value="user">Reviewer (non-admin)</cds-dropdown-item>
+        </cds-dropdown>
+
+        <cds-button id="login-submit" type="button" class="login__submit">Sign in</cds-button>
+      </form>
+    </cds-tile>
+  </main>
+</BaseLayout>
+
+<script>
+  import { writeIdentity, isMaintenance, ROUTES } from '../lib/maintenance';
+  import { withBase } from '../lib/base';
+
+  const submit = document.getElementById('login-submit');
+  const asDropdown = document.getElementById('login-as') as any;
+  const error = document.getElementById('login-error') as any;
+
+  submit?.addEventListener('click', () => {
+    const account = (asDropdown?.value as 'admin' | 'user') || 'admin';
+    writeIdentity(account);
+
+    if (account === 'admin') {
+      // Verified admin → straight to the console during maintenance, else home.
+      location.href = withBase(isMaintenance() ? ROUTES.console : '/');
+      return;
+    }
+
+    // Non-admin: allowed when the site is live; during maintenance they're told
+    // they lack access and routed to the public notice.
+    if (isMaintenance()) {
+      error.hidden = false;
+      error.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      setTimeout(() => { location.href = withBase(ROUTES.notice); }, 1600);
+    } else {
+      location.href = withBase('/');
+    }
+  });
+</script>
+
+<style>
+  .login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: calc(100vh - var(--cds-spacing-09, 3rem));
+    padding: var(--cds-spacing-07, 2rem) var(--cds-spacing-05, 1rem);
+  }
+  .login__card {
+    inline-size: 100%;
+    max-inline-size: 26rem;
+    padding: var(--cds-spacing-07, 2rem);
+  }
+  .login__eyebrow {
+    margin: 0;
+    text-transform: uppercase;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .login__title {
+    margin: var(--cds-spacing-02, 0.25rem) 0 var(--cds-spacing-06, 1.5rem);
+  }
+  #login-error { margin-bottom: var(--cds-spacing-05, 1rem); }
+  #login-error[hidden] { display: none; }
+  .login__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05, 1rem);
+  }
+  .login__submit { margin-top: var(--cds-spacing-03, 0.5rem); }
+</style>
