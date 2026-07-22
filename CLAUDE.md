@@ -71,6 +71,12 @@ Two different things — don't conflate:
 - Page-level layout CSS (container width, gaps) is fine in a page's `<style>`;
   **component styling belongs in `cds-*` + `--cds-*` tokens**.
 - Mock data is invented, deterministic, domain-credible — never real client data.
+- **Accessibility workaround:** `@carbon/web-components@2.59.0` ships `cds-text-input`,
+  `cds-radio-button`, and `cds-multi-select` with broken label association (no accessible
+  name) plus a disallowed `aria-readonly` on radios — patched at runtime by
+  `src/lib/carbon-a11y.ts` (loaded from `src/carbon.ts`). See
+  [`docs/carbon-accessibility-fixes.md`](docs/carbon-accessibility-fixes.md) before porting
+  to prod or bumping Carbon.
 
 ## Commands
 ```bash

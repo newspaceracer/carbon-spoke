@@ -19,6 +19,11 @@
 //                        role" an auditor flags.)
 //   • cds-multi-select — the list-box control gets no name from its title label.
 //
+// PLUS a related "aria-allowed-attr" defect: cds-radio-button and
+// cds-radio-button-group stamp aria-readonly="false" onto role=radio / the
+// group fieldset, where that attribute is NOT permitted — the "aria attributes
+// don't match the role" an auditor reports. Stripped here too (see below).
+//
 // cds-textarea / cds-checkbox / cds-dropdown / cds-combo-box / cds-date-picker-input
 // / cds-file-uploader / cds-search all label correctly — left untouched.
 //
@@ -77,17 +82,38 @@ async function fixTextInput(el: Litish): Promise<void> {
   ensureName(sr.querySelector(CONTROL_SELECTOR), nameFor(el, sr));
 }
 
+// Carbon stamps aria-readonly="false" onto controls whose role does NOT permit
+// it (role=radio, and the group's role=group), which auditors flag as
+// "aria-allowed-attr" / "aria attributes don't match the role". The value is the
+// no-op "false", so removing it is always safe. Lit won't re-add it on later
+// renders (its committed value is still "false", so the binding is skipped)
+// unless `readOnly` actually toggles — which these forms never do.
+function stripDisallowedReadonly(node: Element | null): void {
+  if (node && node.getAttribute('aria-readonly') === 'false') {
+    node.removeAttribute('aria-readonly');
+  }
+}
+
 async function fixRadioButton(el: Litish): Promise<void> {
   const sr = await shadowOf(el);
   if (!sr) return;
   const control = sr.querySelector(CONTROL_SELECTOR) as HTMLElement | null;
   ensureName(control, nameFor(el, sr));
+  stripDisallowedReadonly(control);
   // Repair the dangling <label for="..."> → the real control id, so the
   // association is valid instead of pointing at a nonexistent element.
   const label = sr.querySelector('label[for]');
   if (label && control?.id && label.getAttribute('for') !== control.id) {
     label.setAttribute('for', control.id);
   }
+}
+
+async function fixRadioGroup(el: Litish): Promise<void> {
+  const sr = await shadowOf(el);
+  if (!sr) return;
+  // The <legend> already names the fieldset; only the disallowed aria-readonly
+  // needs clearing here.
+  stripDisallowedReadonly(sr.querySelector('fieldset'));
 }
 
 async function fixMultiSelect(el: Litish): Promise<void> {
@@ -104,6 +130,7 @@ async function fixMultiSelect(el: Litish): Promise<void> {
 const FIXERS: Record<string, (el: Litish) => void> = {
   'CDS-TEXT-INPUT': fixTextInput,
   'CDS-RADIO-BUTTON': fixRadioButton,
+  'CDS-RADIO-BUTTON-GROUP': fixRadioGroup,
   'CDS-MULTI-SELECT': fixMultiSelect,
 };
 
