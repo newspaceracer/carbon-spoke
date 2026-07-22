@@ -92,6 +92,10 @@ npm run preview   # preview the build
   type scale, status meaning (colored Tag ≠ status → `cds-icon-indicator`), the WC
   grid, the WCAG 2.2 accessibility contract, icon-name verification, mock-data rules.
   Distilled from IBM's Carbon guidance reconciled with the house aesthetic.
+- **Skill** `microcopy` — how the WORDS read: the 3 C's (Clarity > Concision >
+  Character), front-loading, the four concision mistakes, length targets, and the
+  jargon/audience rule. Load before writing or editing ANY user-facing copy.
+  Distilled from NNGroup's Informative Microcopy course.
 - **Hook** `check-carbon-first.mjs` (PreToolUse) — blocks bespoke primitives;
   escape hatch is a `carbon-checked: <reason>` comment. Enforces only in a repo
   that depends on `@carbon/web-components`.

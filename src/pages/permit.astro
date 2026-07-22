@@ -152,7 +152,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
               </PermitSection>
 
               <PermitSection title="Tags">
-                <p class="section-hint t-body-01">Reviewer-applied labels for triage and coordination — internal handling tags, separate from the permit's classification badges. Choose from the set; applied tags show below and can be dismissed.</p>
+                <p class="section-hint t-body-01">Internal labels for triage and coordination, separate from the permit's classification badges. Pick from the set; applied tags appear below and can be removed.</p>
                 <div class="tagger">
                   <cds-multi-select
                     id="permit-tag-select"
@@ -271,7 +271,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                     <cds-textarea
                       id="comment-input"
                       label="Add a comment"
-                      placeholder="Share a note with the review team…"
+                      placeholder="Share a note with the analysis team…"
                       rows="2"
                     ></cds-textarea>
                     <div class="composer__actions">
@@ -604,7 +604,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
           kind="warning"
           low-contrast
           hide-close-button
-          title="Nothing to add"
+          title="Add a condition first"
           subtitle="Pick a condition from the catalog or write one below."
         ></cds-inline-notification>
 

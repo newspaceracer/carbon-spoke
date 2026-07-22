@@ -135,7 +135,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </cds-button>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Organization</h3>
+      <h3 class="sub-head t-heading-02">Organization</h3>
       <dl class="review">
         {orgRows.map((r) => (
           <div class="review__row">
@@ -147,7 +147,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Principal investigator</h3>
+      <h3 class="sub-head t-heading-02">Principal investigator</h3>
       {researchTeam.piIsSubmitter && (
         <p class="sub-note t-body-01">This is you (the submitter).</p>
       )}
@@ -160,7 +160,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
         ))}
         <div class="review__row">
           <dt class="review__label t-label-01">Résumé or CV</dt>
-          <dd class="review__value">
+          <dd class="review__value t-body-01">
             {researchTeam.piResume ? (
               <span class="doc">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
@@ -175,7 +175,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Person in direct charge of field work</h3>
+      <h3 class="sub-head t-heading-02">Person in direct charge of field work</h3>
       <dl class="review">
         {fieldChargeRows.map((r) => (
           <div class="review__row">
@@ -187,7 +187,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Additional participants</h3>
+      <h3 class="sub-head t-heading-02">Additional participants</h3>
       {seedParticipants.length ? (
         <cds-table class="ro-table">
           <cds-table-head>
@@ -217,7 +217,6 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Personnel &amp; insurance</h3>
       <dl class="review">
         <div class="review__row">
           <dt class="review__label t-label-01">All personnel employed or insured by the institution</dt>
@@ -235,7 +234,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </cds-button>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Project details</h3>
+      <h3 class="sub-head t-heading-02">Project details</h3>
       <dl class="review">
         <div class="review__row">
           <dt class="review__label t-label-01">Category</dt>
@@ -257,7 +256,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Project dates</h3>
+      <h3 class="sub-head t-heading-02">Project dates</h3>
       <dl class="review">
         {dateRows.map((r) => (
           <div class="review__row">
@@ -269,7 +268,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Field investigation occurrences</h3>
+      <h3 class="sub-head t-heading-02">Field investigation occurrences</h3>
       {seedOccurrences.length ? (
         <cds-table class="ro-table">
           <cds-table-head>
@@ -295,7 +294,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Project schedule</h3>
+      <h3 class="sub-head t-heading-02">Project schedule</h3>
       <ul class="docs">
         {project.scheduleFile ? (
           <li class="doc">
@@ -317,7 +316,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </cds-button>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Study area parks</h3>
+      <h3 class="sub-head t-heading-02">Study area parks</h3>
       {parkRows.length ? (
         <cds-table class="ro-table">
           <cds-table-head>
@@ -341,7 +340,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">GIS location</h3>
+      <h3 class="sub-head t-heading-02">GIS location</h3>
       <ul class="docs">
         {seedGisFiles.length ? (
           seedGisFiles.map((f) => (
@@ -365,7 +364,6 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </cds-button>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Specimen collection</h3>
       <dl class="review">
         <div class="review__row">
           <dt class="review__label t-label-01">Involves specimen collection</dt>
@@ -441,7 +439,6 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Laboratory work</h3>
       <dl class="review">
         <div class="review__row">
           <dt class="review__label t-label-01">Involves laboratory work</dt>
@@ -463,7 +460,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Additional information</h3>
+      <h3 class="sub-head t-heading-02">Additional information</h3>
       <div class="narrative">
         <p class="narrative__label t-label-01">Study procedures</p>
         {dc.studyProceduresInProposal ? (
@@ -491,7 +488,6 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </cds-button>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Soil disturbance</h3>
       <dl class="review">
         <div class="review__row">
           <dt class="review__label t-label-01">Involves soil disturbance</dt>
@@ -522,7 +518,6 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Additional permits</h3>
       <dl class="review">
         <div class="review__row">
           <dt class="review__label t-label-01">Requires additional permits</dt>
@@ -555,7 +550,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Study supporting information</h3>
+      <h3 class="sub-head t-heading-02">Study supporting information</h3>
       <div class="narrative">
         <p class="narrative__label t-label-01">Budget</p>
         {ad.budgetInProposal ? (
@@ -588,7 +583,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Required documents</h3>
+      <h3 class="sub-head t-heading-02">Required documents</h3>
       <div class="narrative">
         <p class="narrative__label t-label-01">Signed standard condition agreement form</p>
         <ul class="docs">
@@ -618,7 +613,6 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <h3 class="sub-head t-heading-compact-01">Research activities beyond simple use</h3>
       <dl class="review">
         <div class="review__row">
           <dt class="review__label t-label-01">Conducts activities beyond simple use</dt>

@@ -246,7 +246,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         <!-- carbon-checked: confirmation prose has no cds-* component; a <p> with the
              Carbon type role is the house pattern for modal body copy. -->
         <p class="modal-hint t-body-01" id="remove-body">
-          Remove this member from the district? They'll no longer be auto-assigned to permits or listed as a contact.
+          Remove this member from the district? They’ll no longer be auto-assigned to permits or listed as a contact.
         </p>
       </cds-modal-body>
       <cds-modal-footer>
@@ -596,7 +596,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     const m = state.members[index];
     const who = findUser(m?.userId)?.name ?? 'this member';
     const body = $('remove-body');
-    if (body) body.textContent = `Remove ${who} from ${district.name}? They'll no longer be auto-assigned to permits or listed as a contact.`;
+    if (body) body.textContent = `Remove ${who} from ${district.name}? They’ll no longer be auto-assigned to permits or listed as a contact.`;
     if (removeModal) removeModal.open = true;
   };
 

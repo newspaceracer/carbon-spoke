@@ -42,7 +42,7 @@ export const prototype = {
             <cds-breadcrumb-link aria-current="page">Maintenance mode</cds-breadcrumb-link>
           </cds-breadcrumb-item>
         </cds-breadcrumb>
-        <h1 class="head__title t-heading-05">Maintenance Mode Console</h1>
+        <h1 class="head__title t-heading-05">Maintenance mode console</h1>
         <p class="head__lede t-body-02">
           Take the CA State Parks Scientific Collecting Permit site into maintenance
           mode, or restore it to production. While in maintenance, all pages route to
@@ -59,7 +59,7 @@ export const prototype = {
           low-contrast
           hide-close-button
           title="Access denied"
-          subtitle="You don’t have permission to access the Maintenance Mode Console. This tool is limited to system administrators."
+          subtitle="You don’t have permission to access the maintenance mode console. This tool is limited to system administrators."
         >
           <cds-actionable-notification-button slot="action" href={withBase('/')}>Return to site</cds-actionable-notification-button>
         </cds-actionable-notification>
@@ -101,16 +101,16 @@ export const prototype = {
           <div id="message-wrap" class="message-wrap" hidden>
             <cds-textarea
               id="notice-message"
-              label="Maintenance Notice Public Message"
+              label="Public maintenance message"
               rows="4"
               helper-text={`0/${PUBLIC_MESSAGE_LIMIT}`}
-              invalid-text={`Field text character limit exceeded. ${PUBLIC_MESSAGE_LIMIT} character limit only.`}
+              invalid-text={`Message must be ${PUBLIC_MESSAGE_LIMIT} characters or fewer.`}
             ></cds-textarea>
           </div>
 
           <div class="actions" id="actions">
             <cds-button id="cancel-btn" kind="danger-tertiary" disabled>Cancel</cds-button>
-            <cds-button id="primary-btn" kind="danger" disabled>Activate Maintenance Mode</cds-button>
+            <cds-button id="primary-btn" kind="danger" disabled>Activate maintenance mode</cds-button>
           </div>
         </PermitSection>
       </div>
@@ -127,9 +127,9 @@ export const prototype = {
         <!-- carbon-checked: prose confirmation text; a <p> with the Carbon type
              role is the standard pattern (see profile.astro's modals). -->
         <p class="modal-hint t-body-01">
-          Every page will immediately route to the public maintenance notice for all
-          visitors. Users can still sign in, and administrators keep access to this
-          console. You can restore the site from here at any time.
+          Every visitor will immediately see the public maintenance notice instead of the
+          site. Users can still sign in, and administrators keep access to this console.
+          You can restore the site from here at any time.
         </p>
       </cds-modal-body>
       <cds-modal-footer>
@@ -234,7 +234,7 @@ export const prototype = {
         // From live, the only action is to activate maintenance — enabled once
         // maintenance is selected with a valid notice.
         primaryBtn.kind = 'danger';
-        primaryBtn.textContent = 'Activate Maintenance Mode';
+        primaryBtn.textContent = 'Activate maintenance mode';
         primaryBtn.disabled = !(changed && messageOk);
       } else {
         // From maintenance, the action is to restore production.

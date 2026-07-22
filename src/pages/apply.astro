@@ -32,7 +32,7 @@ import StudyAreasStep from '../components/StudyAreasStep.astro';
 import DataCollectionStep from '../components/DataCollectionStep.astro';
 import AdditionalDocsStep from '../components/AdditionalDocsStep.astro';
 import SummaryStep from '../components/SummaryStep.astro';
-import { applicationSteps, draft } from '../data/application';
+import { applicationSteps, draft, applicant } from '../data/application';
 
 // Steps with a fully-built panel; the rest render an honest placeholder.
 const builtSteps = new Set([
@@ -196,6 +196,42 @@ export const prototype = {
       </div>
     </div>
 
+    <!-- ── Submission confirmation ──────────────────────────────────────────────
+         A full-screen success view that replaces the wizard once the application
+         is submitted. No Carbon "confirmation page" component exists, so this is a
+         tier-2 composition: semantic text + a success glyph + a stock cds-button.
+         Hidden until submit; the script hides the banner + wizard and reveals it. -->
+    <section id="submitted-view" class="submitted" hidden aria-live="polite">
+      <div class="submitted__inner">
+        <svg
+          class="submitted__icon"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 32 32"
+          width="96"
+          height="96"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d="M14 21.414l-5-5.001L10.413 15 14 18.586 21.585 11 23 12.415l-9 8.999z"></path>
+          <path d="M16 2A14 14 0 1030 16 14 14 0 0016 2zm0 26a12 12 0 1112-12 12 12 0 01-12 12z"></path>
+        </svg>
+        <h1 class="submitted__title t-heading-05">Application {draft.id} was submitted</h1>
+        <div class="submitted__leads">
+          <p class="submitted__lead t-body-02">
+            A confirmation email was sent to {applicant.email}.
+          </p>
+          <p class="submitted__lead t-body-02">
+            You'll be notified by email if additional information is needed, and again once a
+            decision is made.
+          </p>
+        </div>
+        <cds-button id="submitted-cta" href={withBase('/permits')}>
+          View my permits
+          <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M18 6L16.6 7.4l7.6 7.6H4v2h20.2l-7.6 7.6L18 26l10-10z"></path></svg>
+        </cds-button>
+      </div>
+    </section>
+
     <!-- Withdraw confirmation — destructive, so a stock cds-modal (danger) guards it. -->
     <cds-modal id="withdraw-modal" size="sm" danger>
       <cds-modal-header>
@@ -205,7 +241,7 @@ export const prototype = {
       </cds-modal-header>
       <cds-modal-body>
         <p class="t-body-01">
-          This permanently discards your draft and can't be undone. Since your answers save
+          This permanently discards your draft and can’t be undone. Since your answers save
           automatically, you can simply leave and return to finish later instead.
         </p>
       </cds-modal-body>
@@ -274,6 +310,10 @@ export const prototype = {
   const withdrawConfirm = document.getElementById('withdraw-confirm');
   const incompleteModal = document.getElementById('incomplete-modal') as any;
   const incompleteList = document.getElementById('incomplete-list');
+  // Full-screen success view + the wizard chrome it replaces on submit.
+  const submittedView = document.getElementById('submitted-view');
+  const banner = document.querySelector<HTMLElement>('.banner');
+  const wizardBody = document.querySelector<HTMLElement>('.body');
   // Certification lives on the review step; Submit is gated on it being checked.
   const certify = document.getElementById('summary-certify') as any;
   // Per-page header — retitled on every navigation.
@@ -389,12 +429,22 @@ export const prototype = {
     if (current === steps.length - 1) {
       // Belt-and-suspenders: the button is disabled until certified, but guard the
       // handler too so a stray click can't submit an uncertified application.
-      if (!certify?.checked) return;
-      toast('success', 'Application submitted', 'Your application has been sent for review.');
+      if (!bypassValidation && !certify?.checked) return;
+      showSubmitted();
       return;
     }
     tryGoTo(current + 1);
   });
+
+  // Submit success: swap the wizard (banner + form body) for the full-screen
+  // confirmation view, and scroll to the top so it's seen from its start.
+  function showSubmitted() {
+    if (banner) banner.hidden = true;
+    if (wizardBody) wizardBody.hidden = true;
+    if (submittedView) submittedView.hidden = false;
+    document.title = 'Application submitted';
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
 
   // Withdraw is destructive — confirm through the modal, then discard and leave.
   withdrawBtn?.addEventListener('click', () => {
@@ -622,5 +672,52 @@ export const prototype = {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+
+  /* ── Submission confirmation — full-screen success view ─────────────────────
+     Layout only; the button is a stock cds-button and the check is an inline
+     Carbon glyph colored with the semantic success token. Explicit [hidden]
+     rules because the HTML5 reset's `section,header{display:block}` outranks the
+     UA `[hidden]` rule (same gotcha as the wizard steps above). */
+  .banner[hidden],
+  .body[hidden],
+  .submitted[hidden] {
+    display: none;
+  }
+  .submitted {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 65vh;
+    padding: var(--cds-spacing-10, 4rem) var(--cds-grid-margin, 1.5rem);
+    text-align: center;
+  }
+  .submitted__inner {
+    max-width: 40rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .submitted__icon {
+    color: var(--cds-support-success, #24a148);
+    margin-bottom: var(--cds-spacing-06, 1.5rem);
+  }
+  .submitted__title {
+    margin: 0;
+    color: var(--cds-text-primary, #161616);
+  }
+  .submitted__leads {
+    margin-top: var(--cds-spacing-05, 1rem);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03, 0.5rem);
+  }
+  .submitted__lead {
+    margin: 0;
+    max-width: 34rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  #submitted-cta {
+    margin-top: var(--cds-spacing-08, 2.5rem);
   }
 </style>
