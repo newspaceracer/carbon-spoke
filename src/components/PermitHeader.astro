@@ -3,6 +3,7 @@
 // number eyebrow, name, status indicator, action buttons, badge rows, then an
 // at-a-glance strip of labeled facts (plain data, not boxed content pieces).
 import type { Badge } from '../data/permit';
+import { withBase } from '../lib/base';
 
 interface Stat {
   label: string;
@@ -24,9 +25,13 @@ interface Props {
 
 const { id, name, organization, status, infoTags, flagTags, stats, requestedWindow } =
   Astro.props;
+
+// An amendment reuses the whole application flow, prefilled from this permit and
+// numbered with an "-A" suffix — offered only once the permit is Active.
+const amendHref = withBase(`/apply?amend=${id}`);
 ---
 
-<header class="banner cds--g100" id="permit-banner" data-permit-id={id}>
+<header class="banner cds--g100" id="permit-banner" data-permit-id={id} data-status={status.label} data-letter-url={withBase('/final-letter')}>
   <div class="banner__inner">
   <div class="banner__crumb"><slot name="breadcrumb" /></div>
   <div class="banner__main">
@@ -52,13 +57,16 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
       </div>
     </div>
 
-    <!-- One primary anchor (Approve); demoted actions live in the attached menu.
-         Reject stays flagged as danger inside the menu. -->
+    <!-- Actions depend on where the permit sits in the workflow — only the set for
+         the current status is shown (the script toggles by [data-when]):
+           • Under review     → Approve (primary) + Request changes / Reject in the menu
+           • Out for signature → Sign permit
+           • Active            → Request amendment (the applicant's next move)
+           • Changes requested / Rejected → no decision remains here
+         tooltip-alignment=bottom: the caret's tooltip defaults to opening upward,
+         which is clipped once the header is a pinned bar — open it downward. -->
     <div class="banner__actions">
-      <!-- tooltip-alignment=bottom: the caret's "Additional actions" tooltip
-           defaults to opening upward, which is clipped once the header is a pinned
-           bar at the top of the viewport — open it downward instead. -->
-      <cds-combo-button id="permit-actions" class="permit-actions" size="md" label="Approve permit" menu-alignment="bottom-end" tooltip-alignment="bottom">
+      <cds-combo-button data-when="Under review" class="permit-actions" size="md" label="Approve permit" menu-alignment="bottom-end" tooltip-alignment="bottom">
         <cds-menu>
           <cds-menu-item label="Request changes"></cds-menu-item>
           <cds-menu-item label="Download"></cds-menu-item>
@@ -66,6 +74,8 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
           <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
         </cds-menu>
       </cds-combo-button>
+      <cds-button data-when="Out for signature" class="permit-action-sign" size="md" hidden>Sign permit</cds-button>
+      <cds-button data-when="Active" class="permit-action-amend" size="md" href={amendHref} hidden>Request amendment</cds-button>
     </div>
   </div>
 
@@ -91,7 +101,7 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
     <cds-icon-indicator class="permit-status-indicator" size="16" kind={status.kind} label={status.label}></cds-icon-indicator>
     <span class="compactbar__window t-body-01">{requestedWindow.start} – {requestedWindow.end}</span>
     <div class="compactbar__spacer"></div>
-    <cds-combo-button class="permit-actions" size="sm" label="Approve permit" menu-alignment="bottom-end" tooltip-alignment="bottom">
+    <cds-combo-button data-when="Under review" class="permit-actions" size="sm" label="Approve permit" menu-alignment="bottom-end" tooltip-alignment="bottom">
       <cds-menu>
         <cds-menu-item label="Request changes"></cds-menu-item>
         <cds-menu-item label="Download"></cds-menu-item>
@@ -99,6 +109,8 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
         <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
       </cds-menu>
     </cds-combo-button>
+    <cds-button data-when="Out for signature" class="permit-action-sign" size="sm" hidden>Sign permit</cds-button>
+    <cds-button data-when="Active" class="permit-action-amend" size="sm" href={amendHref} hidden>Request amendment</cds-button>
   </div>
 </div>
 
@@ -123,7 +135,7 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
            inputs; the container `value` seeds both (ISO `start/end`). The
            requested dates repeat below as a reminder. -->
       <cds-stack gap="3">
-        <cds-date-picker value={`${requestedWindow.startISO}/${requestedWindow.endISO}`}>
+        <cds-date-picker id="approve-window" value={`${requestedWindow.startISO}/${requestedWindow.endISO}`}>
           <cds-date-picker-input
             kind="from"
             label-text="Permit start date"
@@ -156,6 +168,24 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
   <cds-modal-footer>
     <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
     <cds-modal-footer-button kind="primary" id="approve-confirm" data-modal-close>Approve permit</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<cds-modal id="sign-permit-modal" size="sm">
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label>Permit {id}</cds-modal-label>
+    <cds-modal-heading>Record the signed permit?</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <p class="t-body-01">
+      Confirm the applicant has signed and returned the permit. This activates it:
+      the permit becomes valid and the applicant can begin the authorized work.
+    </p>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="sign-confirm" data-modal-close>Mark as signed</cds-modal-footer-button>
   </cds-modal-footer>
 </cds-modal>
 
@@ -195,7 +225,7 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
   </cds-modal-body>
   <cds-modal-footer>
     <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-    <cds-modal-footer-button kind="primary" data-modal-close>Send request</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="request-confirm" data-modal-close>Send request</cds-modal-footer-button>
   </cds-modal-footer>
 </cds-modal>
 
@@ -213,11 +243,58 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
   </cds-modal-body>
   <cds-modal-footer>
     <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-    <cds-modal-footer-button kind="danger" data-modal-close>Reject permit</cds-modal-footer-button>
+    <cds-modal-footer-button kind="danger" id="reject-confirm" data-modal-close>Reject permit</cds-modal-footer-button>
   </cds-modal-footer>
 </cds-modal>
 
 <script>
+  // ── Workflow state machine (prototype-local) ──
+  // The permit moves through a small set of statuses; each has a cds-icon-indicator
+  // `kind` (kept in sync with data/permits.ts) and its own action set. The current
+  // status persists to `permit-status-${id}` so it survives a reload, and every
+  // transition broadcasts `permit-status-changed` so other surfaces on the page —
+  // notably the Special conditions tab, which freezes once the permit leaves review
+  // — react without a reload.
+  //   Under review ──approve──▶ Out for signature ──sign──▶ Active
+  //                └─request changes─▶ Changes requested
+  //                └─reject──────────▶ Rejected
+  const banner = document.getElementById('permit-banner');
+  const permitId = banner?.dataset.permitId ?? '';
+  const seededStatus = banner?.dataset.status ?? 'Under review';
+  const statusKey = `permit-status-${permitId}`;
+
+  const STATUS_KIND: Record<string, string> = {
+    'Under review': 'in-progress',
+    'Out for signature': 'pending',
+    'Active': 'succeeded',
+    'Changes requested': 'caution-minor',
+    'Rejected': 'failed',
+  };
+
+  const currentStatus = () =>
+    (permitId && localStorage.getItem(statusKey)) || seededStatus;
+
+  // Reflect a status across every surface: the two status indicators and the
+  // action controls (only those tagged for the current status are shown).
+  const paintStatus = (status: string) => {
+    const kind = STATUS_KIND[status] ?? 'unknown';
+    document.querySelectorAll('.permit-status-indicator').forEach((el) => {
+      el.setAttribute('kind', kind);
+      el.setAttribute('label', status);
+    });
+    document.querySelectorAll<HTMLElement>('[data-when]').forEach((el) => {
+      el.hidden = el.dataset.when !== status;
+    });
+  };
+
+  const setStatus = (status: string) => {
+    if (permitId) localStorage.setItem(statusKey, status);
+    paintStatus(status);
+    window.dispatchEvent(
+      new CustomEvent('permit-status-changed', { detail: { status } }),
+    );
+  };
+
   // Combo-button fires onClick for its primary button AND for menu-item picks;
   // route each to the matching confirmation modal. Both the full header and the
   // compact bar carry a `.permit-actions` combo-button, so wire them all.
@@ -225,6 +302,7 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
   const approveModal = document.getElementById('approve-permit-modal') as any;
   const rejectModal = document.getElementById('reject-permit-modal') as any;
   const requestModal = document.getElementById('request-changes-modal') as any;
+  const signModal = document.getElementById('sign-permit-modal') as any;
   document.querySelectorAll('.permit-actions').forEach((combo) => {
     (combo as any).onClick = (e: Event) => {
       const item = (e.target as HTMLElement).closest?.('cds-menu-item');
@@ -234,29 +312,64 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
       else if (!item) approveModal.open = true; // primary "Approve permit"
     };
   });
-
-  // ── Approval → freeze the permit ──
-  // Approving persists the permit's status (prototype-local). Other surfaces that
-  // must lock on approval — notably the Special conditions tab — read this key and
-  // also listen for the live `permit-status-changed` event so they freeze without
-  // a reload. On load we reflect an already-approved status in the indicators.
-  const permitId = document.getElementById('permit-banner')?.dataset.permitId ?? '';
-  const statusKey = `permit-status-${permitId}`;
-
-  const applyApprovedUI = () => {
-    document.querySelectorAll('.permit-status-indicator').forEach((el) => {
-      el.setAttribute('kind', 'succeeded');
-      el.setAttribute('label', 'Active');
-    });
-  };
-
-  if (permitId && localStorage.getItem(statusKey) === 'Active') applyApprovedUI();
-
-  document.getElementById('approve-confirm')?.addEventListener('click', () => {
-    if (permitId) localStorage.setItem(statusKey, 'Active');
-    applyApprovedUI();
-    window.dispatchEvent(new CustomEvent('permit-status-changed', { detail: { status: 'Active' } }));
+  document.querySelectorAll('.permit-action-sign').forEach((btn) => {
+    btn.addEventListener('click', () => (signModal.open = true));
   });
+  // Request amendment navigates to the prefilled application (href); before it
+  // does, record that an amendment exists for this permit so the detail page can
+  // surface a link back to it. Set synchronously so it lands before navigation.
+  document.querySelectorAll('.permit-action-amend').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (permitId) localStorage.setItem(`permit-amendment-${permitId}`, `${permitId}-A`);
+    });
+  });
+
+  // Approving no longer jumps straight to "Out for signature". It captures the
+  // confirmed window + CEQA and hands off to the live final-letter view, where the
+  // reviewer reads the document, edits parks/dates, and THEN sends for signature
+  // (that step advances the status). Capture the picked window as ISO from the
+  // date-picker's change event; if untouched, the letter view falls back to the
+  // requested window it already carries.
+  const toISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  let approvedStartISO = '';
+  let approvedEndISO = '';
+  document.getElementById('approve-window')?.addEventListener('cds-date-picker-changed', (e) => {
+    const dates = (e as CustomEvent).detail?.selectedDates ?? [];
+    if (dates[0]) approvedStartISO = toISO(dates[0]);
+    if (dates[1]) approvedEndISO = toISO(dates[1]);
+  });
+  document.getElementById('approve-confirm')?.addEventListener('click', () => {
+    const letterUrl = banner?.dataset.letterUrl;
+    if (!letterUrl) return setStatus('Out for signature'); // fallback if unwired
+    const ceqa = (document.querySelector(
+      '#approve-permit-modal cds-radio-button-group[name="ceqa"]',
+    ) as any)?.value;
+    const finalKey = `permit-final-${permitId}`;
+    const prior = JSON.parse(localStorage.getItem(finalKey) || '{}');
+    localStorage.setItem(
+      finalKey,
+      JSON.stringify({
+        ...prior,
+        ...(approvedStartISO ? { startISO: approvedStartISO } : {}),
+        ...(approvedEndISO ? { endISO: approvedEndISO } : {}),
+        ceqa,
+      }),
+    );
+    window.location.href = letterUrl;
+  });
+  document
+    .getElementById('sign-confirm')
+    ?.addEventListener('click', () => setStatus('Active'));
+  document
+    .getElementById('request-confirm')
+    ?.addEventListener('click', () => setStatus('Changes requested'));
+  document
+    .getElementById('reject-confirm')
+    ?.addEventListener('click', () => setStatus('Rejected'));
+
+  // Reflect the persisted (or seeded) status on load.
+  paintStatus(currentStatus());
 
   // ── Compact bar reveal ──
   // Show the compact bar once the full header has scrolled out of view. This is
@@ -265,7 +378,6 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
   // the document height on scroll, so there's no scroll-anchoring feedback and no
   // content jump — the two failure modes that made a *resizing* sticky header
   // oscillate. An IntersectionObserver on the header flips a single class.
-  const banner = document.getElementById('permit-banner');
   const compactbar = document.getElementById('permit-compactbar');
   if (banner && compactbar && 'IntersectionObserver' in window) {
     const io = new IntersectionObserver(
@@ -405,6 +517,12 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
     flex-wrap: wrap;
     gap: 0.25rem;
     flex: 0 0 auto;
+  }
+  /* Only the action set for the current status is shown; the script toggles
+     [hidden] on the rest. Custom elements don't honor the UA [hidden] rule
+     reliably, so force it. */
+  [data-when][hidden] {
+    display: none;
   }
   .banner__stats {
     display: grid;

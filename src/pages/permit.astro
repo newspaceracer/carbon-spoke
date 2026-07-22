@@ -126,6 +126,24 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 
       </PermitHeader>
 
+      <!-- Amendment link — revealed by the client script only once an amendment has
+           been started from this permit. Names the amendment and links to it, so the
+           relationship is traceable from the original, not just from the amendment. -->
+      <cds-actionable-notification
+        id="amend-notice"
+        class="amend-notice"
+        kind="info"
+        low-contrast
+        hide-close-button
+        hidden
+      >
+        <span slot="title">Amendment in progress</span>
+        <span slot="subtitle" id="amend-notice-text"></span>
+        <cds-actionable-notification-button id="amend-notice-btn" href="#">
+          View amendment
+        </cds-actionable-notification-button>
+      </cds-actionable-notification>
+
       <!-- carbon-checked: .tabbar is NOT a tab component — the tabs are the stock
            cds-tabs/cds-tab below. It is only a full-bleed STICKY background layer
            that pins the tab strip below the compact header bar and gives it an
@@ -946,7 +964,11 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
     permitId,
     districts.map((d) => d.key),
   );
-  let locked = localStorage.getItem(permitStatusKey(permitId)) === 'Active';
+  // Conditions freeze the moment the permit leaves review — i.e. once it's been
+  // approved (Out for signature) and thereafter (Active). Under review, they're
+  // still editable; Changes requested / Rejected never leave them frozen.
+  const FROZEN_STATUSES = ['Out for signature', 'Active'];
+  let locked = FROZEN_STATUSES.includes(localStorage.getItem(permitStatusKey(permitId)) ?? '');
 
   const scopeEl = $('sc-acting-as') as any;
   const currentScope = (): ConditionOwner => scopeEl?.value || 'hq';
@@ -1233,9 +1255,11 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   scopeEl?.addEventListener('cds-dropdown-selected', applyScope);
   $('sc-modal-save')?.addEventListener('click', saveFromModal);
 
-  // Approval (fired by PermitHeader) freezes the tab without a reload.
+  // A status change (fired by PermitHeader) freezes the tab without a reload once
+  // the permit is approved / signed.
   window.addEventListener('permit-status-changed', (e) => {
-    if ((e as CustomEvent).detail?.status === 'Active') {
+    const status = (e as CustomEvent).detail?.status;
+    if (FROZEN_STATUSES.includes(status) && !locked) {
       locked = true;
       render();
     }
@@ -1243,6 +1267,34 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 
   applyScope();
 </script>
+
+<!-- Amendment link — surfaces the amendment on the ORIGINAL permit once one has
+     been started (flag written by PermitHeader's Request amendment action). -->
+<script>
+  import { permit } from '../data/permit';
+  import { withBase } from '../lib/base';
+
+  const amendNumber = localStorage.getItem(`permit-amendment-${permit.id}`);
+  if (amendNumber) {
+    const notice = document.getElementById('amend-notice') as any;
+    const text = document.getElementById('amend-notice-text');
+    const btn = document.getElementById('amend-notice-btn');
+    if (text) text.textContent = `Amendment ${amendNumber} has been started for this permit.`;
+    if (btn) btn.setAttribute('href', withBase(`/apply?amend=${permit.id}`));
+    if (notice) notice.hidden = false;
+  }
+</script>
+
+<style>
+  /* Amendment notice sits between the header and the tab strip; ships hidden. */
+  .amend-notice[hidden] {
+    display: none;
+  }
+  .amend-notice {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+  }
+</style>
 
 <style>
   /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens.

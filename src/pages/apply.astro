@@ -34,6 +34,14 @@ import AdditionalDocsStep from '../components/AdditionalDocsStep.astro';
 import SummaryStep from '../components/SummaryStep.astro';
 import { applicationSteps, draft, applicant } from '../data/application';
 
+// Amendment mode is reached from an Active permit's "Request amendment" action as
+// /apply?amend=<permitId>. An amendment is a fresh application prefilled from the
+// original permit (the form is already seeded with that data here) that keeps the
+// original number with an "-A" suffix. The site is a STATIC build, so the query
+// param isn't known at build time — the client script below reads it and rewrites
+// the number, title, breadcrumb, and notice. Markup renders the new-application
+// case by default.
+
 // Steps with a fully-built panel; the rest render an honest placeholder.
 const builtSteps = new Set([
   'research-team',
@@ -68,20 +76,36 @@ export const prototype = {
           <cds-breadcrumb-item>
             <cds-breadcrumb-link href={withBase('/permits')}>Permits</cds-breadcrumb-link>
           </cds-breadcrumb-item>
+          <!-- Origin permit — revealed by the client script in amendment mode so the
+               trail itself names the permit being amended. -->
+          <cds-breadcrumb-item id="amend-crumb-item" hidden>
+            <cds-breadcrumb-link id="amend-crumb-link" href="#"></cds-breadcrumb-link>
+          </cds-breadcrumb-item>
           <cds-breadcrumb-item>
-            <cds-breadcrumb-link aria-current="page">New application</cds-breadcrumb-link>
+            <cds-breadcrumb-link id="app-crumb" aria-current="page">New application</cds-breadcrumb-link>
           </cds-breadcrumb-item>
         </cds-breadcrumb>
 
         <div class="banner__lead">
-          <h1 class="banner__title t-heading-05">Scientific Research &amp; Collection Permit application</h1>
+          <h1 id="app-title" class="banner__title t-heading-05">Scientific Research &amp; Collection Permit application</h1>
           <div class="banner__id-row">
-            <span class="banner__number t-heading-03">{draft.id}</span>
+            <span id="app-number" class="banner__number t-heading-03">{draft.id}</span>
             <cds-icon-indicator size="16" kind="incomplete" label={draft.status}></cds-icon-indicator>
+            <!-- Persistent "this is an amendment" marker — a type label (neutral),
+                 not a workflow status. Revealed by the client script. -->
+            <cds-tag id="amend-tag" type="cool-gray" size="md" hidden>Amendment</cds-tag>
           </div>
         </div>
 
         <dl class="banner__stats">
+          <!-- Which permit this amends — a link back to the original, revealed by the
+               client script. Answers "which permit" permanently, not just in prose. -->
+          <div class="stat" id="amend-stat" hidden>
+            <dt class="stat__label t-label-01">Amending permit</dt>
+            <dd class="stat__value t-body-01">
+              <cds-link id="amend-link" href="#"></cds-link>
+            </dd>
+          </div>
           <div class="stat">
             <dt class="stat__label t-label-01">Status</dt>
             <dd class="stat__value t-body-01">{draft.status}</dd>
@@ -128,6 +152,18 @@ export const prototype = {
           <h2 id="page-head-title" class="page-head__title t-heading-04">{applicationSteps[0].label}</h2>
           <p id="page-head-sub" class="page-head__sub t-body-02">{applicationSteps[0].secondaryLabel}</p>
         </header>
+
+        <!-- Amendment context — revealed by the client script only when amending an
+             existing permit (its title names the original permit). -->
+        <cds-inline-notification
+          id="amend-note"
+          class="wizard-intro"
+          kind="info"
+          low-contrast
+          hide-close-button
+          hidden
+          subtitle="We've prefilled this form with the original permit's information. Update what's changed, then submit for review. Your amendment keeps the original number with an “-A” suffix."
+        ></cds-inline-notification>
 
         <!-- Application-wide guidance — the same on every page of the Draft. -->
         <cds-inline-notification
@@ -215,7 +251,7 @@ export const prototype = {
           <path d="M14 21.414l-5-5.001L10.413 15 14 18.586 21.585 11 23 12.415l-9 8.999z"></path>
           <path d="M16 2A14 14 0 1030 16 14 14 0 0016 2zm0 26a12 12 0 1112-12 12 12 0 01-12 12z"></path>
         </svg>
-        <h1 class="submitted__title t-heading-05">Application {draft.id} was submitted</h1>
+        <h1 id="submitted-title" class="submitted__title t-heading-05">Application {draft.id} was submitted</h1>
         <div class="submitted__leads">
           <p class="submitted__lead t-body-02">
             A confirmation email was sent to {applicant.email}.
@@ -290,8 +326,54 @@ export const prototype = {
   // field — (1) the completeness gate that blocks the review step, and (2) the
   // certify-to-submit gate. Absent the flag, behavior is unchanged, so this never
   // leaks into normal use. Remove before production if that matters to you.
-  const bypassValidation =
-    new URLSearchParams(location.search).has('bypass') || location.hash === '#bypass';
+  const params = new URLSearchParams(location.search);
+  const bypassValidation = params.has('bypass') || location.hash === '#bypass';
+
+  // Amendment mode (static build → read the query param at runtime). An amendment
+  // keeps the original permit's number with an "-A" suffix and reframes the header;
+  // the form itself is already seeded with the original's data.
+  const amendOf = params.get('amend');
+  if (amendOf) {
+    const amendNumber = `${amendOf}-A`;
+    // The original permit's detail page (single-permit prototype → /permit).
+    const originHref = withBase('/permit');
+
+    document.getElementById('app-number')!.textContent = amendNumber;
+    document.getElementById('app-title')!.textContent =
+      'Amend a Scientific Research & Collection Permit';
+    document.getElementById('app-crumb')!.textContent = 'Amendment';
+    document.title = `Amend permit ${amendOf}`;
+
+    // Persistent "Amendment" tag next to the number.
+    const tag = document.getElementById('amend-tag') as any;
+    if (tag) tag.hidden = false;
+
+    // Origin breadcrumb: Home › Permits › <original> › Amendment.
+    const crumbItem = document.getElementById('amend-crumb-item') as any;
+    const crumbLink = document.getElementById('amend-crumb-link');
+    if (crumbLink) {
+      crumbLink.setAttribute('href', originHref);
+      crumbLink.textContent = amendOf;
+    }
+    if (crumbItem) crumbItem.hidden = false;
+
+    // "Amending permit → <original>" banner stat, linked to the original.
+    const link = document.getElementById('amend-link');
+    if (link) {
+      link.setAttribute('href', originHref);
+      link.textContent = amendOf;
+    }
+    const stat = document.getElementById('amend-stat') as any;
+    if (stat) stat.hidden = false;
+
+    const note = document.getElementById('amend-note') as any;
+    if (note) {
+      note.title = `Amending permit ${amendOf}`;
+      note.hidden = false;
+    }
+    const submittedTitle = document.getElementById('submitted-title');
+    if (submittedTitle) submittedTitle.textContent = `Amendment ${amendNumber} was submitted`;
+  }
   // Treat the draft as complete when bypassing; otherwise use the real issues.
   const issues = bypassValidation ? [] : applicationIssues;
 
@@ -611,6 +693,23 @@ export const prototype = {
     display: block;
     max-width: 46rem;
     margin-bottom: 2rem;
+  }
+  /* The amendment notice ships hidden; the author display:block above would beat
+     the UA [hidden] rule, so restore it explicitly. */
+  .wizard-intro[hidden] {
+    display: none;
+  }
+
+  /* Amendment banner markers ship hidden and are revealed only in amendment mode.
+     Custom elements / grid children don't always honor UA [hidden], so force it. */
+  #amend-tag[hidden],
+  #amend-stat[hidden],
+  #amend-crumb-item[hidden] {
+    display: none;
+  }
+  /* Amendment tag sits inline with the number + status glyph. */
+  #amend-tag {
+    margin-inline-start: var(--cds-spacing-02, 0.25rem);
   }
 
   /* Placeholder pages — a plain editorial block; the notification states intent

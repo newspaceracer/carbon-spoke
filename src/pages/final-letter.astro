@@ -1,0 +1,666 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — same app bar as the permit detail page
+     header: identity banner (g100 zone) — permit number, "Finalizing" status, window
+     spine:  main.page > .cds--css-grid
+               rail (col 3)   -> vertical cds-progress-indicator, one step per PAGE
+               page (col 7)   -> the current wizard page (one shown at a time)
+               preview (col 6)-> the live final permit letter, persistent across pages
+     purpose:
+       The reviewer's finalize wizard — structured like the applicant's own
+       application form: a vertical progress rail, a per-page header ("Page N of
+       M"), one page shown at a time, and Back / Save-and-continue actions. The
+       difference from the applicant form is the persistent letter preview on the
+       right, which regenerates from the record as the reviewer moves through the
+       pages. The thesis holds: everything on the letter is a field, so nothing is
+       hand-edited on the PDF.
+
+       Pages: ① Application details (confirm captured + window + parks) →
+              ② Internal review items (report-due, conditions, signatures) →
+              ③ Final adjustments (reviewer note) → Send for signature.
+       The rail is a TRACKER, not a gate — any page is reachable in any order, and
+       the position persists so the reviewer can leave and resume (matching the
+       application form's "leave and come back" behaviour).
+
+     Preview vs. PDF: the right pane is a live HTML rendition; a real build mints
+     the signed PDF ONCE at send, from the same template, so they can't diverge.
+
+     State is prototype-local (localStorage), shared with the rest of the spoke:
+       permit-final-${id}            confirmed dates + reviewer note
+       permit-parks-${id}            edited authorized-parks set
+       permit-conditions-${id}       applied conditions (shared with the permit tab)
+       permit-finalize-step-${id}    resume position in the wizard
+       permit-status-${id}           lifecycle status (shared with PermitHeader)
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import { permit } from '../data/permit';
+import { parks } from '../data/parks';
+import { districtKey } from '../data/conditions';
+import { withBase } from '../lib/base';
+
+export const prototype = {
+  title: 'Final letter — finalize wizard',
+  summary:
+    'The reviewer finalizes a permit through a page-by-page wizard (like the ' +
+    'application form) while the final letter regenerates live alongside, then ' +
+    'sends it for signature.',
+  tag: 'Internal tool',
+};
+
+const t = permit.researchTeam;
+const isMultiDistrict = permit.infoTags.some((tag) => tag.label === 'Multi-district');
+const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight);
+const seniorApprover = permit.overview.analysisTeam.find((m) => m.role === 'Permit coordinator');
+
+// The wizard pages — one per rail step / per-page header.
+const pages = [
+  { id: 'details', label: 'Application details', secondaryLabel: 'Confirm what was captured' },
+  { id: 'internal', label: 'Internal review items', secondaryLabel: 'Conditions, dates, signatures' },
+  { id: 'adjust', label: 'Final adjustments', secondaryLabel: 'Notes, then send for signature' },
+];
+
+// Parks a district can ADD: directory units under that district not already on it.
+const districts = permit.studyAreas.districts.map((d) => ({
+  name: d.name,
+  key: districtKey(d.name),
+  coordinator: d.coordinator,
+  parks: d.parks,
+  available: parks
+    .filter((p) => p.district === d.name && !d.parks.includes(p.name))
+    .map((p) => ({ id: p.id, name: p.name })),
+}));
+
+const letterData = {
+  permitId: permit.id,
+  window: permit.activeWindow,
+  districtKeys: districts.map((d) => d.key),
+  districts,
+  pages: pages.map((p) => ({ label: p.label, secondaryLabel: p.secondaryLabel })),
+  permitUrl: withBase('/permit'),
+  letter: {
+    projectName: permit.name,
+    piName: t.principalInvestigator.name,
+    orgName: t.organization.name,
+    orgAddress: t.organization.address ?? '',
+    analystName: responsibleAnalyst?.name ?? '—',
+    seniorName: seniorApprover?.name ?? '—',
+    isMultiDistrict,
+  },
+};
+---
+
+<BaseLayout title={`Finalize ${permit.id}`}>
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <!-- Identity banner — dark g100 zone, consistent with apply / permit headers. -->
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <cds-breadcrumb no-trailing-slash class="banner__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href={withBase('/permits')}>Permits</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href={withBase('/permit')}>{permit.id}</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">Finalize</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <div class="banner__lead">
+          <h1 class="banner__title t-heading-05">Finalize the permit letter</h1>
+          <div class="banner__id-row">
+            <span class="banner__number t-heading-03">{permit.id}</span>
+            <cds-icon-indicator size="16" kind="pending" label="Finalizing"></cds-icon-indicator>
+          </div>
+        </div>
+
+        <dl class="banner__stats">
+          <div class="stat">
+            <dt class="stat__label t-label-01">Applicant</dt>
+            <dd class="stat__value t-body-01">{t.principalInvestigator.name}</dd>
+          </div>
+          <div class="stat">
+            <dt class="stat__label t-label-01">Requested window</dt>
+            <dd class="stat__value t-body-01">{permit.activeWindow.start} – {permit.activeWindow.end}</dd>
+          </div>
+          <div class="stat">
+            <dt class="stat__label t-label-01">Pages</dt>
+            <dd class="stat__value t-body-01">{pages.length}</dd>
+          </div>
+        </dl>
+      </div>
+    </header>
+
+    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+      <!-- ── Progress track: horizontal, full width above both columns. A vertical
+           rail column would eat the horizontal room the side-by-side letter needs.
+           Steps are a tracker, not a gate — jump freely; position resumes. ────── -->
+      <nav class="wiz-track cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" aria-label="Finalize steps">
+        <cds-progress-indicator id="wiz-progress" space-equally>
+          {pages.map((p) => (
+            <cds-progress-step label={p.label} secondary-label={p.secondaryLabel}></cds-progress-step>
+          ))}
+        </cds-progress-indicator>
+      </nav>
+
+      <!-- ── Current page: only one shown at a time ─────────────────────────── -->
+      <div class="main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-7">
+        <header class="page-head">
+          <p id="page-head-eyebrow" class="page-head__eyebrow t-label-01">Page 1 of {pages.length}</p>
+          <h2 id="page-head-title" class="page-head__title t-heading-04">{pages[0].label}</h2>
+          <p id="page-head-sub" class="page-head__sub t-body-02">{pages[0].secondaryLabel}</p>
+        </header>
+
+        <!-- ① Confirm captured; adjust window + parks. -->
+        <section class="wiz-page" data-step="0">
+          <div class="field-group">
+            <h3 class="field-group__title t-heading-compact-01">Application details</h3>
+            <cds-structured-list condensed>
+              <cds-structured-list-body>
+                <cds-structured-list-row>
+                  <cds-structured-list-cell>Project category</cds-structured-list-cell>
+                  <cds-structured-list-cell>{permit.category}</cds-structured-list-cell>
+                </cds-structured-list-row>
+                <cds-structured-list-row>
+                  <cds-structured-list-cell>Principal investigator</cds-structured-list-cell>
+                  <cds-structured-list-cell>{t.principalInvestigator.name}</cds-structured-list-cell>
+                </cds-structured-list-row>
+                <cds-structured-list-row>
+                  <cds-structured-list-cell>Organization</cds-structured-list-cell>
+                  <cds-structured-list-cell>{t.organization.name}</cds-structured-list-cell>
+                </cds-structured-list-row>
+                <cds-structured-list-row>
+                  <cds-structured-list-cell>Field lead</cds-structured-list-cell>
+                  <cds-structured-list-cell>{t.fieldLead.name}</cds-structured-list-cell>
+                </cds-structured-list-row>
+                <cds-structured-list-row>
+                  <cds-structured-list-cell>Additional participants</cds-structured-list-cell>
+                  <cds-structured-list-cell>{t.participants.length}</cds-structured-list-cell>
+                </cds-structured-list-row>
+              </cds-structured-list-body>
+            </cds-structured-list>
+          </div>
+
+          <div class="field-group">
+            <h3 class="field-group__title t-heading-compact-01">Permit window</h3>
+            <cds-date-picker id="fb-window" date-format="m/d/Y">
+              <cds-date-picker-input kind="from" label-text="Permit start" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+              <cds-date-picker-input kind="to" label-text="Permit end" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+            </cds-date-picker>
+          </div>
+
+          <div class="field-group">
+            <h3 class="field-group__title t-heading-compact-01">Authorized parks</h3>
+            <div id="parks-input"></div>
+          </div>
+        </section>
+
+        <!-- ② The reviewer's own additions. -->
+        <section class="wiz-page" data-step="1" hidden>
+          <div class="field-group">
+            <h3 class="field-group__title t-heading-compact-01">Annual report due</h3>
+            <cds-date-picker id="fb-report" date-format="m/d/Y">
+              <cds-date-picker-input kind="single" label-text="Report due" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+            </cds-date-picker>
+            <p class="field-hint t-label-01">Defaults to one year after the start date. Change it to override.</p>
+          </div>
+
+          <div class="field-group">
+            <h3 class="field-group__title t-heading-compact-01">Special conditions</h3>
+            <p class="field-hint t-label-01">The applied conditions from headquarters and each district. Add from the catalog or remove per permit.</p>
+            <div id="conditions-input"></div>
+          </div>
+
+          <div class="field-group">
+            <h3 class="field-group__title t-heading-compact-01">Signatures</h3>
+            <p class="field-hint t-label-01">Resolved from assigned roles.</p>
+            <cds-structured-list condensed>
+              <cds-structured-list-body>
+                <cds-structured-list-row>
+                  <cds-structured-list-cell>{responsibleAnalyst?.name ?? '—'}</cds-structured-list-cell>
+                  <cds-structured-list-cell>NRD technical reviewer</cds-structured-list-cell>
+                </cds-structured-list-row>
+                {isMultiDistrict && (
+                  <cds-structured-list-row>
+                    <cds-structured-list-cell>{seniorApprover?.name ?? '—'}</cds-structured-list-cell>
+                    <cds-structured-list-cell>Approving authority</cds-structured-list-cell>
+                  </cds-structured-list-row>
+                )}
+              </cds-structured-list-body>
+            </cds-structured-list>
+          </div>
+        </section>
+
+        <!-- ③ The escape hatch — done as a captured FIELD, not PDF surgery. -->
+        <section class="wiz-page" data-step="2" hidden>
+          <cds-inline-notification
+            kind="info" low-contrast hide-close-button
+            title="Read the letter, then send"
+            subtitle="Anything you'd hand-edit on the PDF should be a field. Add a note below if needed, then send for signature."
+          ></cds-inline-notification>
+          <div class="field-group">
+            <h3 class="field-group__title t-heading-compact-01">Reviewer note</h3>
+            <p class="field-hint t-label-01">Optional. Appears on the letter under the conditions. Captured with the permit, so it can't drift from the record.</p>
+            <cds-textarea id="fb-note" label="Note to the applicant" placeholder="e.g. Please pay particular attention to the snowy plover condition when working in coastal areas." rows="4"></cds-textarea>
+          </div>
+        </section>
+
+        <!-- Wizard actions — Back / Cancel on the left, Save and continue (Send on
+             the last page) on the right. Edits persist as you go, like the app form. -->
+        <footer class="wiz-actions">
+          <cds-button id="wiz-back" kind="secondary" hidden>Back</cds-button>
+          <cds-button kind="ghost" href={withBase('/permit')}>Cancel</cds-button>
+          <div class="wiz-actions__spacer"></div>
+          <cds-button id="wiz-next">Save and continue</cds-button>
+        </footer>
+      </div>
+
+      <!-- ── Live letter preview: persistent across pages ──────────────────── -->
+      <aside class="preview cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-9" aria-label="Final letter preview">
+        <p class="preview__label t-label-01">Final letter — updates as you go</p>
+        <article class="sheet cds--white" id="letter" aria-label={`Final permit letter for ${permit.id}`}></article>
+      </aside>
+    </div>
+  </main>
+
+  <cds-modal id="send-modal" size="sm">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Permit {permit.id}</cds-modal-label>
+      <cds-modal-heading>Send this letter for signature?</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <p class="t-body-01">
+        The letter is locked from further edits and routed to the signers. The
+        permit moves to <strong>Out for signature</strong>. You can still record
+        the signed permit from the permit page once it comes back.
+      </p>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Keep editing</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="send-confirm" data-modal-close>Send for signature</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <script type="application/json" id="letter-data" set:html={JSON.stringify(letterData)}></script>
+
+  <script>
+    // ── Finalize wizard controller (prototype-local) ─────────────────────────
+    // One page shown at a time (like the application form), with a persistent live
+    // letter preview. Conditions reuse the shared conditions model so this surface
+    // and the permit's Special conditions tab stay in lock-step.
+    import {
+      loadPermitConditions,
+      savePermitConditions,
+      loadInventory,
+      ownerLabel,
+      newConditionId,
+      type PermitCondition,
+    } from '../data/conditions';
+
+    interface DistrictSeed {
+      name: string; key: string;
+      coordinator: { name: string; email?: string };
+      parks: string[];
+      available: { id: string; name: string }[];
+    }
+    interface LetterData {
+      permitId: string;
+      window: { start: string; end: string; startISO: string; endISO: string };
+      districtKeys: string[];
+      districts: DistrictSeed[];
+      pages: { label: string; secondaryLabel: string }[];
+      permitUrl: string;
+      letter: {
+        projectName: string; piName: string; orgName: string; orgAddress: string;
+        analystName: string; seniorName: string; isMultiDistrict: boolean;
+      };
+    }
+
+    const data: LetterData = JSON.parse(document.getElementById('letter-data')?.textContent || '{}');
+    const { permitId, districts, letter } = data;
+
+    const finalKey = `permit-final-${permitId}`;
+    const parksKey = `permit-parks-${permitId}`;
+    const statusKey = `permit-status-${permitId}`;
+    const stepKey = `permit-finalize-step-${permitId}`;
+
+    // ── Date helpers (browser script → `new Date` is fine; build in local time) ─
+    const parseISO = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+    const fmt = (iso: string) => parseISO(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const plusYear = (iso: string) => { const d = parseISO(iso); return toISO(new Date(d.getFullYear() + 1, d.getMonth(), d.getDate())); };
+
+    // ── State ────────────────────────────────────────────────────────────────
+    const persistedFinal = JSON.parse(localStorage.getItem(finalKey) || '{}');
+    const state = {
+      startISO: (persistedFinal.startISO || data.window.startISO) as string,
+      endISO: (persistedFinal.endISO || data.window.endISO) as string,
+      reportISO: (persistedFinal.reportISO || plusYear(persistedFinal.startISO || data.window.startISO)) as string,
+      reportOverridden: Boolean(persistedFinal.reportISO),
+      parks: { ...Object.fromEntries(districts.map((d) => [d.name, d.parks])), ...JSON.parse(localStorage.getItem(parksKey) || '{}') } as Record<string, string[]>,
+      conditions: loadPermitConditions(permitId, data.districtKeys) as PermitCondition[],
+      note: (persistedFinal.note || '') as string,
+    };
+
+    const $ = (id: string) => document.getElementById(id);
+    const persistParks = () => localStorage.setItem(parksKey, JSON.stringify(state.parks));
+    const persistConditions = () => savePermitConditions(permitId, state.conditions);
+    const persistFinal = () => localStorage.setItem(finalKey, JSON.stringify({
+      ...persistedFinal, startISO: state.startISO, endISO: state.endISO, reportISO: state.reportISO, note: state.note,
+    }));
+
+    const closeIcon =
+      '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M17.4141 16 24 9.4141 22.5859 8 16 14.5859 9.4143 8 8 9.4141 14.5859 16 8 22.5859 9.4143 24 16 17.4141 22.5859 24 24 22.5859 17.4141 16z"/></svg>';
+
+    // ── Parks input ────────────────────────────────────────────────────────────
+    const parksInput = $('parks-input')!;
+    const renderParksInput = () => {
+      parksInput.innerHTML = districts.map((d) => {
+        const current = state.parks[d.name] || [];
+        const options = d.available.filter((a) => !current.includes(a.name));
+        const items = current.map((name) => `
+          <li class="row">
+            <span class="row__label t-body-01">${name}</span>
+            <cds-icon-button kind="ghost" size="sm" align="left" data-remove-park="${encodeURIComponent(name)}" data-district="${encodeURIComponent(d.name)}">
+              ${closeIcon}<span slot="tooltip-content">Remove ${name}</span>
+            </cds-icon-button>
+          </li>`).join('');
+        const adder = options.length
+          ? `<cds-combo-box class="adder" size="sm" data-add-park="${encodeURIComponent(d.name)}" label="" placeholder="Add a park in this district">
+               ${options.map((o) => `<cds-combo-box-item value="${o.name}">${o.name}</cds-combo-box-item>`).join('')}
+             </cds-combo-box>`
+          : `<p class="field-hint t-label-01">All directory parks in this district are listed.</p>`;
+        return `
+          <div class="subgroup">
+            <div class="subgroup__head">
+              <span class="subgroup__name t-heading-compact-01">${d.name}</span>
+              <cds-tag type="gray" size="sm">${current.length}</cds-tag>
+            </div>
+            <ul class="rows">${items || '<li class="row row--empty t-label-01">No parks listed.</li>'}</ul>
+            ${adder}
+          </div>`;
+      }).join('');
+    };
+    parksInput.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest?.('[data-remove-park]') as HTMLElement | null;
+      if (!btn) return;
+      const name = decodeURIComponent(btn.dataset.removePark || '');
+      const district = decodeURIComponent(btn.dataset.district || '');
+      state.parks[district] = (state.parks[district] || []).filter((p) => p !== name);
+      persistParks(); renderParksInput(); renderPreview();
+    });
+    parksInput.addEventListener('cds-combo-box-selected', (e: any) => {
+      const combo = (e.target as HTMLElement).closest?.('[data-add-park]') as HTMLElement | null;
+      const name = e.detail?.item?.getAttribute('value');
+      if (!combo || !name) return;
+      const district = decodeURIComponent(combo.dataset.addPark || '');
+      const list = state.parks[district] || [];
+      if (!list.includes(name)) { state.parks[district] = [...list, name]; persistParks(); }
+      renderParksInput(); renderPreview();
+    });
+
+    // ── Conditions input ────────────────────────────────────────────────────────
+    const conditionsInput = $('conditions-input')!;
+    const owners = ['hq', ...data.districtKeys];
+    const renderConditionsInput = () => {
+      conditionsInput.innerHTML = owners.map((owner) => {
+        const applied = state.conditions.filter((c) => c.owner === owner);
+        const appliedInvIds = new Set(applied.map((c) => c.inventoryId).filter(Boolean));
+        const catalogOptions = loadInventory(owner).filter((i) => !appliedInvIds.has(i.id));
+        const items = applied.map((c) => `
+          <li class="row">
+            <span class="row__label t-body-01">${c.title}</span>
+            <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond="${c.id}">
+              ${closeIcon}<span slot="tooltip-content">Remove ${c.title}</span>
+            </cds-icon-button>
+          </li>`).join('');
+        const adder = catalogOptions.length
+          ? `<cds-combo-box class="adder" size="sm" data-add-cond="${owner}" label="" placeholder="Add a condition from the catalog">
+               ${catalogOptions.map((o) => `<cds-combo-box-item value="${o.id}">${o.title}</cds-combo-box-item>`).join('')}
+             </cds-combo-box>`
+          : `<p class="field-hint t-label-01">All catalog conditions are applied.</p>`;
+        return `
+          <div class="subgroup">
+            <div class="subgroup__head">
+              <span class="subgroup__name t-heading-compact-01">${ownerLabel(owner)}</span>
+              <cds-tag type="gray" size="sm">${applied.length}</cds-tag>
+            </div>
+            <ul class="rows">${items || '<li class="row row--empty t-label-01">No conditions applied.</li>'}</ul>
+            ${adder}
+          </div>`;
+      }).join('');
+    };
+    conditionsInput.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest?.('[data-remove-cond]') as HTMLElement | null;
+      if (!btn) return;
+      state.conditions = state.conditions.filter((c) => c.id !== btn.dataset.removeCond);
+      persistConditions(); renderConditionsInput(); renderPreview();
+    });
+    conditionsInput.addEventListener('cds-combo-box-selected', (e: any) => {
+      const combo = (e.target as HTMLElement).closest?.('[data-add-cond]') as HTMLElement | null;
+      const invId = e.detail?.item?.getAttribute('value');
+      if (!combo || !invId) return;
+      const owner = combo.dataset.addCond!;
+      const item = loadInventory(owner).find((i) => i.id === invId);
+      if (item && !state.conditions.some((c) => c.inventoryId === invId)) {
+        state.conditions = [...state.conditions, {
+          id: newConditionId(owner === 'hq' ? 'hq' : owner),
+          owner, source: 'inventory', inventoryId: item.id,
+          title: item.title, body: item.body, addedBy: 'Reviewer', addedAt: 'Finalizing',
+        }];
+        persistConditions();
+      }
+      renderConditionsInput(); renderPreview();
+    });
+
+    // ── Date pickers ────────────────────────────────────────────────────────────
+    const windowPicker = $('fb-window') as any;
+    const reportPicker = $('fb-report') as any;
+    if (windowPicker) windowPicker.value = `${state.startISO}/${state.endISO}`;
+    if (reportPicker) reportPicker.value = state.reportISO;
+    windowPicker?.addEventListener('cds-date-picker-changed', (e: any) => {
+      const dates: Date[] = e.detail?.selectedDates || [];
+      if (dates[0]) state.startISO = toISO(dates[0]);
+      if (dates[1]) state.endISO = toISO(dates[1]);
+      if (!state.reportOverridden) { state.reportISO = plusYear(state.startISO); if (reportPicker) reportPicker.value = state.reportISO; }
+      persistFinal(); renderPreview();
+    });
+    reportPicker?.addEventListener('cds-date-picker-changed', (e: any) => {
+      const d: Date | undefined = e.detail?.selectedDates?.[0];
+      if (d) { state.reportISO = toISO(d); state.reportOverridden = true; persistFinal(); renderPreview(); }
+    });
+
+    // ── Reviewer note (the escape hatch, as a captured field) ───────────────────
+    const noteEl = $('fb-note') as any;
+    if (noteEl) noteEl.value = state.note;
+    noteEl?.addEventListener('input', () => { state.note = noteEl.value; persistFinal(); renderPreview(); });
+
+    // ── Live letter preview ─────────────────────────────────────────────────────
+    const letterEl = $('letter')!;
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    // The report-due FIELD drives the annual-report condition text — no drift.
+    const conditionBody = (c: PermitCondition) =>
+      c.inventoryId === 'hq-annual'
+        ? `<p>An annual report is due by <strong>${fmt(state.reportISO)}</strong>.</p>`
+        : c.body;
+
+    const renderPreview = () => {
+      const conditionGroups = owners.map((owner) => {
+        const applied = state.conditions.filter((c) => c.owner === owner);
+        if (!applied.length) return '';
+        return `<div class="ltr__cond-group"><p class="ltr__cond-owner t-label-01">${ownerLabel(owner)}</p><ol class="ltr__conditions">${applied.map((c) => `<li>${conditionBody(c)}</li>`).join('')}</ol></div>`;
+      }).join('');
+
+      const parkBlocks = districts.map((d) => {
+        const current = state.parks[d.name] || [];
+        return `<div class="ltr__district"><p class="ltr__district-name t-heading-compact-01">${d.name}</p><p class="ltr__coord t-label-01">Research coordinator: ${d.coordinator.name}</p><ul class="ltr__parks">${current.map((p) => `<li class="t-body-01">${p}</li>`).join('') || '<li class="t-body-01">—</li>'}</ul></div>`;
+      }).join('');
+
+      const noteSection = state.note.trim()
+        ? `<section class="ltr__section"><h2 class="ltr__h t-heading-compact-01">Note</h2><p class="ltr__body t-body-01">${state.note.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p></section>`
+        : '';
+
+      const signatures = `
+        <div class="ltr__sig-grid">
+          <div class="ltr__sig"><div class="ltr__sig-line"></div><p class="t-body-01">${letter.analystName}</p><p class="t-label-01">NRD technical reviewer</p></div>
+          ${letter.isMultiDistrict ? `<div class="ltr__sig"><div class="ltr__sig-line"></div><p class="t-body-01">${letter.seniorName}</p><p class="t-label-01">Natural Resources Division — approving authority</p></div>` : ''}
+        </div>`;
+
+      letterEl.innerHTML = `
+        <header class="ltr__head">
+          <p class="ltr__org t-heading-compact-02">California State Parks</p>
+          <p class="ltr__unit t-body-01">Natural Resources Division</p>
+        </header>
+        <p class="ltr__date t-body-01">${today}</p>
+        <address class="ltr__to t-body-01">${letter.piName}<br>${letter.orgName}<br>${letter.orgAddress}</address>
+        <p class="ltr__re t-body-01"><strong>Re:</strong> Scientific Research &amp; Collection Permit ${permitId} — ${letter.projectName}</p>
+        <p class="ltr__body t-body-01">Dear ${letter.piName}, the Department of Parks and Recreation authorizes the research and collection described in your application within the parks listed below, subject to the conditions of this permit. This permit is valid from <strong>${fmt(state.startISO)}</strong> through <strong>${fmt(state.endISO)}</strong>.</p>
+        <section class="ltr__section"><h2 class="ltr__h t-heading-compact-01">Authorized parks</h2>${parkBlocks}</section>
+        <section class="ltr__section"><h2 class="ltr__h t-heading-compact-01">Special conditions</h2>${conditionGroups || '<p class="t-body-01">No conditions applied.</p>'}</section>
+        ${noteSection}
+        <section class="ltr__section"><h2 class="ltr__h t-heading-compact-01">Signatures</h2>${signatures}</section>`;
+    };
+
+    // ── Send for signature ──────────────────────────────────────────────────────
+    const sendModal = $('send-modal') as any;
+    $('send-confirm')?.addEventListener('click', () => {
+      persistFinal(); persistParks(); persistConditions();
+      localStorage.setItem(statusKey, 'Out for signature');
+      window.location.href = data.permitUrl;
+    });
+
+    // ── Wizard paging (one page at a time; rail = tracker, not a gate) ───────────
+    const PAGES = data.pages.length;
+    const progress = $('wiz-progress') as any;
+    const panels = [...document.querySelectorAll<HTMLElement>('.wiz-page')];
+    const backBtn = $('wiz-back') as any;
+    const nextBtn = $('wiz-next') as any;
+    const headEyebrow = $('page-head-eyebrow');
+    const headTitle = $('page-head-title');
+    const headSub = $('page-head-sub');
+    let current = Math.min(PAGES - 1, Math.max(0, parseInt(localStorage.getItem(stepKey) || '0', 10) || 0));
+
+    const render = (scroll = false) => {
+      panels.forEach((p) => (p.hidden = Number(p.dataset.step) !== current));
+      // The indicator owns step states from currentIndex (before=complete, at=current…).
+      if (progress) progress.currentIndex = current;
+      const page = data.pages[current];
+      if (headEyebrow) headEyebrow.textContent = `Page ${current + 1} of ${PAGES}`;
+      if (headTitle) headTitle.textContent = page.label;
+      if (headSub) headSub.textContent = page.secondaryLabel;
+      if (backBtn) backBtn.hidden = current === 0;
+      const last = current === PAGES - 1;
+      if (nextBtn) nextBtn.textContent = last ? 'Send for signature' : 'Save and continue';
+      if (scroll) document.querySelector('.wiz-page:not([hidden])')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    };
+    const goTo = (i: number) => {
+      current = Math.min(PAGES - 1, Math.max(0, i));
+      localStorage.setItem(stepKey, String(current));
+      render(true);
+    };
+    // Setting onChange makes Carbon's steps interactive (clickable + accessible).
+    if (progress) progress.onChange = (e: CustomEvent<{ index: number }>) => goTo(e.detail.index);
+    backBtn?.addEventListener('click', () => goTo(current - 1));
+    nextBtn?.addEventListener('click', () => {
+      if (current === PAGES - 1) { sendModal.open = true; return; }
+      goTo(current + 1);
+    });
+
+    renderParksInput();
+    renderConditionsInput();
+    renderPreview();
+    render(false);
+  </script>
+
+  <style>
+    .page { padding-block: 0 var(--cds-spacing-10, 4rem); }
+
+    /* Identity banner — same construction as apply / PermitHeader. */
+    .banner { background: var(--cds-background, #161616); margin-inline: calc(50% - 50vw); padding-block: var(--cds-spacing-07, 2rem); }
+    .banner__inner { max-inline-size: 99rem; margin-inline: auto; padding-inline: var(--cds-grid-margin, 1.5rem); }
+    .banner__crumb { display: block; margin-bottom: var(--cds-spacing-05, 1rem); }
+    .banner__lead { min-width: 0; }
+    .banner__title { margin: 0; max-width: 46rem; }
+    .banner__id-row { display: flex; align-items: center; gap: var(--cds-spacing-04, 0.75rem); margin-top: var(--cds-spacing-03, 0.5rem); }
+    .banner__number { color: var(--cds-text-primary, #f4f4f4); }
+    .banner__stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--cds-spacing-06, 1.5rem); margin: var(--cds-spacing-06, 1.5rem) 0 0; padding-top: var(--cds-spacing-06, 1.5rem); border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .stat { min-width: 0; }
+    .stat__label { margin: 0; color: var(--cds-text-secondary, #525252); }
+    .stat__value { margin: 0.25rem 0 0; color: var(--cds-text-primary, #161616); }
+
+    .body { margin-top: var(--cds-spacing-07, 2rem); }
+
+    /* Horizontal progress track above the two columns. */
+    .wiz-track { display: block; margin-bottom: var(--cds-spacing-05, 1rem); }
+    .main { min-width: 0; }
+
+    /* One page shown at a time — the HTML5 reset's section{display:block} outranks
+       the UA [hidden] rule, so restore it (same gotcha as apply.astro). */
+    .wiz-page[hidden] { display: none; }
+    .wiz-page { display: grid; gap: var(--cds-spacing-07, 2rem); align-content: start; }
+
+    /* Per-page header — names the current page + its place in the sequence. */
+    .page-head { max-width: 46rem; margin-bottom: var(--cds-spacing-07, 2rem); padding-bottom: var(--cds-spacing-05, 1rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .page-head__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+    .page-head__title { margin: 0; }
+    .page-head__sub { margin: 0.25rem 0 0; color: var(--cds-text-secondary, #525252); }
+
+    .field-group { display: grid; gap: var(--cds-spacing-04, 0.75rem); }
+    .field-group__title { margin: 0; padding-bottom: var(--cds-spacing-02, 0.25rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .field-hint { margin: 0; color: var(--cds-text-secondary, #525252); }
+
+    /* Input sub-groups (a district's parks, an owner's conditions). */
+    .subgroup { display: grid; gap: var(--cds-spacing-03, 0.5rem); margin-bottom: var(--cds-spacing-05, 1rem); }
+    .subgroup__head { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); }
+    .subgroup__name { margin: 0; }
+    .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.125rem; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem); padding: var(--cds-spacing-02, 0.25rem) 0; border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0); }
+    .row__label { min-width: 0; }
+    .row--empty { color: var(--cds-text-secondary, #525252); border-bottom: 0; }
+    .adder { max-inline-size: 100%; }
+
+    /* Wizard actions. */
+    .wiz-actions { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); margin-top: var(--cds-spacing-08, 2.5rem); padding-top: var(--cds-spacing-05, 1rem); border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .wiz-actions__spacer { flex: 1 1 auto; }
+    #wiz-back[hidden] { display: none; }
+
+    /* ── Live letter preview ── a white document surface, sticky beside the pages. */
+    .preview__label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
+    @media (min-width: 66.01rem) { .preview { position: sticky; top: 4rem; align-self: start; } }
+    .sheet {
+      background: var(--cds-background, #ffffff);
+      border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+      padding: var(--cds-spacing-07, 2rem);
+      color: var(--cds-text-primary, #161616);
+      max-height: calc(100vh - 6rem);
+      overflow-y: auto;
+    }
+    @media (max-width: 66rem) { .sheet { max-height: none; } }
+
+    .sheet :global(.ltr__head) { border-bottom: 2px solid var(--cds-border-strong-01, #8d8d8d); padding-bottom: var(--cds-spacing-04, 0.75rem); margin-bottom: var(--cds-spacing-06, 1.5rem); }
+    .sheet :global(.ltr__org) { margin: 0; }
+    .sheet :global(.ltr__unit) { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); }
+    .sheet :global(.ltr__date) { margin: 0 0 var(--cds-spacing-05, 1rem); }
+    .sheet :global(.ltr__to) { font-style: normal; line-height: 1.5; margin: 0 0 var(--cds-spacing-05, 1rem); }
+    .sheet :global(.ltr__re) { margin: 0 0 var(--cds-spacing-05, 1rem); }
+    .sheet :global(.ltr__body) { line-height: 1.6; margin: 0 0 var(--cds-spacing-06, 1.5rem); }
+    .sheet :global(.ltr__section) { margin-bottom: var(--cds-spacing-06, 1.5rem); }
+    .sheet :global(.ltr__h) { margin: 0 0 var(--cds-spacing-04, 0.75rem); padding-bottom: var(--cds-spacing-02, 0.25rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .sheet :global(.ltr__district) { margin-bottom: var(--cds-spacing-04, 0.75rem); }
+    .sheet :global(.ltr__district-name) { margin: 0; }
+    .sheet :global(.ltr__coord) { margin: 0.125rem 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+    .sheet :global(.ltr__parks) { margin: 0; padding-left: var(--cds-spacing-06, 1.5rem); }
+    .sheet :global(.ltr__cond-group) { margin-bottom: var(--cds-spacing-04, 0.75rem); }
+    .sheet :global(.ltr__cond-owner) { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+    .sheet :global(.ltr__conditions) { margin: 0; padding-left: var(--cds-spacing-06, 1.5rem); display: grid; gap: var(--cds-spacing-02, 0.25rem); }
+    .sheet :global(.ltr__conditions p) { margin: 0; }
+    .sheet :global(.ltr__sig-grid) { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--cds-spacing-06, 1.5rem); margin-top: var(--cds-spacing-05, 1rem); }
+    .sheet :global(.ltr__sig-line) { height: 2rem; border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d); margin-bottom: var(--cds-spacing-03, 0.5rem); }
+    .sheet :global(.ltr__sig p) { margin: 0; }
+    .sheet :global(.ltr__sig p.t-label-01) { color: var(--cds-text-secondary, #525252); }
+  </style>
+</BaseLayout>
