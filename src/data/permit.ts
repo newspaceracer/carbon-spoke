@@ -64,7 +64,7 @@ export const permit = {
   id: '26-635-017',
   name: 'Diversity of coralline algae in northern California and their reproductive systems',
   // State, not a category — rendered as cds-icon-indicator (icon + label).
-  status: { label: 'Under Review', kind: 'in-progress' },
+  status: { label: 'Under review', kind: 'in-progress' },
   category: 'Marine Aquatic Resources',
   // Dates the applicant REQUESTED. Display strings drive the at-a-glance stat;
   // the ISO pair prefills the approval modal's confirmation date-range picker.

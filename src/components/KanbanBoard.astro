@@ -1,0 +1,461 @@
+---
+// My-permits KANBAN board — a status-lane view of the permits the reviewer holds
+// a role on. Each column is one workflow state; each card is a permit she can
+// move between states to triage her queue.
+//
+// Carbon-first note: Carbon ships no board / kanban / drag-and-drop primitive
+// (checked the catalog — see the carbon-checked note on the board element). So
+// everything VISIBLE is composed from stock cds-*: cards are cds-tile, the state
+// chips reuse the register's status glyph+label affordance (icon+text, never
+// colour alone — WCAG 1.4.1), the per-card "Move to" control is a cds-overflow-
+// menu, and the reset is a cds-button. The ONLY bespoke layer is the thin
+// drag-and-drop wiring; the overflow menu is the equal, keyboard-accessible path
+// to the same move, so the board never depends on a drag a keyboard can't do.
+import { withBase } from '../lib/base';
+import type { PermitRow } from '../data/permits';
+
+interface Props {
+  /** The permits to place on the board (the reviewer's "mine" set). */
+  permits: PermitRow[];
+}
+const { permits } = Astro.props;
+
+// Lane order = the permit lifecycle, left→right. `kind` matches each row's
+// statusKind; `type` is the Carbon tag colour the register already uses for that
+// state, so the two screens read identically. Glyph paths are the same Carbon
+// icons the grid's status cell renders (carbon-ag-grid.ts) — reused here so a
+// state's mark is consistent everywhere. `colorToken` colours the lane glyph via
+// a real Carbon tag-colour token (no hard-coded hex).
+const lanes = [
+  { kind: 'pending',     label: 'Awaiting Submittal',   type: 'gray',      colorToken: '--cds-tag-color-gray' },
+  { kind: 'in-progress', label: 'Under Review',         type: 'blue',      colorToken: '--cds-tag-color-blue' },
+  { kind: 'amendment',   label: 'Amendment Requested',  type: 'purple',    colorToken: '--cds-tag-color-purple' },
+  { kind: 'succeeded',   label: 'Approved',             type: 'green',      colorToken: '--cds-tag-color-green' },
+  { kind: 'failed',      label: 'Rejected',             type: 'red',        colorToken: '--cds-tag-color-red' },
+  { kind: 'expired',     label: 'Expired',              type: 'cool-gray',  colorToken: '--cds-tag-color-cool-gray' },
+] as const;
+
+// Status glyphs — icon + colour, matching the register (carbon-ag-grid.ts). Icon
+// paired with the lane's text label ⇒ state never reads by colour alone.
+const glyphs: Record<string, { viewBox: string; path: string }> = {
+  succeeded:     { viewBox: '0 0 16 16', path: 'M8,1C4.1,1,1,4.1,1,8c0,3.9,3.1,7,7,7s7-3.1,7-7C15,4.1,11.9,1,8,1z M7,11L4.3,8.3l0.9-0.8L7,9.3l4-3.9l0.9,0.8L7,11z' },
+  'in-progress': { viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14.0158,14.0158,0,0,0,16,2Zm0,26A12,12,0,0,1,16,4V16l8.4812,8.4814A11.9625,11.9625,0,0,1,16,28Z' },
+  pending:       { viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14,14,0,0,0,16,2ZM8,18a2,2,0,1,1,2-2A2,2,0,0,1,8,18Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,16,18Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,24,18Z' },
+  amendment:     { viewBox: '0 0 32 32', path: 'M2 26h28v2H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4l15-15zM20.4 4L24 7.6l-3 3L17.4 7l3-3zM6 22v-3.6l10-10 3.6 3.6-10 10H6z' },
+  failed:        { viewBox: '0 0 16 16', path: 'M8,1C4.1,1,1,4.1,1,8s3.1,7,7,7s7-3.1,7-7S11.9,1,8,1z M10.7,11.5L4.5,5.3l0.8-0.8l6.2,6.2L10.7,11.5z' },
+  expired:       { viewBox: '0 0 32 32', path: 'M16,30A14,14,0,1,1,30,16,14,14,0,0,1,16,30ZM16,4A12,12,0,1,0,28,16,12,12,0,0,0,16,4Z M20.5859,23,15,17.4141V8h2v8.5859l5,5.0009Z' },
+};
+
+const fmtDate = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+// The one date most relevant to each state, so a card carries a useful "when".
+function cardDate(p: PermitRow): string {
+  switch (p.statusKind) {
+    case 'succeeded':  return `Permit ends ${fmtDate(p.permitEnd)}`;
+    case 'expired':    return `Expired ${fmtDate(p.permitEnd)}`;
+    case 'amendment':  return `Permit ends ${fmtDate(p.permitEnd)}`;
+    default:           return `Submitted ${fmtDate(p.submitted)}`;
+  }
+}
+
+const byKind = (kind: string) => permits.filter((p) => p.statusKind === kind);
+---
+
+<!-- carbon-checked: no cds-* component provides a kanban / board / drag-and-drop
+     column layout (walked node_modules/@carbon/web-components/es/components and
+     carbondesignsystem.com/components/overview). The board grid + drag wiring is
+     the bespoke layer; every control inside it is stock cds-*. -->
+<section class="kanban" aria-label="My permits by status">
+  <div class="kanban__bar">
+    <p class="kanban__count t-body-01" id="kb-count" aria-live="polite"></p>
+    <cds-button id="kb-reset" kind="ghost" size="md">
+      Reset board
+      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
+        <path d="M18,28A12,12,0,1,0,6,16v6.2L2.4,18.6,1,20l6,6,6-6-1.4-1.4L8,22.2V16H8A10,10,0,1,1,18,26Z" />
+      </svg>
+    </cds-button>
+  </div>
+
+  <div class="kanban__board" id="kb-board">
+    {lanes.map((lane) => {
+      const cards = byKind(lane.kind);
+      const g = glyphs[lane.kind];
+      return (
+        <div class="lane" data-kind={lane.kind}>
+          <header class="lane__head">
+            <span class="lane__glyph" style={`color:var(${lane.colorToken})`}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox={g.viewBox} width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d={g.path} />
+              </svg>
+            </span>
+            <h2 class="lane__title t-heading-compact-01">{lane.label}</h2>
+            <span class="lane__count t-label-01" data-count>{cards.length}</span>
+          </header>
+
+          <ul class="lane__cards" data-kind={lane.kind} aria-label={`${lane.label} permits`}>
+            {cards.map((p) => (
+              <li
+                class="kcard"
+                draggable="true"
+                data-permit-id={p.permitId}
+                data-kind={p.statusKind}
+                data-seed-kind={p.statusKind}
+              >
+                <div class="kcard__top">
+                  <span class="kcard__grip" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor">
+                      <path d="M10 6H14V10H10z" /><path d="M18 6H22V10H18z" />
+                      <path d="M10 14H14V18H10z" /><path d="M18 14H22V18H18z" />
+                      <path d="M10 22H14V26H10z" /><path d="M18 22H22V26H18z" />
+                    </svg>
+                  </span>
+                  <a class="kcard__id" href={withBase('/permit')}>{p.permitId}</a>
+                  <cds-overflow-menu class="kcard__menu" size="sm" menu-label={`Move ${p.permitId} to another status`}>
+                    <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
+                      <circle cx="16" cy="8" r="2" /><circle cx="16" cy="16" r="2" /><circle cx="16" cy="24" r="2" />
+                    </svg>
+                    <span slot="tooltip-content">Move to…</span>
+                    <cds-overflow-menu-body>
+                      {lanes.map((target) => (
+                        <cds-overflow-menu-item
+                          data-move-to={target.kind}
+                          disabled={target.kind === p.statusKind ? true : undefined}
+                        >
+                          {target.label}
+                        </cds-overflow-menu-item>
+                      ))}
+                    </cds-overflow-menu-body>
+                  </cds-overflow-menu>
+                </div>
+
+                <p class="kcard__title t-body-01">{p.title}</p>
+
+                <dl class="kcard__meta t-label-01">
+                  <div><dt>PI</dt><dd>{p.principalInvestigator}</dd></div>
+                  <div><dt>Park</dt><dd>{p.park}</dd></div>
+                </dl>
+
+                <footer class="kcard__foot">
+                  <cds-tag type="teal" size="sm">{p.role}</cds-tag>
+                  <span class="kcard__date t-label-01" data-date>{cardDate(p)}</span>
+                </footer>
+              </li>
+            ))}
+          </ul>
+
+          <p class="lane__empty t-label-01" data-empty hidden>Nothing here yet.</p>
+        </div>
+      );
+    })}
+  </div>
+</section>
+
+<script>
+  // ── Kanban move + persistence (prototype-local) ─────────────────────────────
+  // Two ways to move a card, both landing in the same moveCard(): drag-and-drop
+  // (the bespoke layer) and the per-card cds-overflow-menu (keyboard-accessible).
+  // A static prototype has no backend, so a move "saves" to localStorage: only
+  // the cards whose lane differs from their seed are stored (permitId → kind), so
+  // Reset is a real clear.
+  const STORE_KEY = 'carbon-spoke:my-permits-kanban';
+  const board = document.getElementById('kb-board');
+  const countEl = document.getElementById('kb-count');
+  const resetBtn = document.getElementById('kb-reset');
+  if (board && countEl) {
+    const lanes = new Map(
+      Array.from(board.querySelectorAll<HTMLElement>('.lane')).map((l) => [l.dataset.kind!, l]),
+    );
+    const listFor = (kind: string) =>
+      lanes.get(kind)?.querySelector<HTMLElement>('.lane__cards') ?? null;
+
+    const load = (): Record<string, string> => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch {
+        return {};
+      }
+    };
+    let overrides = load();
+    const save = () => localStorage.setItem(STORE_KEY, JSON.stringify(overrides));
+
+    // Refresh a card's overflow-menu so its CURRENT lane is disabled (can't move
+    // a card to where it already is).
+    const syncMenu = (card: HTMLElement) => {
+      card.querySelectorAll<HTMLElement>('[data-move-to]').forEach((item) => {
+        const isHere = item.dataset.moveTo === card.dataset.kind;
+        if (isHere) item.setAttribute('disabled', '');
+        else item.removeAttribute('disabled');
+      });
+    };
+
+    const refreshLane = (kind: string) => {
+      const lane = lanes.get(kind);
+      const list = listFor(kind);
+      if (!lane || !list) return;
+      const n = list.querySelectorAll('.kcard').length;
+      lane.querySelector<HTMLElement>('[data-count]')!.textContent = String(n);
+      lane.querySelector<HTMLElement>('[data-empty]')!.hidden = n > 0;
+    };
+
+    const total = board.querySelectorAll('.kcard').length;
+    const refreshCount = () => {
+      countEl.textContent = total === 1 ? '1 permit' : `${total} permits`;
+    };
+
+    const moveCard = (card: HTMLElement, kind: string) => {
+      const from = card.dataset.kind!;
+      if (from === kind) return;
+      const list = listFor(kind);
+      if (!list) return;
+      list.appendChild(card);
+      card.dataset.kind = kind;
+      // Store only real deviations from the seeded lane.
+      if (kind === card.dataset.seedKind) delete overrides[card.dataset.permitId!];
+      else overrides[card.dataset.permitId!] = kind;
+      save();
+      syncMenu(card);
+      refreshLane(from);
+      refreshLane(kind);
+    };
+
+    // Wire a single card's menu + drag handlers.
+    const wireCard = (card: HTMLElement) => {
+      card.querySelectorAll<HTMLElement>('[data-move-to]').forEach((item) => {
+        item.addEventListener('click', () => {
+          if (!item.hasAttribute('disabled')) moveCard(card, item.dataset.moveTo!);
+        });
+      });
+      card.addEventListener('dragstart', (e) => {
+        card.classList.add('kcard--dragging');
+        e.dataTransfer?.setData('text/plain', card.dataset.permitId!);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('kcard--dragging');
+        board.querySelectorAll('.lane--over').forEach((l) => l.classList.remove('lane--over'));
+      });
+      syncMenu(card);
+    };
+
+    // Apply any stored moves over the server-seeded placement, then wire.
+    board.querySelectorAll<HTMLElement>('.kcard').forEach((card) => {
+      const stored = overrides[card.dataset.permitId!];
+      if (stored && stored !== card.dataset.kind) {
+        const list = listFor(stored);
+        if (list) {
+          list.appendChild(card);
+          card.dataset.kind = stored;
+        }
+      }
+      wireCard(card);
+    });
+
+    // Lane drop zones.
+    lanes.forEach((lane, kind) => {
+      lane.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        lane.classList.add('lane--over');
+      });
+      lane.addEventListener('dragleave', (e) => {
+        if (!lane.contains(e.relatedTarget as Node)) lane.classList.remove('lane--over');
+      });
+      lane.addEventListener('drop', (e) => {
+        e.preventDefault();
+        lane.classList.remove('lane--over');
+        const id = e.dataTransfer?.getData('text/plain');
+        const card = id && board.querySelector<HTMLElement>(`.kcard[data-permit-id="${id}"]`);
+        if (card) moveCard(card, kind);
+      });
+    });
+
+    resetBtn?.addEventListener('click', () => {
+      board.querySelectorAll<HTMLElement>('.kcard').forEach((card) => {
+        moveCard(card, card.dataset.seedKind!);
+      });
+      overrides = {};
+      localStorage.removeItem(STORE_KEY);
+    });
+
+    lanes.forEach((_, kind) => refreshLane(kind));
+    refreshCount();
+  }
+</script>
+
+<style>
+  /* Section LAYOUT only — every control is a cds-* component styled by tokens. */
+  .kanban {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .kanban__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .kanban__count {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* The board: six lanes in a row, scrolling horizontally when they don't fit
+     rather than letting the page body scroll sideways. */
+  .kanban__board {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(17rem, 1fr);
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+
+  .lane {
+    display: flex;
+    flex-direction: column;
+    background: var(--cds-layer-01, #f4f4f4);
+    border-top: 2px solid var(--cds-border-subtle-01, #c6c6c6);
+    min-height: 12rem;
+  }
+  .lane__head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+  }
+  .lane__glyph {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+  .lane__title {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .lane__count {
+    flex: 0 0 auto;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.375rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--cds-layer-accent-01, #e0e0e0);
+    color: var(--cds-text-primary, #161616);
+  }
+  .lane__cards {
+    list-style: none;
+    margin: 0;
+    padding: 0 0.75rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    flex: 1 1 auto;
+  }
+  .lane__empty {
+    margin: 0;
+    padding: 0 1rem 1rem;
+    color: var(--cds-text-placeholder, #a8a8a8);
+  }
+  /* Drop-target affordance while dragging a card over a lane. */
+  .lane--over {
+    outline: 2px dashed var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+    background: var(--cds-layer-selected-01, #e0e0e0);
+  }
+
+  /* Card = cds-tile look via tokens; the tile's own component is fine too, but a
+     draggable <li> keeps the drag semantics on the list item. */
+  .kcard {
+    background: var(--cds-layer-02, #ffffff);
+    border: 1px solid var(--cds-border-subtle-02, #e0e0e0);
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    cursor: grab;
+  }
+  .kcard:focus-within {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+  .kcard--dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+  }
+  .kcard__top {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .kcard__grip {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: var(--cds-icon-secondary, #525252);
+  }
+  .kcard__id {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 500;
+    color: var(--cds-link-primary, #0f62fe);
+    text-decoration: none;
+  }
+  .kcard__id:hover {
+    text-decoration: underline;
+  }
+  .kcard__menu {
+    flex: 0 0 auto;
+  }
+  .kcard__title {
+    margin: 0;
+    color: var(--cds-text-primary, #161616);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .kcard__meta {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .kcard__meta div {
+    display: flex;
+    gap: 0.375rem;
+  }
+  .kcard__meta dt {
+    flex: 0 0 auto;
+    color: var(--cds-text-placeholder, #a8a8a8);
+  }
+  .kcard__meta dd {
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Stacked: the role tag can be long ("Supporting analyst") and shouldn't
+     compete with the date for one narrow line. */
+  .kcard__foot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.375rem;
+    margin-top: 0.125rem;
+  }
+  .kcard__date {
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kcard--dragging {
+      opacity: 0.6;
+    }
+  }
+</style>

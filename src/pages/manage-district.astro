@@ -84,8 +84,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             </div>
           </div>
           <p class="scope__note t-label-01" id="scope-note">
-            A district lead is scoped to their own district — the "mini system admin"
-            for its information, members, and contacts.
+            A district lead is scoped to their own district — its mini system admin
+            for information, members, and contacts.
           </p>
           <cds-inline-notification
             id="switcher-note"
@@ -94,7 +94,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             low-contrast
             hide-close-button
             title="Prototype scope"
-            subtitle="Only North Coast Redwoods District is populated in this prototype; picking another district would scope this same console to it."
+            subtitle="This prototype populates only North Coast Redwoods District. Picking another would scope this same console to it."
           ></cds-inline-notification>
         </cds-tile>
 
@@ -633,7 +633,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     if (scopeNote) {
       scopeNote.textContent = hq
         ? 'HQ system admins manage every district. Pick a district to administer it.'
-        : 'A district lead is scoped to their own district — the "mini system admin" for its information, members, and contacts.';
+        : 'A district lead is scoped to their own district — its mini system admin for information, members, and contacts.';
     }
     if (!hq && switcherNote) switcherNote.hidden = true;
   };

@@ -10,6 +10,7 @@
 // here. Keep it alphabetical. Full catalog:
 //   ls node_modules/@carbon/web-components/es/components/
 // ---------------------------------------------------------------------------
+import '@carbon/web-components/es/components/accordion/index.js';
 import '@carbon/web-components/es/components/breadcrumb/index.js';
 import '@carbon/web-components/es/components/button/index.js';
 import '@carbon/web-components/es/components/checkbox/index.js';

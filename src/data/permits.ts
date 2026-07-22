@@ -138,13 +138,18 @@ const districts = Array.from(
 
 // Status is a STATE, not a category — rendered as an icon+label tag so it never
 // reads by colour alone (WCAG 1.4.1 / house status rule). `kind` selects the glyph.
+// `kind` MUST be a valid cds-icon-indicator kind — the detail page renders it
+// directly (an invalid kind draws no glyph). The grid maps the same key to its own
+// icon in carbon-ag-grid.ts. Keep the two in sync.
 const statuses = [
-  { label: 'Under Review', kind: 'in-progress', w: 6 },
-  { label: 'Approved', kind: 'succeeded', w: 5 },
-  { label: 'Awaiting Submittal', kind: 'pending', w: 3 },
-  { label: 'Amendment Requested', kind: 'amendment', w: 2 },
+  { label: 'Active', kind: 'succeeded', w: 7 },
+  { label: 'Under review', kind: 'in-progress', w: 6 },
+  { label: 'Expired', kind: 'unknown', w: 4 },
+  { label: 'Draft', kind: 'not-started', w: 3 },
+  { label: 'Out for signature', kind: 'pending', w: 2 },
+  { label: 'Returned to submitter', kind: 'caution-minor', w: 2 },
   { label: 'Rejected', kind: 'failed', w: 2 },
-  { label: 'Expired', kind: 'expired', w: 3 },
+  { label: 'Withdrawn', kind: 'undefined', w: 1 },
 ] as const;
 // Expand by weight so pick() draws the intended distribution.
 const statusPool = statuses.flatMap((s) => Array<(typeof statuses)[number]>(s.w).fill(s));
@@ -226,11 +231,11 @@ export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
   // Annual report is due a month after the permit term ends.
   const annualReportDue = iso(startYear + 1, 1 + (month % 12), day);
 
-  // Paperwork state follows status: an active/expired permit has a signed doc;
-  // some of those have this year's annual report in.
-  const active = status.kind === 'succeeded' || status.kind === 'expired';
-  const signedPermit = active ? 'Yes' : 'No';
-  const reportIn = active && rng() < 0.6;
+  // Paperwork state follows status: an issued permit (Active or Expired) has a
+  // signed doc on file; some of those have this year's annual report in.
+  const issued = status.label === 'Active' || status.label === 'Expired';
+  const signedPermit = issued ? 'Yes' : 'No';
+  const reportIn = issued && rng() < 0.6;
 
   // The reviewer is stamped as responsible analyst on the permits that are "hers".
   const responsibleAnalyst = role ? ME : pick(analysts);
@@ -295,7 +300,7 @@ export const permitColumns = [
   { field: 'category', headerName: 'Category', minWidth: 190, flex: 1 },
   { field: 'tags', headerName: 'Tags', cellRenderer: 'tags', minWidth: 200, flex: 1, hide: true },
   { field: 'principalInvestigator', headerName: 'Principal investigator', pinned: 'left', width: 200, flex: 0 },
-  { field: 'picof', headerName: 'PICOF', width: 170, flex: 0 },
+  { field: 'picof', headerName: 'PICOF', headerTooltip: 'Person in direct charge of field work', width: 170, flex: 0 },
   { field: 'projectStart', headerName: 'Project start date', valueFormatter: 'date', width: 165, flex: 0 },
   { field: 'projectEnd', headerName: 'Project end date', valueFormatter: 'date', width: 165, flex: 0 },
   { field: 'permitStart', headerName: 'Permit start date', valueFormatter: 'date', pinned: 'left', width: 165, flex: 0 },

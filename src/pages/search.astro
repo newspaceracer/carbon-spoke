@@ -38,11 +38,17 @@ const rows = permits.map((p) => ({
 // Status shown as a pill (cds-tag). It carries a color AND the exact glyph Carbon's
 // icon-indicator maps to each `kind` AND the text label — so state is never conveyed
 // by color alone (WCAG 1.4.1 / house status rule), while reading as a pill.
+// Keyed by `kind` (a valid cds-icon-indicator kind — same keys as the register
+// grid in carbon-ag-grid.ts). Extend both together.
 const statusStyle: Record<string, { type: string; viewBox: string; path: string }> = {
-  succeeded:     { type: 'green', viewBox: '0 0 16 16', path: 'M8,1C4.1,1,1,4.1,1,8c0,3.9,3.1,7,7,7s7-3.1,7-7C15,4.1,11.9,1,8,1z M7,11L4.3,8.3l0.9-0.8L7,9.3l4-3.9l0.9,0.8L7,11z' },
-  'in-progress': { type: 'blue',  viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14.0158,14.0158,0,0,0,16,2Zm0,26A12,12,0,0,1,16,4V16l8.4812,8.4814A11.9625,11.9625,0,0,1,16,28Z' },
-  pending:       { type: 'gray',  viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14,14,0,0,0,16,2ZM8,18a2,2,0,1,1,2-2A2,2,0,0,1,8,18Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,16,18Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,24,18Z' },
-  failed:        { type: 'red',   viewBox: '0 0 16 16', path: 'M8,1C4.1,1,1,4.1,1,8s3.1,7,7,7s7-3.1,7-7S11.9,1,8,1z M10.7,11.5L4.5,5.3l0.8-0.8l6.2,6.2L10.7,11.5z' },
+  succeeded:      { type: 'green',     viewBox: '0 0 16 16', path: 'M8,1C4.1,1,1,4.1,1,8c0,3.9,3.1,7,7,7s7-3.1,7-7C15,4.1,11.9,1,8,1z M7,11L4.3,8.3l0.9-0.8L7,9.3l4-3.9l0.9,0.8L7,11z' },
+  'in-progress':  { type: 'blue',      viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14.0158,14.0158,0,0,0,16,2Zm0,26A12,12,0,0,1,16,4V16l8.4812,8.4814A11.9625,11.9625,0,0,1,16,28Z' },
+  unknown:        { type: 'cool-gray', viewBox: '0 0 32 32', path: 'M16,30A14,14,0,1,1,30,16,14,14,0,0,1,16,30ZM16,4A12,12,0,1,0,28,16,12,12,0,0,0,16,4Z M20.5859,23,15,17.4141V8h2v8.5859l5,5.0009Z' },
+  'not-started':  { type: 'gray',      viewBox: '0 0 32 32', path: 'M25.7,9.3l-7-7A1,1,0,0,0,18,2H8A2,2,0,0,0,6,4V28a2,2,0,0,0,2,2H24a2,2,0,0,0,2-2V10A1,1,0,0,0,25.7,9.3ZM18,4.4L23.6,10H18ZM24,28H8V4h8v6a2,2,0,0,0,2,2h6Z' },
+  pending:        { type: 'cyan',      viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14,14,0,0,0,16,2ZM8,18a2,2,0,1,1,2-2A2,2,0,0,1,8,18Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,16,18Zm8,0a2,2,0,1,1,2-2A2,2,0,0,1,24,18Z' },
+  'caution-minor':{ type: 'purple',    viewBox: '0 0 32 32', path: 'M16,23a1.5,1.5,0,1,0,1.5,1.5A1.5,1.5,0,0,0,16,23Z M15,12h2v9h-2z M29,30H3a1,1,0,0,1-.8872-1.4614l13-25a1,1,0,0,1,1.7744,0l13,25A1,1,0,0,1,29,30ZM4.6507,28H27.3493l.0011-.0033L16,6.1662,4.6493,27.9967Z' },
+  failed:         { type: 'red',       viewBox: '0 0 16 16', path: 'M8,1C4.1,1,1,4.1,1,8s3.1,7,7,7s7-3.1,7-7S11.9,1,8,1z M10.7,11.5L4.5,5.3l0.8-0.8l6.2,6.2L10.7,11.5z' },
+  undefined:      { type: 'warm-gray', viewBox: '0 0 32 32', path: 'M16,2A14,14,0,1,0,30,16,14,14,0,0,0,16,2Zm0,26A12,12,0,1,1,28,16,12,12,0,0,1,16,28Z M8,15H24v2H8Z' },
 };
 ---
 

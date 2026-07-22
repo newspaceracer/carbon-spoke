@@ -1,0 +1,82 @@
+---
+import { withBase } from '../lib/base';
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — the "My permits" nav item links here.
+     spine:  main.page > 2x Grid (full-width)
+     sections:
+       - header  -> breadcrumb (Home / My permits) + title + lede
+       - board   -> <KanbanBoard/> — status lanes of the reviewer's own permits;
+                    cards move by drag OR the per-card overflow menu.
+
+   Why a board, not the register grid: this is only the reviewer's own permits (a
+   couple dozen), and the job is triage BY STATE, not scanning 900+ rows. A kanban
+   makes "what's mine, and where is it in the workflow" the primary read — the one
+   thing a data grid buries. The full register (all/my-district/my-permits scopes,
+   search, columns) still lives at /permits.
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import KanbanBoard from '../components/KanbanBoard.astro';
+import { permits } from '../data/permits';
+
+// The reviewer's own permits — the same "mine" set the register scopes to.
+const mine = permits.filter((p) => p._buckets.includes('mine'));
+
+// Home-page card metadata — the hub globs pages and reads this to self-list.
+export const prototype = {
+  title: 'My permits board',
+  summary:
+    'The permits you hold a role on, as a kanban board: one lane per workflow ' +
+    'state. Drag a card — or use its menu — to move it between states.',
+  tag: 'Internal tool',
+};
+---
+
+<BaseLayout title="My permits">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <div class="cds--css-grid cds--css-grid--full-width cds--css-grid--with-row-gap">
+      <cds-breadcrumb no-trailing-slash class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+        <cds-breadcrumb-item>
+          <cds-breadcrumb-link aria-current="page">My permits</cds-breadcrumb-link>
+        </cds-breadcrumb-item>
+      </cds-breadcrumb>
+
+      <header class="head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+        <h1 class="head__title">My permits</h1>
+        <p class="head__lede t-body-01">
+          Every permit you hold a role on, organized by where it sits in the review
+          workflow. Drag a card between lanes — or use its menu — to move it. Open the
+          full register to see all permits and your districts.
+        </p>
+      </header>
+
+      <div class="board cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <KanbanBoard permits={mine} />
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  /* Page-level LAYOUT only; width + margins owned by the 2x Grid, header offset
+     by theme.css. */
+  .page {
+    padding-block: 1.5rem 4rem;
+  }
+  .head__title {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 400;
+    line-height: 1.15;
+  }
+  .head__lede {
+    margin: 0.75rem 0 0;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

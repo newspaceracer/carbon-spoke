@@ -106,6 +106,16 @@ itself a clarity aid — keep it uniform.
 
 ## House conventions (this repo)
 
+- **Sentence case everywhere** — headings, section titles, field labels, button
+  text, column headers, menu items, notification titles. Capitalize only the
+  first word and proper nouns; NOT Title Case ("Permit type" not "Permit Type",
+  "Annual report due date" not "Annual Report Due Date"). This is Carbon's own
+  convention and this app's majority style. Watch data-defined labels too
+  (`data/permits.ts` column `headerName`s, role/status labels) and JS-set button
+  text — Title Case tends to creep in there. Acronyms (PICOF, HQ, CEQA, GIS,
+  ZIP) and product/proper names keep their casing; expose an opaque acronym via
+  a tooltip rather than expanding it inline (e.g. the PICOF column
+  `headerTooltip`), and keep a term worded ONE way across the app.
 - **Required/optional labeling:** mark only the **exceptions**. Optional fields
   carry "(optional)"; required is the silent default. (When nearly everything is
   required, "(required)" on every field is redundancy that stops carrying scent.)
@@ -129,7 +139,8 @@ itself a clarity aid — keep it uniform.
 2. **Concision** — front-loaded? none of the four mistakes? within the length
    target? no 3-sentence block in a microcopy slot?
 3. **Character** — tone fits audience + moment, and costs no clarity?
-4. **Consistency** — matches sibling copy's voice and any standardized phrasing?
+4. **Consistency** — sentence case? matches sibling copy's voice, casing, and any
+   standardized phrasing/terminology?
 
 If an edit trades down a C (e.g. accepts passive voice), say **why the higher C
 justifies it** — that's the framework, not an excuse.

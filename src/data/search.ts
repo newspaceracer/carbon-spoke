@@ -29,7 +29,7 @@ export const permits: PermitResult[] = [
     organization: 'Central Coast Lepidoptera Survey',
     district: 'Oceano Dunes District',
     category: 'Terrestrial Wildlife',
-    status: { label: 'Under Review', kind: 'in-progress' },
+    status: { label: 'Under review', kind: 'in-progress' },
     submitted: 'Jun 30, 2026',
     summary:
       'Weekly cluster counts of overwintering monarchs (Danaus plexippus) across ' +
@@ -42,7 +42,7 @@ export const permits: PermitResult[] = [
     organization: 'Sierra Foothills Conservancy',
     district: 'Sierra District',
     category: 'Plant Ecology',
-    status: { label: 'Approved', kind: 'succeeded' },
+    status: { label: 'Active', kind: 'succeeded' },
     submitted: 'May 18, 2026',
     summary:
       'Assessment of native milkweed (Asclepias spp.) plantings as monarch breeding ' +
@@ -55,7 +55,7 @@ export const permits: PermitResult[] = [
     organization: 'Western Monarch Watch',
     district: 'Monterey District',
     category: 'Terrestrial Wildlife',
-    status: { label: 'Awaiting Submittal', kind: 'pending' },
+    status: { label: 'Draft', kind: 'not-started' },
     submitted: 'Apr 2, 2026',
     summary:
       'Non-lethal wing tagging and mark-recapture census to estimate the ' +
@@ -68,7 +68,7 @@ export const permits: PermitResult[] = [
     organization: 'Bodega Marine Laboratory',
     district: 'North Coast Redwoods District',
     category: 'Marine Aquatic Resources',
-    status: { label: 'Under Review', kind: 'in-progress' },
+    status: { label: 'Under review', kind: 'in-progress' },
     submitted: 'Jun 12, 2026',
     summary:
       'Intertidal collection and reproductive analysis of coralline algae across ' +
@@ -81,7 +81,7 @@ export const permits: PermitResult[] = [
     organization: 'North Bay Bat Alliance',
     district: 'Mendocino District',
     category: 'Terrestrial Wildlife',
-    status: { label: 'Approved', kind: 'succeeded' },
+    status: { label: 'Active', kind: 'succeeded' },
     submitted: 'Mar 9, 2026',
     summary:
       'Ultrasonic acoustic monitoring of roosting bat species in sea caves, with ' +

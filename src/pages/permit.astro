@@ -946,7 +946,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
     permitId,
     districts.map((d) => d.key),
   );
-  let locked = localStorage.getItem(permitStatusKey(permitId)) === 'Approved';
+  let locked = localStorage.getItem(permitStatusKey(permitId)) === 'Active';
 
   const scopeEl = $('sc-acting-as') as any;
   const currentScope = (): ConditionOwner => scopeEl?.value || 'hq';
@@ -1062,7 +1062,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
           label.className = 'district-label';
           label.innerHTML =
             `<span class="district-label__name">${d.name}</span>` +
-            `<span class="district-label__count t-label-01">${d.parks} parks where research activities are permitted</span>`;
+            `<span class="district-label__count t-label-01">${d.parks} authorized parks</span>`;
           list.appendChild(label);
 
           ensureAddButton(list, d.key);
@@ -1235,7 +1235,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 
   // Approval (fired by PermitHeader) freezes the tab without a reload.
   window.addEventListener('permit-status-changed', (e) => {
-    if ((e as CustomEvent).detail?.status === 'Approved') {
+    if ((e as CustomEvent).detail?.status === 'Active') {
       locked = true;
       render();
     }

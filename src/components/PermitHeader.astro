@@ -246,16 +246,16 @@ const { id, name, organization, status, infoTags, flagTags, stats, requestedWind
   const applyApprovedUI = () => {
     document.querySelectorAll('.permit-status-indicator').forEach((el) => {
       el.setAttribute('kind', 'succeeded');
-      el.setAttribute('label', 'Approved');
+      el.setAttribute('label', 'Active');
     });
   };
 
-  if (permitId && localStorage.getItem(statusKey) === 'Approved') applyApprovedUI();
+  if (permitId && localStorage.getItem(statusKey) === 'Active') applyApprovedUI();
 
   document.getElementById('approve-confirm')?.addEventListener('click', () => {
-    if (permitId) localStorage.setItem(statusKey, 'Approved');
+    if (permitId) localStorage.setItem(statusKey, 'Active');
     applyApprovedUI();
-    window.dispatchEvent(new CustomEvent('permit-status-changed', { detail: { status: 'Approved' } }));
+    window.dispatchEvent(new CustomEvent('permit-status-changed', { detail: { status: 'Active' } }));
   });
 
   // ── Compact bar reveal ──
