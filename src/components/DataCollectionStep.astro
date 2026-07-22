@@ -1,0 +1,441 @@
+---
+// Step 4 of the permit application — the Data collection page. Stock cds-*
+// controls grouped into PermitSection blocks:
+//   • Specimen collection — a yes/no gate; when yes it reveals a specimen roster
+//                           (Species · Quantity · Size · Condition, the same
+//                           modal-add pattern as Additional participants), a
+//                           collection rationale (a textarea with an "Answered in
+//                           study proposal" shortcut that disables it), optional
+//                           supporting docs, and the curation-facility contact.
+//   • Laboratory work     — a yes/no gate; when yes it reveals the laboratory
+//                           facility contact and the lab-study date window.
+//   • Additional info      — Study procedures and Location of data / data
+//                           products, each a narrative textarea with the same
+//                           "Answered in study proposal" shortcut.
+//
+// The gates, the roster, the "answered in proposal" toggles, and the uploaders
+// all live in this component's own client script block. Wizard step navigation
+// lives on the page.
+import PermitSection from './PermitSection.astro';
+import { dataCollection, seedSpecimens } from '../data/application';
+
+const dc = dataCollection;
+const lab = dc.laboratory;
+const cur = dc.curation;
+---
+
+<div class="dc">
+  <!-- ── Specimen collection ──────────────────────────────────────────────── -->
+  <PermitSection title="Specimen collection">
+    <cds-radio-button-group
+      id="specimen-gate"
+      name="specimen-gate"
+      legend-text="Will your project involve collection of specimens?"
+      orientation="horizontal"
+      value={dc.collectsSpecimens ? 'yes' : 'no'}
+    >
+      <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+      <cds-radio-button label-text="No" value="no"></cds-radio-button>
+    </cds-radio-button-group>
+
+    <div id="specimen-yes" class="gate-body" hidden>
+      <!-- Specimen roster: same modal-add pattern as Additional participants. -->
+      <div class="roster">
+        <div class="roster__head">
+          <p class="field-label t-label-01">Types of specimens to be collected</p>
+          <cds-button id="add-specimen" kind="tertiary" size="sm">Add specimen</cds-button>
+        </div>
+        <cds-table id="specimen-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Species</cds-table-header-cell>
+              <cds-table-header-cell>Quantity</cds-table-header-cell>
+              <cds-table-header-cell>Size</cds-table-header-cell>
+              <cds-table-header-cell>Condition</cds-table-header-cell>
+              <cds-table-header-cell>Remove</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body id="specimen-body"></cds-table-body>
+        </cds-table>
+        <p id="specimen-empty" class="empty-note t-body-01" hidden>No specimen types added yet.</p>
+      </div>
+
+      <!-- Collection rationale — a narrative field with the "answered in study
+           proposal" shortcut, which disables the textarea. -->
+      <div class="proposal-field">
+        <cds-textarea
+          id="collection-rationale"
+          label="Collection rationale"
+          rows="5"
+          helper-text="Describe why collection is necessary, and the disposition of specimens collected. Provide power analysis to justify proposed sample size(s)."
+          value={dc.collectionRationale}
+        ></cds-textarea>
+        <cds-checkbox
+          class="answered-in-proposal"
+          data-target="collection-rationale"
+          checked={dc.collectionRationaleInProposal || undefined}
+          label-text="Answered in study proposal"
+        ></cds-checkbox>
+      </div>
+
+      <div class="uploader">
+        <p class="field-label t-label-01">Supporting documentation <span class="opt">(optional)</span></p>
+        <cds-file-uploader-drop-container
+          class="doc-drop"
+          data-list="collection-docs-list"
+          multiple
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv"
+        >
+          Drag and drop files here or click to upload
+        </cds-file-uploader-drop-container>
+        <div id="collection-docs-list" class="uploaded-list"></div>
+      </div>
+
+      <!-- Curation facility contact. -->
+      <div class="subsection">
+        <p class="field-label t-label-01">Curation facility</p>
+        <div class="field-grid">
+          <div class="field-grid__wide">
+            <cds-text-input id="cur-facility" label="Facility name" value={cur.facility}></cds-text-input>
+          </div>
+          <cds-text-input id="cur-official" label="Responsible official" value={cur.official}></cds-text-input>
+          <cds-text-input id="cur-phone" type="tel" label="Phone number" value={cur.phone}></cds-text-input>
+          <div class="field-grid__wide">
+            <cds-text-input id="cur-email" type="email" label="Email address" value={cur.email}></cds-text-input>
+          </div>
+        </div>
+      </div>
+    </div>
+  </PermitSection>
+
+  <!-- ── Laboratory work ──────────────────────────────────────────────────── -->
+  <PermitSection title="Laboratory work">
+    <cds-radio-button-group
+      id="lab-gate"
+      name="lab-gate"
+      legend-text="Will your project involve laboratory work?"
+      orientation="horizontal"
+      value={dc.labWork ? 'yes' : 'no'}
+    >
+      <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+      <cds-radio-button label-text="No" value="no"></cds-radio-button>
+    </cds-radio-button-group>
+
+    <div id="lab-yes" class="gate-body" hidden>
+      <div class="field-grid">
+        <div class="field-grid__wide">
+          <cds-text-input id="lab-facility" label="Laboratory facility name" value={lab.facility}></cds-text-input>
+        </div>
+        <cds-text-input id="lab-official" label="Responsible official" value={lab.official}></cds-text-input>
+        <cds-text-input id="lab-phone" type="tel" label="Phone number" value={lab.phone}></cds-text-input>
+        <div class="field-grid__wide">
+          <cds-text-input id="lab-email" type="email" label="Email address" value={lab.email}></cds-text-input>
+        </div>
+      </div>
+
+      <cds-date-picker class="lab-dates" value={`${lab.startDate}/${lab.endDate}`}>
+        <cds-date-picker-input kind="from" label-text="Lab study start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="to" label-text="Lab study end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+      </cds-date-picker>
+    </div>
+  </PermitSection>
+
+  <!-- ── Additional information ────────────────────────────────────────────── -->
+  <PermitSection title="Additional information">
+    <p class="section-hint t-body-01">
+      Two narrative questions about your methods and your data. If either is fully covered in your
+      study proposal, mark it as such instead of repeating it here.
+    </p>
+
+    <div class="proposal-field">
+      <cds-textarea
+        id="study-procedures"
+        label="Study procedures"
+        rows="6"
+        helper-text="Describe your study and sampling design, field and laboratory methods or protocols, treatments and controls, number of replicates, and statistical analyses and models, and include power analyses to justify proposed sample size(s) needed to answer the question(s)."
+        value={dc.studyProcedures}
+      ></cds-textarea>
+      <cds-checkbox
+        class="answered-in-proposal"
+        data-target="study-procedures"
+        checked={dc.studyProceduresInProposal || undefined}
+        label-text="Answered in study proposal"
+      ></cds-checkbox>
+    </div>
+
+    <div class="uploader">
+      <p class="field-label t-label-01">Supporting documentation <span class="opt">(optional)</span></p>
+      <cds-file-uploader-drop-container
+        class="doc-drop"
+        data-list="procedures-docs-list"
+        multiple
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.csv"
+      >
+        Drag and drop files here or click to upload
+      </cds-file-uploader-drop-container>
+      <div id="procedures-docs-list" class="uploaded-list"></div>
+    </div>
+
+    <div class="proposal-field">
+      <cds-textarea
+        id="data-location"
+        label="Location of data and data products collected under this permit"
+        rows="5"
+        helper-text="Describe anticipated products and deliverables resulting from this study, such as reports, publications, brochures, GIS layers, web tools, videos, etc., and how study results will be disseminated."
+        value={dc.dataLocation}
+      ></cds-textarea>
+      <cds-checkbox
+        class="answered-in-proposal"
+        data-target="data-location"
+        checked={dc.dataLocationInProposal || undefined}
+        label-text="Answered in study proposal"
+      ></cds-checkbox>
+    </div>
+  </PermitSection>
+</div>
+
+<!-- Add-specimen dialog — same construction as the Add-participant modal: Add
+     appends a row and clears the form so several can be entered in a batch. -->
+<cds-modal id="specimen-modal" size="md">
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label>Specimen collection</cds-modal-label>
+    <cds-modal-heading>Add a specimen type</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <div class="field-grid">
+      <div class="field-grid__wide">
+        <cds-text-input id="ns-species" label="Species"></cds-text-input>
+      </div>
+      <cds-text-input id="ns-quantity" label="Quantity"></cds-text-input>
+      <cds-text-input id="ns-size" label="Size"></cds-text-input>
+      <div class="field-grid__wide">
+        <cds-text-input id="ns-condition" label="Condition"></cds-text-input>
+      </div>
+    </div>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Done</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="ns-add">Add specimen</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<script>
+  import { seedSpecimens } from '../data/application';
+  import type { SpecimenType } from '../data/application';
+
+  // Non-generic on purpose: a generic arrow (`<T extends …>`) is misread as JSX by
+  // Vite's esbuild dependency scanner and breaks `astro dev`. Callers cast as needed.
+  const $ = (id: string): any => document.getElementById(id);
+
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
+
+  // ── Yes/no gates: reveal the follow-up block on "yes" ────────────────────
+  const gate = (groupId: string, bodyId: string) => {
+    const group = $(groupId);
+    const wrap = $(bodyId);
+    const sync = () => {
+      // Read the property when upgraded; fall back to the attribute so the
+      // seeded value still resolves if this runs before the element upgrades.
+      const v = group?.value ?? group?.getAttribute('value');
+      if (wrap) wrap.hidden = v !== 'yes';
+    };
+    group?.addEventListener('cds-radio-button-group-changed', sync);
+    sync(); // apply the seeded value on load
+  };
+  gate('specimen-gate', 'specimen-yes');
+  gate('lab-gate', 'lab-yes');
+
+  // ── "Answered in study proposal" shortcut: disable the paired textarea ───
+  document.querySelectorAll('.answered-in-proposal').forEach((el) => {
+    const cb = el as any;
+    const target = $(cb.dataset.target);
+    const sync = () => {
+      // Property when upgraded; attribute fallback for the pre-upgrade load pass.
+      const checked = cb.checked ?? cb.hasAttribute('checked');
+      if (target) target.disabled = !!checked;
+    };
+    cb.addEventListener('cds-checkbox-changed', sync);
+    sync(); // apply the seeded checked state on load
+  });
+
+  // ── Specimen roster ──────────────────────────────────────────────────────
+  const body = $('specimen-body');
+  const emptyNote = $('specimen-empty');
+  const modal = $('specimen-modal');
+
+  const syncEmpty = () => {
+    const has = !!body && body.children.length > 0;
+    if (emptyNote) emptyNote.hidden = has;
+  };
+
+  const addRow = (s: SpecimenType) => {
+    if (!body) return;
+    const row = document.createElement('cds-table-row');
+    row.innerHTML = `
+      <cds-table-cell>${esc(s.species)}</cds-table-cell>
+      <cds-table-cell>${esc(s.quantity)}</cds-table-cell>
+      <cds-table-cell>${esc(s.size)}</cds-table-cell>
+      <cds-table-cell>${esc(s.condition)}</cds-table-cell>
+      <cds-table-cell>
+        <cds-icon-button kind="ghost" size="sm" align="left" class="row-remove">
+          ${trash}
+          <span slot="tooltip-content">Remove ${esc(s.species)}</span>
+        </cds-icon-button>
+      </cds-table-cell>`;
+    row.querySelector('.row-remove')?.addEventListener('click', () => {
+      row.remove();
+      syncEmpty();
+    });
+    body.appendChild(row);
+    syncEmpty();
+  };
+
+  // Seed the roster with the specimens already planned.
+  seedSpecimens.forEach(addRow);
+
+  $('add-specimen')?.addEventListener('click', () => {
+    if (modal) modal.open = true;
+  });
+
+  const nsIds = ['ns-species', 'ns-quantity', 'ns-size', 'ns-condition'];
+  const clearModal = () => nsIds.forEach((id) => { const el = $(id); if (el) el.value = ''; });
+
+  $('ns-add')?.addEventListener('click', () => {
+    const val = (id: string) => ($(id)?.value ?? '').toString().trim();
+    const species = val('ns-species');
+    if (!species) { $('ns-species')?.focus(); return; } // species is the required key
+    addRow({
+      species,
+      quantity: val('ns-quantity'),
+      size: val('ns-size'),
+      condition: val('ns-condition'),
+    });
+    clearModal();
+    $('ns-species')?.focus(); // ready for the next in the batch
+  });
+
+  // ── Optional supporting-document uploaders (accumulate multiple files) ───
+  document.querySelectorAll('.doc-drop').forEach((drop) => {
+    const list = $((drop as any).dataset.list);
+    drop.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+      const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
+      if (!files || !files.length || !list) return;
+      files.forEach((file) => {
+        const item = document.createElement('cds-file-uploader-item') as any;
+        item.state = 'edit';
+        item.size = 'md';
+        item.textContent = file.name;
+        item.addEventListener('cds-file-uploader-item-deleted', () => item.remove());
+        list.appendChild(item);
+      });
+    });
+  });
+</script>
+
+<style>
+  /* Rhythm between the sub-sections of the step. */
+  .dc {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* The revealed body of a yes/no gate — spaced below the question, its own
+     fields stacked with breathing room. */
+  .gate-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    margin-top: 1.5rem;
+    max-width: 46rem;
+  }
+  .gate-body[hidden] {
+    display: none;
+  }
+
+  /* Specimen roster — an "Add" action on the same line as the roster label,
+     then the table and its empty note. */
+  .roster__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  #specimen-table {
+    display: block;
+  }
+  .empty-note {
+    margin: 1rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty-note[hidden] {
+    display: none;
+  }
+
+  /* A narrative field paired with its "Answered in study proposal" checkbox. */
+  .proposal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-width: 46rem;
+  }
+
+  /* Two-up responsive field grid — same construction as the other steps. */
+  .field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+    max-width: 46rem;
+  }
+  .field-grid__wide {
+    grid-column: 1 / -1;
+  }
+  @media (max-width: 42rem) {
+    .field-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  /* Inside the modal the grid fills the modal body: Carbon sizes the modal itself
+     (by viewport %), so the page's readable 46rem measure would freeze the fields
+     and leave dead space as the modal grows on larger screens. */
+  cds-modal-body .field-grid {
+    max-width: none;
+  }
+
+  .subsection .field-label,
+  .roster__head .field-label {
+    margin: 0;
+  }
+  .field-label {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .field-label .opt {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .subsection .field-label {
+    margin-bottom: 0.75rem;
+  }
+
+  /* Uploader block — labeled dropzone (stock cds-file-uploader-drop-container)
+     plus its list; layout only. */
+  .uploader {
+    max-width: 46rem;
+  }
+  .field-label {
+    margin: 0 0 0.5rem;
+  }
+  .uploaded-list {
+    margin-top: 0.5rem;
+  }
+</style>

@@ -18,7 +18,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitSection from '../components/PermitSection.astro';
 import Avatar from '../components/Avatar.astro';
-import { currentUser, divisions, states, requestableRoles } from '../data/user';
+import AddressFieldset from '../components/AddressFieldset.astro';
+import PhoneField from '../components/PhoneField.astro';
+import { currentUser, divisions, requestableRoles } from '../data/user';
 import { districtDirectory } from '../data/district';
 
 export const prototype = {
@@ -110,22 +112,14 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
                 ))}
               </cds-dropdown>
               <cds-text-input id="f-email" type="email" label="Email address" value={u.email} readonly></cds-text-input>
-              <cds-text-input id="f-phone" type="tel" label="Office phone" value={u.phone} readonly></cds-text-input>
+              <div class="field-grid__wide">
+                <PhoneField id="f-phone" label="Office phone" value={u.phone} />
+              </div>
 
               <h3 class="form__subhead field-grid__wide t-heading-01">Mailing address</h3>
               <div class="field-grid__wide">
-                <cds-text-input id="f-street" label="Street address" value={u.address.street} readonly></cds-text-input>
+                <AddressFieldset prefix="addr" country={u.address.country} value={u.address} />
               </div>
-              <div class="field-grid__wide">
-                <cds-text-input id="f-unit" label="Suite / unit (optional)" value={u.address.unit} readonly></cds-text-input>
-              </div>
-              <cds-text-input id="f-city" label="City" value={u.address.city} readonly></cds-text-input>
-              <cds-dropdown id="f-state" title-text="State" value={u.address.state} read-only>
-                {states.map((s) => (
-                  <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>
-                ))}
-              </cds-dropdown>
-              <cds-text-input id="f-zip" label="ZIP code" value={u.address.zip} readonly></cds-text-input>
             </div>
 
             <div class="form__actions" id="form-actions" hidden>
@@ -280,6 +274,9 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
 <script>
   import { currentUser, requestableRoles, accountRoleMeta } from '../data/user';
+  import type { Address } from '../data/address';
+  import { wireAddressFieldset } from '../lib/address-fields';
+  import { wirePhoneField, formatDisplay } from '../lib/phone';
   import { pendingForUser, submitRequest, accountRoleDisplay, roleDisplay } from '../data/requests';
 
   // ── Personal information: edit + persist (prototype-local) ──────────────
@@ -293,9 +290,12 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const actions = document.getElementById('form-actions');
   const notice = document.getElementById('save-notice') as any;
 
-  const fieldIds = ['firstName', 'lastName', 'title', 'division', 'email', 'phone', 'street', 'unit', 'city', 'state', 'zip'] as const;
-  type FieldKey = (typeof fieldIds)[number];
-  const fieldEl = (k: FieldKey) => document.getElementById(`f-${k}`) as any;
+  // Identity scalars (name / title / division / email). Phone + mailing address
+  // are locale-sensitive widgets driven by their own controllers below, so
+  // they're kept out of this flat list.
+  const scalarIds = ['firstName', 'lastName', 'title', 'division', 'email'] as const;
+  type ScalarKey = (typeof scalarIds)[number];
+  const fieldEl = (k: ScalarKey) => document.getElementById(`f-${k}`) as any;
   // cds-dropdown exposes the readonly flag as `readOnly` / attr `read-only`;
   // cds-text-input uses `readonly`. One helper handles both.
   const setReadonly = (el: any, ro: boolean) => {
@@ -304,20 +304,23 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     else el.readonly = ro;
   };
 
-  // Baseline = the seeded defaults; a saved edit overrides them.
-  const defaults: Record<FieldKey, string> = {
+  // Country-aware controllers for the two locale-sensitive contact fields. They
+  // start locked (view mode); setEditable toggles them alongside the scalars.
+  const addrRoot = document.querySelector<HTMLElement>('#profile-form [data-address]');
+  const phoneRoot = document.querySelector<HTMLElement>('#profile-form [data-phone]');
+  const addr = addrRoot ? wireAddressFieldset(addrRoot, { readonly: true }) : null;
+  const phone = phoneRoot ? wirePhoneField(phoneRoot, { readonly: true }) : null;
+
+  // Seeded defaults; a saved edit overrides them.
+  const scalarDefaults: Record<ScalarKey, string> = {
     firstName: currentUser.firstName,
     lastName: currentUser.lastName,
     title: currentUser.title,
     division: currentUser.division,
     email: currentUser.email,
-    phone: currentUser.phone,
-    street: currentUser.address.street,
-    unit: currentUser.address.unit,
-    city: currentUser.address.city,
-    state: currentUser.address.state,
-    zip: currentUser.address.zip,
   };
+  const defaultPhone = currentUser.phone;                 // E.164
+  const defaultAddress = currentUser.address as Address;  // generic, country-aware
   const divisionLabels: Record<string, string> = {
     'natural-resources': 'Natural Resources Division',
     'cultural-resources': 'Cultural Resources Division',
@@ -326,10 +329,21 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     'science': 'Office of Scientific Review',
   };
 
+  // The persisted record: identity scalars + an E.164 phone + a generic address.
+  interface Personal {
+    firstName: string;
+    lastName: string;
+    title: string;
+    division: string;
+    email: string;
+    phone: string;
+    address: Address;
+  }
+
   if (form && saveBtn && resetBtn && editBtn && actions && notice) {
     const storageKey = form.dataset.storageKey || 'profile-personal';
 
-    const readStored = (): Partial<Record<FieldKey, string>> => {
+    const readStored = (): Partial<Personal> => {
       try {
         const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}');
         return parsed && typeof parsed === 'object' ? parsed : {};
@@ -338,17 +352,19 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       }
     };
 
-    const setFields = (values: Record<FieldKey, string>) => {
-      fieldIds.forEach((k) => {
+    const setFields = (v: Personal) => {
+      scalarIds.forEach((k) => {
         const el = fieldEl(k);
-        if (el) el.value = values[k];
+        if (el) el.value = v[k];
       });
+      phone?.setValue(v.phone);
+      addr?.setValue(v.address);
     };
 
     // Banner echoes the identity fields — keep it in sync so a save is visible.
     const initials = (first: string, last: string) =>
       `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
-    const syncBanner = (v: Record<FieldKey, string>) => {
+    const syncBanner = (v: Personal) => {
       const name = `${v.firstName} ${v.lastName}`.trim();
       const nameEl = document.getElementById('banner-name');
       const subEl = document.getElementById('banner-sub');
@@ -359,28 +375,48 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       if (nameEl) nameEl.textContent = name;
       if (subEl) subEl.textContent = `${v.title} · ${divisionLabels[v.division] ?? ''}`;
       if (emailEl) emailEl.textContent = v.email;
-      if (phoneEl) phoneEl.textContent = v.phone;
+      // Phone is stored E.164; show it formatted for readers.
+      if (phoneEl) phoneEl.textContent = formatDisplay(v.phone);
       if (prefsEmailEl) prefsEmailEl.textContent = v.email;
       if (avatarEl) avatarEl.textContent = initials(v.firstName, v.lastName);
     };
 
-    const current = (): Record<FieldKey, string> => {
-      const out = {} as Record<FieldKey, string>;
-      fieldIds.forEach((k) => {
+    const current = (): Personal => {
+      const out = {} as Personal;
+      scalarIds.forEach((k) => {
         const el = fieldEl(k);
-        out[k] = (el?.value ?? defaults[k]).toString();
+        (out as any)[k] = (el?.value ?? scalarDefaults[k]).toString();
       });
+      out.phone = phone?.getValue() || defaultPhone;
+      out.address = addr?.getValue() ?? defaultAddress;
       return out;
     };
 
-    // The persisted truth: seeded defaults overlaid with any saved edit.
-    const savedValues = (): Record<FieldKey, string> => ({ ...defaults, ...readStored() });
+    // The persisted truth: seeded defaults overlaid with any saved edit. Guards
+    // reject a stale record from an older build (flat US address / national phone).
+    const savedValues = (): Personal => {
+      const s = readStored();
+      const okPhone = typeof s.phone === 'string' && s.phone.startsWith('+');
+      const okAddr =
+        !!s.address && typeof s.address === 'object' && typeof (s.address as any).country === 'string';
+      return {
+        firstName: s.firstName ?? scalarDefaults.firstName,
+        lastName: s.lastName ?? scalarDefaults.lastName,
+        title: s.title ?? scalarDefaults.title,
+        division: s.division ?? scalarDefaults.division,
+        email: s.email ?? scalarDefaults.email,
+        phone: okPhone ? (s.phone as string) : defaultPhone,
+        address: okAddr ? (s.address as Address) : defaultAddress,
+      };
+    };
 
     // View-first, like district/permit: the fields read read-only until you
     // click Edit. Edit mode unlocks them and swaps the header Edit action for
     // the Save/Cancel footer; leaving edit mode locks them again.
     const setEditable = (on: boolean) => {
-      fieldIds.forEach((k) => setReadonly(fieldEl(k), !on));
+      scalarIds.forEach((k) => setReadonly(fieldEl(k), !on));
+      phone?.setReadonly(!on);
+      addr?.setReadonly(!on);
       actions.hidden = !on;
       editBtn.hidden = on;
     };
@@ -406,8 +442,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     });
 
     // Cancel discards this edit session — revert the fields to the last saved
-    // state and lock them. (It does NOT reset to seeded defaults; a saved edit
-    // stays saved.)
+    // state and lock them. (A saved edit stays saved; a country switch reverts
+    // via addr.setValue rebuilding the saved country's field set.)
     resetBtn.addEventListener('click', () => {
       setFields(savedValues());
       setEditable(false);
@@ -586,12 +622,16 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   /* Body grid sits below the full-bleed banner. */
   .body { margin-top: var(--cds-spacing-07, 2rem); }
 
-  /* Editorial rhythm within the main column — sections separated by whitespace. */
+  /* Editorial rhythm within the main column — sections separated by whitespace.
+     Capped to a readable form measure so each PermitSection's full-width header
+     rule and its content share ONE width (a settings form reads better narrow
+     than filling the whole col-11); the rail sits to its right. */
   .main {
     display: flex;
     flex-direction: column;
     gap: 2.75rem;
     min-width: 0;
+    max-width: 44rem;
   }
 
   .section-hint {

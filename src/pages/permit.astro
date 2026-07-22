@@ -1488,8 +1488,8 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   /* One applied condition: rich-text body over a quiet source/author meta line;
      row actions sit in the item's action slot. */
   .cond { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
-  :global(.cond__body) { color: var(--cds-text-primary, #161616); }
-  :global(.cond__body p) { margin: 0 0 0.375rem; }
+  :global(.cond__body) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; line-height: 1.28572; }
+  :global(.cond__body p) { margin: 0 0 0.375rem; font-size: 0.875rem; }
   :global(.cond__body p:last-child) { margin-bottom: 0; }
   :global(.cond__body ul), :global(.cond__body ol) { margin: 0 0 0.375rem; padding-left: 1.5rem; }
   :global(.cond__body ul) { list-style: disc; }

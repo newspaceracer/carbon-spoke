@@ -73,7 +73,8 @@ export const applicant = {
   lastName: 'Halvorsen',
   title: 'Senior Research Scientist',
   email: 'r.halvorsen@cascadiamarine.org',
-  phone: '(415) 555-0173',
+  // Person phones are stored as E.164; forms render them formatted.
+  phone: '+14155550173',
   address: {
     street: '18 Nautilus Court',
     unit: '',
@@ -95,6 +96,52 @@ export interface Participant {
   comments: string;
 }
 
+// ── Project information (step 2) ─────────────────────────────────────────────
+// Prefilled draft answers so the page renders as work-in-progress rather than a
+// blank slate. `category` is an `expertiseOptions` VALUE (user.ts) — the project
+// category dropdown reuses that taxonomy. Dates are ISO (YYYY-MM-DD) so they seed
+// the cds-date-picker directly. All INVENTED, domain-credible, deterministic.
+export const project = {
+  category: 'marine-aquatic',
+  title: 'Intertidal Community Response to Marine Heatwaves along the North Coast',
+  purpose:
+    'This study examines how rocky intertidal invertebrate communities in North Coast ' +
+    'Redwoods parks are reshaped by successive marine heatwaves. Building on long-term ' +
+    'MARINe monitoring, we test whether thermal stress shifts competitive dominance from ' +
+    'California mussels (Mytilus californianus) toward more heat-tolerant algal turfs. ' +
+    'Objectives: (1) quantify post-heatwave recovery trajectories across three tidal ' +
+    'heights; (2) test the hypothesis that grazer density mediates recovery rate; ' +
+    '(3) establish a repeatable photo-quadrat baseline for future monitoring.',
+  benefits:
+    "California's rocky shores are among the state's most-visited and most climate-exposed " +
+    'natural features, and this work happens where park stewards can act on it. Findings ' +
+    'give the district an early-warning framework for detecting climate-driven regime ' +
+    'shifts in accessible tidepool zones, informing visitor-use management and ' +
+    'interpretive programming. The photo-quadrat baseline and data will be shared with the ' +
+    'Natural Resources Division to support long-term coastal monitoring across the district.',
+  dates: {
+    projectStart: '2026-09-01',
+    projectEnd: '2028-08-31',
+    permitStart: '2026-09-15',
+    permitEnd: '2027-09-14',
+    annualReport: '2027-12-15',
+  },
+};
+
+/** One field investigation occurrence — a discrete window when the team will be
+ *  on-site. Stored as display strings (m/d/Y) so the roster and the date picker's
+ *  own output stay in the same format. */
+export interface FieldOccurrence {
+  start: string;
+  end: string;
+}
+
+// Seed occurrences — two planned field windows already on the schedule. INVENTED.
+export const seedOccurrences: FieldOccurrence[] = [
+  { start: '9/16/2026', end: '9/27/2026' },
+  { start: '1/12/2027', end: '1/23/2027' },
+];
+
 // Seed roster — two collaborators already added, so the list renders populated
 // (the applicant can add more or remove these). INVENTED.
 export const seedParticipants: Participant[] = [
@@ -103,7 +150,7 @@ export const seedParticipants: Participant[] = [
     lastName: 'Aranda',
     title: 'Field Technician',
     email: 'm.aranda@cascadiamarine.org',
-    phone: '(415) 555-0188',
+    phone: '+14155550188',
     comments: 'Certified scientific diver; leads intertidal transect surveys.',
   },
   {
@@ -111,7 +158,88 @@ export const seedParticipants: Participant[] = [
     lastName: 'Deshmukh',
     title: 'Graduate Researcher',
     email: 'p.deshmukh@cascadiamarine.org',
-    phone: '(415) 555-0191',
+    phone: '+14155550191',
     comments: 'Handles specimen cataloging and sample chain-of-custody.',
   },
 ];
+
+// ── Data collection (step 4) ─────────────────────────────────────────────────
+
+/** One type of specimen the applicant plans to collect. All fields are
+ *  free-typed by the applicant (roster pattern, like Participants). */
+export interface SpecimenType {
+  species: string;
+  quantity: string;
+  size: string;
+  condition: string;
+}
+
+// Seed specimen list — the material the intertidal marine-heatwave study collects.
+// INVENTED but domain-credible.
+export const seedSpecimens: SpecimenType[] = [
+  {
+    species: 'California mussel (Mytilus californianus)',
+    quantity: '120',
+    size: '4–8 cm shell length',
+    condition: 'Live, whole; retained',
+  },
+  {
+    species: 'Turf algae assemblage (mixed Rhodophyta)',
+    quantity: '60',
+    size: '10 × 10 cm quadrat scrapes',
+    condition: 'Preserved in ethanol',
+  },
+  {
+    species: 'Ochre sea star (Pisaster ochraceus)',
+    quantity: '24',
+    size: '8–15 cm radius',
+    condition: 'Live; measured and released',
+  },
+];
+
+// Prefilled Data-collection answers so the Draft renders as work-in-progress
+// rather than a blank slate (consistent with the Project information step). The
+// `*InProposal` flags model the "Answered in study proposal" shortcut, which
+// disables the matching narrative field. INVENTED, deterministic.
+export const dataCollection = {
+  // Specimen collection
+  collectsSpecimens: true,
+  collectionRationaleInProposal: false,
+  collectionRationale:
+    'Collection is necessary to measure physiological thermal tolerance and body condition, ' +
+    'which cannot be assessed non-destructively in the field. Mussel and algal samples are ' +
+    'analyzed for tissue condition indices and heat-shock protein (HSP70) expression; sea stars ' +
+    'are measured and released. Retained specimens are accessioned into the CMRI Invertebrate ' +
+    'Collection and made available for future study. Sample sizes follow a power analysis ' +
+    '(α = 0.05, power = 0.80) sized to detect a 15% shift in condition index across tidal heights.',
+  curation: {
+    facility: 'Cascadia Marine Research Institute — Invertebrate Collection',
+    official: 'Dr. Lena Okafor',
+    phone: '(415) 555-0180',
+    email: 'collections@cascadiamarine.org',
+  },
+
+  // Laboratory work
+  labWork: true,
+  laboratory: {
+    facility: 'CMRI Coastal Ecophysiology Laboratory',
+    official: 'Dr. Theo Nakamura',
+    phone: '(415) 555-0185',
+    email: 't.nakamura@cascadiamarine.org',
+    startDate: '2026-10-01',
+    endDate: '2028-06-30',
+  },
+
+  // Additional information
+  studyProceduresInProposal: false,
+  studyProcedures:
+    'The study uses a stratified design across three tidal heights (low, mid, high) at each of ' +
+    'four sites, with fixed photo-quadrats and paired grazer-exclusion and control plots. Field ' +
+    'methods follow MARINe rocky-intertidal protocols; laboratory analyses include condition ' +
+    'indices, gonad staging, and HSP70 assays. Five replicate quadrats per stratum per site are ' +
+    'analyzed with linear mixed-effects models (site as a random effect). Power analyses ' +
+    '(power = 0.80, α = 0.05) justify the replicate count for the hypothesized effect sizes.',
+  // Left to the study proposal here, to demonstrate the disabled-field shortcut.
+  dataLocationInProposal: true,
+  dataLocation: '',
+};

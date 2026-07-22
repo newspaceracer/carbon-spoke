@@ -1,0 +1,345 @@
+---
+// Step 2 of the permit application — the Project information page. Stock cds-*
+// controls grouped into PermitSection blocks:
+//   • Project details       — category (reuses the expertise taxonomy), title,
+//                             purpose, and anticipated benefits (helper-text prompts)
+//   • Project dates         — project window + requested permit window (range
+//                             pickers) and the annual-report target (single picker)
+//   • Field investigation occurrences — a roster of on-site date windows the
+//                             applicant adds to (inline range picker + Add), like
+//                             the Additional participants roster on step 1
+//   • Project schedule      — an optional supporting-document upload
+//
+// Conditional/roster behavior lives in this component's own client script block.
+import PermitSection from './PermitSection.astro';
+import { project, seedOccurrences } from '../data/application';
+import { expertiseOptions } from '../data/user';
+
+const d = project.dates;
+---
+
+<div class="pi">
+  <!-- ── Project details ──────────────────────────────────────────────────── -->
+  <PermitSection title="Project details">
+    <p class="section-hint t-body-01">
+      What the research is, and why it belongs in California State Parks.
+    </p>
+
+    <!-- Single-column stack: category, then title beneath it, then the two long
+         rich-text fields — so the eye scans straight down the page instead of
+         zig-zagging, and the (long) project title gets full width. -->
+    <div class="pi-fields">
+      <cds-dropdown id="proj-category" title-text="Project category" value={project.category}>
+        {expertiseOptions.map((o) => <cds-dropdown-item value={o.value}>{o.label}</cds-dropdown-item>)}
+      </cds-dropdown>
+
+      <cds-text-input id="proj-title" label="Project title" value={project.title}></cds-text-input>
+
+      <!-- Rich text: purpose + benefits are long-form narrative that benefits from
+           formatting (lists, emphasis), so they use the reusable sc-rich-text
+           editor (Tiptap in Carbon chrome) rather than a plain textarea. The label
+           + helper are rendered here since the editor is not a native field. -->
+      <div class="rt-field">
+        <span class="rt-label t-label-01" id="purpose-label">Project purpose</span>
+        <p class="rt-helper t-label-01">
+          Describe the study rationale and significance. Include a summary of relevant literature
+          and specific hypotheses to be tested and/or study objectives.
+        </p>
+        <sc-rich-text
+          id="proj-purpose"
+          aria-label="Project purpose"
+          placeholder="Describe the study rationale and significance…"
+          value={`<p>${project.purpose}</p>`}
+        ></sc-rich-text>
+      </div>
+
+      <div class="rt-field">
+        <span class="rt-label t-label-01" id="benefits-label">
+          Anticipated benefits to the California State Park System
+        </span>
+        <p class="rt-helper t-label-01">
+          Describe why you want to do research in California State Parks. Identify any anticipated
+          benefits to the California State Park System that may result from your proposed research.
+        </p>
+        <sc-rich-text
+          id="proj-benefits"
+          aria-label="Anticipated benefits to the California State Park System"
+          placeholder="Describe the anticipated benefits…"
+          value={`<p>${project.benefits}</p>`}
+        ></sc-rich-text>
+      </div>
+    </div>
+  </PermitSection>
+
+  <!-- ── Project dates ────────────────────────────────────────────────────── -->
+  <PermitSection title="Project dates">
+    <p class="section-hint t-body-01">
+      The overall project window, the permit window you're requesting, and when you expect to
+      file your annual report.
+    </p>
+
+    <div class="dates">
+      <cds-date-picker value={`${d.projectStart}/${d.projectEnd}`}>
+        <cds-date-picker-input kind="from" label-text="Project start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="to" label-text="Project end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+      </cds-date-picker>
+
+      <cds-date-picker value={`${d.permitStart}/${d.permitEnd}`}>
+        <cds-date-picker-input kind="from" label-text="Permit requested start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="to" label-text="Permit requested end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+      </cds-date-picker>
+
+      <cds-date-picker value={d.annualReport}>
+        <cds-date-picker-input kind="single" label-text="Annual report tentative completion date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+      </cds-date-picker>
+    </div>
+  </PermitSection>
+
+  <!-- ── Field investigation occurrences ──────────────────────────────────── -->
+  <PermitSection title="Field investigation occurrences">
+    <p class="section-hint t-body-01">
+      Each discrete window your team will be on-site. Add a start and end date for every
+      occurrence; add as many as your schedule needs.
+    </p>
+
+    <div class="occ-add">
+      <cds-date-picker id="occ-range">
+        <cds-date-picker-input id="occ-start" kind="from" label-text="Occurrence start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input id="occ-end" kind="to" label-text="Occurrence end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+      </cds-date-picker>
+      <cds-button id="occ-add" kind="tertiary" size="md">Add occurrence</cds-button>
+    </div>
+
+    <cds-table id="occ-table">
+      <cds-table-head>
+        <cds-table-header-row>
+          <cds-table-header-cell>Occurrence</cds-table-header-cell>
+          <cds-table-header-cell>Start date</cds-table-header-cell>
+          <cds-table-header-cell>End date</cds-table-header-cell>
+          <cds-table-header-cell>Remove</cds-table-header-cell>
+        </cds-table-header-row>
+      </cds-table-head>
+      <cds-table-body id="occ-body"></cds-table-body>
+    </cds-table>
+    <p id="occ-empty" class="empty-note t-body-01" hidden>No field investigation occurrences added yet.</p>
+  </PermitSection>
+
+  <!-- ── Project schedule ─────────────────────────────────────────────────── -->
+  <PermitSection title="Project schedule">
+    <p class="section-hint t-body-01">
+      Optionally attach a detailed project schedule, timeline, or Gantt chart to support the
+      occurrences above.
+    </p>
+    <div class="uploader">
+      <p class="field-label t-label-01">Project schedule <span class="opt">(optional)</span></p>
+      <cds-file-uploader-drop-container id="schedule-drop" accept=".pdf,.doc,.docx,.xls,.xlsx">
+        Drag and drop a file here or click to upload
+      </cds-file-uploader-drop-container>
+      <div id="schedule-list" class="uploaded-list"></div>
+      <p class="uploader-hint t-label-01">Accepted formats: PDF, DOC, DOCX, XLS, or XLSX.</p>
+    </div>
+  </PermitSection>
+</div>
+
+<script>
+  import { seedOccurrences } from '../data/application';
+  import type { FieldOccurrence } from '../data/application';
+  // Registers the <sc-rich-text> custom element (Tiptap in Carbon chrome) used
+  // for the Project purpose and Anticipated benefits fields above.
+  import '../components/sc-rich-text.ts';
+
+  // Non-generic on purpose: a generic arrow (`<T extends …>`) is misread as JSX by
+  // Vite's esbuild dependency scanner and breaks `astro dev`. Callers cast as needed.
+  const $ = (id: string): any => document.getElementById(id);
+
+  // ── Field investigation occurrences roster ──────────────────────────────
+  // Same pattern as step 1's Additional participants, but the "form" is an inline
+  // range date picker (kept out of a modal so Flatpickr's calendar never has to
+  // stack inside another overlay). Add appends a row and clears the picker.
+  const body = $('occ-body');
+  const emptyNote = $('occ-empty');
+  const range = $('occ-range') as any;
+  const startInput = $('occ-start') as any;
+  const endInput = $('occ-end') as any;
+
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
+
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const syncEmpty = () => {
+    const has = !!body && body.children.length > 0;
+    if (emptyNote) emptyNote.hidden = has;
+  };
+
+  // Occurrences are numbered by position, so renumber after any add/remove.
+  const renumber = () => {
+    if (!body) return;
+    Array.from(body.children).forEach((row, i) => {
+      const cell = row.querySelector('.occ-num');
+      if (cell) cell.textContent = `Occurrence ${i + 1}`;
+    });
+  };
+
+  const addRow = (o: FieldOccurrence) => {
+    if (!body) return;
+    const row = document.createElement('cds-table-row');
+    row.innerHTML = `
+      <cds-table-cell class="occ-num"></cds-table-cell>
+      <cds-table-cell>${esc(o.start)}</cds-table-cell>
+      <cds-table-cell>${esc(o.end)}</cds-table-cell>
+      <cds-table-cell>
+        <cds-icon-button kind="ghost" size="sm" align="left" class="row-remove">
+          ${trash}
+          <span slot="tooltip-content">Remove occurrence</span>
+        </cds-icon-button>
+      </cds-table-cell>`;
+    row.querySelector('.row-remove')?.addEventListener('click', () => {
+      row.remove();
+      renumber();
+      syncEmpty();
+    });
+    body.appendChild(row);
+    renumber();
+    syncEmpty();
+  };
+
+  // Seed the schedule with the windows already planned.
+  seedOccurrences.forEach(addRow);
+
+  $('occ-add')?.addEventListener('click', () => {
+    const start = (startInput?.value ?? '').trim();
+    const end = (endInput?.value ?? '').trim();
+    if (!start || !end) {
+      startInput?.focus?.();
+      return; // both dates required for a window
+    }
+    addRow({ start, end });
+    // Clear the picker for the next window (both the container and its inputs).
+    if (range) range.value = '';
+    if (startInput) startInput.value = '';
+    if (endInput) endInput.value = '';
+  });
+
+  // ── Project schedule upload ─────────────────────────────────────────────
+  $('schedule-drop')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+    const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
+    if (!files || !files.length) return;
+    const list = $('schedule-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const item = document.createElement('cds-file-uploader-item') as any;
+    item.state = 'edit';
+    item.size = 'md';
+    item.textContent = files[0].name;
+    item.addEventListener('cds-file-uploader-item-deleted', () => (list.innerHTML = ''));
+    list.appendChild(item);
+  });
+</script>
+
+<style>
+  /* Rhythm between the sub-sections of the step. */
+  .pi {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* Project details is a single top-to-bottom column so the eye doesn't zig-zag;
+     the long project title and the two rich-text fields all get full width. */
+  .pi-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 46rem;
+  }
+
+  /* Rich-text field: the editor is not a native control, so its label + helper
+     text are rendered here, mirroring Carbon's label/helper placement above a
+     cds-textarea. The editor chrome itself is owned by sc-rich-text. */
+  .rt-field {
+    display: flex;
+    flex-direction: column;
+  }
+  .rt-label {
+    margin: 0 0 0.25rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .rt-helper {
+    margin: 0 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* Make the two project editors user-resizable with a drag handle. The writing
+     surface (.tiptap) is created at runtime by Tiptap in sc-rich-text's light DOM,
+     so it carries no Astro scope attribute — reach it with :global, scoped under
+     .pi-fields so ONLY these two editors gain the handle (Special conditions,
+     which reuses sc-rich-text, is unaffected). A stable initial height keeps the
+     long seeded content scrolling INSIDE the box (not ballooning it); resize +
+     max-height:none let the drag grow it; the base 8rem min-height is the floor.
+     carbon-checked: .tiptap is our own sc-rich-text editor surface (a documented
+     bespoke wrapper), not a Carbon internal — this is a page-level resize
+     affordance, not a component reskin. */
+  .pi-fields :global(sc-rich-text .tiptap) {
+    height: 11rem;
+    max-height: none;
+    overflow-y: auto;
+    resize: vertical;
+  }
+
+  /* Date pickers stack with breathing room; each range picker lays its own two
+     inputs side by side. */
+  .dates {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  /* Inline occurrence add row — the range picker and its Add button on one line,
+     wrapping on narrow screens; the button aligns to the inputs' baseline row. */
+  .occ-add {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    max-width: 46rem;
+  }
+
+  #occ-table {
+    display: block;
+  }
+  .empty-note {
+    margin: 1rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty-note[hidden] {
+    display: none;
+  }
+
+  /* Uploader block — labeled dropzone (stock cds-file-uploader-drop-container)
+     plus help text; layout only. */
+  .uploader {
+    max-width: 46rem;
+  }
+  .field-label {
+    margin: 0 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .field-label .opt {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .uploaded-list {
+    margin-top: 0.5rem;
+  }
+  .uploader-hint {
+    margin: 0.5rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

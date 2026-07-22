@@ -4,6 +4,12 @@
 // email, phone, address) is INVENTED — this repo is public and the house rules
 // forbid copying or lightly-sanitizing real data. Deterministic: same every build.
 
+// The mailing-address shape is now the country-neutral `Address` (address.ts).
+// `states` (the US state list) also lives there with the rest of the address
+// metadata; re-exported here so existing importers keep their `from './user'`.
+import type { Address } from './address';
+export { states } from './address';
+
 /** A division option for the personal-information dropdown. */
 export interface Division {
   value: string;
@@ -40,17 +46,6 @@ export const userDirectory: DirectoryUser[] = [
   { id: 'okonkwo', name: 'T. Okonkwo', role: 'Scientific advisor', detail: 'Botany', email: 't.okonkwo@parks.ca.gov' },
   { id: 'bautista', name: 'E. Bautista', role: 'Cultural resources reviewer', detail: 'Cultural Resources Division', email: 'e.bautista@parks.ca.gov' },
 ];
-
-/** A structured US mailing address. */
-export interface Address {
-  street: string;
-  /** Suite / floor / unit — optional. */
-  unit: string;
-  city: string;
-  /** Two-letter USPS state code, matched against `states`. */
-  state: string;
-  zip: string;
-}
 
 /** A district this reviewer is authorized to administer permits within. */
 export interface AssignedDistrict {
@@ -144,36 +139,6 @@ export const requestableRoles: { value: string; label: string; description: stri
   },
 ];
 
-// USPS state/territory codes for the mailing-address State dropdown.
-export const states: { value: string; label: string }[] = [
-  { value: 'AL', label: 'Alabama' }, { value: 'AK', label: 'Alaska' },
-  { value: 'AZ', label: 'Arizona' }, { value: 'AR', label: 'Arkansas' },
-  { value: 'CA', label: 'California' }, { value: 'CO', label: 'Colorado' },
-  { value: 'CT', label: 'Connecticut' }, { value: 'DE', label: 'Delaware' },
-  { value: 'DC', label: 'District of Columbia' }, { value: 'FL', label: 'Florida' },
-  { value: 'GA', label: 'Georgia' }, { value: 'HI', label: 'Hawaii' },
-  { value: 'ID', label: 'Idaho' }, { value: 'IL', label: 'Illinois' },
-  { value: 'IN', label: 'Indiana' }, { value: 'IA', label: 'Iowa' },
-  { value: 'KS', label: 'Kansas' }, { value: 'KY', label: 'Kentucky' },
-  { value: 'LA', label: 'Louisiana' }, { value: 'ME', label: 'Maine' },
-  { value: 'MD', label: 'Maryland' }, { value: 'MA', label: 'Massachusetts' },
-  { value: 'MI', label: 'Michigan' }, { value: 'MN', label: 'Minnesota' },
-  { value: 'MS', label: 'Mississippi' }, { value: 'MO', label: 'Missouri' },
-  { value: 'MT', label: 'Montana' }, { value: 'NE', label: 'Nebraska' },
-  { value: 'NV', label: 'Nevada' }, { value: 'NH', label: 'New Hampshire' },
-  { value: 'NJ', label: 'New Jersey' }, { value: 'NM', label: 'New Mexico' },
-  { value: 'NY', label: 'New York' }, { value: 'NC', label: 'North Carolina' },
-  { value: 'ND', label: 'North Dakota' }, { value: 'OH', label: 'Ohio' },
-  { value: 'OK', label: 'Oklahoma' }, { value: 'OR', label: 'Oregon' },
-  { value: 'PA', label: 'Pennsylvania' }, { value: 'RI', label: 'Rhode Island' },
-  { value: 'SC', label: 'South Carolina' }, { value: 'SD', label: 'South Dakota' },
-  { value: 'TN', label: 'Tennessee' }, { value: 'TX', label: 'Texas' },
-  { value: 'UT', label: 'Utah' }, { value: 'VT', label: 'Vermont' },
-  { value: 'VA', label: 'Virginia' }, { value: 'WA', label: 'Washington' },
-  { value: 'WV', label: 'West Virginia' }, { value: 'WI', label: 'Wisconsin' },
-  { value: 'WY', label: 'Wyoming' },
-];
-
 // ── User directory ─────────────────────────────────────────────────────────
 // The system's user accounts. District membership REFERENCES a user by id — a
 // district member is always a real user, never a free-typed person, so their
@@ -228,13 +193,15 @@ export const currentUser = {
   title: 'Lead analyst',
   division: 'natural-resources',
   email: 'j.okafor@parks.ca.gov',
-  phone: '(916) 555-0148',
+  // Phone is stored canonically as E.164; the profile shows it formatted.
+  phone: '+19165550148',
   address: {
-    street: '1416 9th Street',
-    unit: 'Suite 1405',
+    country: 'US',
+    line1: '1416 9th Street',
+    line2: 'Suite 1405',
     city: 'Sacramento',
-    state: 'CA',
-    zip: '95814',
+    region: 'CA',
+    postalCode: '95814',
   } as Address,
   memberSince: 'Mar 2021',
 

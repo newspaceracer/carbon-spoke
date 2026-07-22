@@ -10,8 +10,10 @@
 //   • Personnel & insurance — a yes/no that conditionally requires a signed waiver
 //
 // All conditional show/hide + the participant roster live in this component's own
-// client <script>; the wizard's step navigation lives on the page.
+// client script; the wizard's step navigation lives on the page.
 import PermitSection from './PermitSection.astro';
+import AddressFieldset from './AddressFieldset.astro';
+import PhoneField from './PhoneField.astro';
 import { applicantOrg, applicant, seedParticipants } from '../data/application';
 import { states } from '../data/user';
 ---
@@ -55,7 +57,9 @@ import { states } from '../data/user';
       <cds-text-input id="pi-first" label="First name"></cds-text-input>
       <cds-text-input id="pi-last" label="Last name"></cds-text-input>
       <cds-text-input id="pi-title" label="Title"></cds-text-input>
-      <cds-text-input id="pi-phone" type="tel" label="Phone number"></cds-text-input>
+      <div class="field-grid__wide">
+        <PhoneField id="pi-phone" label="Phone number" />
+      </div>
       <div class="field-grid__wide">
         <cds-text-input id="pi-email" type="email" label="Email address"></cds-text-input>
       </div>
@@ -133,18 +137,15 @@ import { states } from '../data/user';
       <cds-text-input id="picof-first" label="First name"></cds-text-input>
       <cds-text-input id="picof-last" label="Last name"></cds-text-input>
       <cds-text-input id="picof-title" label="Title"></cds-text-input>
-      <cds-text-input id="picof-phone" type="tel" label="Phone number"></cds-text-input>
+      <div class="field-grid__wide">
+        <PhoneField id="picof-phone" label="Phone number" />
+      </div>
       <div class="field-grid__wide">
         <cds-text-input id="picof-email" type="email" label="Email address"></cds-text-input>
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="picof-street" label="Street address"></cds-text-input>
+        <AddressFieldset prefix="picof-addr" country="US" value={{ country: 'US', region: 'CA' }} />
       </div>
-      <cds-text-input id="picof-city" label="City"></cds-text-input>
-      <cds-dropdown id="picof-state" title-text="State" value="CA">
-        {states.map((s) => <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>)}
-      </cds-dropdown>
-      <cds-text-input id="picof-zip" label="ZIP code"></cds-text-input>
     </div>
   </PermitSection>
 
@@ -215,7 +216,9 @@ import { states } from '../data/user';
       <cds-text-input id="np-first" label="First name"></cds-text-input>
       <cds-text-input id="np-last" label="Last name"></cds-text-input>
       <cds-text-input id="np-title" label="Title"></cds-text-input>
-      <cds-text-input id="np-phone" type="tel" label="Phone number"></cds-text-input>
+      <div class="field-grid__wide">
+        <PhoneField id="np-phone" label="Phone number" />
+      </div>
       <div class="field-grid__wide">
         <cds-text-input id="np-email" type="email" label="Email address"></cds-text-input>
       </div>
@@ -231,10 +234,29 @@ import { states } from '../data/user';
 </cds-modal>
 
 <script>
-  import { applicant, seedParticipants, type Participant } from '../data/application';
+  import { applicant, seedParticipants } from '../data/application';
+  import type { Participant } from '../data/application';
+  import { wireAddressFieldset } from '../lib/address-fields';
+  import { wirePhoneField, formatDisplay } from '../lib/phone';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id) as T | null;
+
+  // Country-aware contact controllers. Every <PhoneField>/<AddressFieldset> must
+  // be wired to populate its calling-code list / render its fields — including
+  // the PICOF block that starts hidden (wiring a hidden element is fine). PI and
+  // participant phones are referenced later, so keep their controllers.
+  const phoneRoot = (prefix: string) =>
+    document.querySelector<HTMLElement>(`[data-phone][data-prefix="${prefix}"]`);
+  const piPhoneRoot = phoneRoot('pi-phone');
+  const npPhoneRoot = phoneRoot('np-phone');
+  const picofPhoneRoot = phoneRoot('picof-phone');
+  const picofAddrRoot = document.querySelector<HTMLElement>('[data-address][data-prefix="picof-addr"]');
+
+  const piPhone = piPhoneRoot ? wirePhoneField(piPhoneRoot) : null;
+  const npPhone = npPhoneRoot ? wirePhoneField(npPhoneRoot) : null;
+  if (picofPhoneRoot) wirePhoneField(picofPhoneRoot);
+  if (picofAddrRoot) wireAddressFieldset(picofAddrRoot);
 
   // ── Principal investigator: profile auto-fill ───────────────────────────
   // Checking "I am the PI" fills the fields from the submitter's profile;
@@ -244,7 +266,6 @@ import { states } from '../data/user';
     'pi-first': applicant.firstName,
     'pi-last': applicant.lastName,
     'pi-title': applicant.title,
-    'pi-phone': applicant.phone,
     'pi-email': applicant.email,
   };
   const setPiFields = (fill: boolean) => {
@@ -252,6 +273,8 @@ import { states } from '../data/user';
       const el = $(id) as any;
       if (el) el.value = fill ? v : '';
     });
+    // Phone is a widget, not a plain field — route it through its controller.
+    piPhone?.setValue(fill ? applicant.phone : '');
   };
   piIsMe?.addEventListener('cds-checkbox-changed', () => {
     setPiFields(!!piIsMe.checked);
@@ -342,7 +365,7 @@ import { states } from '../data/user';
   const body = $('participants-body');
   const emptyNote = $('participants-empty');
   const modal = $('participant-modal') as any;
-  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM12 2H20V4H12zM8 28V8H24V28z"/></svg>`;
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
 
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -354,7 +377,7 @@ import { states } from '../data/user';
       <cds-table-cell>${esc(`${p.firstName} ${p.lastName}`.trim())}</cds-table-cell>
       <cds-table-cell>${esc(p.title)}</cds-table-cell>
       <cds-table-cell>${esc(p.email)}</cds-table-cell>
-      <cds-table-cell>${esc(p.phone)}</cds-table-cell>
+      <cds-table-cell>${esc(formatDisplay(p.phone))}</cds-table-cell>
       <cds-table-cell>${esc(p.comments)}</cds-table-cell>
       <cds-table-cell>
         <cds-icon-button kind="ghost" size="sm" align="left" class="row-remove">
@@ -382,8 +405,11 @@ import { states } from '../data/user';
     if (modal) modal.open = true;
   });
 
-  const npIds = ['np-first', 'np-last', 'np-title', 'np-phone', 'np-email', 'np-comments'];
-  const clearModal = () => npIds.forEach((id) => { const el = $(id) as any; if (el) el.value = ''; });
+  const npIds = ['np-first', 'np-last', 'np-title', 'np-email', 'np-comments'];
+  const clearModal = () => {
+    npIds.forEach((id) => { const el = $(id) as any; if (el) el.value = ''; });
+    npPhone?.setValue('');
+  };
 
   $('np-add')?.addEventListener('click', () => {
     const val = (id: string) => (($(id) as any)?.value ?? '').toString().trim();
@@ -395,7 +421,7 @@ import { states } from '../data/user';
       lastName: last,
       title: val('np-title'),
       email: val('np-email'),
-      phone: val('np-phone'),
+      phone: npPhone?.getValue() ?? '', // canonical E.164
       comments: val('np-comments'),
     });
     clearModal();
@@ -445,6 +471,12 @@ import { states } from '../data/user';
     .field-grid {
       grid-template-columns: 1fr;
     }
+  }
+  /* Inside the modal the grid fills the modal body: Carbon sizes the modal itself
+     (by viewport %), so the page's readable 46rem measure would freeze the fields
+     and leave dead space as the modal grows on larger screens. */
+  cds-modal-body .field-grid {
+    max-width: none;
   }
 
   /* PI fields sit under the "I am the PI" checkbox, spaced from it and the

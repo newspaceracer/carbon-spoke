@@ -1,0 +1,39 @@
+---
+// An INTERNATIONAL phone field: a searchable calling-code picker (stock
+// cds-combo-box, populated client-side from libphonenumber-js) beside a national
+// number field (cds-text-input). Stores a canonical E.164 string.
+//
+// Pure MARKUP — no <script>. The page wires it via wirePhoneField(root, …)
+// (src/lib/phone.ts) and reads/writes E.164 through the returned controller.
+interface Props {
+  /** Unique id prefix. Combo is `${id}-cc`, number field is `${id}-num`. */
+  id: string;
+  /** Visible label on the number field. */
+  label: string;
+  /** Initial value as an E.164 string (e.g. "+19165550148"). */
+  value?: string;
+}
+
+const { id, label, value } = Astro.props;
+---
+
+<div class="phone-field" data-phone data-prefix={id} data-value={value ?? ''}>
+  <cds-combo-box id={`${id}-cc`} title-text="Country code" label="Country"></cds-combo-box>
+  <cds-text-input id={`${id}-num`} type="tel" label={label}></cds-text-input>
+</div>
+
+<style>
+  /* Layout only — dial-code picker beside the number, stacking when narrow.
+     Control look stays in cds-* + --cds-* tokens. */
+  .phone-field {
+    display: grid;
+    grid-template-columns: minmax(9rem, 13rem) 1fr;
+    gap: 1rem;
+    align-items: end;
+  }
+  @media (max-width: 42rem) {
+    .phone-field {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

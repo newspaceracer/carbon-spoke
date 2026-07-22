@@ -106,6 +106,19 @@ body {
 .t-label-01 { font-size: 0.75rem; font-weight: 400; line-height: 1.33333; letter-spacing: 0.32px; }
 .t-helper-text-01 { font-size: 0.75rem; font-weight: 400; line-height: 1.33333; letter-spacing: 0.32px; }
 
+/* ---- MODAL WIDTH CAP -----------------------------------------------------
+   Carbon sizes a modal by VIEWPORT PERCENTAGE (a md modal is ~48% wide on large
+   screens), so on a wide monitor a short form modal balloons — its fields either
+   stretch awkwardly or leave dead space. Cap the modal CONTAINER at a readable
+   form width. The container is exposed as ::part(dialog) (Carbon's sanctioned
+   styling API — not a shadow-internal), so this one global rule covers EVERY
+   modal. It's a MAX: sm/xs modals are already narrower and are untouched; only
+   oversized md modals get clamped. Fields fill the bounded modal via each step's
+   `cds-modal-body .field-grid` rule. */
+cds-modal::part(dialog) {
+  max-inline-size: 48rem;
+}
+
 /* Identity chip (Avatar) — ONE home for the round initials/glyph chip used by the
    <Avatar> component AND client-rendered chips (see src/lib/avatar.ts). Defined
    globally so chips created at runtime (JS-built table rows / cards) are styled

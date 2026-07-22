@@ -1,0 +1,236 @@
+---
+// Step 3 of the permit application — the Study areas page. Two questions, each a
+// PermitSection composed from stock cds-* controls:
+//   • Study area parks — a single FILTERABLE cds-multi-select over the whole
+//                        California State Parks directory. Each option shows the
+//                        park AND its district, and Carbon's filter matches the
+//                        option's text, so typing a park name OR a district name
+//                        narrows the list. Selections echo below in a cds-table
+//                        roster (Park · District) the applicant can remove from,
+//                        mirroring the additional-participants table.
+//   • GIS location    — an optional multi-file cds-file-uploader-drop-container
+//                        for the study-area boundary/location data (a Shapefile
+//                        bundle is several files, so it accepts multiple).
+//
+// The chip <-> multi-select sync and the file list live in this component's own
+// client script; wizard step navigation lives on the page.
+import PermitSection from './PermitSection.astro';
+import { parks, seedStudyAreas } from '../data/parks';
+---
+
+<div class="sa">
+  <!-- ── Study area parks ─────────────────────────────────────────────────── -->
+  <PermitSection title="Study area parks">
+    <p class="section-hint t-body-01">
+      Select every California State Park unit where field work will take place. Search by park
+      name or by district — start typing to narrow the list — and add as many as apply.
+    </p>
+
+    <div class="select-wrap">
+      <cds-multi-select
+        id="study-areas-select"
+        filterable
+        selection-feedback="fixed"
+        title-text="Parks"
+        label="Search by park or district name"
+        helper-text="Every park in the state park system, grouped by field district."
+        value={seedStudyAreas.join(',')}
+      >
+        {parks.map((p) => (
+          <cds-multi-select-item value={p.id}>{p.name} — {p.district}</cds-multi-select-item>
+        ))}
+      </cds-multi-select>
+    </div>
+
+    <div class="selected">
+      <p class="selected__label t-label-01">
+        Selected parks <span id="sa-count"></span>
+      </p>
+      <cds-table id="sa-table">
+        <cds-table-head>
+          <cds-table-header-row>
+            <cds-table-header-cell>Park</cds-table-header-cell>
+            <cds-table-header-cell>District</cds-table-header-cell>
+            <cds-table-header-cell>Remove</cds-table-header-cell>
+          </cds-table-header-row>
+        </cds-table-head>
+        <cds-table-body id="sa-body"></cds-table-body>
+      </cds-table>
+      <p id="sa-empty" class="empty-note t-body-01">
+        No parks selected yet — search above to add study areas.
+      </p>
+    </div>
+  </PermitSection>
+
+  <!-- ── GIS location ─────────────────────────────────────────────────────── -->
+  <PermitSection title="GIS location">
+    <p class="section-hint t-body-01">
+      If you have geospatial data delineating your study areas, upload it here. This helps
+      reviewers locate the exact sites within each park.
+    </p>
+
+    <div class="uploader">
+      <p class="field-label t-label-01">GIS files <span class="opt">(optional)</span></p>
+      <cds-file-uploader-drop-container
+        id="gis-drop"
+        multiple
+        accept=".zip,.shp,.shx,.dbf,.prj,.kml,.kmz,.geojson,.json,.gpkg,.gdb"
+      >
+        Drag and drop GIS files here or click to upload
+      </cds-file-uploader-drop-container>
+      <div id="gis-list" class="uploaded-list"></div>
+      <p class="uploader-hint t-label-01">
+        Accepted: a zipped Shapefile (.zip), KML/KMZ, GeoJSON, or GeoPackage (.gpkg). A
+        Shapefile is several files (.shp, .shx, .dbf, .prj) — add them together or zip them.
+      </p>
+    </div>
+  </PermitSection>
+</div>
+
+<script>
+  import { parkById, seedStudyAreas } from '../data/parks';
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
+    document.getElementById(id) as T | null;
+
+  // ── Study area parks: multi-select <-> selected-parks table sync ─────────
+  // The filterable cds-multi-select is the source of truth for selection; the
+  // table below mirrors it (Park · District, one row each) and lets the
+  // applicant remove a park without reopening the menu — the same roster pattern
+  // as the additional-participants table. `selected` is seeded so the rows
+  // render before the element upgrades (property reads would race), then
+  // resynced from the element's `value` on every user change.
+  const select = $('study-areas-select') as any;
+  const body = $('sa-body');
+  const emptyNote = $('sa-empty');
+  const countEl = $('sa-count');
+
+  let selected: string[] = [...seedStudyAreas];
+
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
+
+  const setSelectValue = (vals: string[]) => {
+    if (select) select.value = vals.join(',');
+  };
+
+  const renderTable = () => {
+    if (countEl) countEl.textContent = selected.length ? `(${selected.length})` : '';
+    if (emptyNote) emptyNote.hidden = selected.length > 0;
+    if (!body) return;
+    body.innerHTML = '';
+    selected.forEach((id) => {
+      const park = parkById.get(id);
+      const name = park ? park.name : id;
+      const row = document.createElement('cds-table-row');
+      row.innerHTML = `
+        <cds-table-cell>${esc(name)}</cds-table-cell>
+        <cds-table-cell>${esc(park ? park.district : '')}</cds-table-cell>
+        <cds-table-cell>
+          <cds-icon-button kind="ghost" size="sm" align="left" class="row-remove">
+            ${trash}
+            <span slot="tooltip-content">Remove ${esc(name)}</span>
+          </cds-icon-button>
+        </cds-table-cell>`;
+      row.querySelector('.row-remove')?.addEventListener('click', () => {
+        selected = selected.filter((x) => x !== id);
+        setSelectValue(selected); // deselect it in the menu too
+        renderTable();
+      });
+      body.appendChild(row);
+    });
+  };
+
+  // After any menu gesture the element's `value` is authoritative — mirror it.
+  select?.addEventListener('cds-multi-select-selected', () => {
+    const v = (select.value ?? '') as string;
+    selected = v ? v.split(',').filter(Boolean) : [];
+    renderTable();
+  });
+
+  renderTable(); // initial paint from the seed
+
+  // ── GIS location: multi-file upload ──────────────────────────────────────
+  // A static prototype can't store bytes, so "uploaded" means: render a Carbon
+  // file item per chosen file. Multiple files accumulate (a Shapefile bundle),
+  // each removable on its own.
+  const gisList = $('gis-list');
+
+  $('gis-drop')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+    const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
+    if (!files || !files.length || !gisList) return;
+    files.forEach((file) => {
+      const item = document.createElement('cds-file-uploader-item') as any;
+      item.state = 'edit';
+      item.size = 'md';
+      item.textContent = file.name;
+      item.addEventListener('cds-file-uploader-item-deleted', () => item.remove());
+      gisList.appendChild(item);
+    });
+  });
+</script>
+
+<style>
+  /* Rhythm between the two sub-sections — matches ResearchTeamStep so the
+     application reads as one system. */
+  .sa {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* The multi-select is a form control; cap its width like the other fields. */
+  .select-wrap {
+    max-width: 46rem;
+  }
+
+  /* Selected-parks summary — a labeled roster table that mirrors the menu
+     selection (Park · District · remove), the same construction as the
+     additional-participants table. Layout only; the controls are stock cds-*. */
+  .selected {
+    margin-top: 1.5rem;
+    max-width: 46rem;
+  }
+  .selected__label {
+    margin: 0 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  #sa-table {
+    display: block;
+  }
+  .empty-note {
+    margin: 1rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty-note[hidden] {
+    display: none;
+  }
+
+  /* Uploader block — a labeled dropzone (stock cds-file-uploader-drop-container)
+     plus its help text; layout only. */
+  .uploader {
+    max-width: 46rem;
+  }
+  .field-label {
+    margin: 0 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .field-label .opt {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .uploaded-list {
+    margin-top: 0.5rem;
+  }
+  .uploader-hint {
+    margin: 0.5rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

@@ -1,0 +1,59 @@
+---
+// A COUNTRY-AWARE address fieldset: a Country picker (stock cds-dropdown) on top
+// of a container whose fields are (re)built client-side per the selected
+// country's libaddressinput format (src/data/address.ts + lib/address-fields.ts).
+//
+// Pure MARKUP + data-attributes — no <script> of its own. The page that uses it
+// calls wireAddressFieldset(root, …) so it keeps control of view-first /
+// persistence / reveal behavior. The empty [data-fields] container is filled at
+// runtime; its layout classes are GLOBAL (below) because those injected fields
+// can't match a page- or component-scoped selector.
+import { countries } from '../data/address';
+import type { Address } from '../data/address';
+
+interface Props {
+  /** Unique id prefix for this fieldset's controls (e.g. "addr", "picof-addr").
+   *  The country picker is `${prefix}-country`; each field is `${prefix}-${key}`. */
+  prefix: string;
+  /** Initial country (ISO 3166-1 alpha-2). Defaults to US. */
+  country?: string;
+  /** Initial field values (a partial Address). */
+  value?: Partial<Address>;
+}
+
+const { prefix, country = 'US', value } = Astro.props;
+const initial = { country, ...(value ?? {}) };
+---
+
+<div class="address-fieldset" data-address data-prefix={prefix} data-value={JSON.stringify(initial)}>
+  <cds-dropdown id={`${prefix}-country`} title-text="Country" value={initial.country}>
+    {countries.map((c) => (
+      <cds-dropdown-item value={c.value}>{c.label}</cds-dropdown-item>
+    ))}
+  </cds-dropdown>
+  <div data-fields class="address-grid"></div>
+</div>
+
+<style is:global>
+  /* Layout only (component look stays in cds-* + --cds-* tokens). GLOBAL because
+     the address fields are injected at runtime and would not match a scoped rule.
+     Mirrors the .field-grid rhythm the surrounding forms use. */
+  .address-fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .address-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+  }
+  .address-grid__wide {
+    grid-column: 1 / -1;
+  }
+  @media (max-width: 42rem) {
+    .address-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

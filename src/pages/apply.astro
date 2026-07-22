@@ -1,0 +1,356 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — the public applicant's top bar.
+     header: identity banner (g100 zone) — title, tracking id, Draft status, dates.
+     spine:  main.page > .cds--css-grid  (rail col 4 = progress indicator / main col 12 = step)
+     sections:
+       - Progress (rail) -> vertical cds-progress-indicator, one step per page; the
+                            steps are clickable so the applicant can jump around a Draft.
+       - Steps (main)    -> one <section data-step> per page, only the current shown:
+                            • Research team   -> <ResearchTeamStep/> (fully built)
+                            • Project information / Study areas / Data collection /
+                              Additional documents / Application summary -> placeholders
+       - Wizard actions  -> Back / Save draft / Next (Submit on the summary step)
+   A new application is a Draft; the whole flow is prototype-local (no backend).
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import ResearchTeamStep from '../components/ResearchTeamStep.astro';
+import ProjectInfoStep from '../components/ProjectInfoStep.astro';
+import StudyAreasStep from '../components/StudyAreasStep.astro';
+import DataCollectionStep from '../components/DataCollectionStep.astro';
+import { applicationSteps, draft } from '../data/application';
+
+// Steps with a fully-built panel; the rest render an honest placeholder.
+const builtSteps = new Set(['research-team', 'project-info', 'study-areas', 'data-collection']);
+
+// Home-page card metadata — the hub globs pages and reads this to self-list.
+export const prototype = {
+  title: 'Permit application',
+  summary:
+    'The public applicant flow: a member of the public creates a Scientific Research & ' +
+    'Collection permit application as a multi-page Draft, starting with the research team.',
+  tag: 'Public flow',
+};
+---
+
+<BaseLayout title="New permit application">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <!-- Identity banner — dark g100 zone, consistent with the permit + profile headers. -->
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <cds-breadcrumb no-trailing-slash class="banner__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href="/permits">Permits</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">New application</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <div class="banner__lead">
+          <h1 class="banner__title t-heading-05">Scientific Research &amp; Collection Permit application</h1>
+          <div class="banner__id-row">
+            <span class="banner__number t-heading-03">{draft.id}</span>
+            <cds-icon-indicator size="16" kind="incomplete" label={draft.status}></cds-icon-indicator>
+          </div>
+        </div>
+
+        <dl class="banner__stats">
+          <div class="stat">
+            <dt class="stat__label t-label-01">Status</dt>
+            <dd class="stat__value t-body-01">{draft.status}</dd>
+          </div>
+          <div class="stat">
+            <dt class="stat__label t-label-01">Started</dt>
+            <dd class="stat__value t-body-01">{draft.startedOn}</dd>
+          </div>
+          <div class="stat">
+            <dt class="stat__label t-label-01">Pages</dt>
+            <dd class="stat__value t-body-01">{applicationSteps.length}</dd>
+          </div>
+        </dl>
+      </div>
+    </header>
+
+    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+      <!-- ── Progress rail: jump between pages of the Draft ──────────────────── -->
+      <aside class="rail cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-4">
+        <nav class="rail__inner" aria-label="Application pages">
+          <cds-progress-indicator id="wizard-progress" vertical>
+            {applicationSteps.map((s, i) => (
+              <cds-progress-step
+                data-index={i}
+                data-step-id={s.id}
+                label={s.label}
+                secondary-label={s.secondaryLabel}
+              ></cds-progress-step>
+            ))}
+          </cds-progress-indicator>
+        </nav>
+      </aside>
+
+      <!-- ── Step panels: only the current page is shown ────────────────────── -->
+      <div class="main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+        <section class="step" data-step="research-team">
+          <ResearchTeamStep />
+        </section>
+
+        <section class="step" data-step="project-info" hidden>
+          <ProjectInfoStep />
+        </section>
+
+        <section class="step" data-step="study-areas" hidden>
+          <StudyAreasStep />
+        </section>
+
+        <section class="step" data-step="data-collection" hidden>
+          <DataCollectionStep />
+        </section>
+
+        {applicationSteps.filter((s) => !builtSteps.has(s.id)).map((s) => (
+          <section class="step" data-step={s.id} hidden>
+            <div class="placeholder">
+              <h2 class="placeholder__title t-heading-04">{s.label}</h2>
+              <p class="placeholder__sub t-body-02">{s.secondaryLabel}</p>
+              <cds-inline-notification
+                kind="info"
+                low-contrast
+                hide-close-button
+                title={s.review ? 'Summary page' : 'Coming next'}
+                subtitle={
+                  s.review
+                    ? 'This page will summarize every answer for a final review before submitting.'
+                    : 'This page of the application is part of the flow and will be built out here.'
+                }
+              ></cds-inline-notification>
+            </div>
+          </section>
+        ))}
+
+        <!-- Shared wizard actions — Back / Save draft / Next (Submit on the last page). -->
+        <footer class="wizard-actions">
+          <cds-button id="wizard-back" kind="secondary" hidden>Back</cds-button>
+          <div class="wizard-actions__spacer"></div>
+          <cds-button id="wizard-save" kind="ghost">Save draft</cds-button>
+          <cds-button id="wizard-next">Next</cds-button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- carbon-checked: the feedback IS a stock cds-toast-notification (created in
+         the script below); this is only a fixed-position stacking host for it —
+         Carbon ships no positioning container for toasts, so a plain host is right. -->
+    <div id="toast-host" class="toast-host" aria-live="polite"></div>
+  </main>
+</BaseLayout>
+
+<script>
+  import { applicationSteps } from '../data/application';
+
+  const steps = applicationSteps.map((s) => s.id);
+  const progress = document.getElementById('wizard-progress') as any;
+  const panels = new Map(
+    Array.from(document.querySelectorAll<HTMLElement>('section.step')).map((el) => [
+      el.dataset.step!,
+      el,
+    ]),
+  );
+  const backBtn = document.getElementById('wizard-back') as any;
+  const nextBtn = document.getElementById('wizard-next') as any;
+  const saveBtn = document.getElementById('wizard-save');
+
+  let current = 0;
+
+  const render = (scroll = true) => {
+    // Panels: show only the current page.
+    steps.forEach((id, i) => {
+      const panel = panels.get(id);
+      if (panel) panel.hidden = i !== current;
+    });
+    // The indicator owns step states — set currentIndex and it marks the steps
+    // before/at/after as complete/current/incomplete.
+    if (progress) progress.currentIndex = current;
+    // Actions: Back hidden on the first page; primary becomes Submit on the last.
+    backBtn.hidden = current === 0;
+    const last = current === steps.length - 1;
+    nextBtn.textContent = last ? 'Submit application' : 'Next';
+    // The top of the step area is the useful scroll target when the page changes
+    // (skipped on the initial load so we don't jump past the banner).
+    if (scroll) {
+      document.querySelector('section.step:not([hidden])')?.scrollIntoView({
+        block: 'start',
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  const goTo = (i: number) => {
+    current = Math.max(0, Math.min(steps.length - 1, i));
+    render();
+  };
+
+  // Assigning onChange makes the steps keyboard-clickable (Carbon gates step
+  // interactivity on onChange being a function) AND is the navigation callback:
+  // clicking or Entering a step jumps straight to that page (Draft = free nav).
+  if (progress) progress.onChange = (e: CustomEvent<{ index: number }>) => goTo(e.detail.index);
+
+  backBtn.addEventListener('click', () => goTo(current - 1));
+  nextBtn.addEventListener('click', () => {
+    if (current === steps.length - 1) {
+      toast('success', 'Application submitted', 'Your application has been sent for review.');
+      return;
+    }
+    goTo(current + 1);
+  });
+  saveBtn?.addEventListener('click', () =>
+    toast('success', 'Draft saved', 'You can return to finish this application anytime.'),
+  );
+
+  // Feedback for Save draft / Submit — a stock cds-toast-notification appended to
+  // the host and auto-dismissed. Overlay-style feedback, out of grid flow.
+  const host = document.getElementById('toast-host');
+  function toast(kind: string, title: string, subtitle: string) {
+    if (!host) return;
+    const t = document.createElement('cds-toast-notification') as any;
+    t.kind = kind;
+    t.title = title;
+    t.subtitle = subtitle;
+    t.timeout = 5000;
+    t.lowContrast = true;
+    host.appendChild(t);
+    t.addEventListener('cds-notification-closed', () => t.remove());
+  }
+
+  // Reflect the initial state on load (no scroll).
+  render(false);
+</script>
+
+<style>
+  /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens.
+     body already offsets the fixed ui-shell header (theme.css padding-top). */
+  .page {
+    padding-block: 0 6rem;
+  }
+
+  /* Identity banner — full-bleed dark g100 band, re-centered to the 2x Grid, the
+     same construction as PermitHeader / profile so the headers read as one system. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__crumb {
+    display: block;
+    margin-bottom: var(--cds-spacing-05, 1rem);
+  }
+  .banner__lead {
+    min-width: 0;
+  }
+  .banner__title {
+    margin: 0;
+    max-width: 46rem;
+  }
+  .banner__id-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-04, 0.75rem);
+    margin-top: var(--cds-spacing-03, 0.5rem);
+  }
+  .banner__number {
+    color: var(--cds-text-primary, #f4f4f4);
+  }
+  .banner__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: var(--cds-spacing-06, 1.5rem);
+    margin: var(--cds-spacing-06, 1.5rem) 0 0;
+    padding-top: var(--cds-spacing-06, 1.5rem);
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .stat {
+    min-width: 0;
+  }
+  .stat__label {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .stat__value {
+    margin: 0.25rem 0 0;
+    color: var(--cds-text-primary, #161616);
+  }
+
+  /* Body grid below the full-bleed banner. */
+  .body {
+    margin-top: var(--cds-spacing-07, 2rem);
+  }
+
+  /* Progress rail — sticky so the pages stay reachable while the form scrolls.
+     Offset accounts for the fixed 48px UI-Shell header + a little breathing room. */
+  .rail__inner {
+    position: sticky;
+    top: 4rem;
+  }
+  @media (max-width: 66rem) {
+    /* Below lg the rail stacks above the form; drop the sticky so it scrolls away. */
+    .rail__inner {
+      position: static;
+    }
+  }
+
+  .main {
+    min-width: 0;
+  }
+
+  /* Placeholder pages — a plain editorial block; the notification states intent
+     honestly rather than pretending the page is built. */
+  .placeholder {
+    max-width: 46rem;
+  }
+  .placeholder__title {
+    margin: 0;
+  }
+  .placeholder__sub {
+    margin: 0.25rem 0 1.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* Wizard actions — a top hairline binds the buttons to the step above; Back sits
+     on the left, Save draft + Next on the right. */
+  .wizard-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 2.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .wizard-actions__spacer {
+    flex: 1 1 auto;
+  }
+  #wizard-back[hidden] {
+    display: none;
+  }
+
+  /* carbon-checked: fixed-position stacking host for stock cds-toast-notification
+     elements (Carbon ships no toast positioning container). */
+  .toast-host {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+</style>
