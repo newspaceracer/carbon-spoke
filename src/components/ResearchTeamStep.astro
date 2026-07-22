@@ -15,7 +15,6 @@ import PermitSection from './PermitSection.astro';
 import AddressFieldset from './AddressFieldset.astro';
 import PhoneField from './PhoneField.astro';
 import { applicantOrg, applicant, seedParticipants } from '../data/application';
-import { states } from '../data/user';
 ---
 
 <div class="rt">
@@ -31,16 +30,8 @@ import { states } from '../data/user';
       <cds-text-input id="org-phone" type="tel" label="Organization phone (required)" value={applicantOrg.phone}></cds-text-input>
       <cds-text-input id="org-email" type="email" label="Organization email (required)" value={applicantOrg.email}></cds-text-input>
       <div class="field-grid__wide">
-        <cds-text-input id="org-street" label="Street address (required)" value={applicantOrg.address.street}></cds-text-input>
+        <AddressFieldset prefix="org-addr" country={applicantOrg.address.country} value={applicantOrg.address} />
       </div>
-      <div class="field-grid__wide">
-        <cds-text-input id="org-unit" label="Suite / unit (optional)" value={applicantOrg.address.unit}></cds-text-input>
-      </div>
-      <cds-text-input id="org-city" label="City (required)" value={applicantOrg.address.city}></cds-text-input>
-      <cds-dropdown id="org-state" title-text="State (required)" value={applicantOrg.address.state}>
-        {states.map((s) => <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>)}
-      </cds-dropdown>
-      <cds-text-input id="org-zip" label="ZIP code (required)" value={applicantOrg.address.zip}></cds-text-input>
     </div>
   </PermitSection>
 
@@ -62,6 +53,9 @@ import { states } from '../data/user';
       </div>
       <div class="field-grid__wide">
         <cds-text-input id="pi-email" type="email" label="Email address (required)"></cds-text-input>
+      </div>
+      <div class="field-grid__wide">
+        <AddressFieldset prefix="pi-addr" country="US" />
       </div>
     </div>
 
@@ -252,11 +246,19 @@ import { states } from '../data/user';
   const piPhoneRoot = phoneRoot('pi-phone');
   const npPhoneRoot = phoneRoot('np-phone');
   const picofPhoneRoot = phoneRoot('picof-phone');
-  const picofAddrRoot = document.querySelector<HTMLElement>('[data-address][data-prefix="picof-addr"]');
+  const addrRoot = (prefix: string) =>
+    document.querySelector<HTMLElement>(`[data-address][data-prefix="${prefix}"]`);
+  const orgAddrRoot = addrRoot('org-addr');
+  const piAddrRoot = addrRoot('pi-addr');
+  const picofAddrRoot = addrRoot('picof-addr');
 
   const piPhone = piPhoneRoot ? wirePhoneField(piPhoneRoot) : null;
   const npPhone = npPhoneRoot ? wirePhoneField(npPhoneRoot) : null;
   if (picofPhoneRoot) wirePhoneField(picofPhoneRoot);
+  // Org address is display/edit only; PI address is driven by the "I am the PI"
+  // auto-fill below, so keep its controller.
+  if (orgAddrRoot) wireAddressFieldset(orgAddrRoot);
+  const piAddr = piAddrRoot ? wireAddressFieldset(piAddrRoot) : null;
   if (picofAddrRoot) wireAddressFieldset(picofAddrRoot);
 
   // ── Principal investigator: profile auto-fill ───────────────────────────
@@ -274,8 +276,10 @@ import { states } from '../data/user';
       const el = $(id) as any;
       if (el) el.value = fill ? v : '';
     });
-    // Phone is a widget, not a plain field — route it through its controller.
+    // Phone and address are widgets, not plain fields — route them through their
+    // controllers. Clearing resets the address to an empty US form.
     piPhone?.setValue(fill ? applicant.phone : '');
+    piAddr?.setValue(fill ? applicant.address : { country: 'US' });
   };
   piIsMe?.addEventListener('cds-checkbox-changed', () => {
     setPiFields(!!piIsMe.checked);

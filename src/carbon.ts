@@ -44,3 +44,9 @@ import '@carbon/web-components/es/components/textarea/index.js';
 import '@carbon/web-components/es/components/tile/index.js';
 import '@carbon/web-components/es/components/toggle/index.js';
 import '@carbon/web-components/es/components/ui-shell/index.js';
+
+// Runtime accessible-name remediation for cds-text-input / cds-radio-button /
+// cds-multi-select, which ship without a working label↔control association in
+// @carbon/web-components@2.59.0. Loaded last so every element is registered
+// first. See src/lib/carbon-a11y.ts (upstream fix = bump the Carbon version).
+import './lib/carbon-a11y';

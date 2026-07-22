@@ -50,8 +50,14 @@ const fmtMDY = (mdy: string): string => {
   const [m, day, y] = mdy.split('/').map(Number);
   return `${MONTHS[m - 1]} ${day}, ${y}`;
 };
-const fmtAddress = (a: Address): string =>
-  [a.street, a.unit, `${a.city}, ${a.state} ${a.zip}`].filter(Boolean).join(', ');
+// Generic country-aware address → one line. Region/postal may be absent for some
+// countries, so build the locality segment defensively (no stray commas).
+const fmtAddress = (a: Address): string => {
+  const locality = [a.city, [a.region, a.postalCode].filter(Boolean).join(' ')]
+    .filter(Boolean)
+    .join(', ');
+  return [a.line1, a.line2, locality].filter(Boolean).join(', ');
+};
 const fullName = (first: string, last: string): string => `${first} ${last}`.trim();
 
 // ── Section value sets ───────────────────────────────────────────────────────

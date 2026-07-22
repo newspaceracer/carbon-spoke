@@ -4,18 +4,12 @@
 // public who submits the permit, and the application starts life as a Draft.
 //
 // Every personal / organizational detail is INVENTED (house no-real-data rule)
-// and deterministic — same values every build. Address `state` values match the
-// USPS codes in `states` (re-exported from user.ts) so the shared dropdown works.
-
-export interface Address {
-  street: string;
-  /** Suite / floor / unit — optional. */
-  unit: string;
-  city: string;
-  /** Two-letter USPS state code, matched against `states` (user.ts). */
-  state: string;
-  zip: string;
-}
+// and deterministic — same values every build. Addresses use the country-aware
+// generic `Address` shape (data/address.ts) that <AddressFieldset> reads/writes,
+// so the form, this seed, and the summary all speak one address model; `region`
+// carries the USPS code for US addresses (e.g. 'CA'), matched against `states`.
+import type { Address } from './address';
+export type { Address };
 
 /** One step in the application wizard, shown in the progress indicator. The
  *  first five are form pages; the last (`summary`) is a read-only review. */
@@ -53,11 +47,12 @@ export const applicantOrg = {
   phone: '(415) 555-0164',
   email: 'permits@cascadiamarine.org',
   address: {
-    street: '2200 Bridgeway Boulevard',
-    unit: 'Building C',
+    country: 'US',
+    line1: '2200 Bridgeway Boulevard',
+    line2: 'Building C',
     city: 'Sausalito',
-    state: 'CA',
-    zip: '94965',
+    region: 'CA',
+    postalCode: '94965',
   } as Address,
 };
 
@@ -76,11 +71,12 @@ export const applicant = {
   // Person phones are stored as E.164; forms render them formatted.
   phone: '+14155550173',
   address: {
-    street: '18 Nautilus Court',
-    unit: '',
+    country: 'US',
+    line1: '18 Nautilus Court',
+    line2: '',
     city: 'Mill Valley',
-    state: 'CA',
-    zip: '94941',
+    region: 'CA',
+    postalCode: '94941',
   } as Address,
   resumeOnFile: null as string | null,
 };
@@ -107,11 +103,12 @@ export const researchTeam = {
     email: 'm.aranda@cascadiamarine.org',
     phone: '+14155550188',
     address: {
-      street: '2200 Bridgeway Boulevard',
-      unit: 'Building C',
+      country: 'US',
+      line1: '2200 Bridgeway Boulevard',
+      line2: 'Building C',
       city: 'Sausalito',
-      state: 'CA',
-      zip: '94965',
+      region: 'CA',
+      postalCode: '94965',
     } as Address,
   },
   personnelInsured: true,

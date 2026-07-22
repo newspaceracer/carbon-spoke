@@ -116,6 +116,18 @@ export const prototype = {
 
       <!-- ── Step panels: only the current page is shown ────────────────────── -->
       <div class="main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+        <!-- Per-page header — names the current page and its place in the sequence,
+             so each step reads as a distinct page (not one long scroll). The script
+             rewrites it on navigation; SSR-seeded with the first step so it's right
+             before the JS runs. -->
+        <header class="page-head">
+          <p id="page-head-eyebrow" class="page-head__eyebrow t-label-01">
+            Page 1 of {applicationSteps.length}
+          </p>
+          <h2 id="page-head-title" class="page-head__title t-heading-04">{applicationSteps[0].label}</h2>
+          <p id="page-head-sub" class="page-head__sub t-body-02">{applicationSteps[0].secondaryLabel}</p>
+        </header>
+
         <!-- Application-wide guidance — the same on every page of the Draft. -->
         <cds-inline-notification
           class="wizard-intro"
@@ -252,6 +264,10 @@ export const prototype = {
   const incompleteList = document.getElementById('incomplete-list');
   // Certification lives on the review step; Submit is gated on it being checked.
   const certify = document.getElementById('summary-certify') as any;
+  // Per-page header — retitled on every navigation.
+  const pageHeadEyebrow = document.getElementById('page-head-eyebrow');
+  const pageHeadTitle = document.getElementById('page-head-title');
+  const pageHeadSub = document.getElementById('page-head-sub');
 
   // The review step can only be reached once every required item is provided.
   const reviewIndex = applicationSteps.findIndex((s) => s.review);
@@ -268,6 +284,11 @@ export const prototype = {
     // The indicator owns step states — set currentIndex and it marks the steps
     // before/at/after as complete/current/incomplete.
     if (progress) progress.currentIndex = current;
+    // Page header: name the current page and its place in the sequence.
+    const step = applicationSteps[current];
+    if (pageHeadEyebrow) pageHeadEyebrow.textContent = `Page ${current + 1} of ${steps.length}`;
+    if (pageHeadTitle) pageHeadTitle.textContent = step.label;
+    if (pageHeadSub) pageHeadSub.textContent = step.secondaryLabel;
     // Actions: Back hidden on the first page; primary becomes Submit on the last.
     backBtn.hidden = current === 0;
     const last = current === steps.length - 1;
@@ -488,6 +509,39 @@ export const prototype = {
 
   .main {
     min-width: 0;
+  }
+
+  /* Only the CURRENT wizard step is shown — the others are marked [hidden] by the
+     script (and in the initial SSR markup). But a global HTML5 reset ships an
+     author-origin rule `article,…,nav,section { display:block }`, which OUTRANKS
+     the user-agent `[hidden] { display:none }` — so without this, every hidden
+     step still lays out and the six steps stack into one giant scroll (you can
+     scroll straight from one page of the form into the next). This scoped rule
+     (class + attribute → higher specificity than the bare-element reset) restores
+     the intended one-page-at-a-time paging. See the "Carbon [hidden] host-display"
+     gotcha — same root cause, an author display rule beating [hidden]. */
+  .step[hidden] {
+    display: none;
+  }
+
+  /* Per-page header — the current page's name and its place in the sequence, so
+     each step reads as its own page. A hairline binds it to the content below. */
+  .page-head {
+    max-width: 46rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .page-head__eyebrow {
+    margin: 0 0 0.25rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .page-head__title {
+    margin: 0;
+  }
+  .page-head__sub {
+    margin: 0.25rem 0 0;
+    color: var(--cds-text-secondary, #525252);
   }
 
   /* Application-wide guidance notification — full-measure, spaced above the step. */
