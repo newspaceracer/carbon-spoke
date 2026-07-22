@@ -19,7 +19,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitSection from '../components/PermitSection.astro';
-import { directory, accountRoleOptions } from '../data/user';
+import { directory, accountRoleOptions, expertiseOptions } from '../data/user';
 import { districtDirectory } from '../data/district';
 
 export const prototype = {
@@ -29,6 +29,11 @@ export const prototype = {
     'requests, and manage every user’s global account role in one place.',
   tag: 'Internal tool',
 };
+
+// Dropdown options render alphabetically. (expertiseOptions is already A–Z with
+// "Other" pinned last at the source, so it's rendered as-authored.)
+const rolesSorted = [...accountRoleOptions].sort((a, b) => a.label.localeCompare(b.label));
+const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompare(b.name));
 ---
 
 <BaseLayout title="Users">
@@ -94,10 +99,16 @@ export const prototype = {
         <!-- ── All users (the account directory) ────────────────────────────── -->
         <PermitSection title="All users">
           <cds-tag slot="aside" type="cool-gray" id="users-count">{directory.length}</cds-tag>
+          <cds-button slot="aside" kind="tertiary" size="sm" id="add-user-btn">
+            Add user
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
+              <path d="M17 15L17 8 15 8 15 15 8 15 8 17 15 17 15 24 17 24 17 17 24 17 24 15z"></path>
+            </svg>
+          </cds-button>
           <p class="section-hint t-body-01">
             Every account in the system and its current global role. Use <strong>Manage</strong> to set a
-            user’s account role directly. A user’s per-district assignments are edited on that
-            district’s management screen, not here.
+            user’s account role directly, or <strong>Add user</strong> to create one. A user’s
+            per-district assignments are edited on that district’s management screen, not here.
           </p>
           <div class="table-wrap">
             <cds-table>
@@ -105,6 +116,7 @@ export const prototype = {
                 <cds-table-header-row>
                   <cds-table-header-cell>User</cds-table-header-cell>
                   <cds-table-header-cell>Account role</cds-table-header-cell>
+                  <cds-table-header-cell>Expertise</cds-table-header-cell>
                   <cds-table-header-cell>Affiliation</cds-table-header-cell>
                   <cds-table-header-cell>Actions</cds-table-header-cell>
                 </cds-table-header-row>
@@ -135,8 +147,11 @@ export const prototype = {
             <p class="identity__note t-label-01">Identity comes from this user’s account — only their role is set here.</p>
           </div>
 
-          <cds-dropdown id="u-role" title-text="Account role">
-            {accountRoleOptions.map((r) => (
+          <!-- autoalign: Floating UI positions the open menu so it escapes the
+               modal's scroll container instead of being clipped/faded at the
+               bottom (Carbon drops the modal's mask fade when a dropdown auto-aligns). -->
+          <cds-dropdown id="u-role" title-text="Account role" autoalign>
+            {rolesSorted.map((r) => (
               <cds-dropdown-item value={r.value}>{r.label}</cds-dropdown-item>
             ))}
           </cds-dropdown>
@@ -147,11 +162,21 @@ export const prototype = {
           <!-- District picker — shown only for a district-scoped role (lead /
                assistant), which is always the lead/assistant OF a district. -->
           <div id="u-district-wrap" hidden>
-            <cds-dropdown id="u-district" title-text="District">
-              {districtDirectory.map((d) => (
+            <cds-dropdown id="u-district" title-text="District" autoalign>
+              {districtsSorted.map((d) => (
                 <cds-dropdown-item value={d.id}>{d.name}</cds-dropdown-item>
               ))}
             </cds-dropdown>
+          </div>
+
+          <!-- Areas of expertise — required (≥1) for HQ technical reviewers. -->
+          <div>
+            <cds-multi-select id="u-expertise" title-text="Areas of expertise" label="Select areas" autoalign>
+              {expertiseOptions.map((e) => (
+                <cds-multi-select-item value={e.value}>{e.label}</cds-multi-select-item>
+              ))}
+            </cds-multi-select>
+            <p class="modal-hint t-label-01" id="u-expertise-hint"></p>
           </div>
         </div>
       </cds-modal-body>
@@ -160,11 +185,60 @@ export const prototype = {
         <cds-modal-footer-button kind="primary" id="u-save">Save role</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
+
+    <!-- ── Add-user modal: create an account, set its role + expertise ───────── -->
+    <cds-modal id="add-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>User account</cds-modal-label>
+        <cds-modal-heading>Add user</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <div class="modal-grid">
+          <div class="name-row">
+            <cds-text-input id="au-first" label="First name" placeholder="e.g. Jordan"></cds-text-input>
+            <cds-text-input id="au-last" label="Last name" placeholder="e.g. Rivera"></cds-text-input>
+          </div>
+          <cds-text-input id="au-email" type="email" label="Email" placeholder="name@parks.ca.gov"></cds-text-input>
+          <cds-text-input id="au-phone" label="Phone" placeholder="(916) 555-0100"></cds-text-input>
+
+          <cds-dropdown id="au-role" title-text="Account role" label="Select a role" autoalign>
+            {rolesSorted.map((r) => (
+              <cds-dropdown-item value={r.value}>{r.label}</cds-dropdown-item>
+            ))}
+          </cds-dropdown>
+          <p class="modal-desc t-label-01" id="au-role-desc"></p>
+
+          <!-- District — required for a district-scoped role. -->
+          <div id="au-district-wrap" hidden>
+            <cds-dropdown id="au-district" title-text="District" autoalign>
+              {districtsSorted.map((d) => (
+                <cds-dropdown-item value={d.id}>{d.name}</cds-dropdown-item>
+              ))}
+            </cds-dropdown>
+          </div>
+
+          <!-- Areas of expertise — required (≥1) for HQ technical reviewers. -->
+          <div>
+            <cds-multi-select id="au-expertise" title-text="Areas of expertise" label="Select areas" autoalign>
+              {expertiseOptions.map((e) => (
+                <cds-multi-select-item value={e.value}>{e.label}</cds-multi-select-item>
+              ))}
+            </cds-multi-select>
+            <p class="modal-hint t-label-01" id="au-expertise-hint"></p>
+          </div>
+        </div>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="au-save">Add user</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
   </main>
 </BaseLayout>
 
 <script>
-  import { directory, accountRoleOptions, accountRoleMeta, findUser } from '../data/user';
+  import { accountRoleOptions, accountRoleMeta, findUser, expertiseLabel } from '../data/user';
   import {
     pendingRequests,
     decideRequest,
@@ -173,6 +247,12 @@ export const prototype = {
     setAccountRole,
     roleLabel,
     roleDisplay,
+    affiliationOf,
+    expertiseOf,
+    setExpertise,
+    listUsers,
+    resolveUser,
+    addUser,
   } from '../data/requests';
   import { avatarHTML } from '../lib/avatar';
 
@@ -251,11 +331,23 @@ export const prototype = {
   };
 
   // ── User directory ──────────────────────────────────────────────────────────
+  // Expertise cell: one quiet chip per area, or an em dash when none.
+  const expertiseCellHTML = (values: string[]) =>
+    values.length
+      ? `<div class="u-expertise">${values
+          .map((v) => `<cds-tag type="cool-gray" size="sm">${esc(expertiseLabel(v))}</cds-tag>`)
+          .join('')}</div>`
+      : '<span class="u-sub">—</span>';
+
   const renderUsers = () => {
     const tbody = $('users-tbody');
     if (!tbody) return;
+    const users = listUsers();
+    const count = $('users-count');
+    if (count) count.textContent = String(users.length);
+
     tbody.replaceChildren(
-      ...directory.map((u) => {
+      ...users.map((u) => {
         const row = document.createElement('cds-table-row');
 
         const userCell = document.createElement('cds-table-cell');
@@ -266,8 +358,12 @@ export const prototype = {
         // column, so repeating it here (accountRoleDisplay adds it) is redundant.
         roleCell.textContent = roleLabel(accountRoleOf(u.id).role);
 
+        const expertiseCell = document.createElement('cds-table-cell');
+        expertiseCell.innerHTML = expertiseCellHTML(expertiseOf(u.id));
+
+        // District for a district-scoped role, else "HQ" — derived from the role.
         const affilCell = document.createElement('cds-table-cell');
-        affilCell.textContent = u.affiliation;
+        affilCell.textContent = affiliationOf(u.id);
 
         const actionCell = document.createElement('cds-table-cell');
         const manage = document.createElement('cds-button');
@@ -276,7 +372,7 @@ export const prototype = {
         manage.addEventListener('click', () => openUserModal(u.id));
         actionCell.appendChild(manage);
 
-        row.append(userCell, roleCell, affilCell, actionCell);
+        row.append(userCell, roleCell, expertiseCell, affilCell, actionCell);
         return row;
       }),
     );
@@ -288,27 +384,41 @@ export const prototype = {
   const roleDesc = $('u-role-desc');
   const districtWrap = $('u-district-wrap');
   const districtEl = $('u-district') as any;
+  const expertiseEl = $('u-expertise') as any;
+  const expertiseHint = $('u-expertise-hint');
   let editingUserId = '';
 
+  const HQ = 'hq-technical';
   const isScoped = (value: string) => !!accountRoleMeta(value)?.scoped;
+  const expertiseHintText = (value: string) =>
+    value === HQ
+      ? 'Required — HQ technical reviewers need at least one area of expertise.'
+      : 'Optional — the reviewer’s resource-domain expertise.';
 
   // A district role needs a district; a global one doesn't — show the picker and
-  // the role's description to match the current selection.
+  // the role's description to match the current selection. Expertise is required
+  // for the HQ technical reviewer role, optional otherwise.
   const syncForRole = (value: string) => {
     if (roleDesc) roleDesc.textContent = accountRoleMeta(value)?.description ?? '';
     if (districtWrap) districtWrap.hidden = !isScoped(value);
+    if (expertiseHint) {
+      expertiseHint.textContent = expertiseHintText(value);
+      expertiseHint.removeAttribute('data-error');
+    }
   };
 
   const openUserModal = (userId: string) => {
     editingUserId = userId;
-    const u = findUser(userId);
+    const u = resolveUser(userId);
     if ($('u-name')) $('u-name')!.textContent = u?.name ?? '';
     if ($('u-email')) $('u-email')!.textContent = u?.email ?? '';
-    if ($('u-affil')) $('u-affil')!.textContent = u?.affiliation ?? '';
+    if ($('u-affil')) $('u-affil')!.textContent = affiliationOf(userId);
 
     const { role, district } = accountRoleOf(userId);
     if (roleEl) roleEl.value = role || accountRoleOptions[0].value;
     if (districtEl) districtEl.value = district || 'north-coast-redwoods';
+    // Setting the multi-select's comma-joined value reconciles its checkboxes.
+    if (expertiseEl) expertiseEl.value = expertiseOf(userId).join(',');
     syncForRole(roleEl?.value);
     modal.open = true;
   };
@@ -319,12 +429,94 @@ export const prototype = {
     const value = roleEl?.value;
     if (!value || !editingUserId) return;
     const district = isScoped(value) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
+    const expertise = (expertiseEl?.value || '').split(',').filter(Boolean);
+    // Enforce the HQ-technical expertise rule before committing.
+    if (value === HQ && expertise.length === 0) {
+      if (expertiseHint) {
+        expertiseHint.textContent = 'HQ technical reviewers need at least one area of expertise.';
+        expertiseHint.setAttribute('data-error', '');
+      }
+      return;
+    }
     setAccountRole(editingUserId, value, district);
+    setExpertise(editingUserId, expertise);
     modal.open = false;
     renderUsers();
     renderRequests(); // current-role column may reference this user
-    const u = findUser(editingUserId);
+    const u = resolveUser(editingUserId);
     flash('Role updated', `${u?.name ?? 'The user'} is now ${roleDisplay(value, district)}.`);
+  });
+
+  // ── Add-user modal ──────────────────────────────────────────────────────────
+  const addModal = $('add-modal') as any;
+  const auFirst = $('au-first') as any;
+  const auLast = $('au-last') as any;
+  const auEmail = $('au-email') as any;
+  const auPhone = $('au-phone') as any;
+  const auRole = $('au-role') as any;
+  const auRoleDesc = $('au-role-desc');
+  const auDistrictWrap = $('au-district-wrap');
+  const auDistrict = $('au-district') as any;
+  const auExpertise = $('au-expertise') as any;
+  const auExpertiseHint = $('au-expertise-hint');
+
+  const clearInvalid = (el: any) => { if (el) el.invalid = false; };
+
+  const auSyncForRole = (value: string) => {
+    if (auRoleDesc) auRoleDesc.textContent = accountRoleMeta(value)?.description ?? '';
+    if (auDistrictWrap) auDistrictWrap.hidden = !isScoped(value);
+    if (auExpertiseHint) {
+      auExpertiseHint.textContent = expertiseHintText(value);
+      auExpertiseHint.removeAttribute('data-error');
+    }
+  };
+
+  const openAddModal = () => {
+    if (auFirst) { auFirst.value = ''; clearInvalid(auFirst); }
+    if (auLast) { auLast.value = ''; clearInvalid(auLast); }
+    if (auEmail) { auEmail.value = ''; clearInvalid(auEmail); }
+    if (auPhone) auPhone.value = '';
+    if (auRole) { auRole.value = ''; clearInvalid(auRole); }
+    if (auDistrict) auDistrict.value = 'north-coast-redwoods';
+    if (auExpertise) auExpertise.value = '';
+    auSyncForRole('');
+    addModal.open = true;
+  };
+
+  $('add-user-btn')?.addEventListener('click', openAddModal);
+  auRole?.addEventListener('cds-dropdown-selected', () => { clearInvalid(auRole); auSyncForRole(auRole.value); });
+  auFirst?.addEventListener('input', () => clearInvalid(auFirst));
+  auLast?.addEventListener('input', () => clearInvalid(auLast));
+  auEmail?.addEventListener('input', () => clearInvalid(auEmail));
+
+  $('au-save')?.addEventListener('click', () => {
+    const first = (auFirst?.value || '').trim();
+    const last = (auLast?.value || '').trim();
+    const name = [first, last].filter(Boolean).join(' ');
+    const email = (auEmail?.value || '').trim();
+    const phone = (auPhone?.value || '').trim();
+    const role = auRole?.value || '';
+    const district = isScoped(role) ? (auDistrict?.value || 'north-coast-redwoods') : undefined;
+    const expertise = (auExpertise?.value || '').split(',').filter(Boolean);
+
+    let ok = true;
+    if (!first) { if (auFirst) { auFirst.invalid = true; auFirst.invalidText = 'Enter a first name.'; } ok = false; }
+    if (!last) { if (auLast) { auLast.invalid = true; auLast.invalidText = 'Enter a last name.'; } ok = false; }
+    if (!email) { if (auEmail) { auEmail.invalid = true; auEmail.invalidText = 'Enter an email address.'; } ok = false; }
+    if (!role) { if (auRole) { auRole.invalid = true; auRole.invalidText = 'Select an account role.'; } ok = false; }
+    if (role === HQ && expertise.length === 0) {
+      if (auExpertiseHint) {
+        auExpertiseHint.textContent = 'HQ technical reviewers need at least one area of expertise.';
+        auExpertiseHint.setAttribute('data-error', '');
+      }
+      ok = false;
+    }
+    if (!ok) return;
+
+    addUser({ name, email, phone, role, district, expertise });
+    addModal.open = false;
+    renderUsers();
+    flash('User added', `${name} was added as ${roleDisplay(role, district)}.`);
   });
 
   // ── Init ──────────────────────────────────────────────────────────────────────
@@ -384,9 +576,19 @@ export const prototype = {
     color: var(--cds-text-secondary, #525252);
   }
   :global(.row-actions) { display: flex; gap: 0.25rem; }
+  /* Expertise chips wrap within the cell rather than stretching the column. */
+  :global(.u-expertise) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    max-width: 22rem;
+  }
 
   /* Manage-user modal internals. */
   .modal-grid { display: flex; flex-direction: column; gap: 1.25rem; }
+  /* First + last name share a row, stacking on narrow widths. */
+  .name-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .name-row > * { flex: 1 1 10rem; min-width: 0; }
   .identity {
     padding: 1rem;
     background: var(--cds-layer-01, #f4f4f4);
@@ -402,4 +604,7 @@ export const prototype = {
   }
   .identity__note { margin: 0.5rem 0 0; color: var(--cds-text-secondary, #525252); }
   .modal-desc { margin: 0; color: var(--cds-text-secondary, #525252); }
+  /* Expertise helper text; turns error-red when the HQ rule is unmet. */
+  .modal-hint { margin: 0.375rem 0 0; color: var(--cds-text-secondary, #525252); }
+  .modal-hint[data-error] { color: var(--cds-text-error, #da1e28); }
 </style>

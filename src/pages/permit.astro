@@ -78,7 +78,9 @@ const currentUser = permit.overview.analysisTeam.find((m) => m.highlight)?.name 
 // combo-box offers directory users not already assigned; the client keeps this
 // in sync as rows are added/removed. `teamStorageKey` persists edits per permit.
 const seededTeamIds = new Set(permit.overview.analysisTeam.map((m) => m.id));
-const eligibleUsers = userDirectory.filter((u) => !seededTeamIds.has(u.id));
+const eligibleUsers = userDirectory
+  .filter((u) => !seededTeamIds.has(u.id))
+  .sort((a, b) => a.name.localeCompare(b.name));
 const teamStorageKey = `permit-team-${permit.id}`;
 
 // Permit tags: applied from a curated set on the Overview tab. `appliedTags` seeds
@@ -164,7 +166,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                         (the component reconciles each item on first render), so
                         items carry no per-item `selected` — avoids Astro emitting
                         a stringy selected="false" that Lit would read as truthy. */}
-                    {permit.overview.tagOptions.map((tag) => (
+                    {[...permit.overview.tagOptions].sort((a, b) => a.localeCompare(b)).map((tag) => (
                       <cds-multi-select-item value={tag}>{tag}</cds-multi-select-item>
                     ))}
                   </cds-multi-select>
@@ -406,7 +408,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                 <div class="sc-scope__row">
                   <cds-dropdown id="sc-acting-as" title-text="Acting as" value="hq">
                     <cds-dropdown-item value="hq">HQ reviewer</cds-dropdown-item>
-                    {permitDistricts.map((d) => (
+                    {[...permitDistricts].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
                       <cds-dropdown-item value={d.key}>{d.name} representative</cds-dropdown-item>
                     ))}
                   </cds-dropdown>
@@ -778,6 +780,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
       teamAddSelect.innerHTML = '';
       directory
         .filter((u) => !onTeam.has(u.id))
+        .sort((a, b) => a.name.localeCompare(b.name))
         .forEach((u) => {
           const item = document.createElement('cds-combo-box-item');
           item.setAttribute('value', u.id);
@@ -1109,7 +1112,9 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
     const el = pickEl();
     if (!el) return;
     const appliedInvIds = new Set(conditions.filter((c) => c.inventoryId).map((c) => c.inventoryId));
-    const available = loadInventory(owner).filter((it) => !appliedInvIds.has(it.id));
+    const available = loadInventory(owner)
+      .filter((it) => !appliedInvIds.has(it.id))
+      .sort((a, b) => a.title.localeCompare(b.title));
     el.innerHTML = available
       .map((it) => `<cds-multi-select-item value="${it.id}">${it.title}</cds-multi-select-item>`)
       .join('');

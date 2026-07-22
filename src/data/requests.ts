@@ -162,7 +162,7 @@ export const accountRoleOf = (userId: string): AccountRole => {
   const overlay = loadRoleOverlay()[userId];
   if (overlay && typeof overlay === 'object' && overlay.role) return overlay;
   const seed = directory.find((u) => u.id === userId);
-  return seed ? { role: seed.accountRole, district: seed.district } : { role: 'reviewer' };
+  return seed ? { role: seed.accountRole, district: seed.district } : { role: 'hq-technical' };
 };
 
 /** A user's current account role as a display string (with district if scoped). */
@@ -178,3 +178,99 @@ export const setAccountRole = (userId: string, role: string, district?: string):
   overlay[userId] = { role, ...(scoped && district ? { district } : {}) };
   localStorage.setItem(ROLES_KEY, JSON.stringify(overlay));
 };
+
+/** A user's current affiliation. The two district-scoped roles are affiliated
+ *  with their district; every other role (HQ technical reviewer / admin) is
+ *  headquarters, shown as "HQ". Derived from the CURRENT account role, so it
+ *  follows a role change immediately. */
+export const affiliationOf = (userId: string): string => {
+  const { role, district } = accountRoleOf(userId);
+  const scoped = !!accountRoleMeta(role)?.scoped;
+  return scoped && district ? districtName(district) : 'HQ';
+};
+
+// ── Expertise overlay ──────────────────────────────────────────────────────────
+// Areas of expertise (expertiseOptions values) per user — the seeded directory
+// value unless an admin has changed it here. HQ technical reviewers must carry ≥1
+// (enforced in the /users add + manage flows, not here).
+const EXPERTISE_KEY = 'admin-user-expertise';
+
+const loadExpertiseOverlay = (): Record<string, string[]> => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(EXPERTISE_KEY) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+};
+
+/** A user's current expertise (overlay over the seeded default). */
+export const expertiseOf = (userId: string): string[] => {
+  const overlay = loadExpertiseOverlay()[userId];
+  if (Array.isArray(overlay)) return overlay;
+  return directory.find((u) => u.id === userId)?.expertise ?? [];
+};
+
+/** Set (admin action) a user's areas of expertise. */
+export const setExpertise = (userId: string, values: string[]): void => {
+  const overlay = loadExpertiseOverlay();
+  overlay[userId] = [...values];
+  localStorage.setItem(EXPERTISE_KEY, JSON.stringify(overlay));
+};
+
+// ── Added users ────────────────────────────────────────────────────────────────
+// Users created from the /users console. Their identity lives here; their role +
+// expertise are written to the overlays above (so accountRoleOf / expertiseOf /
+// affiliationOf resolve them the same way they resolve seeded users).
+const ADDED_KEY = 'admin-added-users';
+
+export interface AddedUser {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+export const addedUsers = (): AddedUser[] => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ADDED_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+};
+
+/** Create a user: store their identity, then stamp their role + expertise into
+ *  the shared overlays. Returns the new user's id. */
+export const addUser = (input: {
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  district?: string;
+  expertise: string[];
+}): string => {
+  const id = `user-${Date.now()}`;
+  const list = addedUsers();
+  list.push({ id, name: input.name, email: input.email, phone: input.phone });
+  localStorage.setItem(ADDED_KEY, JSON.stringify(list));
+  setAccountRole(id, input.role, input.district);
+  setExpertise(id, input.expertise);
+  return id;
+};
+
+/** Resolve any user's identity — seeded directory OR an added user. */
+export const resolveUser = (
+  userId: string,
+): { id: string; name: string; email: string; phone: string } | undefined => {
+  const seed = directory.find((u) => u.id === userId);
+  if (seed) return { id: seed.id, name: seed.name, email: seed.email, phone: seed.phone };
+  return addedUsers().find((u) => u.id === userId);
+};
+
+/** Every user the console lists — seeded directory plus added users. Identity
+ *  only; role / expertise / affiliation are resolved per row via the accessors. */
+export const listUsers = (): { id: string; name: string; email: string }[] => [
+  ...directory.map((u) => ({ id: u.id, name: u.name, email: u.email })),
+  ...addedUsers().map((u) => ({ id: u.id, name: u.name, email: u.email })),
+];

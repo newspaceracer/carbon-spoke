@@ -1,0 +1,536 @@
+---
+// Step 1 of the permit application — the Research team page. Composed entirely
+// from stock cds-* controls grouped into PermitSection blocks:
+//   • Organization        — the applicant institution's contact record
+//   • Principal investigator — profile auto-fill + required résumé upload, with a
+//                              save-to-profile offer once a PI résumé is attached
+//   • Person in direct charge of field work — two gating questions that reveal or
+//                              hide the contact fields (same as PI / same as you)
+//   • Additional participants — a roster the applicant adds people to (modal, batch)
+//   • Personnel & insurance — a yes/no that conditionally requires a signed waiver
+//
+// All conditional show/hide + the participant roster live in this component's own
+// client <script>; the wizard's step navigation lives on the page.
+import PermitSection from './PermitSection.astro';
+import { applicantOrg, applicant, seedParticipants } from '../data/application';
+import { states } from '../data/user';
+---
+
+<div class="rt">
+  <!-- ── Organization ─────────────────────────────────────────────────────── -->
+  <PermitSection title="Organization">
+    <p class="section-hint t-body-01">
+      The institution conducting the research and its primary contact for this permit.
+    </p>
+    <div class="field-grid">
+      <div class="field-grid__wide">
+        <cds-text-input id="org-name" label="Applicant organization" value={applicantOrg.name}></cds-text-input>
+      </div>
+      <cds-text-input id="org-phone" type="tel" label="Organization phone" value={applicantOrg.phone}></cds-text-input>
+      <cds-text-input id="org-email" type="email" label="Organization email" value={applicantOrg.email}></cds-text-input>
+      <div class="field-grid__wide">
+        <cds-text-input id="org-street" label="Street address" value={applicantOrg.address.street}></cds-text-input>
+      </div>
+      <div class="field-grid__wide">
+        <cds-text-input id="org-unit" label="Suite / unit (optional)" value={applicantOrg.address.unit}></cds-text-input>
+      </div>
+      <cds-text-input id="org-city" label="City" value={applicantOrg.address.city}></cds-text-input>
+      <cds-dropdown id="org-state" title-text="State" value={applicantOrg.address.state}>
+        {states.map((s) => <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>)}
+      </cds-dropdown>
+      <cds-text-input id="org-zip" label="ZIP code" value={applicantOrg.address.zip}></cds-text-input>
+    </div>
+  </PermitSection>
+
+  <!-- ── Principal investigator ───────────────────────────────────────────── -->
+  <PermitSection title="Principal investigator">
+    <p class="section-hint t-body-01">
+      The lead scientist responsible for the research. Check the box to auto-fill your own
+      contact details from your profile.
+    </p>
+
+    <cds-checkbox id="pi-is-me" label-text="I am the principal investigator for this project"></cds-checkbox>
+
+    <div class="field-grid pi-grid">
+      <cds-text-input id="pi-first" label="First name"></cds-text-input>
+      <cds-text-input id="pi-last" label="Last name"></cds-text-input>
+      <cds-text-input id="pi-title" label="Title"></cds-text-input>
+      <cds-text-input id="pi-phone" type="tel" label="Phone number"></cds-text-input>
+      <div class="field-grid__wide">
+        <cds-text-input id="pi-email" type="email" label="Email address"></cds-text-input>
+      </div>
+    </div>
+
+    <div class="uploader">
+      <p class="field-label t-label-01">Résumé or CV <span class="req">(required)</span></p>
+      <cds-file-uploader-drop-container id="pi-resume-drop" accept=".pdf,.doc,.docx">
+        Drag and drop a file here or click to upload
+      </cds-file-uploader-drop-container>
+      <div id="pi-resume-list" class="uploaded-list"></div>
+      <p class="uploader-hint t-label-01">Accepted formats: PDF, DOC, or DOCX.</p>
+    </div>
+
+    <!-- Offer to keep the PI's résumé on their profile — shown only once the
+         submitter is the PI AND a résumé has been attached. -->
+    <div id="pi-save-prompt" class="prompt" hidden>
+      <cds-checkbox
+        id="pi-save-resume"
+        label-text="Save this résumé to my profile and auto-fill it on future applications"
+      ></cds-checkbox>
+    </div>
+  </PermitSection>
+
+  <!-- ── Person in direct charge of field work ────────────────────────────── -->
+  <PermitSection title="Person in direct charge of field work">
+    <p class="section-hint t-body-01">
+      The person who directs the on-the-ground field activities. This may or may not be the
+      principal investigator.
+    </p>
+
+    <cds-radio-button-group
+      id="picof-same-pi"
+      name="picof-same-pi"
+      legend-text="Is this the same person as the principal investigator?"
+      orientation="horizontal"
+    >
+      <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+      <cds-radio-button label-text="No" value="no"></cds-radio-button>
+    </cds-radio-button-group>
+
+    <cds-inline-notification
+      id="picof-same-pi-note"
+      hidden
+      kind="info"
+      low-contrast
+      hide-close-button
+      title="Directed by the principal investigator"
+      subtitle="No additional contact details are needed for field-work direction."
+    ></cds-inline-notification>
+
+    <div id="picof-submitter-q" hidden>
+      <cds-radio-button-group
+        id="picof-is-me"
+        name="picof-is-me"
+        legend-text="Are you (the submitter) the person in direct charge of field work?"
+        orientation="horizontal"
+      >
+        <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+        <cds-radio-button label-text="No" value="no"></cds-radio-button>
+      </cds-radio-button-group>
+    </div>
+
+    <cds-inline-notification
+      id="picof-is-me-note"
+      hidden
+      kind="info"
+      low-contrast
+      hide-close-button
+      title="You'll be recorded for field-work direction"
+      subtitle="Your profile contact details will be used — no need to re-enter them."
+    ></cds-inline-notification>
+
+    <div id="picof-fields" class="field-grid" hidden>
+      <cds-text-input id="picof-first" label="First name"></cds-text-input>
+      <cds-text-input id="picof-last" label="Last name"></cds-text-input>
+      <cds-text-input id="picof-title" label="Title"></cds-text-input>
+      <cds-text-input id="picof-phone" type="tel" label="Phone number"></cds-text-input>
+      <div class="field-grid__wide">
+        <cds-text-input id="picof-email" type="email" label="Email address"></cds-text-input>
+      </div>
+      <div class="field-grid__wide">
+        <cds-text-input id="picof-street" label="Street address"></cds-text-input>
+      </div>
+      <cds-text-input id="picof-city" label="City"></cds-text-input>
+      <cds-dropdown id="picof-state" title-text="State" value="CA">
+        {states.map((s) => <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>)}
+      </cds-dropdown>
+      <cds-text-input id="picof-zip" label="ZIP code"></cds-text-input>
+    </div>
+  </PermitSection>
+
+  <!-- ── Additional participants ──────────────────────────────────────────── -->
+  <PermitSection title="Additional participants">
+    <cds-button slot="aside" id="add-participant" kind="tertiary" size="sm">Add participant</cds-button>
+    <p class="section-hint t-body-01">
+      Everyone else involved in the research activities. Add each person's details; you can add
+      several in a row without leaving the dialog.
+    </p>
+
+    <cds-table id="participants-table">
+      <cds-table-head>
+        <cds-table-header-row>
+          <cds-table-header-cell>Name</cds-table-header-cell>
+          <cds-table-header-cell>Title</cds-table-header-cell>
+          <cds-table-header-cell>Email</cds-table-header-cell>
+          <cds-table-header-cell>Phone</cds-table-header-cell>
+          <cds-table-header-cell>Comments</cds-table-header-cell>
+          <cds-table-header-cell>Remove</cds-table-header-cell>
+        </cds-table-header-row>
+      </cds-table-head>
+      <cds-table-body id="participants-body"></cds-table-body>
+    </cds-table>
+    <p id="participants-empty" class="empty-note t-body-01" hidden>
+      No additional participants added yet.
+    </p>
+  </PermitSection>
+
+  <!-- ── Personnel & insurance ────────────────────────────────────────────── -->
+  <PermitSection title="Personnel &amp; insurance">
+    <cds-radio-button-group
+      id="personnel-insured"
+      name="personnel-insured"
+      legend-text="Are all personnel employed or insured by the institution conducting the research?"
+      orientation="horizontal"
+    >
+      <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+      <cds-radio-button label-text="No" value="no"></cds-radio-button>
+    </cds-radio-button-group>
+
+    <div id="waiver-wrap" class="uploader" hidden>
+      <p class="field-label t-label-01">Liability waiver addendum <span class="req">(required)</span></p>
+      <cds-file-uploader-drop-container id="waiver-drop" accept=".pdf,.doc,.docx">
+        Drag and drop a file here or click to upload
+      </cds-file-uploader-drop-container>
+      <div id="waiver-list" class="uploaded-list"></div>
+      <p class="uploader-hint t-label-01">
+        This document must be signed by ALL participants involved in research activities, so plan
+        accordingly.
+      </p>
+      <cds-link id="waiver-download" href="#">Download the unsigned liability waiver addendum</cds-link>
+    </div>
+  </PermitSection>
+</div>
+
+<!-- Add-participant dialog. Overlay lives outside grid flow; Carbon owns the focus
+     trap, return, and heading. "Add participant" appends a row and clears the form
+     so several can be entered in a batch; "Done" closes. -->
+<cds-modal id="participant-modal" size="md">
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label>Research team</cds-modal-label>
+    <cds-modal-heading>Add a participant</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <div class="field-grid">
+      <cds-text-input id="np-first" label="First name"></cds-text-input>
+      <cds-text-input id="np-last" label="Last name"></cds-text-input>
+      <cds-text-input id="np-title" label="Title"></cds-text-input>
+      <cds-text-input id="np-phone" type="tel" label="Phone number"></cds-text-input>
+      <div class="field-grid__wide">
+        <cds-text-input id="np-email" type="email" label="Email address"></cds-text-input>
+      </div>
+      <div class="field-grid__wide">
+        <cds-textarea id="np-comments" label="Comments" rows="2"></cds-textarea>
+      </div>
+    </div>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Done</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="np-add">Add participant</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<script>
+  import { applicant, seedParticipants, type Participant } from '../data/application';
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
+    document.getElementById(id) as T | null;
+
+  // ── Principal investigator: profile auto-fill ───────────────────────────
+  // Checking "I am the PI" fills the fields from the submitter's profile;
+  // unchecking clears them so the applicant enters someone else by hand.
+  const piIsMe = $('pi-is-me') as any;
+  const piFields: Record<string, string> = {
+    'pi-first': applicant.firstName,
+    'pi-last': applicant.lastName,
+    'pi-title': applicant.title,
+    'pi-phone': applicant.phone,
+    'pi-email': applicant.email,
+  };
+  const setPiFields = (fill: boolean) => {
+    Object.entries(piFields).forEach(([id, v]) => {
+      const el = $(id) as any;
+      if (el) el.value = fill ? v : '';
+    });
+  };
+  piIsMe?.addEventListener('cds-checkbox-changed', () => {
+    setPiFields(!!piIsMe.checked);
+    syncSavePrompt();
+  });
+
+  // ── Résumé upload + save-to-profile offer ───────────────────────────────
+  // A static prototype can't store the bytes, so "uploaded" means: render a
+  // Carbon file item for the chosen file. The save-to-profile prompt appears
+  // only when the submitter is the PI AND a résumé is attached.
+  let piResumeAttached = false;
+
+  const renderFileItem = (
+    listId: string,
+    name: string,
+    onDelete: () => void,
+  ) => {
+    const list = $(listId);
+    if (!list) return;
+    list.innerHTML = '';
+    const item = document.createElement('cds-file-uploader-item') as any;
+    item.state = 'edit';
+    item.size = 'md';
+    item.textContent = name;
+    item.addEventListener('cds-file-uploader-item-deleted', () => {
+      list.innerHTML = '';
+      onDelete();
+    });
+    list.appendChild(item);
+  };
+
+  const firstFileName = (e: Event): string | null => {
+    const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
+    return files && files.length ? files[0].name : null;
+  };
+
+  const savePrompt = $('pi-save-prompt');
+  const syncSavePrompt = () => {
+    const show = !!piIsMe?.checked && piResumeAttached;
+    if (savePrompt) savePrompt.hidden = !show;
+    if (!show) {
+      const cb = $('pi-save-resume') as any;
+      if (cb) cb.checked = false;
+    }
+  };
+
+  $('pi-resume-drop')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+    const name = firstFileName(e);
+    if (!name) return;
+    piResumeAttached = true;
+    renderFileItem('pi-resume-list', name, () => {
+      piResumeAttached = false;
+      syncSavePrompt();
+    });
+    syncSavePrompt();
+  });
+
+  // ── Person in direct charge of field work: two gating questions ──────────
+  // Q1 same-as-PI? No -> ask Q2 same-as-submitter? No -> reveal the contact
+  // fields. Any "Yes" collapses the fields and shows the matching note.
+  const samePi = $('picof-same-pi') as any;
+  const isMe = $('picof-is-me') as any;
+  const samePiNote = $('picof-same-pi-note');
+  const submitterQ = $('picof-submitter-q');
+  const isMeNote = $('picof-is-me-note');
+  const picofFields = $('picof-fields');
+
+  const syncPicof = () => {
+    const q1 = samePi?.value; // 'yes' | 'no' | ''
+    const sameAsPi = q1 === 'yes';
+    // Q2 only relevant when the PICOF is NOT the PI.
+    if (submitterQ) submitterQ.hidden = q1 !== 'no';
+    if (samePiNote) samePiNote.hidden = !sameAsPi;
+
+    const q2 = q1 === 'no' ? isMe?.value : '';
+    const isSubmitter = q2 === 'yes';
+    if (isMeNote) isMeNote.hidden = !isSubmitter;
+    // Fields appear only when the PICOF is a distinct third person.
+    if (picofFields) picofFields.hidden = !(q1 === 'no' && q2 === 'no');
+  };
+  samePi?.addEventListener('cds-radio-button-group-changed', () => {
+    if (samePi.value === 'yes' && isMe) isMe.value = ''; // reset stale Q2
+    syncPicof();
+  });
+  isMe?.addEventListener('cds-radio-button-group-changed', syncPicof);
+
+  // ── Additional participants roster ──────────────────────────────────────
+  const body = $('participants-body');
+  const emptyNote = $('participants-empty');
+  const modal = $('participant-modal') as any;
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM12 2H20V4H12zM8 28V8H24V28z"/></svg>`;
+
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const addRow = (p: Participant) => {
+    if (!body) return;
+    const row = document.createElement('cds-table-row');
+    row.innerHTML = `
+      <cds-table-cell>${esc(`${p.firstName} ${p.lastName}`.trim())}</cds-table-cell>
+      <cds-table-cell>${esc(p.title)}</cds-table-cell>
+      <cds-table-cell>${esc(p.email)}</cds-table-cell>
+      <cds-table-cell>${esc(p.phone)}</cds-table-cell>
+      <cds-table-cell>${esc(p.comments)}</cds-table-cell>
+      <cds-table-cell>
+        <cds-icon-button kind="ghost" size="sm" align="left" class="row-remove">
+          ${trash}
+          <span slot="tooltip-content">Remove ${esc(`${p.firstName} ${p.lastName}`.trim())}</span>
+        </cds-icon-button>
+      </cds-table-cell>`;
+    row.querySelector('.row-remove')?.addEventListener('click', () => {
+      row.remove();
+      syncEmpty();
+    });
+    body.appendChild(row);
+    syncEmpty();
+  };
+
+  const syncEmpty = () => {
+    const has = !!body && body.children.length > 0;
+    if (emptyNote) emptyNote.hidden = has;
+  };
+
+  // Seed the roster with the collaborators already on file.
+  seedParticipants.forEach(addRow);
+
+  $('add-participant')?.addEventListener('click', () => {
+    if (modal) modal.open = true;
+  });
+
+  const npIds = ['np-first', 'np-last', 'np-title', 'np-phone', 'np-email', 'np-comments'];
+  const clearModal = () => npIds.forEach((id) => { const el = $(id) as any; if (el) el.value = ''; });
+
+  $('np-add')?.addEventListener('click', () => {
+    const val = (id: string) => (($(id) as any)?.value ?? '').toString().trim();
+    const first = val('np-first');
+    const last = val('np-last');
+    if (!first && !last) { ($('np-first') as any)?.focus(); return; } // need a name
+    addRow({
+      firstName: first,
+      lastName: last,
+      title: val('np-title'),
+      email: val('np-email'),
+      phone: val('np-phone'),
+      comments: val('np-comments'),
+    });
+    clearModal();
+    ($('np-first') as any)?.focus(); // ready for the next in the batch
+  });
+
+  // ── Personnel & insurance: conditional waiver upload ────────────────────
+  const insured = $('personnel-insured') as any;
+  const waiverWrap = $('waiver-wrap');
+  insured?.addEventListener('cds-radio-button-group-changed', () => {
+    if (waiverWrap) waiverWrap.hidden = insured.value !== 'no';
+  });
+  $('waiver-drop')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+    const name = firstFileName(e);
+    if (name) renderFileItem('waiver-list', name, () => {});
+  });
+  // Prototype download stub — no real form to serve.
+  $('waiver-download')?.addEventListener('click', (e) => e.preventDefault());
+</script>
+
+<style>
+  /* Rhythm between the sub-sections of the step. */
+  .rt {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* Two-up responsive field grid — same construction as the profile form so the
+     application reads as one system. Controls are stock cds-* legos. */
+  .field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+    max-width: 46rem;
+  }
+  .field-grid__wide {
+    grid-column: 1 / -1;
+  }
+  @media (max-width: 42rem) {
+    .field-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* PI fields sit under the "I am the PI" checkbox, spaced from it and the
+     uploader that follows. */
+  .pi-grid {
+    margin-top: 1.5rem;
+  }
+
+  /* Uploader block — a labeled dropzone (stock cds-file-uploader-drop-container)
+     plus its help text; layout only. */
+  .uploader {
+    margin-top: 1.5rem;
+    max-width: 46rem;
+  }
+  .field-label {
+    margin: 0 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .field-label .req {
+    color: var(--cds-text-error, #da1e28);
+  }
+  .uploaded-list {
+    margin-top: 0.5rem;
+  }
+  .uploader-hint {
+    margin: 0.5rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  #waiver-download {
+    display: inline-block;
+    margin-top: 0.75rem;
+  }
+
+  /* Save-to-profile offer — a quiet bordered prompt so it reads as a follow-up
+     to the résumé upload, not a primary field. */
+  .prompt {
+    margin-top: 1.5rem;
+    max-width: 46rem;
+    padding: 1rem;
+    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    background: var(--cds-layer-01, #f4f4f4);
+  }
+  .prompt[hidden] {
+    display: none;
+  }
+
+  /* The PICOF gating questions and their notes stack with breathing room. */
+  #picof-same-pi,
+  #picof-submitter-q {
+    display: block;
+    margin-bottom: 1.5rem;
+  }
+  #picof-submitter-q[hidden] {
+    display: none;
+  }
+  #picof-same-pi-note,
+  #picof-is-me-note {
+    display: block;
+    margin-bottom: 1.5rem;
+    max-width: 46rem;
+  }
+  #picof-same-pi-note[hidden],
+  #picof-is-me-note[hidden] {
+    display: none;
+  }
+  #picof-fields[hidden] {
+    display: none;
+  }
+
+  /* Participant roster: let the table breathe below the intro; the empty note
+     replaces it when the roster is cleared. */
+  #participants-table {
+    display: block;
+  }
+  .empty-note {
+    margin: 1rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty-note[hidden] {
+    display: none;
+  }
+
+  #personnel-insured {
+    display: block;
+  }
+  #waiver-wrap[hidden] {
+    display: none;
+  }
+</style>

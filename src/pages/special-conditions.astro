@@ -30,6 +30,9 @@ export const prototype = {
     'its own. Items flagged "default" auto-attach when a permit enters review.',
   tag: 'Internal tool',
 };
+
+// District options render alphabetically in the scope + browse dropdowns.
+const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare(b.name));
 ---
 
 <BaseLayout title="Manage special conditions">
@@ -63,8 +66,8 @@ export const prototype = {
             </cds-dropdown>
 
             <div id="switcher-wrap" class="scope__switcher" hidden>
-              <cds-dropdown id="district-switcher" title-text="District" value={districtOptions[0]?.key}>
-                {districtOptions.map((o) => (
+              <cds-dropdown id="district-switcher" title-text="District" value={districtsSorted[0]?.key}>
+                {districtsSorted.map((o) => (
                   <cds-dropdown-item value={o.key}>{o.name}</cds-dropdown-item>
                 ))}
               </cds-dropdown>
@@ -86,35 +89,79 @@ export const prototype = {
           subtitle="Your changes save automatically and are available on every permit."
         ></cds-inline-notification>
 
-        <!-- ── Condition inventory ──────────────────────────────────────────── -->
-        <PermitSection title="Condition inventory">
-          <cds-button slot="aside" id="add-condition" kind="tertiary" size="sm">Add condition</cds-button>
-          <p class="section-hint t-body-01" id="inv-hint">
-            Reusable conditions for <strong id="inv-owner">Headquarters</strong>. Reviewers pull these onto
-            a permit without retyping. Items marked <strong>Default</strong> attach automatically when a
-            permit enters review.
-          </p>
-          <!-- carbon-checked: .table-wrap is NOT a table — the table is the stock
-               cds-table below. It is only a horizontal-scroll container so the
-               cds-table overflows gracefully on narrow viewports (same pattern as
-               manage-district.astro). -->
-          <div class="table-wrap">
-            <cds-table>
-              <cds-table-head>
-                <cds-table-header-row>
-                  <cds-table-header-cell>Title</cds-table-header-cell>
-                  <cds-table-header-cell>Condition text</cds-table-header-cell>
-                  <cds-table-header-cell>Applies</cds-table-header-cell>
-                  <cds-table-header-cell>Actions</cds-table-header-cell>
-                </cds-table-header-row>
-              </cds-table-head>
-              <cds-table-body id="inv-tbody"></cds-table-body>
-            </cds-table>
-          </div>
-          <p class="empty-note t-body-01" id="inv-empty" hidden>
-            No conditions in this catalog yet. Use <strong>Add condition</strong> to create the first one.
-          </p>
-        </PermitSection>
+        <!-- View toggle: edit your own catalog, or browse everyone's. -->
+        <cds-content-switcher id="sc-view">
+          <cds-content-switcher-item value="mine" selected>My catalog</cds-content-switcher-item>
+          <cds-content-switcher-item value="browse">All districts</cds-content-switcher-item>
+        </cds-content-switcher>
+
+        <!-- ── My catalog (editable, scoped to who you're acting as) ──────────── -->
+        <div id="panel-mine">
+          <PermitSection title="Condition inventory">
+            <cds-button slot="aside" id="add-condition" kind="tertiary" size="sm">Add condition</cds-button>
+            <p class="section-hint t-body-01" id="inv-hint">
+              Reusable conditions for <strong id="inv-owner">Headquarters</strong>. Reviewers pull these onto
+              a permit without retyping. Items marked <strong>Default</strong> attach automatically when a
+              permit enters review.
+            </p>
+            <!-- carbon-checked: .table-wrap is NOT a table — the table is the stock
+                 cds-table below. It is only a horizontal-scroll container so the
+                 cds-table overflows gracefully on narrow viewports (same pattern as
+                 manage-district.astro). -->
+            <div class="table-wrap">
+              <cds-table>
+                <cds-table-head>
+                  <cds-table-header-row>
+                    <cds-table-header-cell>Title</cds-table-header-cell>
+                    <cds-table-header-cell>Condition text</cds-table-header-cell>
+                    <cds-table-header-cell>Applies</cds-table-header-cell>
+                    <cds-table-header-cell>Actions</cds-table-header-cell>
+                  </cds-table-header-row>
+                </cds-table-head>
+                <cds-table-body id="inv-tbody"></cds-table-body>
+              </cds-table>
+            </div>
+            <p class="empty-note t-body-01" id="inv-empty" hidden>
+              No conditions in this catalog yet. Use <strong>Add condition</strong> to create the first one.
+            </p>
+          </PermitSection>
+        </div>
+
+        <!-- ── Browse everyone (read-only) + adopt into your own catalog ──────── -->
+        <div id="panel-browse" hidden>
+          <PermitSection title="All special conditions">
+            <p class="section-hint t-body-01">
+              Every district's and HQ's conditions, read-only. Copy any into
+              <strong id="browse-owner-label">your</strong> catalog to reuse it — it lands as your own item you can then edit.
+            </p>
+            <div class="browse-controls">
+              <cds-dropdown id="browse-filter" title-text="Show" value="all">
+                <cds-dropdown-item value="all">All owners</cds-dropdown-item>
+                <cds-dropdown-item value="hq">Headquarters</cds-dropdown-item>
+                {districtsSorted.map((o) => (
+                  <cds-dropdown-item value={o.key}>{o.name}</cds-dropdown-item>
+                ))}
+              </cds-dropdown>
+            </div>
+            <!-- carbon-checked: .table-wrap is only a horizontal-scroll container
+                 around the stock cds-table, not a table primitive (see above). -->
+            <div class="table-wrap">
+              <cds-table>
+                <cds-table-head>
+                  <cds-table-header-row>
+                    <cds-table-header-cell>Owner</cds-table-header-cell>
+                    <cds-table-header-cell>Title</cds-table-header-cell>
+                    <cds-table-header-cell>Condition text</cds-table-header-cell>
+                    <cds-table-header-cell>Applies</cds-table-header-cell>
+                    <cds-table-header-cell>Actions</cds-table-header-cell>
+                  </cds-table-header-row>
+                </cds-table-head>
+                <cds-table-body id="browse-tbody"></cds-table-body>
+              </cds-table>
+            </div>
+            <p class="empty-note t-body-01" id="browse-empty" hidden>No conditions match this filter yet.</p>
+          </PermitSection>
+        </div>
       </div>
     </div>
 
@@ -182,6 +229,9 @@ export const prototype = {
 
   // ── Inventory state (the active owner's catalog) ────────────────────────
   let items: ConditionInventoryItem[] = [];
+  let currentView: 'mine' | 'browse' = 'mine';
+  const allOwners = (): ConditionOwner[] => ['hq', ...districtOptions.map((o) => o.key)];
+  const sig = (it: { title: string; body: string }) => `${it.title}||${it.body}`;
 
   const flashSaved = () => {
     const n = $('save-notice') as any;
@@ -249,10 +299,94 @@ export const prototype = {
     if (switcherWrap) switcherWrap.hidden = !isDistrict;
     if (scopeNote) {
       scopeNote.textContent = isDistrict
-        ? 'District representatives curate only their own district catalog. Pick your district.'
-        : 'HQ reviewers curate the org-wide catalog that applies to every permit.';
+        ? 'District representatives curate their own catalog, and can browse every other district and copy conditions into it.'
+        : 'HQ reviewers curate the org-wide catalog, and can browse every district catalog.';
     }
-    renderInventory();
+    renderCurrent();
+  };
+
+  // ── Browse everyone (read-only) + adopt into your own catalog ─────────────
+  const renderBrowse = () => {
+    const owner = currentOwner();
+    const ownerLbl = $('browse-owner-label');
+    if (ownerLbl) ownerLbl.textContent = `the ${ownerLabel(owner)}`;
+
+    const filter = (($('browse-filter') as any)?.value as string) || 'all';
+    const owners = allOwners().filter((o) => filter === 'all' || o === filter);
+    const mine = new Set(loadInventory(owner).map(sig));
+
+    const rows: { o: ConditionOwner; it: ConditionInventoryItem }[] = [];
+    owners.forEach((o) => loadInventory(o).forEach((it) => rows.push({ o, it })));
+
+    const tbody = $('browse-tbody');
+    const empty = $('browse-empty');
+    if (empty) empty.hidden = rows.length > 0;
+    if (!tbody) return;
+
+    tbody.replaceChildren(
+      ...rows.map(({ o, it }) => {
+        const row = document.createElement('cds-table-row');
+
+        const ownerCell = document.createElement('cds-table-cell');
+        ownerCell.innerHTML = `<span class="c-owner">${esc(ownerLabel(o))}</span>`;
+
+        const titleCell = document.createElement('cds-table-cell');
+        titleCell.innerHTML = `<span class="c-title">${esc(it.title || '(untitled)')}</span>`;
+
+        const bodyCell = document.createElement('cds-table-cell');
+        const b = document.createElement('div');
+        b.className = 'c-body';
+        b.innerHTML = it.body;
+        bodyCell.appendChild(b);
+
+        const defCell = document.createElement('cds-table-cell');
+        defCell.innerHTML = it.isDefault
+          ? `<cds-tag type="cool-gray" size="sm">Default</cds-tag>`
+          : `<span class="c-muted">As needed</span>`;
+
+        const actionCell = document.createElement('cds-table-cell');
+        if (o === owner) {
+          actionCell.innerHTML = `<span class="c-muted">Your catalog</span>`;
+        } else if (mine.has(sig(it))) {
+          const done = document.createElement('cds-button');
+          done.setAttribute('kind', 'ghost'); done.setAttribute('size', 'sm'); done.setAttribute('disabled', '');
+          done.textContent = 'In your catalog';
+          actionCell.appendChild(done);
+        } else {
+          const copy = document.createElement('cds-button');
+          copy.setAttribute('kind', 'ghost'); copy.setAttribute('size', 'sm');
+          copy.textContent = 'Copy to my catalog';
+          copy.addEventListener('click', () => {
+            const inv = loadInventory(owner);
+            inv.push({
+              id: newConditionId(owner === 'hq' ? 'hq' : owner),
+              owner,
+              title: it.title,
+              body: it.body,
+              isDefault: false,
+            });
+            saveInventory(owner, inv);
+            flashSaved();
+            renderBrowse();
+          });
+          actionCell.appendChild(copy);
+        }
+
+        row.append(ownerCell, titleCell, bodyCell, defCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
+  const renderCurrent = () => (currentView === 'browse' ? renderBrowse() : renderInventory());
+
+  const showView = (v: 'mine' | 'browse') => {
+    currentView = v;
+    const mine = $('panel-mine');
+    const browse = $('panel-browse');
+    if (mine) mine.hidden = v !== 'mine';
+    if (browse) browse.hidden = v !== 'browse';
+    renderCurrent();
   };
 
   // ── Add / edit modal ─────────────────────────────────────────────────────
@@ -305,9 +439,19 @@ export const prototype = {
   // ── Wire ─────────────────────────────────────────────────────────────────
   applyScope();
   actingAs?.addEventListener('cds-dropdown-selected', applyScope);
-  switcher?.addEventListener('cds-dropdown-selected', renderInventory);
+  switcher?.addEventListener('cds-dropdown-selected', renderCurrent);
   $('add-condition')?.addEventListener('click', () => openModal(-1));
   $('c-save')?.addEventListener('click', saveCondition);
+
+  // View toggle (my catalog ↔ browse all) + browse owner filter.
+  const viewSwitch = $('sc-view') as any;
+  viewSwitch?.addEventListener('cds-content-switcher-selected', (e: Event) => {
+    const detailVal = (e as CustomEvent).detail?.item?.value;
+    const selected = Array.from(viewSwitch.querySelectorAll('cds-content-switcher-item'))
+      .find((i: any) => i.selected) as any;
+    showView((detailVal ?? selected?.value ?? 'mine') as 'mine' | 'browse');
+  });
+  $('browse-filter')?.addEventListener('cds-dropdown-selected', renderBrowse);
 </script>
 
 <style>
@@ -346,8 +490,15 @@ export const prototype = {
   .scope__row cds-dropdown { min-width: 18rem; }
   .scope__switcher { min-width: 18rem; }
   .scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
-  #switcher-wrap[hidden], #save-notice[hidden], #inv-empty[hidden] { display: none; }
+  #switcher-wrap[hidden], #save-notice[hidden], #inv-empty[hidden],
+  #browse-empty[hidden], #panel-mine[hidden], #panel-browse[hidden] { display: none; }
   #save-notice { max-width: 48rem; }
+
+  /* View toggle + cross-district browse controls. */
+  #sc-view { max-width: 24rem; }
+  .browse-controls { margin: 0 0 1.25rem; }
+  .browse-controls cds-dropdown { min-width: 18rem; }
+  :global(.c-owner) { color: var(--cds-text-secondary, #525252); white-space: nowrap; }
 
   .section-hint {
     margin: 0 0 1.25rem;

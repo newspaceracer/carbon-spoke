@@ -81,10 +81,9 @@ export const divisions: Division[] = [
 // The full set of GLOBAL account roles an admin can assign in the /users console.
 // `scoped` roles are tied to a specific district (a district lead/assistant is
 // always the lead/assistant OF a district), so assigning or requesting one must
-// also name the district. The non-scoped roles (Reviewer baseline, HQ technical
-// reviewer, Admin) are agency-wide and carry no district.
+// also name the district. The non-scoped roles (HQ technical reviewer, Admin)
+// are agency-wide and carry no district.
 export const accountRoleOptions: { value: string; label: string; scoped: boolean; description: string }[] = [
-  { value: 'reviewer', label: 'Reviewer', scoped: false, description: 'Baseline access — contributes to reviews without a district or HQ role.' },
   { value: 'district-assistant', label: 'District assistant technical reviewer', scoped: true, description: 'Supports district review; contributes analysis without final sign-off.' },
   { value: 'district-lead', label: 'District lead technical reviewer', scoped: true, description: 'Leads technical review for a district and signs off on district decisions.' },
   { value: 'hq-technical', label: 'HQ technical reviewer', scoped: false, description: 'Reviews permits statewide from headquarters, across all districts.' },
@@ -95,9 +94,33 @@ export const accountRoleOptions: { value: string; label: string; scoped: boolean
 export const accountRoleMeta = (value: string) =>
   accountRoleOptions.find((r) => r.value === value);
 
-// Roles a reviewer can REQUEST to move into (a subset of the account roles — you
-// can't request the plain Reviewer baseline). Role changes are approved by an
-// administrator, so the profile only *requests* one of these — it can't self-assign.
+// Areas of expertise a reviewer can be credentialed in — the CA State Parks
+// resource-domain taxonomy. Every HQ technical reviewer must carry at least one
+// (enforced in the /users add + manage flows); district reviewers may carry them
+// too. `hint` is the parenthetical example from the source taxonomy, shown as
+// helper detail; the short `label` is what a table chip displays.
+export const expertiseOptions: { value: string; label: string; hint?: string }[] = [
+  { value: 'aesthetics', label: 'Aesthetics', hint: 'e.g. sense of place, lightscape, soundscape, odor' },
+  { value: 'air', label: 'Air Resources' },
+  { value: 'animal', label: 'Animal Resources' },
+  { value: 'freshwater-aquatic', label: 'Freshwater Aquatic Resources', hint: 'e.g. riparian ecosystems, floodplains' },
+  { value: 'geologic', label: 'Geologic Resources' },
+  { value: 'marine-aquatic', label: 'Marine Aquatic Resources', hint: 'e.g. tidepools, coastal wetlands' },
+  { value: 'paleontological', label: 'Paleontological Resources' },
+  { value: 'plant', label: 'Plant Resources' },
+  { value: 'soil', label: 'Soil Resources' },
+  { value: 'water', label: 'Water Resources', hint: 'e.g. water quality' },
+  { value: 'wildfire', label: 'Wildfire' },
+  { value: 'other', label: 'Other' },
+];
+
+/** Display label for an expertise value (falls back to the raw value). */
+export const expertiseLabel = (value: string) =>
+  expertiseOptions.find((e) => e.value === value)?.label ?? value;
+
+// Roles a reviewer can REQUEST to move into (the elevated account roles). Role
+// changes are approved by an administrator, so the profile only *requests* one of
+// these — it can't self-assign.
 export const requestableRoles: { value: string; label: string; description: string }[] = [
   {
     value: 'district-lead',
@@ -168,23 +191,26 @@ export interface DirectoryUser {
    *  in /users; approving a role-change request overwrites it. */
   accountRole: string;
   /** District id (see districtDirectory) for a district-SCOPED role. Omitted for
-   *  the non-scoped roles (reviewer / hq-technical / admin). */
+   *  the non-scoped roles (hq-technical / admin). */
   district?: string;
   /** Division or district shown for context in the users console. */
   affiliation: string;
+  /** Areas of expertise — `expertiseOptions` values. Required (≥1) for HQ
+   *  technical reviewers; optional for everyone else. */
+  expertise?: string[];
 }
 
 export const directory: DirectoryUser[] = [
-  { id: 'j-okafor', name: 'Jomo Okafor', email: 'j.okafor@parks.ca.gov', phone: '(707) 555-0148', accountRole: 'district-lead', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District' },
-  { id: 'k-whitfield', name: 'Karen Whitfield', email: 'k.whitfield@parks.ca.gov', phone: '(707) 555-0101', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District' },
-  { id: 'm-santos', name: 'M. Santos', email: 'm.santos@parks.ca.gov', phone: '(707) 555-0119', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District' },
-  { id: 'd-cho', name: 'Daniel Cho', email: 'd.cho@parks.ca.gov', phone: '(707) 555-0134', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District' },
-  { id: 't-herrera', name: 'Tomás Herrera', email: 't.herrera@parks.ca.gov', phone: '(707) 555-0152', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District' },
-  { id: 'a-moreno', name: 'Alicia Moreno', email: 'a.moreno@parks.ca.gov', phone: '(707) 555-0146', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District' },
-  { id: 'l-tran', name: 'Linda Tran', email: 'l.tran@parks.ca.gov', phone: '(707) 555-0160', accountRole: 'reviewer', affiliation: 'Statewide Permitting Office' },
-  { id: 'r-okoye', name: 'Raymond Okoye', email: 'r.okoye@parks.ca.gov', phone: '(707) 555-0171', accountRole: 'hq-technical', affiliation: 'Office of Scientific Review' },
-  { id: 'j-park', name: 'Julia Park', email: 'j.park@parks.ca.gov', phone: '(707) 555-0182', accountRole: 'reviewer', affiliation: 'Natural Resources Division' },
-  { id: 'b-ramirez', name: 'Ben Ramirez', email: 'b.ramirez@parks.ca.gov', phone: '(707) 555-0193', accountRole: 'admin', affiliation: 'Statewide Permitting Office' },
+  { id: 'j-okafor', name: 'Jomo Okafor', email: 'j.okafor@parks.ca.gov', phone: '(707) 555-0148', accountRole: 'district-lead', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['marine-aquatic', 'plant'] },
+  { id: 'k-whitfield', name: 'Karen Whitfield', email: 'k.whitfield@parks.ca.gov', phone: '(707) 555-0101', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['animal'] },
+  { id: 'm-santos', name: 'M. Santos', email: 'm.santos@parks.ca.gov', phone: '(707) 555-0119', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['freshwater-aquatic'] },
+  { id: 'd-cho', name: 'Daniel Cho', email: 'd.cho@parks.ca.gov', phone: '(707) 555-0134', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['plant'] },
+  { id: 't-herrera', name: 'Tomás Herrera', email: 't.herrera@parks.ca.gov', phone: '(707) 555-0152', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['wildfire'] },
+  { id: 'a-moreno', name: 'Alicia Moreno', email: 'a.moreno@parks.ca.gov', phone: '(707) 555-0146', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: [] },
+  { id: 'l-tran', name: 'Linda Tran', email: 'l.tran@parks.ca.gov', phone: '(707) 555-0160', accountRole: 'hq-technical', affiliation: 'Statewide Permitting Office', expertise: ['water'] },
+  { id: 'r-okoye', name: 'Raymond Okoye', email: 'r.okoye@parks.ca.gov', phone: '(707) 555-0171', accountRole: 'hq-technical', affiliation: 'Office of Scientific Review', expertise: ['geologic', 'paleontological'] },
+  { id: 'j-park', name: 'Julia Park', email: 'j.park@parks.ca.gov', phone: '(707) 555-0182', accountRole: 'hq-technical', affiliation: 'Natural Resources Division', expertise: ['air'] },
+  { id: 'b-ramirez', name: 'Ben Ramirez', email: 'b.ramirez@parks.ca.gov', phone: '(707) 555-0193', accountRole: 'admin', affiliation: 'Statewide Permitting Office', expertise: [] },
 ];
 
 /** Resolve a directory user by id. */

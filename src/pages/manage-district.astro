@@ -33,6 +33,9 @@ export const prototype = {
 };
 
 const d = district;
+
+// The district switcher lists every district alphabetically (states are already A–Z).
+const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompare(b.name));
 ---
 
 <BaseLayout title={`Manage ${d.name}`}>
@@ -73,7 +76,7 @@ const d = district;
 
             <div id="switcher-wrap" class="scope__switcher" hidden>
               <cds-dropdown id="district-switcher" title-text="District" value={d.id}>
-                {districtDirectory.map((row) => (
+                {districtsSorted.map((row) => (
                   <cds-dropdown-item value={row.id}>{row.name}</cds-dropdown-item>
                 ))}
               </cds-dropdown>
@@ -424,7 +427,7 @@ const d = district;
     const cur = memberRoles.find((r) => r.value === currentRole);
     if (cur) byValue.set(cur.value, { value: cur.value, label: cur.label });
 
-    const roles = [...byValue.values()];
+    const roles = [...byValue.values()].sort((a, b) => a.label.localeCompare(b.label));
     dd.innerHTML = roles.map((r) => `<cds-dropdown-item value="${r.value}">${esc(r.label)}</cds-dropdown-item>`).join('');
     dd.value = byValue.has(currentRole) ? currentRole : (roles[0]?.value ?? 'district-assistant');
 
@@ -456,6 +459,7 @@ const d = district;
     const taken = new Set(state.members.map((m) => m.userId));
     box.innerHTML = directory
       .filter((u) => !taken.has(u.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
       .map((u) => `<cds-combo-box-item value="${esc(u.id)}">${esc(u.name)} · ${esc(u.email)}</cds-combo-box-item>`)
       .join('');
     box.value = '';

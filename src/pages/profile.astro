@@ -32,6 +32,10 @@ export const prototype = {
 const u = currentUser;
 const fullName = `${u.firstName} ${u.lastName}`;
 const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? '';
+
+// Dropdown options render alphabetically (states are already A–Z at the source).
+const divisionsSorted = [...divisions].sort((a, b) => a.label.localeCompare(b.label));
+const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompare(b.name));
 ---
 
 <BaseLayout title={`My profile — ${fullName}`}>
@@ -101,7 +105,7 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
               <cds-text-input id="f-lastName" label="Last name" value={u.lastName} readonly></cds-text-input>
               <cds-text-input id="f-title" label="Job title" value={u.title} readonly></cds-text-input>
               <cds-dropdown id="f-division" title-text="Division" value={u.division} read-only>
-                {divisions.map((d) => (
+                {divisionsSorted.map((d) => (
                   <cds-dropdown-item value={d.value}>{d.label}</cds-dropdown-item>
                 ))}
               </cds-dropdown>
@@ -251,8 +255,8 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
         <!-- District picker — shown only for a district-scoped role (lead /
              assistant), which is always the lead/assistant OF a district. -->
         <div id="role-district-wrap" class="modal-district" hidden>
-          <cds-dropdown id="role-district" title-text="District" value="north-coast-redwoods">
-            {districtDirectory.map((d) => (
+          <cds-dropdown id="role-district" title-text="District" value="north-coast-redwoods" autoalign>
+            {districtsSorted.map((d) => (
               <cds-dropdown-item value={d.id}>{d.name}</cds-dropdown-item>
             ))}
           </cds-dropdown>
@@ -597,14 +601,16 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
   }
 
   /* Personal-information form — a responsive two-up field grid; the fields
-     themselves are stock cds-text-input / cds-dropdown. */
-  #save-notice { margin-bottom: 1.25rem; max-width: 44rem; }
+     themselves are stock cds-text-input / cds-dropdown. Content fills the
+     section (like permit.astro's col-11 main) so the fields, notification and
+     action footer line up with the section header's full-width rule; only prose
+     (.section-hint) is measured for readability. */
+  #save-notice { margin-bottom: 1.25rem; }
   #save-notice[hidden] { display: none; }
   .field-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1.25rem 1rem;
-    max-width: 44rem;
   }
   .field-grid__wide { grid-column: 1 / -1; }
   /* Subheading that groups the address fields within the form. */
@@ -614,12 +620,15 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
   @media (max-width: 42rem) {
     .field-grid { grid-template-columns: 1fr; }
   }
+  /* Form footer: a top hairline spanning the full form width (matching the
+     section header's rule) binds Save/Cancel to the form as its footer. */
   .form__actions {
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
-    margin-top: 1.75rem;
-    max-width: 44rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   }
   .form__actions[hidden] { display: none; }
   /* cds-button sets :host display, overriding the UA [hidden] rule — an explicit
@@ -627,9 +636,10 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
      notifications above carry their own [hidden] rules). */
   #profile-edit[hidden] { display: none; }
 
-  /* Notification preferences — one event per row with a single email on/off
-     toggle. Layout only; the control is a stock cds-toggle. */
-  .prefs { max-width: 44rem; }
+  /* Notification / appearance preferences — one event per row with a single
+     toggle. Rows fill the section (like the form) so the toggle sits at the
+     section's right edge; the row dividers bridge label and control. Layout
+     only; the control is a stock cds-toggle. */
   .prefs__email { color: var(--cds-text-primary, #161616); }
   .prefs__row {
     display: grid;
@@ -641,7 +651,9 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
   .prefs__row + .prefs__row {
     border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   }
-  .prefs__info { min-width: 0; }
+  /* Text column fills the row; only its prose is measured for readability so the
+     description doesn't run the full section width. */
+  .prefs__info { min-width: 0; max-width: 44rem; }
   .prefs__label { margin: 0; }
   .prefs__desc {
     margin: 0.125rem 0 0;
