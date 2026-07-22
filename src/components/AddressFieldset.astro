@@ -3,7 +3,7 @@
 // of a container whose fields are (re)built client-side per the selected
 // country's libaddressinput format (src/data/address.ts + lib/address-fields.ts).
 //
-// Pure MARKUP + data-attributes — no <script> of its own. The page that uses it
+// Pure MARKUP + data-attributes — no client script of its own. The page that uses it
 // calls wireAddressFieldset(root, …) so it keeps control of view-first /
 // persistence / reveal behavior. The empty [data-fields] container is filled at
 // runtime; its layout classes are GLOBAL (below) because those injected fields
@@ -26,7 +26,7 @@ const initial = { country, ...(value ?? {}) };
 ---
 
 <div class="address-fieldset" data-address data-prefix={prefix} data-value={JSON.stringify(initial)}>
-  <cds-dropdown id={`${prefix}-country`} title-text="Country" value={initial.country}>
+  <cds-dropdown id={`${prefix}-country`} title-text="Country (required)" value={initial.country}>
     {countries.map((c) => (
       <cds-dropdown-item value={c.value}>{c.label}</cds-dropdown-item>
     ))}

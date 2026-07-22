@@ -46,10 +46,14 @@ const setRO = (el: any, ro: boolean) => {
  *  combo-box can resolve the selection. */
 function buildField(spec: AddressFieldSpec, prefix: string, value: string): HTMLElement {
   const id = `${prefix}-${spec.key}`;
+  // Mark each field by its true per-country required-ness (libaddressinput knows
+  // which subfields are optional — e.g. a US address line 2), matching the
+  // "(required)"/"(optional)" convention used across the permit application.
+  const label = `${spec.label} (${spec.required ? 'required' : 'optional'})`;
   if (spec.options) {
     const cb = document.createElement('cds-combo-box') as any;
     cb.id = id;
-    cb.setAttribute('title-text', spec.label);
+    cb.setAttribute('title-text', label);
     cb.setAttribute('label', 'Type to search…');
     spec.options.forEach((o) => {
       const item = document.createElement('cds-combo-box-item') as any;
@@ -62,7 +66,7 @@ function buildField(spec: AddressFieldSpec, prefix: string, value: string): HTML
   }
   const field = document.createElement('cds-text-input') as any;
   field.id = id;
-  field.setAttribute('label', spec.label);
+  field.setAttribute('label', label);
   if (value) field.value = value;
   return field;
 }

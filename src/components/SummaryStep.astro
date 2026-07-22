@@ -1,0 +1,797 @@
+---
+// Step 6 of the permit application — the Application summary. A READ-ONLY final
+// review: the applicant reads back every answer they've given, section by
+// section, and either jumps back to fix something (each section's "Edit" action
+// returns to that wizard step) or certifies and submits. This step is gated —
+// the wizard only lets the applicant reach it once every required item is
+// provided (data/application.ts `applicationIssues`), so the review renders the
+// COMPLETE application; it composes stock cds-* legos (read-only cds-table for
+// rosters, cds-checkbox for the certification) with a plain label/value
+// definition list for the field-by-field metadata.
+//
+// Everything shown comes from the same seed the form steps render from, so the
+// summary and the steps stay in lockstep. Edit-navigation and the submit gate
+// (Submit stays disabled until the certification box is checked) are wired on the
+// page (apply.astro), which owns wizard navigation.
+import PermitSection from './PermitSection.astro';
+import {
+  applicantOrg,
+  applicant,
+  researchTeam,
+  seedParticipants,
+  project,
+  seedOccurrences,
+  dataCollection,
+  seedSpecimens,
+  additionalDocs,
+  seedGisFiles,
+  type Address,
+} from '../data/application';
+import { parkById, seedStudyAreas } from '../data/parks';
+import { expertiseLabel } from '../data/user';
+import { formatDisplay } from '../lib/phone';
+
+const dc = dataCollection;
+const ad = additionalDocs;
+const fc = researchTeam.fieldCharge;
+const d = project.dates;
+
+// ── Display formatters (build-time; no client JS needed) ─────────────────────
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// ISO (YYYY-MM-DD) → "Sep 1, 2026". Parsed by parts so it's timezone-proof.
+const fmtISO = (iso: string): string => {
+  if (!iso) return '';
+  const [y, m, day] = iso.split('-').map(Number);
+  return `${MONTHS[m - 1]} ${day}, ${y}`;
+};
+// m/d/Y ("9/16/2026") → "Sep 16, 2026" so occurrences read like the ISO dates.
+const fmtMDY = (mdy: string): string => {
+  if (!mdy) return '';
+  const [m, day, y] = mdy.split('/').map(Number);
+  return `${MONTHS[m - 1]} ${day}, ${y}`;
+};
+const fmtAddress = (a: Address): string =>
+  [a.street, a.unit, `${a.city}, ${a.state} ${a.zip}`].filter(Boolean).join(', ');
+const fullName = (first: string, last: string): string => `${first} ${last}`.trim();
+
+// ── Section value sets ───────────────────────────────────────────────────────
+const orgRows = [
+  { label: 'Organization', value: applicantOrg.name },
+  { label: 'Phone', value: applicantOrg.phone },
+  { label: 'Email', value: applicantOrg.email },
+  { label: 'Address', value: fmtAddress(applicantOrg.address) },
+];
+
+const piRows = [
+  { label: 'Name', value: fullName(applicant.firstName, applicant.lastName) },
+  { label: 'Title', value: applicant.title },
+  { label: 'Phone', value: formatDisplay(applicant.phone) },
+  { label: 'Email', value: applicant.email },
+];
+
+// The person in direct charge of field work resolves from the two gate answers.
+const fieldChargeRows = fc.sameAsPI
+  ? [{ label: 'Person in direct charge', value: 'Same as the principal investigator' }]
+  : fc.isSubmitter
+    ? [{ label: 'Person in direct charge', value: 'You (the submitter)' }]
+    : [
+        { label: 'Name', value: fullName(fc.firstName, fc.lastName) },
+        { label: 'Title', value: fc.title },
+        { label: 'Phone', value: formatDisplay(fc.phone) },
+        { label: 'Email', value: fc.email },
+        { label: 'Address', value: fmtAddress(fc.address) },
+      ];
+
+const dateRows = [
+  { label: 'Project window', value: `${fmtISO(d.projectStart)} – ${fmtISO(d.projectEnd)}` },
+  { label: 'Permit window requested', value: `${fmtISO(d.permitStart)} – ${fmtISO(d.permitEnd)}` },
+  { label: 'Annual report due', value: fmtISO(d.annualReport) },
+];
+
+const curationRows = [
+  { label: 'Facility', value: dc.curation.facility },
+  { label: 'Responsible official', value: dc.curation.official },
+  { label: 'Phone', value: dc.curation.phone },
+  { label: 'Email', value: dc.curation.email },
+];
+
+const labRows = [
+  { label: 'Facility', value: dc.laboratory.facility },
+  { label: 'Responsible official', value: dc.laboratory.official },
+  { label: 'Phone', value: dc.laboratory.phone },
+  { label: 'Email', value: dc.laboratory.email },
+  {
+    label: 'Lab study window',
+    value: `${fmtISO(dc.laboratory.startDate)} – ${fmtISO(dc.laboratory.endDate)}`,
+  },
+];
+
+// Study-area parks resolved to name + district for the read-only roster.
+const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
+---
+
+<div class="sum">
+  <!-- Final-review guidance — states what this page is for and how to act on it. -->
+  <cds-inline-notification
+    class="sum-intro"
+    kind="info"
+    low-contrast
+    hide-close-button
+    title="Review before you submit"
+    subtitle="This is the last step. Read back every section below and confirm it's correct — use Edit on any section to go back and change an answer. When everything looks right, confirm the statement at the bottom and choose Submit application."
+  ></cds-inline-notification>
+
+  <!-- ── Research team ────────────────────────────────────────────────────── -->
+  <PermitSection title="Research team">
+    <cds-button slot="aside" kind="ghost" size="sm" data-goto-step="research-team">
+      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>
+      Edit
+    </cds-button>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Organization</h3>
+      <dl class="review">
+        {orgRows.map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.label}</dt>
+            <dd class="review__value t-body-01">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Principal investigator</h3>
+      {researchTeam.piIsSubmitter && (
+        <p class="sub-note t-body-01">This is you (the submitter).</p>
+      )}
+      <dl class="review">
+        {piRows.map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.label}</dt>
+            <dd class="review__value t-body-01">{r.value}</dd>
+          </div>
+        ))}
+        <div class="review__row">
+          <dt class="review__label t-label-01">Résumé or CV</dt>
+          <dd class="review__value">
+            {researchTeam.piResume ? (
+              <span class="doc">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+                <span class="t-body-01">{researchTeam.piResume}</span>
+              </span>
+            ) : (
+              <span class="review__value--muted t-body-01">Not attached</span>
+            )}
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Person in direct charge of field work</h3>
+      <dl class="review">
+        {fieldChargeRows.map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.label}</dt>
+            <dd class="review__value t-body-01">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Additional participants</h3>
+      {seedParticipants.length ? (
+        <cds-table class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Name</cds-table-header-cell>
+              <cds-table-header-cell>Title</cds-table-header-cell>
+              <cds-table-header-cell>Email</cds-table-header-cell>
+              <cds-table-header-cell>Phone</cds-table-header-cell>
+              <cds-table-header-cell>Comments</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body>
+            {seedParticipants.map((p) => (
+              <cds-table-row>
+                <cds-table-cell>{fullName(p.firstName, p.lastName)}</cds-table-cell>
+                <cds-table-cell>{p.title}</cds-table-cell>
+                <cds-table-cell>{p.email}</cds-table-cell>
+                <cds-table-cell>{formatDisplay(p.phone)}</cds-table-cell>
+                <cds-table-cell>{p.comments}</cds-table-cell>
+              </cds-table-row>
+            ))}
+          </cds-table-body>
+        </cds-table>
+      ) : (
+        <p class="sub-note t-body-01">No additional participants added.</p>
+      )}
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Personnel &amp; insurance</h3>
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">All personnel employed or insured by the institution</dt>
+          <dd class="review__value t-body-01">{researchTeam.personnelInsured ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
+    </div>
+  </PermitSection>
+
+  <!-- ── Project information ──────────────────────────────────────────────── -->
+  <PermitSection title="Project information">
+    <cds-button slot="aside" kind="ghost" size="sm" data-goto-step="project-info">
+      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>
+      Edit
+    </cds-button>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Project details</h3>
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">Category</dt>
+          <dd class="review__value t-body-01">{expertiseLabel(project.category)}</dd>
+        </div>
+        <div class="review__row">
+          <dt class="review__label t-label-01">Title</dt>
+          <dd class="review__value t-body-01">{project.title}</dd>
+        </div>
+      </dl>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Project purpose</p>
+        <p class="narrative__body t-body-01">{project.purpose}</p>
+      </div>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Anticipated benefits to the California State Park System</p>
+        <p class="narrative__body t-body-01">{project.benefits}</p>
+      </div>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Project dates</h3>
+      <dl class="review">
+        {dateRows.map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.label}</dt>
+            <dd class="review__value t-body-01">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Field investigation occurrences</h3>
+      {seedOccurrences.length ? (
+        <cds-table class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Occurrence</cds-table-header-cell>
+              <cds-table-header-cell>Start date</cds-table-header-cell>
+              <cds-table-header-cell>End date</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body>
+            {seedOccurrences.map((o, i) => (
+              <cds-table-row>
+                <cds-table-cell>Occurrence {i + 1}</cds-table-cell>
+                <cds-table-cell>{fmtMDY(o.start)}</cds-table-cell>
+                <cds-table-cell>{fmtMDY(o.end)}</cds-table-cell>
+              </cds-table-row>
+            ))}
+          </cds-table-body>
+        </cds-table>
+      ) : (
+        <p class="sub-note t-body-01">No field investigation occurrences added.</p>
+      )}
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Project schedule</h3>
+      <ul class="docs">
+        {project.scheduleFile ? (
+          <li class="doc">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+            <span class="t-body-01">{project.scheduleFile}</span>
+          </li>
+        ) : (
+          <li class="doc review__value--muted t-body-01">None attached (optional)</li>
+        )}
+      </ul>
+    </div>
+  </PermitSection>
+
+  <!-- ── Study areas ──────────────────────────────────────────────────────── -->
+  <PermitSection title="Study areas">
+    <cds-button slot="aside" kind="ghost" size="sm" data-goto-step="study-areas">
+      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>
+      Edit
+    </cds-button>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Study area parks</h3>
+      {parkRows.length ? (
+        <cds-table class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Park</cds-table-header-cell>
+              <cds-table-header-cell>District</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body>
+            {parkRows.map((p) => (
+              <cds-table-row>
+                <cds-table-cell>{p!.name}</cds-table-cell>
+                <cds-table-cell>{p!.district}</cds-table-cell>
+              </cds-table-row>
+            ))}
+          </cds-table-body>
+        </cds-table>
+      ) : (
+        <p class="sub-note t-body-01">No parks selected.</p>
+      )}
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">GIS location</h3>
+      <ul class="docs">
+        {seedGisFiles.length ? (
+          seedGisFiles.map((f) => (
+            <li class="doc">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+              <span class="t-body-01">{f}</span>
+            </li>
+          ))
+        ) : (
+          <li class="doc review__value--muted t-body-01">None provided (optional)</li>
+        )}
+      </ul>
+    </div>
+  </PermitSection>
+
+  <!-- ── Data collection ──────────────────────────────────────────────────── -->
+  <PermitSection title="Data collection">
+    <cds-button slot="aside" kind="ghost" size="sm" data-goto-step="data-collection">
+      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>
+      Edit
+    </cds-button>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Specimen collection</h3>
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">Involves specimen collection</dt>
+          <dd class="review__value t-body-01">{dc.collectsSpecimens ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
+
+      {dc.collectsSpecimens && (
+        <div class="nested">
+          {seedSpecimens.length ? (
+            <cds-table class="ro-table">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Species</cds-table-header-cell>
+                  <cds-table-header-cell>Quantity</cds-table-header-cell>
+                  <cds-table-header-cell>Size</cds-table-header-cell>
+                  <cds-table-header-cell>Condition</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body>
+                {seedSpecimens.map((s) => (
+                  <cds-table-row>
+                    <cds-table-cell>{s.species}</cds-table-cell>
+                    <cds-table-cell>{s.quantity}</cds-table-cell>
+                    <cds-table-cell>{s.size}</cds-table-cell>
+                    <cds-table-cell>{s.condition}</cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+          ) : (
+            <p class="sub-note t-body-01">No specimen types added.</p>
+          )}
+
+          <div class="narrative">
+            <p class="narrative__label t-label-01">Collection rationale</p>
+            {dc.collectionRationaleInProposal ? (
+              <p class="narrative__body deferred t-body-01">Answered in study proposal</p>
+            ) : (
+              <p class="narrative__body t-body-01">{dc.collectionRationale}</p>
+            )}
+          </div>
+
+          <div class="narrative">
+            <p class="narrative__label t-label-01">Supporting documentation</p>
+            <ul class="docs">
+              {dc.collectionDocs.length ? (
+                dc.collectionDocs.map((f) => (
+                  <li class="doc">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+                    <span class="t-body-01">{f}</span>
+                  </li>
+                ))
+              ) : (
+                <li class="doc review__value--muted t-body-01">None provided (optional)</li>
+              )}
+            </ul>
+          </div>
+
+          <div class="narrative">
+            <p class="narrative__label t-label-01">Curation facility</p>
+            <dl class="review">
+              {curationRows.map((r) => (
+                <div class="review__row">
+                  <dt class="review__label t-label-01">{r.label}</dt>
+                  <dd class="review__value t-body-01">{r.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+      )}
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Laboratory work</h3>
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">Involves laboratory work</dt>
+          <dd class="review__value t-body-01">{dc.labWork ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
+      {dc.labWork && (
+        <div class="nested">
+          <dl class="review">
+            {labRows.map((r) => (
+              <div class="review__row">
+                <dt class="review__label t-label-01">{r.label}</dt>
+                <dd class="review__value t-body-01">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Additional information</h3>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Study procedures</p>
+        {dc.studyProceduresInProposal ? (
+          <p class="narrative__body deferred t-body-01">Answered in study proposal</p>
+        ) : (
+          <p class="narrative__body t-body-01">{dc.studyProcedures}</p>
+        )}
+      </div>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Location of data and data products</p>
+        {dc.dataLocationInProposal ? (
+          <p class="narrative__body deferred t-body-01">Answered in study proposal</p>
+        ) : (
+          <p class="narrative__body t-body-01">{dc.dataLocation}</p>
+        )}
+      </div>
+    </div>
+  </PermitSection>
+
+  <!-- ── Additional documents ─────────────────────────────────────────────── -->
+  <PermitSection title="Additional documents">
+    <cds-button slot="aside" kind="ghost" size="sm" data-goto-step="additional-docs">
+      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>
+      Edit
+    </cds-button>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Soil disturbance</h3>
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">Involves soil disturbance</dt>
+          <dd class="review__value t-body-01">{ad.soilDisturbance ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
+      {ad.soilDisturbance && (
+        <div class="nested">
+          <div class="narrative">
+            <p class="narrative__label t-label-01">Soil disturbance details</p>
+            <p class="narrative__body t-body-01">{ad.soilDisturbanceDetails}</p>
+          </div>
+          <div class="narrative">
+            <p class="narrative__label t-label-01">Soil disturbance areas &amp; supporting documents</p>
+            <ul class="docs">
+              {ad.soilDisturbanceMap ? (
+                <li class="doc">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+                  <span class="t-body-01">{ad.soilDisturbanceMap}</span>
+                </li>
+              ) : (
+                <li class="doc review__value--muted t-body-01">Not attached</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Additional permits</h3>
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">Requires additional permits</dt>
+          <dd class="review__value t-body-01">{ad.additionalPermits ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
+      {ad.additionalPermits && (
+        <div class="nested">
+          <div class="narrative">
+            <p class="narrative__label t-label-01">Uploaded permits &amp; supporting documents</p>
+            <ul class="docs">
+              {ad.additionalPermitsDocs.length ? (
+                ad.additionalPermitsDocs.map((f) => (
+                  <li class="doc">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+                    <span class="t-body-01">{f}</span>
+                  </li>
+                ))
+              ) : (
+                <li class="doc review__value--muted t-body-01">None uploaded — rationale provided below</li>
+              )}
+            </ul>
+          </div>
+          <div class="narrative">
+            <p class="narrative__label t-label-01">Rationale or additional information</p>
+            <p class="narrative__body t-body-01">{ad.additionalPermitsDetails}</p>
+          </div>
+        </div>
+      )}
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Study supporting information</h3>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Budget</p>
+        {ad.budgetInProposal ? (
+          <p class="narrative__body deferred t-body-01">Answered in study proposal</p>
+        ) : (
+          <p class="narrative__body t-body-01">{ad.budget}</p>
+        )}
+      </div>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Literature cited</p>
+        {ad.literatureInProposal ? (
+          <p class="narrative__body deferred t-body-01">Answered in study proposal</p>
+        ) : (
+          <p class="narrative__body t-body-01">{ad.literature}</p>
+        )}
+      </div>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Study proposal</p>
+        <ul class="docs">
+          {ad.studyProposalFile ? (
+            <li class="doc">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+              <span class="t-body-01">{ad.studyProposalFile}</span>
+            </li>
+          ) : (
+            <li class="doc review__value--muted t-body-01">None attached (optional)</li>
+          )}
+        </ul>
+      </div>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Required documents</h3>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Signed standard condition agreement form</p>
+        <ul class="docs">
+          {ad.conditionAgreementFile ? (
+            <li class="doc">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+              <span class="t-body-01">{ad.conditionAgreementFile}</span>
+            </li>
+          ) : (
+            <li class="doc review__value--muted t-body-01">Not attached</li>
+          )}
+        </ul>
+      </div>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Signed waiver and indemnity agreement form</p>
+        <ul class="docs">
+          {ad.waiverIndemnityFile ? (
+            <li class="doc">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+              <span class="t-body-01">{ad.waiverIndemnityFile}</span>
+            </li>
+          ) : (
+            <li class="doc review__value--muted t-body-01">Not attached</li>
+          )}
+        </ul>
+      </div>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-compact-01">Research activities beyond simple use</h3>
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">Conducts activities beyond simple use</dt>
+          <dd class="review__value t-body-01">{ad.beyondSimpleUse ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
+      {ad.beyondSimpleUse && (
+        <div class="nested">
+          <div class="narrative">
+            <p class="narrative__label t-label-01">Insurance addendum</p>
+            <ul class="docs">
+              {ad.insuranceAddendumFile ? (
+                <li class="doc">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z"/></svg>
+                  <span class="t-body-01">{ad.insuranceAddendumFile}</span>
+                </li>
+              ) : (
+                <li class="doc review__value--muted t-body-01">Not attached</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  </PermitSection>
+
+  <!-- ── Certification + submit gate ──────────────────────────────────────── -->
+  <div class="certify">
+    <cds-inline-notification
+      kind="info"
+      low-contrast
+      hide-close-button
+      title="Ready to submit?"
+      subtitle="Once submitted, your application goes to California State Parks for review. Confirm the statement below to enable Submit application."
+    ></cds-inline-notification>
+    <cds-checkbox
+      id="summary-certify"
+      label-text="I certify that the information provided in this application is accurate and complete to the best of my knowledge."
+    ></cds-checkbox>
+  </div>
+</div>
+
+<style>
+  /* Rhythm between the reviewed sections — matches the form steps so the summary
+     reads as one system. */
+  .sum {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .sum-intro {
+    display: block;
+    max-width: 46rem;
+  }
+
+  /* Sub-blocks within a reviewed section, spaced apart. */
+  .subblock + .subblock {
+    margin-top: 2rem;
+  }
+  .sub-head {
+    margin: 0 0 0.75rem;
+    color: var(--cds-text-primary, #161616);
+  }
+  .sub-note {
+    margin: 0 0 0.75rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  /* When a note is the last thing in its sub-block (e.g. the empty-roster case),
+     drop the trailing gap. */
+  .sub-note:last-child {
+    margin-bottom: 0;
+  }
+
+  /* carbon-checked: label/value review metadata is a definition list (the
+     semantic primitive for it). cds-structured-list is a columnar DATA list, not
+     a <dl>; this is layout CSS over a <dl>, not a reskin of a Carbon component. */
+  .review {
+    margin: 0;
+    max-width: 46rem;
+  }
+  .review__row {
+    display: grid;
+    grid-template-columns: minmax(9rem, 15rem) 1fr;
+    gap: 0.5rem 1.5rem;
+    padding: 0.625rem 0;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .review__row:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .review__label {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .review__value {
+    margin: 0;
+    color: var(--cds-text-primary, #161616);
+    overflow-wrap: anywhere;
+  }
+  .review__value--muted {
+    color: var(--cds-text-secondary, #525252);
+  }
+  @media (max-width: 42rem) {
+    .review__row {
+      grid-template-columns: 1fr;
+      gap: 0.125rem;
+    }
+  }
+
+  /* Narrative answers — a label over the full text, so nothing is truncated on a
+     review page (the applicant must be able to read every word before submitting). */
+  .narrative {
+    max-width: 46rem;
+  }
+  .narrative + .narrative,
+  .review + .narrative {
+    margin-top: 1.5rem;
+  }
+  .narrative__label {
+    margin: 0 0 0.375rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .narrative__body {
+    margin: 0;
+    color: var(--cds-text-primary, #161616);
+  }
+  .narrative__body.deferred {
+    color: var(--cds-text-secondary, #525252);
+    font-style: italic;
+  }
+
+  /* Nested detail revealed under a "Yes" gate answer, indented slightly so it
+     reads as belonging to the question above it. */
+  .nested {
+    margin-top: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  /* Attachment list — a document glyph + filename per file; a muted single item
+     states the empty case honestly. Layout only. */
+  .docs {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .doc {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--cds-text-primary, #161616);
+  }
+  .doc svg {
+    flex: 0 0 auto;
+    color: var(--cds-icon-secondary, #525252);
+  }
+
+  /* Read-only roster tables sit full-measure below their sub-head. */
+  .ro-table {
+    display: block;
+  }
+
+  /* Certification block — a hairline binds the confirm + submit gate to the review
+     above it. */
+  .certify {
+    margin-top: 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    max-width: 46rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+</style>
+</content>
+</invoke>

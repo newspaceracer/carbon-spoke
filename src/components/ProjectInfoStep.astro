@@ -29,18 +29,18 @@ const d = project.dates;
          rich-text fields — so the eye scans straight down the page instead of
          zig-zagging, and the (long) project title gets full width. -->
     <div class="pi-fields">
-      <cds-dropdown id="proj-category" title-text="Project category" value={project.category}>
+      <cds-dropdown id="proj-category" title-text="Project category (required)" value={project.category}>
         {expertiseOptions.map((o) => <cds-dropdown-item value={o.value}>{o.label}</cds-dropdown-item>)}
       </cds-dropdown>
 
-      <cds-text-input id="proj-title" label="Project title" value={project.title}></cds-text-input>
+      <cds-text-input id="proj-title" label="Project title (required)" value={project.title}></cds-text-input>
 
       <!-- Rich text: purpose + benefits are long-form narrative that benefits from
            formatting (lists, emphasis), so they use the reusable sc-rich-text
            editor (Tiptap in Carbon chrome) rather than a plain textarea. The label
            + helper are rendered here since the editor is not a native field. -->
       <div class="rt-field">
-        <span class="rt-label t-label-01" id="purpose-label">Project purpose</span>
+        <span class="rt-label t-label-01" id="purpose-label">Project purpose (required)</span>
         <p class="rt-helper t-label-01">
           Describe the study rationale and significance. Include a summary of relevant literature
           and specific hypotheses to be tested and/or study objectives.
@@ -55,7 +55,7 @@ const d = project.dates;
 
       <div class="rt-field">
         <span class="rt-label t-label-01" id="benefits-label">
-          Anticipated benefits to the California State Park System
+          Anticipated benefits to the California State Park System (required)
         </span>
         <p class="rt-helper t-label-01">
           Describe why you want to do research in California State Parks. Identify any anticipated
@@ -80,17 +80,17 @@ const d = project.dates;
 
     <div class="dates">
       <cds-date-picker value={`${d.projectStart}/${d.projectEnd}`}>
-        <cds-date-picker-input kind="from" label-text="Project start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
-        <cds-date-picker-input kind="to" label-text="Project end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="from" label-text="Project start date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="to" label-text="Project end date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
       </cds-date-picker>
 
       <cds-date-picker value={`${d.permitStart}/${d.permitEnd}`}>
-        <cds-date-picker-input kind="from" label-text="Permit requested start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
-        <cds-date-picker-input kind="to" label-text="Permit requested end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="from" label-text="Permit requested start date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="to" label-text="Permit requested end date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
       </cds-date-picker>
 
       <cds-date-picker value={d.annualReport}>
-        <cds-date-picker-input kind="single" label-text="Annual report tentative completion date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="single" label-text="Annual report tentative completion date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
       </cds-date-picker>
     </div>
   </PermitSection>
@@ -104,8 +104,8 @@ const d = project.dates;
 
     <div class="occ-add">
       <cds-date-picker id="occ-range">
-        <cds-date-picker-input id="occ-start" kind="from" label-text="Occurrence start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
-        <cds-date-picker-input id="occ-end" kind="to" label-text="Occurrence end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input id="occ-start" kind="from" label-text="Occurrence start date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input id="occ-end" kind="to" label-text="Occurrence end date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
       </cds-date-picker>
       <cds-button id="occ-add" kind="tertiary" size="md">Add occurrence</cds-button>
     </div>

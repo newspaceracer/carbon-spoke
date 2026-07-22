@@ -4,8 +4,9 @@
 //   • Specimen collection — a yes/no gate; when yes it reveals a specimen roster
 //                           (Species · Quantity · Size · Condition, the same
 //                           modal-add pattern as Additional participants), a
-//                           collection rationale (a textarea with an "Answered in
-//                           study proposal" shortcut that disables it), optional
+//                           collection rationale (one label over two alternative
+//                           inputs — an "Answered in study proposal" check that
+//                           collapses the textarea, or the textarea), optional
 //                           supporting docs, and the curation-facility contact.
 //   • Laboratory work     — a yes/no gate; when yes it reveals the laboratory
 //                           facility contact and the lab-study date window.
@@ -30,7 +31,7 @@ const cur = dc.curation;
     <cds-radio-button-group
       id="specimen-gate"
       name="specimen-gate"
-      legend-text="Will your project involve collection of specimens?"
+      legend-text="Will your project involve collection of specimens? (required)"
       orientation="horizontal"
       value={dc.collectsSpecimens ? 'yes' : 'no'}
     >
@@ -42,7 +43,7 @@ const cur = dc.curation;
       <!-- Specimen roster: same modal-add pattern as Additional participants. -->
       <div class="roster">
         <div class="roster__head">
-          <p class="field-label t-label-01">Types of specimens to be collected</p>
+          <p class="field-label t-label-01">Types of specimens to be collected <span class="req">(required)</span></p>
           <cds-button id="add-specimen" kind="tertiary" size="sm">Add specimen</cds-button>
         </div>
         <cds-table id="specimen-table">
@@ -60,22 +61,26 @@ const cur = dc.curation;
         <p id="specimen-empty" class="empty-note t-body-01" hidden>No specimen types added yet.</p>
       </div>
 
-      <!-- Collection rationale — a narrative field with the "answered in study
-           proposal" shortcut, which disables the textarea. -->
-      <div class="proposal-field">
-        <cds-textarea
-          id="collection-rationale"
-          label="Collection rationale"
-          rows="5"
-          helper-text="Describe why collection is necessary, and the disposition of specimens collected. Provide power analysis to justify proposed sample size(s)."
-          value={dc.collectionRationale}
-        ></cds-textarea>
+      <!-- Collection rationale — one question, two alternative inputs: check
+           "Answered in study proposal" to skip it, or type the answer. The check
+           sits between the shared label and the field, and collapses the textarea
+           when set so the either/or is unmistakable. -->
+      <div class="proposal-field" role="group" aria-labelledby="collection-rationale-label">
+        <p class="proposal-field__label t-label-01" id="collection-rationale-label">Collection rationale <span class="req">(required)</span></p>
         <cds-checkbox
           class="answered-in-proposal"
           data-target="collection-rationale"
           checked={dc.collectionRationaleInProposal || undefined}
           label-text="Answered in study proposal"
         ></cds-checkbox>
+        <cds-textarea
+          id="collection-rationale"
+          hide-label
+          label="Collection rationale"
+          rows="5"
+          helper-text="Describe why collection is necessary, and the disposition of specimens collected. Provide power analysis to justify proposed sample size(s)."
+          value={dc.collectionRationale}
+        ></cds-textarea>
       </div>
 
       <div class="uploader">
@@ -96,12 +101,12 @@ const cur = dc.curation;
         <p class="field-label t-label-01">Curation facility</p>
         <div class="field-grid">
           <div class="field-grid__wide">
-            <cds-text-input id="cur-facility" label="Facility name" value={cur.facility}></cds-text-input>
+            <cds-text-input id="cur-facility" label="Facility name (required)" value={cur.facility}></cds-text-input>
           </div>
-          <cds-text-input id="cur-official" label="Responsible official" value={cur.official}></cds-text-input>
-          <cds-text-input id="cur-phone" type="tel" label="Phone number" value={cur.phone}></cds-text-input>
+          <cds-text-input id="cur-official" label="Responsible official (required)" value={cur.official}></cds-text-input>
+          <cds-text-input id="cur-phone" type="tel" label="Phone number (required)" value={cur.phone}></cds-text-input>
           <div class="field-grid__wide">
-            <cds-text-input id="cur-email" type="email" label="Email address" value={cur.email}></cds-text-input>
+            <cds-text-input id="cur-email" type="email" label="Email address (required)" value={cur.email}></cds-text-input>
           </div>
         </div>
       </div>
@@ -113,7 +118,7 @@ const cur = dc.curation;
     <cds-radio-button-group
       id="lab-gate"
       name="lab-gate"
-      legend-text="Will your project involve laboratory work?"
+      legend-text="Will your project involve laboratory work? (required)"
       orientation="horizontal"
       value={dc.labWork ? 'yes' : 'no'}
     >
@@ -124,18 +129,18 @@ const cur = dc.curation;
     <div id="lab-yes" class="gate-body" hidden>
       <div class="field-grid">
         <div class="field-grid__wide">
-          <cds-text-input id="lab-facility" label="Laboratory facility name" value={lab.facility}></cds-text-input>
+          <cds-text-input id="lab-facility" label="Laboratory facility name (required)" value={lab.facility}></cds-text-input>
         </div>
-        <cds-text-input id="lab-official" label="Responsible official" value={lab.official}></cds-text-input>
-        <cds-text-input id="lab-phone" type="tel" label="Phone number" value={lab.phone}></cds-text-input>
+        <cds-text-input id="lab-official" label="Responsible official (required)" value={lab.official}></cds-text-input>
+        <cds-text-input id="lab-phone" type="tel" label="Phone number (required)" value={lab.phone}></cds-text-input>
         <div class="field-grid__wide">
-          <cds-text-input id="lab-email" type="email" label="Email address" value={lab.email}></cds-text-input>
+          <cds-text-input id="lab-email" type="email" label="Email address (required)" value={lab.email}></cds-text-input>
         </div>
       </div>
 
       <cds-date-picker class="lab-dates" value={`${lab.startDate}/${lab.endDate}`}>
-        <cds-date-picker-input kind="from" label-text="Lab study start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
-        <cds-date-picker-input kind="to" label-text="Lab study end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="from" label-text="Lab study start date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="to" label-text="Lab study end date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
       </cds-date-picker>
     </div>
   </PermitSection>
@@ -147,20 +152,22 @@ const cur = dc.curation;
       study proposal, mark it as such instead of repeating it here.
     </p>
 
-    <div class="proposal-field">
-      <cds-textarea
-        id="study-procedures"
-        label="Study procedures"
-        rows="6"
-        helper-text="Describe your study and sampling design, field and laboratory methods or protocols, treatments and controls, number of replicates, and statistical analyses and models, and include power analyses to justify proposed sample size(s) needed to answer the question(s)."
-        value={dc.studyProcedures}
-      ></cds-textarea>
+    <div class="proposal-field" role="group" aria-labelledby="study-procedures-label">
+      <p class="proposal-field__label t-label-01" id="study-procedures-label">Study procedures <span class="req">(required)</span></p>
       <cds-checkbox
         class="answered-in-proposal"
         data-target="study-procedures"
         checked={dc.studyProceduresInProposal || undefined}
         label-text="Answered in study proposal"
       ></cds-checkbox>
+      <cds-textarea
+        id="study-procedures"
+        hide-label
+        label="Study procedures"
+        rows="6"
+        helper-text="Describe your study and sampling design, field and laboratory methods or protocols, treatments and controls, number of replicates, and statistical analyses and models, and include power analyses to justify proposed sample size(s) needed to answer the question(s)."
+        value={dc.studyProcedures}
+      ></cds-textarea>
     </div>
 
     <div class="uploader">
@@ -176,20 +183,22 @@ const cur = dc.curation;
       <div id="procedures-docs-list" class="uploaded-list"></div>
     </div>
 
-    <div class="proposal-field">
-      <cds-textarea
-        id="data-location"
-        label="Location of data and data products collected under this permit"
-        rows="5"
-        helper-text="Describe anticipated products and deliverables resulting from this study, such as reports, publications, brochures, GIS layers, web tools, videos, etc., and how study results will be disseminated."
-        value={dc.dataLocation}
-      ></cds-textarea>
+    <div class="proposal-field" role="group" aria-labelledby="data-location-label">
+      <p class="proposal-field__label t-label-01" id="data-location-label">Location of data and data products collected under this permit <span class="req">(required)</span></p>
       <cds-checkbox
         class="answered-in-proposal"
         data-target="data-location"
         checked={dc.dataLocationInProposal || undefined}
         label-text="Answered in study proposal"
       ></cds-checkbox>
+      <cds-textarea
+        id="data-location"
+        hide-label
+        label="Location of data and data products collected under this permit"
+        rows="5"
+        helper-text="Describe anticipated products and deliverables resulting from this study, such as reports, publications, brochures, GIS layers, web tools, videos, etc., and how study results will be disseminated."
+        value={dc.dataLocation}
+      ></cds-textarea>
     </div>
   </PermitSection>
 </div>
@@ -205,12 +214,12 @@ const cur = dc.curation;
   <cds-modal-body>
     <div class="field-grid">
       <div class="field-grid__wide">
-        <cds-text-input id="ns-species" label="Species"></cds-text-input>
+        <cds-text-input id="ns-species" label="Species (required)"></cds-text-input>
       </div>
-      <cds-text-input id="ns-quantity" label="Quantity"></cds-text-input>
-      <cds-text-input id="ns-size" label="Size"></cds-text-input>
+      <cds-text-input id="ns-quantity" label="Quantity (required)"></cds-text-input>
+      <cds-text-input id="ns-size" label="Size (required)"></cds-text-input>
       <div class="field-grid__wide">
-        <cds-text-input id="ns-condition" label="Condition"></cds-text-input>
+        <cds-text-input id="ns-condition" label="Condition (required)"></cds-text-input>
       </div>
     </div>
   </cds-modal-body>
@@ -249,14 +258,25 @@ const cur = dc.curation;
   gate('specimen-gate', 'specimen-yes');
   gate('lab-gate', 'lab-yes');
 
-  // ── "Answered in study proposal" shortcut: disable the paired textarea ───
+  // ── "Answered in study proposal" shortcut: collapse the paired textarea ──
+  // The two are alternative inputs for one question, so checking the box hides
+  // the textarea outright (also disabled, so it drops out of the form) rather
+  // than leaving a greyed-out box that reads as "one field, temporarily off".
+  // NOTE: cds-textarea sets `:host { display }`, which outranks a scoped
+  // `[hidden]` rule — so the visual collapse must be an INLINE style (inline
+  // author styles beat any shadow `:host` rule). `hidden`/`disabled` stay for
+  // semantics and form exclusion.
   document.querySelectorAll('.answered-in-proposal').forEach((el) => {
     const cb = el as any;
     const target = $(cb.dataset.target);
     const sync = () => {
       // Property when upgraded; attribute fallback for the pre-upgrade load pass.
-      const checked = cb.checked ?? cb.hasAttribute('checked');
-      if (target) target.disabled = !!checked;
+      const checked = !!(cb.checked ?? cb.hasAttribute('checked'));
+      if (target) {
+        target.hidden = checked;
+        target.disabled = checked;
+        target.style.display = checked ? 'none' : '';
+      }
     };
     cb.addEventListener('cds-checkbox-changed', sync);
     sync(); // apply the seeded checked state on load
@@ -307,13 +327,16 @@ const cur = dc.curation;
   $('ns-add')?.addEventListener('click', () => {
     const val = (id: string) => ($(id)?.value ?? '').toString().trim();
     const species = val('ns-species');
-    if (!species) { $('ns-species')?.focus(); return; } // species is the required key
-    addRow({
-      species,
-      quantity: val('ns-quantity'),
-      size: val('ns-size'),
-      condition: val('ns-condition'),
-    });
+    const quantity = val('ns-quantity');
+    const size = val('ns-size');
+    const condition = val('ns-condition');
+    // Every specimen field is required; bail to the first empty one so no partial
+    // row is added.
+    if (!species) { $('ns-species')?.focus(); return; }
+    if (!quantity) { $('ns-quantity')?.focus(); return; }
+    if (!size) { $('ns-size')?.focus(); return; }
+    if (!condition) { $('ns-condition')?.focus(); return; }
+    addRow({ species, quantity, size, condition });
     clearModal();
     $('ns-species')?.focus(); // ready for the next in the batch
   });
@@ -383,12 +406,23 @@ const cur = dc.curation;
     display: none;
   }
 
-  /* A narrative field paired with its "Answered in study proposal" checkbox. */
+  /* One question, two alternative inputs: a single label, the "Answered in study
+     proposal" check that sits between the label and the field, then the textarea
+     (which collapses out of flow when the box is checked). */
   .proposal-field {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
     max-width: 46rem;
+  }
+  .proposal-field__label {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  /* When "Answered in study proposal" is checked the textarea is hidden; the flex
+     gap collapses with it, so the label + check stand alone cleanly. */
+  .proposal-field cds-textarea[hidden] {
+    display: none;
   }
 
   /* Two-up responsive field grid — same construction as the other steps. */

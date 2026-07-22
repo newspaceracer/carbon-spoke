@@ -1,0 +1,509 @@
+---
+// Step 5 of the permit application — the Additional documents page. Stock cds-*
+// controls grouped into PermitSection blocks:
+//   • Soil disturbance      — a yes/no gate; when yes it requires a details
+//                             narrative and a topographic-map upload identifying
+//                             each ground-disturbance area.
+//   • Additional permits    — a yes/no gate; when yes it reveals ONE required
+//                             item satisfied by EITHER an upload (existing permits
+//                             / supporting docs) OR a rationale textarea (for
+//                             permits not yet in hand). A live inline error shows
+//                             while neither is provided.
+//   • Study supporting information — Budget and Literature cited as deferrable
+//                             text fields (the "Answered in study proposal" check
+//                             collapses the field), plus an OPTIONAL study-proposal
+//                             upload with a checklist of the sections it may contain.
+//   • Required documents    — the two always-required signed agreement forms
+//                             (standard condition + waiver & indemnity), each with
+//                             a "download the unsigned form" link.
+//   • Research activities beyond simple use — a yes/no gate; when yes it requires
+//                             the insurance addendum.
+//
+// The gates, the uploaders, and the download-link stubs all live in this
+// component's own client script. Wizard step navigation lives on the page.
+import PermitSection from './PermitSection.astro';
+import { additionalDocs } from '../data/application';
+
+const ad = additionalDocs;
+
+// The sections a study proposal may cover — shown as a checklist so applicants
+// know what a complete proposal looks like before they upload one.
+const proposalSections = [
+  'Project title',
+  'Person preparing the proposal',
+  'Abstract',
+  'Introduction',
+  'Methods',
+  'Other state or federal permits',
+  'Schedule',
+  'Anticipated benefits to the State Park System',
+  'Products',
+  'Procedures',
+  'Collections',
+  'Soil disturbance',
+  'Budget',
+  'Literature cited',
+];
+---
+
+<div class="ad">
+  <!-- ── Soil disturbance ─────────────────────────────────────────────────── -->
+  <PermitSection title="Soil disturbance">
+    <cds-radio-button-group
+      id="soil-gate"
+      name="soil-gate"
+      legend-text="Will your project involve soil disturbance (placement of stakes, collection of soil cores, etc.)? (required)"
+      orientation="horizontal"
+      value={ad.soilDisturbance ? 'yes' : 'no'}
+    >
+      <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+      <cds-radio-button label-text="No" value="no"></cds-radio-button>
+    </cds-radio-button-group>
+
+    <div id="soil-yes" class="gate-body" hidden>
+      <div>
+        <cds-textarea
+          id="soil-details"
+          label="Soil disturbance details (required)"
+          rows="5"
+          helper-text="Describe why the soil disturbance is necessary and the disposition of any material collected. Provide a power analysis to justify proposed sample size(s)."
+          value={ad.soilDisturbanceDetails}
+        ></cds-textarea>
+      </div>
+
+      <div class="uploader">
+        <p class="field-label t-label-01">
+          Soil disturbance areas and supporting documents <span class="req">(required)</span>
+        </p>
+        <cds-file-uploader-drop-container class="doc-drop" data-list="soil-docs-list" multiple accept=".pdf">
+          Drag and drop files here or click to upload
+        </cds-file-uploader-drop-container>
+        <div id="soil-docs-list" class="uploaded-list"></div>
+        <p class="uploader-hint t-label-01">
+          Identify each ground-disturbance area on a USGS 7.5-minute topographic map. Supported file
+          type: PDF.
+        </p>
+      </div>
+    </div>
+  </PermitSection>
+
+  <!-- ── Additional permits ───────────────────────────────────────────────── -->
+  <PermitSection title="Additional permits">
+    <cds-radio-button-group
+      id="permits-gate"
+      name="permits-gate"
+      legend-text="Will your project require additional federal, state, or local permits? (required)"
+      orientation="horizontal"
+      value={ad.additionalPermits ? 'yes' : 'no'}
+    >
+      <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+      <cds-radio-button label-text="No" value="no"></cds-radio-button>
+    </cds-radio-button-group>
+
+    <div id="permits-yes" class="gate-body" hidden>
+      <!-- One required item, satisfied by EITHER an upload OR a rationale. The
+           neutral container binds the two options; a live inline error shows only
+           while neither is provided. -->
+      <div class="requirement" role="group" aria-labelledby="permits-req-label">
+        <p class="field-label t-label-01" id="permits-req-label">
+          Additional permits and supporting documents <span class="req">(required)</span>
+        </p>
+        <p class="requirement__hint t-body-01">
+          Upload your existing additional permits and any supporting documents, and/or provide a
+          rationale below. At least one is required.
+        </p>
+
+        <div class="uploader">
+          <cds-file-uploader-drop-container
+            class="doc-drop"
+            data-list="permits-docs-list"
+            multiple
+            accept=".pdf,.doc,.docx"
+          >
+            Drag and drop files here or click to upload
+          </cds-file-uploader-drop-container>
+          <div id="permits-docs-list" class="uploaded-list"></div>
+          <p class="uploader-hint t-label-01">
+            Upload copies of any additional permits already issued and any supporting documents.
+            Supported file types: PDF, DOC, DOCX.
+          </p>
+        </div>
+
+        <cds-textarea
+          id="permits-details"
+          label="Rationale or additional information"
+          rows="4"
+          helper-text="If you replied yes but do not have all the necessary permits prior to submission of this application, provide rationale or additional information here."
+          value={ad.additionalPermitsDetails}
+        ></cds-textarea>
+
+        <cds-inline-notification
+          id="permits-req-error"
+          kind="error"
+          low-contrast
+          hide-close-button
+          title="At least one response is required"
+          subtitle="Upload your additional permits or supporting documents, or provide a rationale, to complete this section."
+          hidden
+        ></cds-inline-notification>
+      </div>
+    </div>
+  </PermitSection>
+
+  <!-- ── Study supporting information ──────────────────────────────────────── -->
+  <PermitSection title="Study supporting information">
+    <p class="section-hint t-body-01">
+      Budget and literature cited can be typed here, or deferred to your study proposal if they are
+      already covered there. Attach the study proposal itself below.
+    </p>
+
+    <!-- Budget — narrative text with the "Answered in study proposal" defer: the
+         check sits between the label and the field, and collapses the textarea. -->
+    <div class="proposal-field" role="group" aria-labelledby="budget-label">
+      <p class="proposal-field__label t-label-01" id="budget-label">Budget <span class="opt">(optional)</span></p>
+      <cds-checkbox
+        class="answered-in-proposal"
+        data-target="budget-input"
+        checked={ad.budgetInProposal || undefined}
+        label-text="Answered in study proposal"
+      ></cds-checkbox>
+      <cds-textarea
+        id="budget-input"
+        hide-label
+        label="Budget"
+        rows="4"
+        helper-text="Summarize the project budget: funding source(s), major cost categories, and the total requested."
+        value={ad.budget}
+      ></cds-textarea>
+    </div>
+
+    <!-- Literature cited — same defer pattern. -->
+    <div class="proposal-field" role="group" aria-labelledby="literature-label">
+      <p class="proposal-field__label t-label-01" id="literature-label">Literature cited <span class="opt">(optional)</span></p>
+      <cds-checkbox
+        class="answered-in-proposal"
+        data-target="literature-input"
+        checked={ad.literatureInProposal || undefined}
+        label-text="Answered in study proposal"
+      ></cds-checkbox>
+      <cds-textarea
+        id="literature-input"
+        hide-label
+        label="Literature cited"
+        rows="4"
+        helper-text="List the references cited in your application, one per line."
+        value={ad.literature}
+      ></cds-textarea>
+    </div>
+
+    <div class="uploader">
+      <p class="field-label t-label-01">Study proposal <span class="opt">(optional)</span></p>
+      <p class="uploader-sub t-body-01">Your study proposal may contain some of these relevant sections:</p>
+      <ul class="proposal-list t-body-01">
+        {proposalSections.map((s) => <li>{s}</li>)}
+      </ul>
+      <cds-file-uploader-drop-container class="doc-drop" data-list="proposal-docs-list" accept=".pdf">
+        Drag and drop a file here or click to upload
+      </cds-file-uploader-drop-container>
+      <div id="proposal-docs-list" class="uploaded-list"></div>
+      <p class="uploader-hint t-label-01">Supported file type: PDF.</p>
+    </div>
+  </PermitSection>
+
+  <!-- ── Required documents ───────────────────────────────────────────────── -->
+  <PermitSection title="Required documents">
+    <div class="uploader">
+      <p class="field-label t-label-01">
+        Signed standard condition agreement form <span class="req">(required)</span>
+      </p>
+      <p class="uploader-sub t-body-01">
+        The Principal Investigator, {ad.principalInvestigator}, must sign this required document.
+        Please upload the signed copy.
+      </p>
+      <cds-file-uploader-drop-container class="doc-drop" data-list="condition-docs-list" data-single accept=".pdf">
+        Drag and drop the signed form here or click to upload
+      </cds-file-uploader-drop-container>
+      <div id="condition-docs-list" class="uploaded-list"></div>
+      <p class="uploader-hint t-label-01">Supported file type: PDF.</p>
+      <cds-link class="doc-download" href="#">Download the unsigned standard condition agreement form</cds-link>
+    </div>
+
+    <div class="uploader">
+      <p class="field-label t-label-01">
+        Signed waiver and indemnity agreement form <span class="req">(required)</span>
+      </p>
+      <p class="uploader-sub t-body-01">
+        A representative of the organization authorized to agree to the indemnification terms must
+        sign this required document. This may or may not be one of the people on the permit. Please
+        upload the signed document.
+      </p>
+      <cds-file-uploader-drop-container class="doc-drop" data-list="waiver-docs-list" data-single accept=".pdf">
+        Drag and drop the signed form here or click to upload
+      </cds-file-uploader-drop-container>
+      <div id="waiver-docs-list" class="uploaded-list"></div>
+      <p class="uploader-hint t-label-01">Supported file type: PDF.</p>
+      <cds-link class="doc-download" href="#">Download the unsigned waiver and indemnity agreement form</cds-link>
+    </div>
+  </PermitSection>
+
+  <!-- ── Research activities beyond simple use ─────────────────────────────── -->
+  <PermitSection title="Research activities beyond simple use">
+    <p class="section-hint t-body-01">
+      Examples of activities beyond simple use include, but are not limited to, the use of aircraft or
+      drones, boats, high-risk vehicle use, scuba diving, climbing equipment, trapping, handling of
+      large and/or dangerous wildlife, collection of materials that create risk, and projects that
+      include large teams of volunteers.
+    </p>
+
+    <cds-radio-button-group
+      id="beyond-gate"
+      name="beyond-gate"
+      legend-text="Will you conduct, or plan on conducting, research activities above and beyond simple use? (required)"
+      orientation="horizontal"
+      value={ad.beyondSimpleUse ? 'yes' : 'no'}
+    >
+      <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+      <cds-radio-button label-text="No" value="no"></cds-radio-button>
+    </cds-radio-button-group>
+
+    <div id="beyond-yes" class="gate-body" hidden>
+      <div class="uploader">
+        <p class="field-label t-label-01">Insurance addendum <span class="req">(required)</span></p>
+        <cds-file-uploader-drop-container class="doc-drop" data-list="insurance-docs-list" data-single accept=".pdf">
+          Drag and drop the signed form here or click to upload
+        </cds-file-uploader-drop-container>
+        <div id="insurance-docs-list" class="uploaded-list"></div>
+        <p class="uploader-hint t-label-01">Supported file type: PDF.</p>
+        <cds-link class="doc-download" href="#">Download the unsigned insurance addendum</cds-link>
+      </div>
+    </div>
+  </PermitSection>
+</div>
+
+<script>
+  // Non-generic on purpose: a generic arrow is misread as JSX by Vite's esbuild
+  // dependency scanner and breaks `astro dev`. Callers cast as needed.
+  const $ = (id: string): any => document.getElementById(id);
+
+  // ── Yes/no gates: reveal the follow-up block on "yes" ────────────────────
+  const gate = (groupId: string, bodyId: string) => {
+    const group = $(groupId);
+    const wrap = $(bodyId);
+    const sync = () => {
+      // Property when upgraded; attribute fallback for the pre-upgrade load pass.
+      const v = group?.value ?? group?.getAttribute('value');
+      if (wrap) wrap.hidden = v !== 'yes';
+    };
+    group?.addEventListener('cds-radio-button-group-changed', sync);
+    sync(); // apply the seeded value on load
+  };
+  gate('soil-gate', 'soil-yes');
+  gate('permits-gate', 'permits-yes');
+  gate('beyond-gate', 'beyond-yes');
+
+  // ── "Answered in study proposal" shortcut: collapse the paired textarea ──
+  // The two are alternative inputs for one question, so checking the box hides
+  // the textarea outright (also disabled, so it drops from the form).
+  document.querySelectorAll('.answered-in-proposal').forEach((el) => {
+    const cb = el as any;
+    const target = $(cb.dataset.target);
+    const sync = () => {
+      // Property when upgraded; attribute fallback for the pre-upgrade load pass.
+      const checked = !!(cb.checked ?? cb.hasAttribute('checked'));
+      if (target) {
+        // cds-textarea's `:host { display }` outranks a scoped `[hidden]` rule,
+        // so the visual collapse must be an INLINE style. `hidden`/`disabled`
+        // stay for semantics and form exclusion.
+        target.hidden = checked;
+        target.disabled = checked;
+        target.style.display = checked ? 'none' : '';
+      }
+    };
+    cb.addEventListener('cds-checkbox-changed', sync);
+    sync(); // apply the seeded checked state on load
+  });
+
+  // ── Additional permits: one requirement, satisfied by an upload OR a rationale ─
+  // (at least one). The inline error surfaces live only while neither is present.
+  (() => {
+    const list = $('permits-docs-list');
+    const textarea = $('permits-details');
+    const error = $('permits-req-error');
+    if (!error) return;
+    const satisfied = () => {
+      const hasFile = !!list && list.children.length > 0;
+      // Property once upgraded (reflects live edits, incl. a cleared ''); attribute
+      // fallback so the seeded value still counts on the pre-upgrade load pass.
+      const text = textarea ? (textarea.value ?? textarea.getAttribute('value') ?? '') : '';
+      const hasText = text.toString().trim().length > 0;
+      return hasFile || hasText;
+    };
+    const sync = () => { error.hidden = satisfied(); };
+    textarea?.addEventListener('input', sync);
+    // Uploads/deletes mutate the list after their own handlers run — re-check next tick.
+    $('permits-yes')?.addEventListener('cds-file-uploader-drop-container-changed', () => setTimeout(sync));
+    list?.addEventListener('cds-file-uploader-item-deleted', () => setTimeout(sync));
+    // Re-check when the Yes/No gate toggles (the block may seed unsatisfied).
+    $('permits-gate')?.addEventListener('cds-radio-button-group-changed', sync);
+    sync();
+  })();
+
+  // ── Document uploaders ───────────────────────────────────────────────────
+  // A static prototype can't store bytes, so "uploaded" means: render a Carbon
+  // file item per chosen file. `data-single` uploaders (the signed forms) keep a
+  // single item and replace it; the rest accumulate.
+  document.querySelectorAll('.doc-drop').forEach((drop) => {
+    const el = drop as any;
+    const list = $(el.dataset.list);
+    const single = el.hasAttribute('data-single');
+    drop.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+      const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
+      if (!files || !files.length || !list) return;
+      const chosen = single ? files.slice(0, 1) : files;
+      if (single) list.innerHTML = '';
+      chosen.forEach((file) => {
+        const item = document.createElement('cds-file-uploader-item') as any;
+        item.state = 'edit';
+        item.size = 'md';
+        item.textContent = file.name;
+        item.addEventListener('cds-file-uploader-item-deleted', () => item.remove());
+        list.appendChild(item);
+      });
+    });
+  });
+
+  // ── Download-form links — prototype stubs (no real form to serve) ────────
+  document.querySelectorAll('.doc-download').forEach((link) => {
+    link.addEventListener('click', (e) => e.preventDefault());
+  });
+</script>
+
+<style>
+  /* Rhythm between the sub-sections of the step — same as the other steps. */
+  .ad {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+  }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* The revealed body of a yes/no gate — spaced below the question, fields
+     stacked with breathing room. */
+  .gate-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    margin-top: 1.5rem;
+    max-width: 46rem;
+  }
+  .gate-body[hidden] {
+    display: none;
+  }
+
+  /* One question, two alternative inputs: a single label, the "Answered in study
+     proposal" check between the label and the field, then the textarea (which
+     collapses out of flow when the box is checked). Same pattern as Data collection. */
+  .proposal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-width: 46rem;
+  }
+  .proposal-field__label {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .proposal-field__label .opt {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .proposal-field cds-textarea[hidden] {
+    display: none;
+  }
+  /* Space the two deferrable fields from each other and the proposal uploader. */
+  .proposal-field + .proposal-field,
+  .proposal-field + .uploader {
+    margin-top: 2rem;
+  }
+
+  /* Additional-permits requirement — one required item satisfied by EITHER an
+     upload OR a typed rationale; a neutral hairline container binds the two
+     options into a single unit, and holds the live "at least one" error. */
+  .requirement {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    max-width: 46rem;
+    padding: 1.25rem;
+    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .requirement .field-label {
+    margin: 0;
+  }
+  .requirement__hint {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  #permits-req-error[hidden] {
+    display: none;
+  }
+
+  /* Uploader block — a labeled dropzone (stock cds-file-uploader-drop-container)
+     plus its sub-text, list, and help text; layout only. */
+  .uploader {
+    max-width: 46rem;
+  }
+  .field-label {
+    margin: 0 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .field-label .req {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .field-label .opt {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .uploader-sub {
+    margin: 0 0 0.75rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .uploaded-list {
+    margin-top: 0.5rem;
+  }
+  .uploader-hint {
+    margin: 0.5rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .doc-download {
+    display: inline-block;
+    margin-top: 0.75rem;
+  }
+
+  /* Study-proposal section checklist — a quiet two-column list of what a proposal
+     may contain, sitting between its label and the uploader. */
+  .proposal-list {
+    margin: 0 0 1rem;
+    padding-left: 1.25rem;
+    columns: 2;
+    column-gap: 2rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .proposal-list li {
+    margin-bottom: 0.25rem;
+    break-inside: avoid;
+  }
+  @media (max-width: 42rem) {
+    .proposal-list {
+      columns: 1;
+    }
+  }
+
+  /* Required-document uploaders sit in their own section; give them air between. */
+  .uploader + .uploader {
+    margin-top: 2rem;
+  }
+</style>

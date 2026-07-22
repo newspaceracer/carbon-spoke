@@ -26,21 +26,21 @@ import { states } from '../data/user';
     </p>
     <div class="field-grid">
       <div class="field-grid__wide">
-        <cds-text-input id="org-name" label="Applicant organization" value={applicantOrg.name}></cds-text-input>
+        <cds-text-input id="org-name" label="Applicant organization (required)" value={applicantOrg.name}></cds-text-input>
       </div>
-      <cds-text-input id="org-phone" type="tel" label="Organization phone" value={applicantOrg.phone}></cds-text-input>
-      <cds-text-input id="org-email" type="email" label="Organization email" value={applicantOrg.email}></cds-text-input>
+      <cds-text-input id="org-phone" type="tel" label="Organization phone (required)" value={applicantOrg.phone}></cds-text-input>
+      <cds-text-input id="org-email" type="email" label="Organization email (required)" value={applicantOrg.email}></cds-text-input>
       <div class="field-grid__wide">
-        <cds-text-input id="org-street" label="Street address" value={applicantOrg.address.street}></cds-text-input>
+        <cds-text-input id="org-street" label="Street address (required)" value={applicantOrg.address.street}></cds-text-input>
       </div>
       <div class="field-grid__wide">
         <cds-text-input id="org-unit" label="Suite / unit (optional)" value={applicantOrg.address.unit}></cds-text-input>
       </div>
-      <cds-text-input id="org-city" label="City" value={applicantOrg.address.city}></cds-text-input>
-      <cds-dropdown id="org-state" title-text="State" value={applicantOrg.address.state}>
+      <cds-text-input id="org-city" label="City (required)" value={applicantOrg.address.city}></cds-text-input>
+      <cds-dropdown id="org-state" title-text="State (required)" value={applicantOrg.address.state}>
         {states.map((s) => <cds-dropdown-item value={s.value}>{s.label}</cds-dropdown-item>)}
       </cds-dropdown>
-      <cds-text-input id="org-zip" label="ZIP code" value={applicantOrg.address.zip}></cds-text-input>
+      <cds-text-input id="org-zip" label="ZIP code (required)" value={applicantOrg.address.zip}></cds-text-input>
     </div>
   </PermitSection>
 
@@ -54,14 +54,14 @@ import { states } from '../data/user';
     <cds-checkbox id="pi-is-me" label-text="I am the principal investigator for this project"></cds-checkbox>
 
     <div class="field-grid pi-grid">
-      <cds-text-input id="pi-first" label="First name"></cds-text-input>
-      <cds-text-input id="pi-last" label="Last name"></cds-text-input>
-      <cds-text-input id="pi-title" label="Title"></cds-text-input>
+      <cds-text-input id="pi-first" label="First name (required)"></cds-text-input>
+      <cds-text-input id="pi-last" label="Last name (required)"></cds-text-input>
+      <cds-text-input id="pi-title" label="Title (required)"></cds-text-input>
       <div class="field-grid__wide">
-        <PhoneField id="pi-phone" label="Phone number" />
+        <PhoneField id="pi-phone" label="Phone number (required)" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="pi-email" type="email" label="Email address"></cds-text-input>
+        <cds-text-input id="pi-email" type="email" label="Email address (required)"></cds-text-input>
       </div>
     </div>
 
@@ -94,7 +94,7 @@ import { states } from '../data/user';
     <cds-radio-button-group
       id="picof-same-pi"
       name="picof-same-pi"
-      legend-text="Is this the same person as the principal investigator?"
+      legend-text="Is this the same person as the principal investigator? (required)"
       orientation="horizontal"
     >
       <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
@@ -115,7 +115,7 @@ import { states } from '../data/user';
       <cds-radio-button-group
         id="picof-is-me"
         name="picof-is-me"
-        legend-text="Are you (the submitter) the person in direct charge of field work?"
+        legend-text="Are you (the submitter) the person in direct charge of field work? (required)"
         orientation="horizontal"
       >
         <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
@@ -134,14 +134,14 @@ import { states } from '../data/user';
     ></cds-inline-notification>
 
     <div id="picof-fields" class="field-grid" hidden>
-      <cds-text-input id="picof-first" label="First name"></cds-text-input>
-      <cds-text-input id="picof-last" label="Last name"></cds-text-input>
-      <cds-text-input id="picof-title" label="Title"></cds-text-input>
+      <cds-text-input id="picof-first" label="First name (required)"></cds-text-input>
+      <cds-text-input id="picof-last" label="Last name (required)"></cds-text-input>
+      <cds-text-input id="picof-title" label="Title (required)"></cds-text-input>
       <div class="field-grid__wide">
-        <PhoneField id="picof-phone" label="Phone number" />
+        <PhoneField id="picof-phone" label="Phone number (required)" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="picof-email" type="email" label="Email address"></cds-text-input>
+        <cds-text-input id="picof-email" type="email" label="Email address (required)"></cds-text-input>
       </div>
       <div class="field-grid__wide">
         <AddressFieldset prefix="picof-addr" country="US" value={{ country: 'US', region: 'CA' }} />
@@ -153,8 +153,9 @@ import { states } from '../data/user';
   <PermitSection title="Additional participants">
     <cds-button slot="aside" id="add-participant" kind="tertiary" size="sm">Add participant</cds-button>
     <p class="section-hint t-body-01">
-      Everyone else involved in the research activities. Add each person's details; you can add
-      several in a row without leaving the dialog.
+      This section is optional. Add anyone else involved in the research activities — you can add
+      several in a row without leaving the dialog. Each person needs a name and email; title, phone,
+      and comments are optional.
     </p>
 
     <cds-table id="participants-table">
@@ -180,7 +181,7 @@ import { states } from '../data/user';
     <cds-radio-button-group
       id="personnel-insured"
       name="personnel-insured"
-      legend-text="Are all personnel employed or insured by the institution conducting the research?"
+      legend-text="Are all personnel employed or insured by the institution conducting the research? (required)"
       orientation="horizontal"
     >
       <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
@@ -213,17 +214,17 @@ import { states } from '../data/user';
   </cds-modal-header>
   <cds-modal-body>
     <div class="field-grid">
-      <cds-text-input id="np-first" label="First name"></cds-text-input>
-      <cds-text-input id="np-last" label="Last name"></cds-text-input>
-      <cds-text-input id="np-title" label="Title"></cds-text-input>
+      <cds-text-input id="np-first" label="First name (required)"></cds-text-input>
+      <cds-text-input id="np-last" label="Last name (required)"></cds-text-input>
+      <cds-text-input id="np-title" label="Title (optional)"></cds-text-input>
       <div class="field-grid__wide">
-        <PhoneField id="np-phone" label="Phone number" />
+        <PhoneField id="np-phone" label="Phone number (optional)" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="np-email" type="email" label="Email address"></cds-text-input>
+        <cds-text-input id="np-email" type="email" label="Email address (required)"></cds-text-input>
       </div>
       <div class="field-grid__wide">
-        <cds-textarea id="np-comments" label="Comments" rows="2"></cds-textarea>
+        <cds-textarea id="np-comments" label="Comments (optional)" rows="2"></cds-textarea>
       </div>
     </div>
   </cds-modal-body>
@@ -415,12 +416,17 @@ import { states } from '../data/user';
     const val = (id: string) => (($(id) as any)?.value ?? '').toString().trim();
     const first = val('np-first');
     const last = val('np-last');
-    if (!first && !last) { ($('np-first') as any)?.focus(); return; } // need a name
+    const email = val('np-email');
+    // Name and email are required for each participant; title, phone, and comments
+    // are optional. Bail to the first missing required field so nothing partial is added.
+    if (!first) { ($('np-first') as any)?.focus(); return; }
+    if (!last) { ($('np-last') as any)?.focus(); return; }
+    if (!email) { ($('np-email') as any)?.focus(); return; }
     addRow({
       firstName: first,
       lastName: last,
       title: val('np-title'),
-      email: val('np-email'),
+      email,
       phone: npPhone?.getValue() ?? '', // canonical E.164
       comments: val('np-comments'),
     });
@@ -496,7 +502,7 @@ import { states } from '../data/user';
     color: var(--cds-text-secondary, #525252);
   }
   .field-label .req {
-    color: var(--cds-text-error, #da1e28);
+    color: var(--cds-text-secondary, #525252);
   }
   .uploaded-list {
     margin-top: 0.5rem;

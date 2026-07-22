@@ -7,10 +7,20 @@
        - Progress (rail) -> vertical cds-progress-indicator, one step per page; the
                             steps are clickable so the applicant can jump around a Draft.
        - Steps (main)    -> one <section data-step> per page, only the current shown:
-                            • Research team   -> <ResearchTeamStep/> (fully built)
-                            • Project information / Study areas / Data collection /
-                              Additional documents / Application summary -> placeholders
-       - Wizard actions  -> Back / Save draft / Next (Submit on the summary step)
+                            • Research team / Project information / Study areas /
+                              Data collection / Additional documents -> fully built form steps
+                            • Application summary -> <SummaryStep/>, a read-only review of
+                              every answer with per-section Edit links and a certify-to-submit
+                              gate (Submit stays disabled until the certification box is checked)
+       - Wizard actions  -> Back / Withdraw / Save and continue (Submit on the summary step).
+                            The draft auto-saves before any navigation, so there is no
+                            explicit save action — the system always persists what's typed,
+                            even when incomplete. Every page is freely reachable EXCEPT the
+                            review (summary) step, which is gated on completeness: attempting
+                            to continue there with required items still missing opens the
+                            "Application incomplete" modal (listing the pages to fix) and
+                            reveals an error banner on each of those pages. Completeness is
+                            modeled by `applicationIssues` (data/application.ts).
    A new application is a Draft; the whole flow is prototype-local (no backend).
 */
 import BaseLayout from '../layouts/BaseLayout.astro';
@@ -19,10 +29,19 @@ import ResearchTeamStep from '../components/ResearchTeamStep.astro';
 import ProjectInfoStep from '../components/ProjectInfoStep.astro';
 import StudyAreasStep from '../components/StudyAreasStep.astro';
 import DataCollectionStep from '../components/DataCollectionStep.astro';
+import AdditionalDocsStep from '../components/AdditionalDocsStep.astro';
+import SummaryStep from '../components/SummaryStep.astro';
 import { applicationSteps, draft } from '../data/application';
 
 // Steps with a fully-built panel; the rest render an honest placeholder.
-const builtSteps = new Set(['research-team', 'project-info', 'study-areas', 'data-collection']);
+const builtSteps = new Set([
+  'research-team',
+  'project-info',
+  'study-areas',
+  'data-collection',
+  'additional-docs',
+  'summary',
+]);
 
 // Home-page card metadata — the hub globs pages and reads this to self-list.
 export const prototype = {
@@ -97,6 +116,15 @@ export const prototype = {
 
       <!-- ── Step panels: only the current page is shown ────────────────────── -->
       <div class="main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+        <!-- Application-wide guidance — the same on every page of the Draft. -->
+        <cds-inline-notification
+          class="wizard-intro"
+          kind="info"
+          low-contrast
+          title="Filling out this application"
+          subtitle="Complete the sections in any order — click a section on the left to jump to it. Your progress saves automatically before you navigate, even when a section is incomplete, so you can leave and return anytime; use Save and continue to move to the next section. Every field is marked required or optional, and you must complete all required fields before you can submit."
+        ></cds-inline-notification>
+
         <section class="step" data-step="research-team">
           <ResearchTeamStep />
         </section>
@@ -111,6 +139,14 @@ export const prototype = {
 
         <section class="step" data-step="data-collection" hidden>
           <DataCollectionStep />
+        </section>
+
+        <section class="step" data-step="additional-docs" hidden>
+          <AdditionalDocsStep />
+        </section>
+
+        <section class="step" data-step="summary" hidden>
+          <SummaryStep />
         </section>
 
         {applicationSteps.filter((s) => !builtSteps.has(s.id)).map((s) => (
@@ -133,15 +169,61 @@ export const prototype = {
           </section>
         ))}
 
-        <!-- Shared wizard actions — Back / Save draft / Next (Submit on the last page). -->
+        <!-- Shared wizard actions — Back / Withdraw on the left, Save and continue
+             (Submit on the last page) on the right. The draft auto-saves before any
+             navigation, so "Save and continue" persists then advances; there is no
+             separate save action. Withdraw is destructive, so it's kept away from the
+             primary and guarded by a confirmation modal. -->
         <footer class="wizard-actions">
           <cds-button id="wizard-back" kind="secondary" hidden>Back</cds-button>
+          <cds-button id="wizard-withdraw" kind="danger--tertiary">Withdraw application</cds-button>
           <div class="wizard-actions__spacer"></div>
-          <cds-button id="wizard-save" kind="ghost">Save draft</cds-button>
-          <cds-button id="wizard-next">Next</cds-button>
+          <cds-button id="wizard-next">Save and continue</cds-button>
         </footer>
       </div>
     </div>
+
+    <!-- Withdraw confirmation — destructive, so a stock cds-modal (danger) guards it. -->
+    <cds-modal id="withdraw-modal" size="sm" danger>
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Scientific Research &amp; Collection Permit application</cds-modal-label>
+        <cds-modal-heading>Withdraw this application?</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <p class="t-body-01">
+          Withdrawing discards this draft and everything saved so far. This can't be undone. Your
+          answers save automatically, so you can leave and return to finish later instead.
+        </p>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Keep working</cds-modal-footer-button>
+        <cds-modal-footer-button kind="danger" id="withdraw-confirm">Withdraw application</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+
+    <!-- Application-incomplete gate — trying to continue to the review section
+         while required items are still missing opens this stock cds-modal. The
+         page list is filled by the script (one link per incomplete page, which
+         navigates there and closes the modal). -->
+    <cds-modal id="incomplete-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Scientific Research &amp; Collection Permit application</cds-modal-label>
+        <cds-modal-heading>Application incomplete</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <p class="incomplete__lead t-heading-compact-02">Missing required information</p>
+        <p class="t-body-01">
+          This section was saved, but the application is still incomplete and can't continue to the
+          review section. Please return to the following pages and fill out any missed requirements.
+        </p>
+        <ul id="incomplete-list" class="incomplete-list"></ul>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Close</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
 
     <!-- carbon-checked: the feedback IS a stock cds-toast-notification (created in
          the script below); this is only a fixed-position stacking host for it —
@@ -151,7 +233,7 @@ export const prototype = {
 </BaseLayout>
 
 <script>
-  import { applicationSteps } from '../data/application';
+  import { applicationSteps, applicationIssues } from '../data/application';
 
   const steps = applicationSteps.map((s) => s.id);
   const progress = document.getElementById('wizard-progress') as any;
@@ -163,7 +245,17 @@ export const prototype = {
   );
   const backBtn = document.getElementById('wizard-back') as any;
   const nextBtn = document.getElementById('wizard-next') as any;
-  const saveBtn = document.getElementById('wizard-save');
+  const withdrawBtn = document.getElementById('wizard-withdraw');
+  const withdrawModal = document.getElementById('withdraw-modal') as any;
+  const withdrawConfirm = document.getElementById('withdraw-confirm');
+  const incompleteModal = document.getElementById('incomplete-modal') as any;
+  const incompleteList = document.getElementById('incomplete-list');
+  // Certification lives on the review step; Submit is gated on it being checked.
+  const certify = document.getElementById('summary-certify') as any;
+
+  // The review step can only be reached once every required item is provided.
+  const reviewIndex = applicationSteps.findIndex((s) => s.review);
+  const labelOf = (id: string) => applicationSteps.find((s) => s.id === id)?.label ?? id;
 
   let current = 0;
 
@@ -179,7 +271,10 @@ export const prototype = {
     // Actions: Back hidden on the first page; primary becomes Submit on the last.
     backBtn.hidden = current === 0;
     const last = current === steps.length - 1;
-    nextBtn.textContent = last ? 'Submit application' : 'Next';
+    nextBtn.textContent = last ? 'Submit application' : 'Save and continue';
+    // On the review step, Submit stays disabled until the applicant certifies the
+    // application; every other step's primary is always enabled.
+    nextBtn.disabled = last ? !certify?.checked : false;
     // The top of the step area is the useful scroll target when the page changes
     // (skipped on the initial load so we don't jump past the banner).
     if (scroll) {
@@ -195,24 +290,93 @@ export const prototype = {
     render();
   };
 
+  // Navigation guard: every page is freely reachable EXCEPT the review step, which
+  // is gated on completeness. Attempting to enter review while items are still
+  // missing surfaces the "Application incomplete" modal instead of advancing, and
+  // reveals each incomplete page's error banner so the fixes are visible on return.
+  const tryGoTo = (i: number) => {
+    if (i >= reviewIndex && applicationIssues.length) {
+      showIncomplete();
+      return;
+    }
+    goTo(i);
+  };
+
+  // Reveal an error banner at the top of each incomplete page (idempotent). The
+  // banner names exactly what is missing, so a returning applicant sees the fixes
+  // in context — not just the modal's page list.
+  const revealErrors = () => {
+    applicationIssues.forEach((issue) => {
+      const panel = panels.get(issue.stepId);
+      if (!panel || panel.querySelector('.step-error')) return;
+      const note = document.createElement('cds-inline-notification') as any;
+      note.classList.add('step-error');
+      note.kind = 'error';
+      note.lowContrast = true;
+      note.hideCloseButton = true;
+      note.title = 'Missing required information';
+      note.subtitle = issue.missing.join(' ');
+      panel.insertBefore(note, panel.firstChild);
+    });
+  };
+
+  // Populate the modal's page list (one link per incomplete page → navigate + close)
+  // reveal the in-page banners, and open the modal.
+  function showIncomplete() {
+    revealErrors();
+    if (incompleteList) {
+      incompleteList.innerHTML = '';
+      applicationIssues.forEach((issue) => {
+        const li = document.createElement('li');
+        const link = document.createElement('cds-link') as any;
+        link.href = '#';
+        link.textContent = labelOf(issue.stepId);
+        link.addEventListener('click', (e: Event) => {
+          e.preventDefault();
+          if (incompleteModal) incompleteModal.open = false;
+          goTo(steps.indexOf(issue.stepId));
+        });
+        li.appendChild(link);
+        incompleteList.appendChild(li);
+      });
+    }
+    if (incompleteModal) incompleteModal.open = true;
+  }
+
   // Assigning onChange makes the steps keyboard-clickable (Carbon gates step
   // interactivity on onChange being a function) AND is the navigation callback:
-  // clicking or Entering a step jumps straight to that page (Draft = free nav).
-  if (progress) progress.onChange = (e: CustomEvent<{ index: number }>) => goTo(e.detail.index);
+  // clicking or Entering a step jumps to that page (gated only on the review step).
+  if (progress) progress.onChange = (e: CustomEvent<{ index: number }>) => tryGoTo(e.detail.index);
 
   backBtn.addEventListener('click', () => goTo(current - 1));
+  // Save and continue: the draft is ALWAYS saved — even with incomplete or invalid
+  // fields — so navigation never blocks. Only the final Submit is gated on the
+  // application being free of issues (represented here by the success path).
   nextBtn.addEventListener('click', () => {
     if (current === steps.length - 1) {
+      // Belt-and-suspenders: the button is disabled until certified, but guard the
+      // handler too so a stray click can't submit an uncertified application.
+      if (!certify?.checked) return;
       toast('success', 'Application submitted', 'Your application has been sent for review.');
       return;
     }
-    goTo(current + 1);
+    tryGoTo(current + 1);
   });
-  saveBtn?.addEventListener('click', () =>
-    toast('success', 'Draft saved', 'You can return to finish this application anytime.'),
-  );
 
-  // Feedback for Save draft / Submit — a stock cds-toast-notification appended to
+  // Withdraw is destructive — confirm through the modal, then discard and leave.
+  withdrawBtn?.addEventListener('click', () => {
+    if (withdrawModal) withdrawModal.open = true;
+  });
+  withdrawConfirm?.addEventListener('click', () => {
+    if (withdrawModal) withdrawModal.open = false;
+    toast('info', 'Application withdrawn', 'This draft has been discarded.');
+    // Prototype: return to the home hub after the confirmation is seen.
+    window.setTimeout(() => {
+      window.location.href = '/';
+    }, 1200);
+  });
+
+  // Feedback for Submit / Withdraw — a stock cds-toast-notification appended to
   // the host and auto-dismissed. Overlay-style feedback, out of grid flow.
   const host = document.getElementById('toast-host');
   function toast(kind: string, title: string, subtitle: string) {
@@ -226,6 +390,20 @@ export const prototype = {
     host.appendChild(t);
     t.addEventListener('cds-notification-closed', () => t.remove());
   }
+
+  // Checking/unchecking the certification re-runs render so the Submit gate on the
+  // review step tracks it live.
+  certify?.addEventListener('cds-checkbox-changed', () => render(false));
+
+  // Per-section "Edit" links on the review step jump back to that wizard step so
+  // the applicant can fix an answer. Editing goes backward (never to the gated
+  // review step), so it uses goTo directly.
+  document.querySelectorAll<HTMLElement>('[data-goto-step]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const i = steps.indexOf(el.dataset.gotoStep ?? '');
+      if (i >= 0) goTo(i);
+    });
+  });
 
   // Reflect the initial state on load (no scroll).
   render(false);
@@ -312,6 +490,13 @@ export const prototype = {
     min-width: 0;
   }
 
+  /* Application-wide guidance notification — full-measure, spaced above the step. */
+  .wizard-intro {
+    display: block;
+    max-width: 46rem;
+    margin-bottom: 2rem;
+  }
+
   /* Placeholder pages — a plain editorial block; the notification states intent
      honestly rather than pretending the page is built. */
   .placeholder {
@@ -325,8 +510,8 @@ export const prototype = {
     color: var(--cds-text-secondary, #525252);
   }
 
-  /* Wizard actions — a top hairline binds the buttons to the step above; Back sits
-     on the left, Save draft + Next on the right. */
+  /* Wizard actions — a top hairline binds the buttons to the step above; Back and
+     Withdraw sit on the left, Save and continue on the right. */
   .wizard-actions {
     display: flex;
     align-items: center;
@@ -340,6 +525,25 @@ export const prototype = {
   }
   #wizard-back[hidden] {
     display: none;
+  }
+
+  /* Per-page error banner — revealed at the top of each incomplete page when the
+     applicant tries to reach review. Layout spacing only. */
+  .step-error {
+    display: block;
+    margin-bottom: var(--cds-spacing-06, 1.5rem);
+  }
+
+  /* Incomplete-application modal — the list of pages still needing attention. */
+  .incomplete__lead {
+    margin: 0 0 var(--cds-spacing-03, 0.5rem);
+  }
+  .incomplete-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03, 0.5rem);
+    margin: var(--cds-spacing-05, 1rem) 0 0;
+    padding-left: var(--cds-spacing-05, 1rem);
   }
 
   /* carbon-checked: fixed-position stacking host for stock cds-toast-notification

@@ -85,6 +85,38 @@ export const applicant = {
   resumeOnFile: null as string | null,
 };
 
+// Research-team answers the step collects INTERACTIVELY and has no other seed
+// for — captured here so the Application summary can review them. The submitter
+// is the principal investigator; the person in direct charge of field work is
+// the certified scientific diver who leads the intertidal transects (a distinct
+// team member); and all personnel are insured through the institution (so no
+// separate waiver addendum is needed on this step — the diving risk is covered
+// by the insurance addendum on the Additional documents step). A filename is
+// DATA, not bytes, so it seeds cleanly even though the static prototype can't
+// persist the uploaded file itself. INVENTED, consistent with the persona.
+export const researchTeam = {
+  piIsSubmitter: true,
+  piResume: 'Halvorsen-CV-2026.pdf',
+  saveResumeToProfile: true,
+  fieldCharge: {
+    sameAsPI: false,
+    isSubmitter: false,
+    firstName: 'Miguel',
+    lastName: 'Aranda',
+    title: 'Field Technician',
+    email: 'm.aranda@cascadiamarine.org',
+    phone: '+14155550188',
+    address: {
+      street: '2200 Bridgeway Boulevard',
+      unit: 'Building C',
+      city: 'Sausalito',
+      state: 'CA',
+      zip: '94965',
+    } as Address,
+  },
+  personnelInsured: true,
+};
+
 /** One additional research participant added to the team roster. All fields are
  *  free-typed by the applicant (these people may not have system accounts). */
 export interface Participant {
@@ -126,7 +158,14 @@ export const project = {
     permitEnd: '2027-09-14',
     annualReport: '2027-12-15',
   },
+  // Optional project-schedule attachment (a filename is DATA, not bytes). Provided
+  // here to show the "optional-but-attached" state on the summary.
+  scheduleFile: 'Field-schedule-2026-2028.pdf',
 };
+
+// Optional GIS study-area files (step 3). Empty by default — the summary shows
+// the honest "None provided" state for this optional upload.
+export const seedGisFiles: string[] = [];
 
 /** One field investigation occurrence — a discrete window when the team will be
  *  on-site. Stored as display strings (m/d/Y) so the roster and the date picker's
@@ -242,4 +281,115 @@ export const dataCollection = {
   // Left to the study proposal here, to demonstrate the disabled-field shortcut.
   dataLocationInProposal: true,
   dataLocation: '',
+
+  // Optional supporting-document attachments (filenames are DATA, not bytes). One
+  // is attached under the collection rationale; procedures rely on the proposal.
+  collectionDocs: ['Collection-power-analysis.pdf'] as string[],
+  procedureDocs: [] as string[],
 };
+
+// ── Additional documents (step 5) ────────────────────────────────────────────
+// The supporting-materials page: two yes/no gates (soil disturbance, and
+// additional permits — the latter satisfied by an upload OR a rationale), the
+// study-supporting info (Budget + Literature cited as deferrable text fields, and
+// an optional study-proposal upload), the two always-required signed agreement
+// forms, and a final gate that requires an insurance addendum when the project
+// goes "above and beyond simple use". Seeded so the Draft renders as
+// work-in-progress. All INVENTED, domain-credible, deterministic.
+export const additionalDocs = {
+  // Name shown on the standard condition agreement the PI must sign. Matches the
+  // applicant persona (the submitter is the PI for this study).
+  principalInvestigator: `${applicant.firstName} ${applicant.lastName}`,
+
+  // Soil disturbance — fixed grazer-exclusion plots are bolted into intertidal
+  // rock, so this study DOES disturb the ground.
+  soilDisturbance: true,
+  soilDisturbanceDetails:
+    'Fixed grazer-exclusion and control plots are secured with stainless-steel eyebolts set into ' +
+    'the rock bench at each of four sites (16 plots total, ~10 mm holes). Disturbance is limited to ' +
+    'bolt placement; no soil cores are taken. On permit completion, bolts are removed and holes ' +
+    'filled with marine epoxy to restore the surface. The 16-plot count follows a power analysis ' +
+    '(α = 0.05, power = 0.80) sized to detect a 20% treatment effect on turf cover.',
+
+  // Additional permits — coastal collection needs a CDFW SCP; diving needs no
+  // separate state permit but is disclosed under "beyond simple use" below.
+  // The Yes branch is satisfied by EITHER an upload OR this rationale (at least
+  // one). Here the SCP is still pending, so the applicant explains rather than
+  // uploads — which is exactly the "don't have all permits yet" case.
+  additionalPermits: true,
+  additionalPermitsDetails:
+    'California Department of Fish & Wildlife Scientific Collecting Permit (SCP) — application ' +
+    'submitted, pending. California Coastal Commission — coordinated through the district; no ' +
+    'separate coastal development permit required for non-structural monitoring.',
+
+  // Study supporting information — Budget and Literature cited are narrative text
+  // fields with the "Answered in study proposal" defer shortcut (same pattern as
+  // the Data collection narratives). Budget is typed here; Literature is deferred
+  // to the proposal, to demonstrate both states. The proposal itself is uploaded.
+  budgetInProposal: false,
+  budget:
+    'Funded by NOAA Climate Program Office (award pending) and CMRI internal reserves. Major ' +
+    'categories: field salaries and dive support ($48,000), laboratory assays incl. HSP70 and ' +
+    'condition indices ($22,000), consumables and permits ($6,500), and data management ($8,000). ' +
+    'Total requested: $84,500 over the two-year study period.',
+  literatureInProposal: true,
+  literature: '',
+
+  // Beyond simple use — the team includes a certified scientific diver, which is
+  // explicitly a "beyond simple use" activity and triggers the insurance addendum.
+  beyondSimpleUse: true,
+
+  // Attachment filenames (DATA, not bytes) for the documents the complete
+  // application carries. The additional-permits rationale is used in place of an
+  // upload (the SCP is still pending), so that upload list stays empty. The two
+  // signed agreement forms and the insurance addendum are the required, signed
+  // uploads a submittable application must include.
+  soilDisturbanceMap: 'Soil-disturbance-areas-topo.pdf',
+  additionalPermitsDocs: [] as string[],
+  studyProposalFile: 'CMRI-intertidal-study-proposal.pdf',
+  conditionAgreementFile: 'Standard-condition-agreement-signed.pdf',
+  waiverIndemnityFile: 'Waiver-and-indemnity-agreement-signed.pdf',
+  insuranceAddendumFile: 'Insurance-addendum-signed.pdf',
+};
+
+// ── Application completeness (prototype) ─────────────────────────────────────
+// The permit can't advance to the review step until every required item is
+// provided. This models a Draft still missing items on four pages — attempting to
+// continue to review lists them in the "Application incomplete" modal, and each
+// listed page shows an error banner naming exactly what to fix. `stepId` keys back
+// to `applicationSteps`, so the page label comes from there. Study Areas is absent
+// on purpose: it's complete. Deterministic; a real app would derive this from the
+// live answers. INVENTED but tied to real seeded gaps (e.g. no PI résumé on file).
+export interface StepIssues {
+  /** Matches an `applicationSteps` id; the page label is looked up from there. */
+  stepId: string;
+  /** Requirements still missing on the page — listed in that page's error banner. */
+  missing: string[];
+}
+
+export const applicationIssues: StepIssues[] = [
+  {
+    stepId: 'research-team',
+    missing: [
+      'Upload the Principal Investigator’s résumé.',
+      'Add a phone number for every additional research participant.',
+    ],
+  },
+  {
+    stepId: 'project-info',
+    missing: ['Enter the anticipated annual report due date.'],
+  },
+  {
+    stepId: 'data-collection',
+    missing: [
+      'Provide a collection rationale, or mark it as answered in the study proposal.',
+    ],
+  },
+  {
+    stepId: 'additional-docs',
+    missing: [
+      'Provide additional-permits documentation, or a rationale in its place.',
+      'Upload the signed waiver and indemnity agreement form.',
+    ],
+  },
+];
