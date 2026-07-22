@@ -1,4 +1,5 @@
 ---
+import { withBase } from '../lib/base';
 /* manifest:
      shell:  PermitNav (cds-header UI Shell) — the "Permits" nav item links here.
      spine:  main.page > 2x Grid (full-width)
@@ -33,7 +34,7 @@ export const prototype = {
     <div class="cds--css-grid cds--css-grid--full-width cds--css-grid--with-row-gap">
       <cds-breadcrumb no-trailing-slash class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
         <cds-breadcrumb-item>
-          <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+          <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
         </cds-breadcrumb-item>
         <cds-breadcrumb-item>
           <cds-breadcrumb-link aria-current="page">Permits</cds-breadcrumb-link>

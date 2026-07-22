@@ -638,6 +638,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 </BaseLayout>
 
 <script>
+  import { withBase } from '../lib/base';
   // cds-tabs renders only the tab strip; panel visibility is the app's job.
   const tabsEl = document.getElementById('permit-tabs') as any;
   const panels = Array.from(document.querySelectorAll<HTMLElement>('.panel'));
@@ -652,7 +653,9 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   siteSearch?.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key !== 'Enter') return;
     const q = (siteSearch.value ?? '').trim();
-    window.location.href = q ? `/search?q=${encodeURIComponent(q)}` : '/search';
+    window.location.href = q
+      ? withBase(`/search?q=${encodeURIComponent(q)}`)
+      : withBase('/search');
   });
 
   // ── Comments: add + persist (prototype-local, newest-first, no editing) ──

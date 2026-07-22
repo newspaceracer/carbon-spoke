@@ -1,4 +1,5 @@
 ---
+import { withBase } from '../lib/base';
 /* manifest:
      shell:  PermitNav (cds-header UI Shell).
      header: identity banner (g100) — "Manage district" + district name + crumb.
@@ -46,13 +47,13 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       <div class="banner__inner">
         <cds-breadcrumb no-trailing-slash class="banner__crumb">
           <cds-breadcrumb-item>
-            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+            <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
           </cds-breadcrumb-item>
           <cds-breadcrumb-item>
-            <cds-breadcrumb-link href="/districts">Districts</cds-breadcrumb-link>
+            <cds-breadcrumb-link href={withBase('/districts')}>Districts</cds-breadcrumb-link>
           </cds-breadcrumb-item>
           <cds-breadcrumb-item>
-            <cds-breadcrumb-link href="/district">{d.name}</cds-breadcrumb-link>
+            <cds-breadcrumb-link href={withBase('/district')}>{d.name}</cds-breadcrumb-link>
           </cds-breadcrumb-item>
           <cds-breadcrumb-item>
             <cds-breadcrumb-link aria-current="page">Manage</cds-breadcrumb-link>
@@ -157,7 +158,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         </PermitSection>
 
         <div class="form__actions">
-          <cds-button id="cancel-btn" kind="ghost" href="/district">Cancel</cds-button>
+          <cds-button id="cancel-btn" kind="ghost" href={withBase('/district')}>Cancel</cds-button>
           <cds-button id="save-btn" type="button">Save changes</cds-button>
         </div>
       </div>

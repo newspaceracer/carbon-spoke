@@ -1,4 +1,5 @@
 ---
+import { withBase } from '../lib/base';
 /* manifest:
      spine: main.page > cds-stack(gap 6)
      sections:
@@ -52,7 +53,7 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
     <div class="cds--css-grid cds--css-grid--with-row-gap">
       <cds-breadcrumb class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
         <cds-breadcrumb-item>
-          <cds-breadcrumb-link href="/">Permits</cds-breadcrumb-link>
+          <cds-breadcrumb-link href={withBase('/')}>Permits</cds-breadcrumb-link>
         </cds-breadcrumb-item>
         <cds-breadcrumb-item>
           <cds-breadcrumb-link aria-current="page">Search</cds-breadcrumb-link>
@@ -69,7 +70,7 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
       <ul class="results cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" id="results" role="list">
         {rows.map((p) => (
           <li class="result" data-haystack={p.haystack}>
-            <cds-clickable-tile href="/permit">
+            <cds-clickable-tile href={withBase('/permit')}>
               <div class="result__row">
                 <div class="result__head">
                   <p class="result__id t-label-01">{p.id}</p>

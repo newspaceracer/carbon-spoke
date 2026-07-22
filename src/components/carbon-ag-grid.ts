@@ -28,6 +28,7 @@ import {
   type ICellRendererParams,
   type ValueFormatterParams,
 } from 'ag-grid-community';
+import { withBase } from '../lib/base';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -77,7 +78,7 @@ const statusStyle: Record<string, { type: string; viewBox: string; path: string 
 // string key a colDef sets in `cellRenderer`.
 const RENDERERS: Record<string, (p: ICellRendererParams) => string> = {
   permitLink: (p) =>
-    `<a href="/permit" style="color:var(--cds-link-primary,#0f62fe);text-decoration:none;font-weight:500">${esc(p.value)}</a>`,
+    `<a href="${withBase('/permit')}" style="color:var(--cds-link-primary,#0f62fe);text-decoration:none;font-weight:500">${esc(p.value)}</a>`,
   status: (p) => {
     const s = statusStyle[p.data?.statusKind] ?? statusStyle.pending;
     return `<cds-tag type="${s.type}" size="sm"><svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="${s.viewBox}" width="16" height="16" aria-hidden="true"><path d="${s.path}"/></svg>${esc(p.value)}</cds-tag>`;
@@ -94,7 +95,7 @@ const RENDERERS: Record<string, (p: ICellRendererParams) => string> = {
   // Document reference — a link when present, an em dash placeholder when not.
   doc: (p) =>
     p.value
-      ? `<a href="/permit" style="color:var(--cds-link-primary,#0f62fe);text-decoration:none;font-weight:500">${esc(p.value)}</a>`
+      ? `<a href="${withBase('/permit')}" style="color:var(--cds-link-primary,#0f62fe);text-decoration:none;font-weight:500">${esc(p.value)}</a>`
       : `<span style="color:var(--cds-text-secondary,#525252)">&mdash;</span>`,
 };
 

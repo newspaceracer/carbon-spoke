@@ -6,6 +6,7 @@
 //   2. A short design-system orientation (the carbon-first rule + token theming),
 //      composed from cds-* legos. Deep guidance lives in CLAUDE.md + the skill.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { withBase } from '../lib/base';
 
 // Glob sibling pages eagerly so we can read each one's `prototype` export.
 const modules = import.meta.glob('./**/*.astro', { eager: true });
@@ -13,8 +14,9 @@ const modules = import.meta.glob('./**/*.astro', { eager: true });
 const prototypes = Object.entries(modules)
   .filter(([path]) => path !== './index.astro')
   .map(([path, mod]) => {
-    const href = path.replace(/^\.\//, '/').replace(/\.astro$/, '').replace(/\/index$/, '');
-    const slug = href.split('/').filter(Boolean).pop() ?? href;
+    const route = path.replace(/^\.\//, '').replace(/\.astro$/, '').replace(/\/index$/, '');
+    const href = withBase('/' + route);
+    const slug = route.split('/').filter(Boolean).pop() ?? route;
     const meta = (mod as Record<string, any>).prototype ?? {};
     return {
       href,

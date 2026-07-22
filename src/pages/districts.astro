@@ -1,4 +1,5 @@
 ---
+import { withBase } from '../lib/base';
 /* manifest:
      shell:  PermitNav (cds-header UI Shell) — the "Districts" nav item links here.
      spine:  main.page > cds-stack(gap 8)
@@ -49,7 +50,7 @@ const arrow = 'M9.3 3.7 13.1 7.5 1 7.5 1 8.5 13.1 8.5 9.3 12.3 10 13 15 8 10 3z'
       <div class="cds--css-grid cds--css-grid--with-row-gap">
         <cds-breadcrumb no-trailing-slash class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
           <cds-breadcrumb-item>
-            <cds-breadcrumb-link href="/">Home</cds-breadcrumb-link>
+            <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
           </cds-breadcrumb-item>
           <cds-breadcrumb-item>
             <cds-breadcrumb-link aria-current="page">Districts</cds-breadcrumb-link>
@@ -78,7 +79,7 @@ const arrow = 'M9.3 3.7 13.1 7.5 1 7.5 1 8.5 13.1 8.5 9.3 12.3 10 13 15 8 10 3z'
           </div>
 
           {byRegion[region].map((d) => (
-            <cds-clickable-tile href="/district" class="card cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4">
+            <cds-clickable-tile href={withBase('/district')} class="card cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4">
               <div class="card__row">
                 <h3 class="card__name t-heading-compact-02">{d.name}</h3>
                 <dl class="card__meta">

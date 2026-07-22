@@ -7,6 +7,13 @@ import { defineConfig } from 'astro/config';
 // hyphenated tags are custom elements so it never tries to treat them as
 // Astro/JSX components.
 export default defineConfig({
+  // Deployed to GitHub Pages as a PROJECT page:
+  //   https://newspaceracer.github.io/carbon-spoke/
+  // `site` is the origin; `base` is the sub-path every asset + route is served
+  // under. Internal links are prefixed with import.meta.env.BASE_URL (= base + '/')
+  // so they resolve correctly under the sub-path.
+  site: 'https://newspaceracer.github.io',
+  base: '/carbon-spoke',
   vite: {
     // Carbon ships pre-compiled styles (button.scss.js etc.), so no Sass step
     // is required — the only stylesheet we pull in is @carbon/styles/css/styles.css.

@@ -5,6 +5,8 @@
 //
 // Nav model lives here so every page renders the same bar. `adminTools` are the
 // dropdown entries; add/reorder by editing the array.
+import { withBase } from '../lib/base';
+
 interface NavLink {
   label: string;
   href: string;
@@ -37,11 +39,11 @@ const adminTools: NavLink[] = [
     button-label-inactive="Open menu"
   ></cds-header-menu-button>
 
-  <cds-header-name href={nameHref} prefix="">{name}</cds-header-name>
+  <cds-header-name href={withBase(nameHref)} prefix="">{name}</cds-header-name>
   <cds-header-nav menu-bar-label={name}>
     <cds-header-menu trigger-content="Admin tools" menu-label="Admin tools">
       {adminTools.map((item) => (
-        <cds-header-menu-item href={item.href}>{item.label}</cds-header-menu-item>
+        <cds-header-menu-item href={withBase(item.href)}>{item.label}</cds-header-menu-item>
       ))}
     </cds-header-menu>
   </cds-header-nav>
@@ -52,7 +54,7 @@ const adminTools: NavLink[] = [
     <cds-header-side-nav-items>
       <cds-side-nav-menu title="Admin tools">
         {adminTools.map((item) => (
-          <cds-side-nav-menu-item href={item.href}>{item.label}</cds-side-nav-menu-item>
+          <cds-side-nav-menu-item href={withBase(item.href)}>{item.label}</cds-side-nav-menu-item>
         ))}
       </cds-side-nav-menu>
     </cds-header-side-nav-items>
