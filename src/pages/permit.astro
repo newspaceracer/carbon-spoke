@@ -637,8 +637,6 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
             <p class="sc-or t-label-01">or write a new one</p>
           </div>
 
-          <cds-text-input id="sc-title" label="Title (optional)" placeholder="Short label for this condition"></cds-text-input>
-
           <div>
             <p class="field-label t-label-01">Condition text</p>
             <sc-rich-text id="sc-body" placeholder="Write a condition. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
@@ -946,6 +944,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
     savePermitConditions,
     permitStatusKey,
     newConditionId,
+    plainText,
     type ConditionOwner,
     type PermitCondition,
   } from '../data/conditions';
@@ -1124,12 +1123,16 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   const modal = $('sc-condition-modal') as any;
   const pickBlock = $('sc-pick-block') as HTMLElement | null;
   const pickEl = () => $('sc-pick') as any;
-  const titleEl = () => $('sc-title') as any;
   const bodyEl = () => $('sc-body') as any;
   const saveCatalogEl = () => $('sc-save-catalog') as any;
   const warnEl = $('sc-modal-warning') as any;
   let modalOwner: ConditionOwner = 'hq';
   let editingGlobalIndex = -1;
+
+  // A condition IS its text. Identify a catalog item by a short plain-text
+  // preview of its body in the picker.
+  const escText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const previewText = (html: string) => { const s = plainText(html); return s.length > 90 ? `${s.slice(0, 89)}…` : s; };
 
   // Populate the catalog multi-select with this owner's saved items not already
   // applied to the permit.
@@ -1139,9 +1142,9 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
     const appliedInvIds = new Set(conditions.filter((c) => c.inventoryId).map((c) => c.inventoryId));
     const available = loadInventory(owner)
       .filter((it) => !appliedInvIds.has(it.id))
-      .sort((a, b) => a.title.localeCompare(b.title));
+      .sort((a, b) => plainText(a.body).localeCompare(plainText(b.body)));
     el.innerHTML = available
-      .map((it) => `<cds-multi-select-item value="${it.id}">${it.title}</cds-multi-select-item>`)
+      .map((it) => `<cds-multi-select-item value="${it.id}">${escText(previewText(it.body))}</cds-multi-select-item>`)
       .join('');
   };
 
@@ -1165,8 +1168,6 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
       if (saveCatalogEl()) saveCatalogEl().checked = false;
     }
 
-    const tEl = titleEl();
-    if (tEl) { tEl.value = c?.title ?? ''; tEl.setAttribute('value', c?.title ?? ''); }
     if (bodyEl()) bodyEl().value = c?.body ?? '';
 
     modal.open = true;
@@ -1182,17 +1183,14 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   };
 
   const saveFromModal = () => {
-    const title = (titleEl()?.value ?? '').toString().trim();
     const body = (bodyEl()?.value ?? '').toString().trim();
 
     if (editingGlobalIndex >= 0) {
-      conditions[editingGlobalIndex] = {
-        ...conditions[editingGlobalIndex],
-        title: title || conditions[editingGlobalIndex].title,
-        body: body || conditions[editingGlobalIndex].body,
-      };
-      persist();
-      render();
+      if (body) {
+        conditions[editingGlobalIndex] = { ...conditions[editingGlobalIndex], body };
+        persist();
+        render();
+      }
       modal.open = false;
       return;
     }
@@ -1210,7 +1208,6 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
         owner: modalOwner,
         source: 'inventory',
         inventoryId: it.id,
-        title: it.title,
         body: it.body,
         addedBy: reviewer,
         addedAt: new Date().toISOString(),
@@ -1223,7 +1220,6 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
         id: newConditionId('c'),
         owner: modalOwner,
         source: 'custom',
-        title: title || 'Custom condition',
         body,
         addedBy: reviewer,
         addedAt: new Date().toISOString(),
@@ -1234,7 +1230,6 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
         inv.push({
           id: newConditionId(modalOwner === 'hq' ? 'hq' : modalOwner),
           owner: modalOwner,
-          title: title || 'Custom condition',
           body,
           isDefault: false,
         });

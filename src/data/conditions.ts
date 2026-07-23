@@ -17,13 +17,13 @@ import { districtDirectory } from './district';
 export type ConditionOwner = 'hq' | string; // 'hq' or a district key
 export type ConditionSource = 'default' | 'inventory' | 'custom';
 
-/** A reusable catalog item living in one owner's inventory. */
+/** A reusable catalog item living in one owner's inventory. A condition IS its
+ *  text — there is no name, title, or short label; the body is the whole thing.
+ *  Pickers and tables identify an item by a plain-text preview of that body. */
 export interface ConditionInventoryItem {
   id: string;
   owner: ConditionOwner;
-  /** Short label shown in pickers and inventory tables. */
-  title: string;
-  /** The condition text as sanitized rich-text HTML. */
+  /** The condition text as sanitized rich-text HTML — the entire condition. */
   body: string;
   /** Auto-attach to applicable permits the moment they enter review. */
   isDefault: boolean;
@@ -37,7 +37,7 @@ export interface PermitCondition {
   source: ConditionSource;
   /** Set when source === 'inventory' — the catalog item it came from. */
   inventoryId?: string;
-  title: string;
+  /** The condition text as sanitized rich-text HTML — the entire condition. */
   body: string;
   addedBy: string;
   addedAt: string;
@@ -61,20 +61,26 @@ const p = (s: string) => `<p>${s}</p>`;
 
 /** HQ / headquarters catalog. The truly-universal items are flagged default. */
 export const hqInventory: ConditionInventoryItem[] = [
-  { id: 'hq-carry', owner: 'hq', isDefault: true, title: 'Permit carried in the field',
+  { id: 'hq-carry', owner: 'hq', isDefault: true,
     body: p('The signed permit must be carried by field personnel during all activities and presented on request.') },
-  { id: 'hq-scope', owner: 'hq', isDefault: true, title: 'Collection limited to approved scope',
+  { id: 'hq-scope', owner: 'hq', isDefault: true,
     body: p('Collection is limited to the approved study areas and the taxa and quantities listed under Data Collection.') },
-  { id: 'hq-reserves', owner: 'hq', isDefault: true, title: 'No collection in marine reserves',
+  { id: 'hq-reserves', owner: 'hq', isDefault: true,
     body: p('No collection within posted marine reserve or special-closure boundaries.') },
-  { id: 'hq-curation', owner: 'hq', isDefault: true, title: 'Specimens are State property',
+  { id: 'hq-curation', owner: 'hq', isDefault: true,
     body: p('All collected specimens are State property and must be curated at the approved facility.') },
-  { id: 'hq-annual', owner: 'hq', isDefault: true, title: 'Annual report required',
+  { id: 'hq-annual', owner: 'hq', isDefault: true,
     body: p('An annual report is due by <strong>Aug 31, 2027</strong>.') },
-  { id: 'hq-tribal', owner: 'hq', isDefault: false, title: 'Tribal consultation',
+  { id: 'hq-tribal', owner: 'hq', isDefault: false,
     body: p('Where activities may affect cultural resources, tribal consultation must be completed before any ground-disturbing work begins.') },
-  { id: 'hq-incident', owner: 'hq', isDefault: false, title: 'Report incidental take',
+  { id: 'hq-incident', owner: 'hq', isDefault: false,
     body: p('Any incidental take of non-target or listed species must be reported to the Department within 48 hours.') },
+  // Conditional standard conditions from the letter template — added by the
+  // reviewer when applicable (the template brackets these "[Remove if …]").
+  { id: 'hq-snpl', owner: 'hq', isDefault: false,
+    body: p('Prior to conducting field work in coastal areas, the Permit Holder (and field assistants) will review the Western Snowy Plover brochures — Sharing the Beach and Rules and Guidelines for Protecting the Snowy Plover. Federally threatened Western Snowy Plovers nest and overwinter on many Pacific Coast beaches and coastal areas.') },
+  { id: 'hq-aquatic', owner: 'hq', isDefault: false,
+    body: p('The Permit Holder (and field assistants) agrees to clean and disinfect all field gear and equipment that contacts any waterbody before and after each site visit, per the CDFW Invasive Species Decontamination Protocol, to minimize the spread of aquatic invasive species, pests, and pathogens.') },
 ];
 
 /** Per-district catalogs. Keyed by district slug; `name` lets the console label a
@@ -85,24 +91,24 @@ export const districtInventorySeeds: Record<string, { name: string; items: Condi
   'north-coast-redwoods': {
     name: 'North Coast Redwoods District',
     items: [
-      { id: 'ncr-reserve', owner: 'north-coast-redwoods', isDefault: true, title: 'False Klamath Cove reserve',
+      { id: 'ncr-reserve', owner: 'north-coast-redwoods', isDefault: true,
         body: p('No collection within the False Klamath Cove marine reserve boundary.') },
-      { id: 'ncr-access', owner: 'north-coast-redwoods', isDefault: false, title: 'Coordinate intertidal access',
+      { id: 'ncr-access', owner: 'north-coast-redwoods', isDefault: false,
         body: p('Intertidal access must be coordinated with the district ranger at least 48 hours in advance.') },
-      { id: 'ncr-vehicles', owner: 'north-coast-redwoods', isDefault: true, title: 'Vehicle restrictions',
+      { id: 'ncr-vehicles', owner: 'north-coast-redwoods', isDefault: true,
         body: p('Vehicles restricted to designated day-use lots; no driving on the beach or dunes.') },
-      { id: 'ncr-pinniped', owner: 'north-coast-redwoods', isDefault: false, title: 'Pinniped buffer',
+      { id: 'ncr-pinniped', owner: 'north-coast-redwoods', isDefault: false,
         body: p('Maintain at least 100 yards from any pinniped haul-out; suspend work if animals show disturbance.') },
     ],
   },
   'mendocino': {
     name: 'Mendocino District',
     items: [
-      { id: 'men-mhw', owner: 'mendocino', isDefault: true, title: 'Rocky intertidal only',
+      { id: 'men-mhw', owner: 'mendocino', isDefault: true,
         body: p('Collection limited to rocky intertidal below the mean high-water line.') },
-      { id: 'men-seal', owner: 'mendocino', isDefault: true, title: 'MacKerricher haul-outs',
+      { id: 'men-seal', owner: 'mendocino', isDefault: true,
         body: p('No disturbance of harbor-seal haul-out areas at MacKerricher.') },
-      { id: 'men-checkin', owner: 'mendocino', isDefault: false, title: 'Field-day check-in',
+      { id: 'men-checkin', owner: 'mendocino', isDefault: false,
         body: p('Check in with the district office before each field day and report the crew size and planned sites.') },
     ],
   },
@@ -180,7 +186,6 @@ export function loadPermitConditions(
         owner,
         source: 'default',
         inventoryId: item.id,
-        title: item.title,
         body: item.body,
         addedBy: 'Standard condition',
         addedAt: 'On submission',

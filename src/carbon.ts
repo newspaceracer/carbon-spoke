@@ -33,6 +33,7 @@ import '@carbon/web-components/es/components/multi-select/index.js';
 import '@carbon/web-components/es/components/notification/index.js';
 import '@carbon/web-components/es/components/overflow-menu/index.js';
 import '@carbon/web-components/es/components/popover/index.js';
+import '@carbon/web-components/es/components/progress-bar/index.js';
 import '@carbon/web-components/es/components/progress-indicator/index.js';
 import '@carbon/web-components/es/components/radio-button/index.js';
 import '@carbon/web-components/es/components/search/index.js';

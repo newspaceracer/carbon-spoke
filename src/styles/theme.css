@@ -199,3 +199,14 @@ body.has-maintenance-banner cds-header { inset-block-start: 2rem; }
   color: var(--cds-text-secondary, #525252);
   text-transform: uppercase;
 }
+
+/* Testing reset — rides below the identity dropdown in the same dev panel,
+   separated by a hairline. */
+.demo-reset {
+  margin-block-start: var(--cds-spacing-04, 0.75rem);
+  padding-block-start: var(--cds-spacing-04, 0.75rem);
+  border-block-start: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+.demo-reset cds-button {
+  inline-size: 100%;
+}

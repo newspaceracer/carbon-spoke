@@ -21,6 +21,7 @@ import {
 
 const BANNER_ID = 'maintenance-banner';
 const SWITCHER_ID = 'demo-identity-switcher';
+const RESET_ID = 'demo-permit-reset';
 
 // ── Top banner ──────────────────────────────────────────────────────────
 function paintBanner(): void {
@@ -113,10 +114,52 @@ function mountIdentitySwitcher(): void {
   });
 }
 
+// ── Dev-only permit state reset ─────────────────────────────────────────────
+// The permit workflow lives in localStorage — the status (permit-status-<id>), the
+// amendment flag (permit-amendment-<id>), and the approval/letter draft
+// (permit-final-<id>) — so a demoed permit stays wherever the last transition left
+// it. This testing control clears all of that and returns to the permit detail page
+// at its seeded "Under review" stage. It rides in the same dev panel and appears
+// whenever there's workflow state to reset, or whenever you're on the permit page —
+// so a tester stranded on a downstream view (e.g. the letter) can still get back.
+const PERMIT_STATE_PREFIXES = ['permit-status-', 'permit-amendment-', 'permit-final-'];
+
+function permitStateKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && PERMIT_STATE_PREFIXES.some((p) => k.startsWith(p))) keys.push(k);
+  }
+  return keys;
+}
+
+function mountPermitReset(): void {
+  if (document.getElementById(RESET_ID)) return;
+  const panel = document.getElementById(SWITCHER_ID);
+  if (!panel) return; // rides in the same dev panel
+  const onPermitPage = !!document.getElementById('permit-banner');
+  if (!onPermitPage && permitStateKeys().length === 0) return; // nothing to reset
+
+  const wrap = document.createElement('div');
+  wrap.id = RESET_ID;
+  wrap.className = 'demo-reset';
+  // carbon-checked: dev-only affordance; the control is a stock cds-button.
+  wrap.innerHTML = `
+    <p class="demo-identity__label t-label-01">Testing</p>
+    <cds-button kind="danger--tertiary" size="sm">Reset to Under review</cds-button>`;
+  panel.appendChild(wrap);
+
+  wrap.querySelector('cds-button')?.addEventListener('click', () => {
+    permitStateKeys().forEach((k) => localStorage.removeItem(k));
+    location.href = withBase('/permit');
+  });
+}
+
 /** Apply all maintenance-aware shell treatments for this page load. */
 export function decorateShell(): void {
   const run = () => {
     mountIdentitySwitcher();
+    mountPermitReset();
     wireLogout();
     if (isMaintenance()) {
       const id = readIdentity();

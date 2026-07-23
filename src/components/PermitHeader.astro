@@ -3,11 +3,28 @@
 // number eyebrow, name, status indicator, action buttons, badge rows, then an
 // at-a-glance strip of labeled facts (plain data, not boxed content pieces).
 import type { Badge } from '../data/permit';
+import type { DirectoryUser } from '../data/user';
 import { withBase } from '../lib/base';
+import Avatar from './Avatar.astro';
 
 interface Stat {
   label: string;
   value: string;
+}
+
+/** One reviewer on the analysis team. A `status` other than "Pending review"
+ *  (i.e. a timestamp) means their analysis is complete. `addedAt` is when they
+ *  joined the permit; `lastEditedAt` is their latest activity while still
+ *  pending (absent = nothing since they were added). */
+interface TeamMember {
+  id: string;
+  role: string;
+  name: string;
+  detail: string;
+  status: string;
+  addedAt?: string;
+  lastEditedAt?: string;
+  highlight?: boolean;
 }
 
 interface Props {
@@ -21,14 +38,55 @@ interface Props {
   /** Dates the applicant requested — shown as a reminder in the approve modal
    *  and used to prefill its confirmation date-range picker (ISO pair). */
   requestedWindow: { start: string; end: string; startISO: string; endISO: string };
+  /** OPTIONAL. When present, the header gains a clickable "Analysis review"
+   *  key-metric (how many reviewers are done) that opens a modal listing the
+   *  team, their completion, and a control to add reviewers. Passed by the
+   *  finalize (under-review) view; omitted on the read-only detail page, which
+   *  carries its own roster in the Overview tab. */
+  analysisTeam?: TeamMember[];
+  /** The user directory the add-reviewer control draws from (required when
+   *  analysisTeam is passed). */
+  directory?: DirectoryUser[];
 }
 
-const { id, name, organization, status, infoTags, flagTags, stats, requestedWindow } =
-  Astro.props;
+const {
+  id, name, organization, status, infoTags, flagTags, stats, requestedWindow,
+  analysisTeam, directory = [],
+} = Astro.props;
 
 // An amendment reuses the whole application flow, prefilled from this permit and
 // numbered with an "-A" suffix — offered only once the permit is Active.
 const amendHref = withBase(`/apply?amend=${id}`);
+
+// ── Analysis-review metric (only when analysisTeam is supplied) ──
+// "Done" = a member whose status is a timestamp, not the "Pending review"
+// sentinel. Completion drives the header meter + the modal summary.
+const isDone = (m: TeamMember) => m.status !== 'Pending review';
+// The stacked status cell: a state label + a date/time line below it. Done →
+// the completion timestamp. Pending → last activity, or when they were added if
+// there's been none.
+const reviewMeta = (m: TeamMember) => {
+  const done = isDone(m);
+  return {
+    done,
+    statusLabel: done ? 'Analysis complete' : 'Pending review',
+    when: done
+      ? m.status
+      : m.lastEditedAt
+        ? `Last edited ${m.lastEditedAt}`
+        : `Added ${m.addedAt ?? '—'}`,
+  };
+};
+const reviewTotal = analysisTeam?.length ?? 0;
+const reviewDone = analysisTeam?.filter(isDone).length ?? 0;
+const reviewAllDone = reviewTotal > 0 && reviewDone === reviewTotal;
+// The add-reviewer combo lists directory users not already on the team.
+const onTeam = new Set(analysisTeam?.map((m) => m.id));
+const eligibleUsers = directory
+  .filter((u) => !onTeam.has(u.id))
+  .sort((a, b) => a.name.localeCompare(b.name));
+// Shared with the detail page's roster (removed/added edits).
+const teamStorageKey = `permit-team-${id}`;
 ---
 
 <header class="banner cds--g100" id="permit-banner" data-permit-id={id} data-status={status.label} data-letter-url={withBase('/final-letter')}>
@@ -79,14 +137,39 @@ const amendHref = withBase(`/apply?amend=${id}`);
     </div>
   </div>
 
-  <dl class="banner__stats">
-    {stats.map((s) => (
-      <div class="stat">
-        <dt class="stat__label t-label-01">{s.label}</dt>
-        <dd class="stat__value t-body-01">{s.value}</dd>
-      </div>
-    ))}
-  </dl>
+  <div class="banner__facts">
+    <dl class="banner__stats">
+      {stats.map((s) => (
+        <div class="stat">
+          <dt class="stat__label t-label-01">{s.label}</dt>
+          <dd class="stat__value t-body-01">{s.value}</dd>
+        </div>
+      ))}
+    </dl>
+
+    {analysisTeam && (
+      <!-- Key metric: at-a-glance analysis-review completion. The whole tile is a
+           button that opens the roster modal (Carbon ships no clickable-metric →
+           dialog control; a clickable-tile is a navigation link, not a dialog
+           trigger). carbon-checked: dialog-opening metric tile. -->
+      <button type="button" class="analysis-metric" id="analysis-metric" aria-haspopup="dialog">
+        <cds-progress-bar
+          id="analysis-metric-bar"
+          class="analysis-metric__bar"
+          label="Analysis review"
+          helper-text={`${reviewDone} of ${reviewTotal} reviewers done`}
+          value={reviewDone}
+          max={reviewTotal}
+          size="small"
+          status={reviewAllDone ? 'finished' : 'active'}
+        ></cds-progress-bar>
+        <span class="analysis-metric__cta t-label-01">
+          View team
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M11 8L6 3 5.3 3.7 9.6 8l-4.3 4.3L6 13z"/></svg>
+        </span>
+      </button>
+    )}
+  </div>
   </div>
 </header>
 
@@ -247,6 +330,102 @@ const amendHref = withBase(`/apply?amend=${id}`);
   </cds-modal-footer>
 </cds-modal>
 
+{analysisTeam && (
+  <cds-modal id="analysis-team-modal" size="md">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Permit {id}</cds-modal-label>
+      <cds-modal-heading>Analysis review</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <cds-stack gap="7">
+        <cds-progress-bar
+          id="analysis-modal-bar"
+          label="Reviews complete"
+          helper-text={`${reviewDone} of ${reviewTotal} reviewers done`}
+          value={reviewDone}
+          max={reviewTotal}
+          status={reviewAllDone ? 'finished' : 'active'}
+        ></cds-progress-bar>
+
+        <!-- Add a directory user to the review team. Sits ABOVE the roster so its
+             dropdown opens down into the list area (not off the modal's bottom
+             edge, where the body's scroll would clip it). Only existing users;
+             the combo rebuilds after each change to exclude whoever's already on. -->
+        <form class="team-add" id="analysis-add">
+          <cds-combo-box
+            id="analysis-add-select"
+            class="team-add__select"
+            title-text="Add a reviewer"
+            label="Search staff by name…"
+          >
+            {eligibleUsers.map((u) => (
+              <cds-combo-box-item value={u.id}>{u.name} — {u.role}</cds-combo-box-item>
+            ))}
+          </cds-combo-box>
+          <cds-button kind="tertiary" size="md" id="analysis-add-btn" type="button">Add reviewer</cds-button>
+        </form>
+
+        <!-- Reviewer roster. Each row shows completion (icon-indicator, not colour
+             alone) and a remove control. Seed rows carry data-seed so removing one
+             is tracked differently from dropping a just-added user. -->
+        <ul class="review-roster" id="review-roster" data-team-key={teamStorageKey}>
+          {analysisTeam.map((m) => {
+            const meta = reviewMeta(m);
+            return (
+            <li class="review-row" data-user-id={m.id} data-seed data-done={String(meta.done)}>
+              <Avatar name={m.name} size="md" />
+              <div class="review-row__id">
+                <p class="review-row__name t-body-01">{m.name}{m.highlight ? <span class="review-row__lead t-label-01"> · Lead</span> : null}</p>
+                <p class="review-row__role t-label-01">{m.role} — {m.detail}</p>
+              </div>
+              <div class="review-row__status">
+                <span class="review-row__state">
+                  <cds-icon-indicator
+                    class="review-row__ind"
+                    size="16"
+                    kind={meta.done ? 'succeeded' : 'pending'}
+                    label={meta.statusLabel}
+                  ></cds-icon-indicator>
+                </span>
+                <span class="review-row__when t-label-01">{meta.when}</span>
+              </div>
+              <cds-icon-button kind="ghost" size="sm" align="left" data-remove aria-label={`Remove ${m.name}`}>
+                <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M12 12h2v12h-2zM18 12h2v12h-2z"/><path d="M4 6v2h2v20a2 2 0 002 2h16a2 2 0 002-2V8h2V6zm4 22V8h16v20zM12 2h8v2h-8z"/></svg>
+              </cds-icon-button>
+            </li>
+            );
+          })}
+        </ul>
+      </cds-stack>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="primary" data-modal-close>Done</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Directory JSON + row template for the client add-reviewer flow. -->
+  <script type="application/json" id="analysis-directory" set:html={JSON.stringify(directory)}></script>
+  <template id="review-row-template">
+    <li class="review-row" data-done="false">
+      <span class="avatar avatar--md" aria-hidden="true"></span>
+      <div class="review-row__id">
+        <p class="review-row__name t-body-01"></p>
+        <p class="review-row__role t-label-01"></p>
+      </div>
+      <div class="review-row__status">
+        <span class="review-row__state">
+          <cds-icon-indicator class="review-row__ind" size="16" kind="pending" label="Pending review"></cds-icon-indicator>
+        </span>
+        <span class="review-row__when t-label-01"></span>
+      </div>
+      <cds-icon-button kind="ghost" size="sm" align="left" data-remove aria-label="Remove reviewer">
+        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M12 12h2v12h-2zM18 12h2v12h-2z"/><path d="M4 6v2h2v20a2 2 0 002 2h16a2 2 0 002-2V8h2V6zm4 22V8h16v20zM12 2h8v2h-8z"/></svg>
+      </cds-icon-button>
+    </li>
+  </template>
+)}
+
 <script>
   // ── Workflow state machine (prototype-local) ──
   // The permit moves through a small set of statuses; each has a cds-icon-indicator
@@ -395,6 +574,144 @@ const amendHref = withBase(`/apply?amend=${id}`);
   }
 </script>
 
+<!-- ── Analysis-review key-metric + roster modal (only rendered on the finalize
+     view, so everything here is guarded on the metric existing) ── -->
+<script>
+  import { initials } from '../lib/avatar';
+
+  interface DirUser { id: string; name: string; role: string; detail: string; email: string; }
+  interface TeamEdits { removed: string[]; added: DirUser[]; }
+
+  const metricBtn = document.getElementById('analysis-metric');
+  const modal = document.getElementById('analysis-team-modal') as any;
+  const roster = document.getElementById('review-roster');
+
+  if (metricBtn && modal && roster) {
+    metricBtn.addEventListener('click', () => (modal.open = true));
+
+    const teamKey = (roster as HTMLElement).dataset.teamKey || 'permit-team';
+    const tpl = document.getElementById('review-row-template') as HTMLTemplateElement;
+    const dirEl = document.getElementById('analysis-directory');
+    const addSelect = document.getElementById('analysis-add-select') as any;
+    const addBtn = document.getElementById('analysis-add-btn');
+    const bars = [
+      document.getElementById('analysis-metric-bar'),
+      document.getElementById('analysis-modal-bar'),
+    ].filter(Boolean) as any[];
+
+    let directory: DirUser[] = [];
+    try { directory = JSON.parse(dirEl?.textContent || '[]'); } catch { directory = []; }
+    const byId = new Map(directory.map((u) => [u.id, u]));
+
+    // Today, formatted like the seeded dates ("Jul 22, 2026") — the "added" line
+    // for a reviewer joined just now. Completion is data-driven (a reviewer marks
+    // their own analysis done elsewhere), so nothing here toggles it.
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // localStorage — {removed, added} shared with the detail-page roster.
+    const loadTeam = (): TeamEdits => {
+      try {
+        const p = JSON.parse(localStorage.getItem(teamKey) || '{}');
+        return { removed: Array.isArray(p.removed) ? p.removed : [], added: Array.isArray(p.added) ? p.added : [] };
+      } catch { return { removed: [], added: [] }; }
+    };
+    const saveTeam = (e: TeamEdits) => localStorage.setItem(teamKey, JSON.stringify(e));
+
+    // Seed ids = the rows the server rendered — captured before edits are applied.
+    const seedIds = new Set(
+      Array.from(roster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!),
+    );
+    const currentIds = () =>
+      Array.from(roster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!);
+
+    const rows = () => Array.from(roster.querySelectorAll<HTMLElement>('.review-row'));
+
+    // Recompute the two meters from the live roster (added reviewers are pending).
+    const recompute = () => {
+      const all = rows();
+      const total = all.length;
+      const done = all.filter((r) => r.dataset.done === 'true').length;
+      const allDone = total > 0 && done === total;
+      bars.forEach((bar) => {
+        bar.max = total;
+        bar.value = done;
+        bar.helperText = `${done} of ${total} reviewers done`;
+        bar.status = allDone ? 'finished' : 'active';
+      });
+    };
+
+    // Rebuild the combo to directory users not already on the team.
+    const refreshCombo = () => {
+      const onTeam = new Set(currentIds());
+      addSelect.value = '';
+      addSelect.innerHTML = '';
+      directory
+        .filter((u) => !onTeam.has(u.id))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach((u) => {
+          const item = document.createElement('cds-combo-box-item');
+          item.setAttribute('value', u.id);
+          item.textContent = `${u.name} — ${u.role}`;
+          addSelect.appendChild(item);
+        });
+    };
+
+    const removeMember = (id: string, row: HTMLElement) => {
+      row.remove();
+      const e = loadTeam();
+      if (seedIds.has(id)) { if (!e.removed.includes(id)) e.removed.push(id); }
+      else { e.added = e.added.filter((u) => u.id !== id); }
+      saveTeam(e);
+      refreshCombo();
+      recompute();
+    };
+
+    const wireRow = (row: HTMLElement) => {
+      row.querySelector('[data-remove]')?.addEventListener('click', () => removeMember(row.dataset.userId!, row));
+    };
+
+    const buildRow = (u: DirUser): HTMLElement => {
+      const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      li.dataset.userId = u.id;
+      const chip = li.querySelector('.avatar');
+      if (chip) chip.textContent = initials(u.name);
+      const nameEl = li.querySelector('.review-row__name');
+      if (nameEl) nameEl.textContent = u.name;
+      const roleEl = li.querySelector('.review-row__role');
+      if (roleEl) roleEl.textContent = `${u.role} — ${u.detail}`;
+      const whenEl = li.querySelector('.review-row__when');
+      if (whenEl) whenEl.textContent = `Added ${today}`;
+      (li.querySelector('[data-remove]') as HTMLElement)?.setAttribute('aria-label', `Remove ${u.name}`);
+      return li;
+    };
+
+    const addMember = () => {
+      const id = addSelect.value;
+      if (!id || currentIds().includes(id)) return;
+      const u = byId.get(id);
+      if (!u) return;
+      const row = buildRow(u);
+      roster.appendChild(row);
+      wireRow(row);
+      const e = loadTeam();
+      e.removed = e.removed.filter((r) => r !== id);
+      if (!e.added.some((a) => a.id === id)) e.added.push(u);
+      saveTeam(e);
+      refreshCombo();
+      recompute();
+    };
+    addBtn?.addEventListener('click', addMember);
+
+    // ── Init: replay stored add/remove edits, wire, recompute ──
+    const edits = loadTeam();
+    edits.removed.forEach((id) => roster.querySelector(`[data-user-id="${id}"]`)?.remove());
+    edits.added.forEach((u) => { if (!currentIds().includes(u.id)) roster.appendChild(buildRow(u)); });
+    rows().forEach(wireRow);
+    refreshCombo();
+    recompute();
+  }
+</script>
+
 <style>
   /* Dark banner panel — the header carries the g100 dark theme zone (see the
      `cds--g100` class on the element), so its background is the near-black base
@@ -524,13 +841,24 @@ const amendHref = withBase(`/apply?amend=${id}`);
   [data-when][hidden] {
     display: none;
   }
+  /* Facts strip: the labeled facts on the left, the optional analysis-review
+     key-metric on the right, sharing the divider above them. */
+  .banner__facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--cds-spacing-06, 1.5rem);
+    margin-top: var(--cds-spacing-07, 2rem);      /* 32px above the divider */
+    padding-top: var(--cds-spacing-06, 1.5rem);   /* 24px, on-scale */
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
   .banner__stats {
+    flex: 1 1 22rem;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
     gap: var(--cds-spacing-06, 1.5rem);
-    margin: var(--cds-spacing-07, 2rem) 0 0;      /* 32px above the divider */
-    padding-top: var(--cds-spacing-06, 1.5rem);   /* 24px, on-scale */
-    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    margin: 0;
   }
   .stat {
     min-width: 0;
@@ -542,6 +870,134 @@ const amendHref = withBase(`/apply?amend=${id}`);
   .stat__value {
     margin: 0.25rem 0 0;
     color: var(--cds-text-primary, #161616);
+  }
+
+  /* ── Analysis-review key metric ──────────────────────────────────────────
+     A clickable tile in the facts strip: the completion meter + a "View team"
+     affordance. Opens the roster modal. Reset the native button so only the
+     meter's own tokens show; the hover/focus ring signals it's interactive. */
+  .analysis-metric {
+    flex: 0 1 20rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03, 0.5rem);
+    padding: var(--cds-spacing-04, 0.75rem);
+    margin: calc(-1 * var(--cds-spacing-04, 0.75rem));
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+    transition: background 0.11s ease;
+  }
+  .analysis-metric:hover {
+    background: var(--cds-layer-hover, rgba(141, 141, 141, 0.16));
+  }
+  .analysis-metric:focus-visible {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+  .analysis-metric__bar {
+    display: block;
+    width: 100%;
+    pointer-events: none; /* the whole tile is the click target */
+  }
+  .analysis-metric__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    color: var(--cds-link-primary, #78a9ff);
+  }
+  .analysis-metric__cta svg {
+    fill: currentColor;
+  }
+
+  /* ── Roster modal ── */
+  .review-roster {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    /* Cap the list and let IT scroll, so a long team never grows the modal past
+       the viewport (and so the add-reviewer dropdown above it clears the list). */
+    max-block-size: 22rem;
+    overflow-y: auto;
+  }
+  .review-row {
+    display: grid;
+    /* The status track is a FIXED width so its left edge lands on the same
+       vertical line in every row — a content-sized (auto) track would differ
+       row to row, since each row is its own grid. Long strings wrap inside it
+       rather than shifting the start point. */
+    grid-template-columns: auto minmax(0, 1fr) 15rem auto;
+    align-items: center;
+    gap: var(--cds-spacing-05, 1rem);
+    padding: var(--cds-spacing-05, 1rem) 0;
+    border-block-end: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .review-row:first-child {
+    border-block-start: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  .review-row__id {
+    min-width: 0;
+  }
+  .review-row__name {
+    margin: 0;
+    color: var(--cds-text-primary, #161616);
+  }
+  .review-row__lead {
+    color: var(--cds-text-secondary, #525252);
+  }
+  .review-row__role {
+    margin: 0.125rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  /* Status is its own column: the state (indicator + label) over the date/time,
+     both hugging the column's left edge so they share a start line. */
+  .review-row__status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+  .review-row__state {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+  /* The date/time sits UNDER the status text, not under the icon — indent it by
+     the icon (16px) + the indicator's icon↔label gap (0.5rem) so it lines up
+     with where "Analysis complete" / "Pending review" begins. */
+  .review-row__when {
+    padding-inline-start: calc(16px + var(--cds-spacing-03, 0.5rem));
+    text-align: left;
+    color: var(--cds-text-secondary, #525252);
+  }
+  @media (max-width: 42rem) {
+    /* Stack the status under the name on narrow modals. */
+    .review-row {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      row-gap: var(--cds-spacing-04, 0.75rem);
+    }
+    .review-row__status {
+      grid-column: 2 / -1;
+    }
+  }
+  /* Add-a-reviewer: combo grows, button aligns to the input bottom (the combo's
+     title label floats above, so flex-end lines the two controls up). */
+  .team-add {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--cds-spacing-05, 1rem);
+  }
+  .team-add__select {
+    flex: 1 1 auto;
+  }
+  .team-add cds-button {
+    flex: 0 0 auto;
   }
 
   /* Approve modal: quiet reminder of the applicant's requested window, sitting

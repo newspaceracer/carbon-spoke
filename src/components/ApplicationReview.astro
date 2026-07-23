@@ -1,0 +1,328 @@
+---
+// Step 1 (left column) of the finalize wizard — THE APPLICATION AS THE ANALYST
+// REVIEWS IT. Same read-back format the submitter saw at their summary step. The
+// applicant's IDENTITY is fixed from the submitted application (research team,
+// institution, participants, submitted dates — all read-only); what the analyst
+// may still adjust for the permit is EDITABLE INLINE: the project title, the
+// project category, the authorized parks per district (Study areas), and the
+// collected specimens. Everything else is read-only context so the analyst can
+// comprehend the request while curating the conditions on the right.
+//
+// The editable text/dropdown controls carry ids + data-field hooks. Study-area
+// parks reuse the application's Study areas control (a filterable multi-select
+// #sa-select + a #sa-body roster); specimens reuse the application's specimen
+// table (#specimen-body) + add/edit modal. All of these are seeded, wired, and
+// persisted by the page script (final-letter.astro) — this component only renders
+// the controls. All read-only content is static, from data/permit.
+import PermitSection from './PermitSection.astro';
+import { permit } from '../data/permit';
+import { parks } from '../data/parks';
+
+// Project categories — the CA State Parks scientific-research classifications the
+// analyst can reclassify the permit into (invented, credible). The application's
+// own category is guaranteed present so the dropdown always has a valid seed.
+const categories = [
+  'Marine Aquatic Resources',
+  'Freshwater Aquatic Resources',
+  'Botanical Resources',
+  'Terrestrial Wildlife',
+  'Geology & Paleontology',
+  'Cultural & Archaeological Resources',
+];
+const categoryOptions = categories.includes(permit.category) ? categories : [permit.category, ...categories];
+
+const t = permit.researchTeam;
+const pi = t.principalInvestigator;
+const org = t.organization;
+const fieldLead = t.fieldLead;
+const pj = permit.projectInfo;
+const dc = permit.dataCollection;
+const ad = permit.additionalDocs;
+const sa = permit.studyAreas;
+
+// Read-back rows mirroring the application summary's Research team block. Each
+// contact carries name / phone / email / address in the permit record.
+const contactRows = (c: { name?: string; phone?: string; email?: string; address?: string }, nameLabel = 'Name') => [
+  { label: nameLabel, value: c.name },
+  { label: 'Phone', value: c.phone },
+  { label: 'Email', value: c.email },
+  { label: 'Address', value: c.address },
+].filter((r) => r.value);
+const orgRows = contactRows(org, 'Organization');
+const piRows = contactRows(pi);
+const fieldLeadRows = contactRows(fieldLead);
+
+// Study-area parks options for the filterable multi-select (same control as the
+// application's Study areas step). Scoped to this permit's districts: the state
+// parks directory for those districts, plus any already-selected units the
+// directory doesn't list, so the current selection is always representable.
+const permitDistrictNames = sa.districts.map((d) => d.name);
+const directoryParks = parks
+  .filter((p) => permitDistrictNames.includes(p.district))
+  .map((p) => ({ name: p.name, district: p.district }));
+const directoryNames = new Set(directoryParks.map((p) => p.name));
+const seededExtras = sa.districts.flatMap((d) =>
+  d.parks.filter((name) => !directoryNames.has(name)).map((name) => ({ name, district: d.name })),
+);
+const studyAreaOptions = [...directoryParks, ...seededExtras].sort((a, b) => a.name.localeCompare(b.name));
+
+const fileGlyph =
+  'M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z';
+---
+
+<div class="app-review">
+  <cds-inline-notification
+    class="app-review__intro"
+    kind="info"
+    low-contrast
+    hide-close-button
+    title="Review the application, set the conditions"
+    subtitle="Read the request below. The fields you can edit here print on the permit letter — fix one and every place it appears updates. Set the special conditions in the panel to the right."
+  ></cds-inline-notification>
+
+  <!-- ── Research team ────────────────────────────────────────────────────── -->
+  <PermitSection title="Research team">
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Organization</h3>
+      <dl class="review">
+        {orgRows.map((r) => (
+          <div class="review__row"><dt class="review__label t-label-01">{r.label}</dt><dd class="review__value t-body-01">{r.value}</dd></div>
+        ))}
+      </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Principal investigator</h3>
+      <dl class="review">
+        {piRows.map((r) => (
+          <div class="review__row"><dt class="review__label t-label-01">{r.label}</dt><dd class="review__value t-body-01">{r.value}</dd></div>
+        ))}
+      </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Person in direct charge of field work</h3>
+      <dl class="review">
+        {fieldLeadRows.map((r) => (
+          <div class="review__row"><dt class="review__label t-label-01">{r.label}</dt><dd class="review__value t-body-01">{r.value}</dd></div>
+        ))}
+      </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Additional participants</h3>
+      {t.participants.length ? (
+        <cds-table class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Name</cds-table-header-cell>
+              <cds-table-header-cell>Phone</cds-table-header-cell>
+              <cds-table-header-cell>Email</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body>
+            {t.participants.map((p) => (
+              <cds-table-row>
+                <cds-table-cell>{p.name}</cds-table-cell>
+                <cds-table-cell>{p.phone || '—'}</cds-table-cell>
+                <cds-table-cell>{p.email}</cds-table-cell>
+              </cds-table-row>
+            ))}
+          </cds-table-body>
+        </cds-table>
+      ) : (
+        <p class="sub-note t-body-01">No additional participants added.</p>
+      )}
+    </div>
+  </PermitSection>
+
+  <!-- ── Project information ──────────────────────────────────────────────── -->
+  <PermitSection title="Project information">
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Project</h3>
+      <div class="field-stack">
+        <cds-text-input id="fb-title" data-field="projectTitle" label="Project title" placeholder="Title of proposal"></cds-text-input>
+        <cds-dropdown id="fb-category" data-field="category" title-text="Category" label="Select a category" value={permit.category}>
+          {categoryOptions.map((c) => <cds-dropdown-item value={c}>{c}</cds-dropdown-item>)}
+        </cds-dropdown>
+      </div>
+    </div>
+
+    <div class="subblock">
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Project purpose</p>
+        <p class="narrative__body t-body-01">{pj.purpose}</p>
+      </div>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Anticipated benefits to the California State Park System</p>
+        <p class="narrative__body t-body-01">{pj.benefits}</p>
+      </div>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Requested dates</h3>
+      <dl class="review">
+        {pj.details.filter((r) => r.key !== 'Project category').map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.key}</dt>
+            <dd class="review__value t-body-01">
+              {r.entries ? r.entries.map((e) => `${e.label}: ${e.value}`).join(' – ') : r.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </PermitSection>
+
+  <!-- ── Study areas ──────────────────────────────────────────────────────── -->
+  <PermitSection title="Study areas">
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Study area parks</h3>
+      <p class="sub-note t-body-01">Search by park or district name and add every unit where field work will take place. These parks and their district coordinators print on the permit's contact list.</p>
+      <div class="select-wrap">
+        <cds-multi-select
+          id="sa-select"
+          filterable
+          selection-feedback="fixed"
+          title-text="Parks"
+          label="Search by park or district name"
+        >
+          {studyAreaOptions.map((p) => (
+            <cds-multi-select-item value={p.name} data-district={p.district}>{p.name} — {p.district}</cds-multi-select-item>
+          ))}
+        </cds-multi-select>
+      </div>
+      <div class="selected">
+        <p class="selected__label t-label-01">Selected parks <span id="sa-count"></span></p>
+        <cds-table id="sa-table" class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Park</cds-table-header-cell>
+              <cds-table-header-cell>District</cds-table-header-cell>
+              <cds-table-header-cell>Remove</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body id="sa-body"></cds-table-body>
+        </cds-table>
+        <p id="sa-empty" class="sub-note t-body-01" hidden>No parks selected yet — search above to add study areas.</p>
+      </div>
+    </div>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Collection sites</h3>
+      <dl class="review">
+        {sa.sites.map((s) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{s.name}</dt>
+            <dd class="review__value t-body-01">{s.coords} — {s.note}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </PermitSection>
+
+  <!-- ── Data collection ──────────────────────────────────────────────────── -->
+  <PermitSection title="Data collection">
+    <div class="subblock">
+      <div class="roster__head">
+        <h3 class="sub-head t-heading-02">Specimens</h3>
+        <cds-button id="add-specimen" kind="tertiary" size="sm">Add specimen</cds-button>
+      </div>
+      <p class="sub-note t-body-01">The taxa and quantities authorized for collection. Add, edit, or remove a specimen. This list prints on the permit as the authorized collection.</p>
+      <cds-table id="specimen-table" class="ro-table">
+        <cds-table-head>
+          <cds-table-header-row>
+            <cds-table-header-cell>Species</cds-table-header-cell>
+            <cds-table-header-cell>Quantity</cds-table-header-cell>
+            <cds-table-header-cell>Portion</cds-table-header-cell>
+            <cds-table-header-cell>Condition</cds-table-header-cell>
+            <cds-table-header-cell>Actions</cds-table-header-cell>
+          </cds-table-header-row>
+        </cds-table-head>
+        <cds-table-body id="specimen-body"></cds-table-body>
+      </cds-table>
+      <p id="specimen-empty" class="sub-note t-body-01" hidden>No specimens added yet.</p>
+    </div>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Curation &amp; laboratory</h3>
+      <dl class="review">
+        {[...dc.collection, ...dc.laboratory].map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.key}</dt>
+            <dd class="review__value t-body-01">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </PermitSection>
+
+  <!-- ── Additional documents ─────────────────────────────────────────────── -->
+  <PermitSection title="Additional documents">
+    <div class="subblock">
+      <dl class="review">
+        {ad.facts.map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.key}</dt>
+            <dd class="review__value t-body-01">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Submitted files</h3>
+      <ul class="docs">
+        {ad.files.map((f) => (
+          <li class="doc">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d={fileGlyph}></path></svg>
+            <span class="t-body-01">{f.name}</span>
+            <span class="doc__type t-label-01">{f.type}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </PermitSection>
+</div>
+
+<style>
+  .app-review { display: flex; flex-direction: column; gap: 2.75rem; }
+  .app-review__intro { display: block; }
+
+  .subblock + .subblock { margin-top: 2rem; }
+  .sub-head { margin: 0 0 0.75rem; color: var(--cds-text-primary, #161616); }
+  .sub-note { margin: 0 0 0.75rem; color: var(--cds-text-secondary, #525252); }
+  .sub-note:last-child { margin-bottom: 0; }
+
+  /* Editable letter-bound fields (project title + category), sitting in the review. */
+  .field-stack { display: grid; gap: 0.75rem; margin-bottom: 0.75rem; }
+
+  /* carbon-checked: label/value review metadata is a definition list (the
+     semantic primitive); this is layout CSS over a <dl>, matching SummaryStep. */
+  .review { margin: 0; }
+  .review__row { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: 0.5rem 1.5rem; padding: 0.625rem 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+  .review__row:first-child { border-top: 0; padding-top: 0; }
+  .review__label { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .review__value { margin: 0; color: var(--cds-text-primary, #161616); overflow-wrap: anywhere; }
+  @media (max-width: 42rem) { .review__row { grid-template-columns: 1fr; gap: 0.125rem; } }
+
+  .narrative { max-width: 46rem; }
+  .narrative + .narrative { margin-top: 1.5rem; }
+  .narrative__label { margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
+  .narrative__body { margin: 0; color: var(--cds-text-primary, #161616); line-height: 1.6; }
+
+  .docs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .doc { display: flex; align-items: center; gap: 0.5rem; color: var(--cds-text-primary, #161616); }
+  .doc svg { flex: 0 0 auto; color: var(--cds-icon-secondary, #525252); }
+  .doc__type { color: var(--cds-text-secondary, #525252); margin-inline-start: auto; text-align: end; }
+
+  .ro-table { display: block; }
+
+  /* Specimen roster head — the section title with its Add button, right-aligned.
+     Same shape as the application form's roster head. */
+  .roster__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .roster__head .sub-head { margin: 0; }
+
+  /* Study-area parks — filterable multi-select + selected-parks roster, the same
+     construction as the application's Study areas step. Layout only. */
+  .select-wrap { max-width: 46rem; }
+  .selected { margin-top: 1.5rem; max-width: 46rem; }
+  .selected__label { margin: 0 0 0.5rem; color: var(--cds-text-secondary, #525252); }
+</style>

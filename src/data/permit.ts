@@ -85,14 +85,16 @@ export const permit = {
   overview: {
     // Internal review team assigned to analyze the application (invented).
     // Internal reviewers. `status` is a sign-off timestamp once reviewed, else
-    // "Pending review". `highlight` marks the current reviewer (you).
+    // "Pending review". `highlight` marks the current reviewer (you). `addedAt`
+    // is when the reviewer joined the permit; `lastEditedAt` is their most recent
+    // activity while still pending (absent = no activity since being added).
     // `id` keys each row to the shared user directory (src/data/user.ts) so the
     // "add reviewer" control can offer only users not already on the team.
     analysisTeam: [
-      { id: 'okafor', role: 'Lead analyst', name: 'J. Okafor', detail: 'Natural Resources Division', status: 'Jul 2, 2026 11:59 AM', highlight: true },
-      { id: 'santos', role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', status: 'Pending review' },
-      { id: 'cheng', role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', status: 'Pending review' },
-      { id: 'delgado', role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', status: 'Jul 5, 2026 8:45 AM' },
+      { id: 'okafor', role: 'Lead analyst', name: 'J. Okafor', detail: 'Natural Resources Division', status: 'Jul 2, 2026 11:59 AM', addedAt: 'Jun 28, 2026', highlight: true },
+      { id: 'santos', role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', status: 'Pending review', addedAt: 'Jun 28, 2026', lastEditedAt: 'Jul 6, 2026 2:14 PM' },
+      { id: 'cheng', role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', status: 'Pending review', addedAt: 'Jul 1, 2026' },
+      { id: 'delgado', role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', status: 'Jul 5, 2026 8:45 AM', addedAt: 'Jun 29, 2026' },
     ],
 
     // Reviewer-applied handling tags. `tagOptions` is the curated vocabulary an

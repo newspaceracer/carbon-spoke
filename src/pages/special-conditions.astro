@@ -113,7 +113,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
               <cds-table>
                 <cds-table-head>
                   <cds-table-header-row>
-                    <cds-table-header-cell>Title</cds-table-header-cell>
                     <cds-table-header-cell>Condition text</cds-table-header-cell>
                     <cds-table-header-cell>Applies</cds-table-header-cell>
                     <cds-table-header-cell>Actions</cds-table-header-cell>
@@ -151,7 +150,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
                 <cds-table-head>
                   <cds-table-header-row>
                     <cds-table-header-cell>Owner</cds-table-header-cell>
-                    <cds-table-header-cell>Title</cds-table-header-cell>
                     <cds-table-header-cell>Condition text</cds-table-header-cell>
                     <cds-table-header-cell>Applies</cds-table-header-cell>
                     <cds-table-header-cell>Actions</cds-table-header-cell>
@@ -180,13 +178,11 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
           kind="warning"
           low-contrast
           hide-close-button
-          title="Title and text required"
-          subtitle="A condition needs a title and body before it can be saved."
+          title="Condition text required"
+          subtitle="A condition is its text — write it before saving."
         ></cds-inline-notification>
 
         <cds-stack gap="6">
-          <cds-text-input id="c-title" label="Title" placeholder="Short label shown in the picker"></cds-text-input>
-
           <div>
             <p class="field-label t-label-01">Condition text</p>
             <sc-rich-text id="c-body" placeholder="Write the condition. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
@@ -232,7 +228,8 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   let items: ConditionInventoryItem[] = [];
   let currentView: 'mine' | 'browse' = 'mine';
   const allOwners = (): ConditionOwner[] => ['hq', ...districtOptions.map((o) => o.key)];
-  const sig = (it: { title: string; body: string }) => `${it.title}||${it.body}`;
+  // A condition IS its text, so its body is its identity (used for dedup).
+  const sig = (it: { body: string }) => it.body;
 
   const flashSaved = () => {
     const n = $('save-notice') as any;
@@ -261,9 +258,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
       ...items.map((it, i) => {
         const row = document.createElement('cds-table-row');
 
-        const titleCell = document.createElement('cds-table-cell');
-        titleCell.innerHTML = `<span class="c-title">${esc(it.title || '(untitled)')}</span>`;
-
         const prevCell = document.createElement('cds-table-cell');
         const bodyEl = document.createElement('div');
         bodyEl.className = 'c-body';
@@ -289,7 +283,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
         wrap.append(edit, rm);
         actionCell.appendChild(wrap);
 
-        row.append(titleCell, prevCell, defCell, actionCell);
+        row.append(prevCell, defCell, actionCell);
         return row;
       }),
     );
@@ -331,9 +325,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
         const ownerCell = document.createElement('cds-table-cell');
         ownerCell.innerHTML = `<span class="c-owner">${esc(ownerLabel(o))}</span>`;
 
-        const titleCell = document.createElement('cds-table-cell');
-        titleCell.innerHTML = `<span class="c-title">${esc(it.title || '(untitled)')}</span>`;
-
         const bodyCell = document.createElement('cds-table-cell');
         const b = document.createElement('div');
         b.className = 'c-body';
@@ -362,7 +353,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
             inv.push({
               id: newConditionId(owner === 'hq' ? 'hq' : owner),
               owner,
-              title: it.title,
               body: it.body,
               isDefault: false,
             });
@@ -373,7 +363,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
           actionCell.appendChild(copy);
         }
 
-        row.append(ownerCell, titleCell, bodyCell, defCell, actionCell);
+        row.append(ownerCell, bodyCell, defCell, actionCell);
         return row;
       }),
     );
@@ -392,7 +382,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
 
   // ── Add / edit modal ─────────────────────────────────────────────────────
   const modal = $('condition-modal') as any;
-  const titleEl = () => $('c-title') as any;
   const bodyEl = () => $('c-body') as any;
   const defaultEl = () => $('c-default') as any;
   const warnEl = $('condition-warning') as any;
@@ -408,8 +397,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
     if (label) label.textContent = `${ownerLabel(currentOwner())} catalog`;
     if (warnEl) warnEl.hidden = true;
 
-    const t = titleEl();
-    if (t) { t.value = it?.title ?? ''; t.setAttribute('value', it?.title ?? ''); }
     if (bodyEl()) bodyEl().value = it?.body ?? '';
     const d = defaultEl();
     if (d) d.checked = !!it?.isDefault;
@@ -418,9 +405,8 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   };
 
   const saveCondition = () => {
-    const title = (titleEl()?.value ?? '').toString().trim();
     const body = (bodyEl()?.value ?? '').toString().trim();
-    if (!title || !body) {
+    if (!body) {
       if (warnEl) warnEl.hidden = false;
       return;
     }
@@ -428,9 +414,9 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
     const isDefault = !!defaultEl()?.checked;
 
     if (editingIndex >= 0) {
-      items[editingIndex] = { ...items[editingIndex], title, body, isDefault };
+      items[editingIndex] = { ...items[editingIndex], body, isDefault };
     } else {
-      items.push({ id: newConditionId(owner === 'hq' ? 'hq' : owner), owner, title, body, isDefault });
+      items.push({ id: newConditionId(owner === 'hq' ? 'hq' : owner), owner, body, isDefault });
     }
     persist();
     renderInventory();
@@ -510,7 +496,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
 
   /* Inventory table wrapper — see carbon-checked note in the markup above. */
   .table-wrap { overflow-x: auto; }
-  :global(.c-title) { color: var(--cds-text-primary, #161616); }
   :global(.c-muted) { color: var(--cds-text-secondary, #525252); }
   :global(.row-actions) { display: flex; gap: 0.25rem; }
 
