@@ -104,6 +104,13 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   <PermitNav slot="nav" />
 
   <main class="page">
+    <!-- No-flash: set the review-started class on <html> synchronously, before
+         paint, so a permit already in review shows its detail immediately and
+         never flashes the gate. localStorage isn't available at SSR, so this
+         reconciles it client-side ahead of the deferred module scripts. -->
+    <script is:inline define:vars={{ rsKey: `permit-review-started-${permit.id}` }}>
+      try { if (localStorage.getItem(rsKey)) document.documentElement.classList.add('review-started'); } catch (e) {}
+    </script>
     <cds-stack gap="6">
       <PermitHeader
         id={permit.id}
@@ -144,12 +151,35 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
         </cds-actionable-notification-button>
       </cds-actionable-notification>
 
+      <!-- Review gate — the application body (tabs + panels) stays sealed until a
+           reviewer starts, so the system records when review actually begins, not
+           just when it was assigned. The header above stays visible for triage;
+           only the substance is gated. The script reveals the body from the
+           permit-review-started-${id} flag, set by any .permit-start-review
+           trigger (the header's Start review OR the button below).
+           carbon-checked: composed empty-state block — Carbon ships no empty-state
+           web component in this catalog; the only control is a stock cds-button. -->
+      <div id="review-gate" class="review-gate">
+        <div class="review-gate__inner">
+          <h2 class="review-gate__title t-heading-04">Start the review to see the application</h2>
+          <p class="review-gate__body t-body-02">Starting records when you began the review — nothing else. The application stays exactly as the applicant filed it.</p>
+          <cds-button class="permit-start-review" size="lg">
+            Start review
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><path d="M18 6L16.6 7.4 24.1 15 3 15 3 17 24.1 17 16.6 24.6 18 26 28 16z"/></svg>
+          </cds-button>
+        </div>
+      </div>
+
+      <!-- Quiet confirmation the start was captured — shown with the body once
+           review has begun; the script fills it from the flag (who + when). -->
+      <p id="review-started-note" class="review-started-note t-label-01" data-review-body></p>
+
       <!-- carbon-checked: .tabbar is NOT a tab component — the tabs are the stock
            cds-tabs/cds-tab below. It is only a full-bleed STICKY background layer
            that pins the tab strip below the compact header bar and gives it an
            opaque backdrop over scrolling panel content; no cds-* component provides
            a page-level sticky background band. -->
-      <div class="tabbar">
+      <div class="tabbar" data-review-body>
         <div class="cds--css-grid">
           <cds-tabs class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" id="permit-tabs" value="overview">
             {tabs.map((tab) => (
@@ -159,7 +189,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
         </div>
       </div>
 
-      <section>
+      <section data-review-body>
         <div class="panels">
           <!-- ── Overview ─────────────────────────────────────────────── -->
           <div class="panel" data-panel="overview" role="tabpanel" aria-labelledby="tab-overview">
@@ -652,6 +682,75 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
     </cds-modal>
   </main>
 </BaseLayout>
+
+<script>
+  // Gate vs. body visibility is driven by the .review-started class the inline
+  // head script sets pre-paint from the flag; this only fills the quiet "you
+  // started" note (the flag carries who + when). Starting itself navigates to the
+  // wizard (PermitHeader.startReview), so there's no in-place reveal to run.
+  const gateBanner = document.getElementById('permit-banner');
+  const gatePermitId = gateBanner?.dataset.permitId ?? '';
+  const gateStartedKey = `permit-review-started-${gatePermitId}`;
+  const startedNote = document.getElementById('review-started-note');
+
+  let startedInfo: { by?: string; at?: string } | null = null;
+  try { startedInfo = JSON.parse(localStorage.getItem(gateStartedKey) || 'null'); } catch { startedInfo = null; }
+  if (startedInfo && startedNote) {
+    startedNote.textContent = startedInfo.at
+      ? `You started reviewing this application on ${startedInfo.at}.`
+      : 'You started reviewing this application.';
+  }
+</script>
+
+<style>
+  /* Review gate — a centered, low-ceremony prompt that stands in for the body
+     until review starts. Page-level layout only; the control is a stock cds-button. */
+  .review-gate {
+    display: flex;
+    justify-content: center;
+    padding-block: var(--cds-spacing-10, 4rem);
+  }
+  .review-gate__inner {
+    max-inline-size: 32rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--cds-spacing-05, 1rem);
+  }
+  .review-gate__title {
+    margin: 0;
+    color: var(--cds-text-primary, #161616);
+  }
+  .review-gate__body {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .review-gate cds-button {
+    margin-top: var(--cds-spacing-03, 0.5rem);
+  }
+  /* Quiet capture confirmation, sitting above the tab strip once revealed. */
+  .review-started-note {
+    margin: 0;
+    padding-block: var(--cds-spacing-04, 0.75rem);
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>
+
+<style is:global>
+  /* Pre-paint gate/body visibility, keyed on the class the inline head script
+     sets from the flag — so a permit already in review shows its detail with no
+     flash of the gate. #review-gate and [data-review-body] exist only on this
+     page, so this global block can't affect any other screen. */
+  html:not(.review-started) [data-review-body] { display: none; }
+  html.review-started #review-gate { display: none; }
+  /* Header no-flash: on a started permit, don't let the "Start review" action
+     flash before the script swaps it to "Open review". Safe as a global rule
+     because .review-started is only ever set on this page — the other PermitHeader
+     pages never match it. (The reverse case needs no rule: the "Open review" combo
+     ships hidden by default, so it can't flash on a not-yet-started permit.) */
+  html.review-started [data-phase="not-started"] { display: none; }
+</style>
 
 <script>
   import { withBase } from '../lib/base';

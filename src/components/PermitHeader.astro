@@ -47,12 +47,24 @@ interface Props {
   /** The user directory the add-reviewer control draws from (required when
    *  analysisTeam is passed). */
   directory?: DirectoryUser[];
+  /** Where this header is mounted. On the detail page ("detail") the started-phase
+   *  action is "Open review" — it enters the finalize wizard. On the wizard itself
+   *  ("finalize") the reviewer is already inside, so the primary reads "Approve
+   *  permit" and jumps to the wizard's Review & send step; the menu keeps only the
+   *  decision actions (Request changes / Reject permit). Defaults to the detail
+   *  behavior. */
+  context?: 'detail' | 'finalize';
 }
 
 const {
   id, name, organization, status, infoTags, flagTags, stats, requestedWindow,
-  analysisTeam, directory = [],
+  analysisTeam, directory = [], context = 'detail',
 } = Astro.props;
+
+// The started-phase primary differs by mount: enter the wizard vs. approve from
+// inside it. Kept here so the full header and the compact bar stay in lockstep.
+const finalize = context === 'finalize';
+const reviewLabel = finalize ? 'Approve permit' : 'Open review';
 
 // An amendment reuses the whole application flow, prefilled from this permit and
 // numbered with an "-A" suffix — offered only once the permit is Active.
@@ -89,7 +101,7 @@ const eligibleUsers = directory
 const teamStorageKey = `permit-team-${id}`;
 ---
 
-<header class="banner cds--g100" id="permit-banner" data-permit-id={id} data-status={status.label} data-letter-url={withBase('/final-letter')}>
+<header class="banner cds--g100" id="permit-banner" data-permit-id={id} data-status={status.label} data-letter-url={withBase('/final-letter')} data-context={context}>
   <div class="banner__inner">
   <div class="banner__crumb"><slot name="breadcrumb" /></div>
   <div class="banner__main">
@@ -124,11 +136,19 @@ const teamStorageKey = `permit-team-${id}`;
          tooltip-alignment=bottom: the caret's tooltip defaults to opening upward,
          which is clipped once the header is a pinned bar — open it downward. -->
     <div class="banner__actions">
-      <cds-combo-button data-when="Under review" class="permit-actions" size="md" label="Approve permit" menu-alignment="bottom-end" tooltip-alignment="bottom">
+      <!-- Under review has two phases (the script toggles [data-phase] by the
+           permit-review-started-${id} flag):
+             not-started → Start review — records who's reviewing + when, then
+                           opens the review wizard (final-letter).
+             started     → Open review — primary enters the wizard; the decision
+                           actions stay in the menu, and the approval itself is
+                           the wizard's Send step. -->
+      <cds-button data-when="Under review" data-phase="not-started" class="permit-start-review" size="md">Start review</cds-button>
+      <cds-combo-button data-when="Under review" data-phase="started" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
         <cds-menu>
           <cds-menu-item label="Request changes"></cds-menu-item>
-          <cds-menu-item label="Download"></cds-menu-item>
-          <cds-menu-item-divider></cds-menu-item-divider>
+          {!finalize && <cds-menu-item label="Download"></cds-menu-item>}
+          {!finalize && <cds-menu-item-divider></cds-menu-item-divider>}
           <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
         </cds-menu>
       </cds-combo-button>
@@ -184,11 +204,12 @@ const teamStorageKey = `permit-team-${id}`;
     <cds-icon-indicator class="permit-status-indicator" size="16" kind={status.kind} label={status.label}></cds-icon-indicator>
     <span class="compactbar__window t-body-01">{requestedWindow.start} – {requestedWindow.end}</span>
     <div class="compactbar__spacer"></div>
-    <cds-combo-button data-when="Under review" class="permit-actions" size="sm" label="Approve permit" menu-alignment="bottom-end" tooltip-alignment="bottom">
+    <cds-button data-when="Under review" data-phase="not-started" class="permit-start-review" size="sm">Start review</cds-button>
+    <cds-combo-button data-when="Under review" data-phase="started" class="permit-open-review" size="sm" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
       <cds-menu>
         <cds-menu-item label="Request changes"></cds-menu-item>
-        <cds-menu-item label="Download"></cds-menu-item>
-        <cds-menu-item-divider></cds-menu-item-divider>
+        {!finalize && <cds-menu-item label="Download"></cds-menu-item>}
+        {!finalize && <cds-menu-item-divider></cds-menu-item-divider>}
         <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
       </cds-menu>
     </cds-combo-button>
@@ -197,63 +218,10 @@ const teamStorageKey = `permit-team-${id}`;
   </div>
 </div>
 
-<!-- Confirmation dialogs for the two decision actions. Overlays live outside
-     normal flow; Carbon owns the focus trap + return and the accessible heading. -->
-<cds-modal id="approve-permit-modal" size="md">
-  <cds-modal-header>
-    <cds-modal-close-button></cds-modal-close-button>
-    <cds-modal-label>Permit {id}</cds-modal-label>
-    <cds-modal-heading>Approve this permit?</cds-modal-heading>
-  </cds-modal-header>
-  <cds-modal-body>
-    <cds-stack gap="7">
-      <p class="t-body-01">
-        Approving authorizes the applicant to begin the requested research and
-        collection under the stated conditions. The applicant and all assigned
-        reviewers will be notified.
-      </p>
-
-      <!-- Effective validity window the reviewer confirms — prefilled with the
-           requested dates, editable. Range mode is auto-detected by the from/to
-           inputs; the container `value` seeds both (ISO `start/end`). The
-           requested dates repeat below as a reminder. -->
-      <cds-stack gap="3">
-        <cds-date-picker id="approve-window" value={`${requestedWindow.startISO}/${requestedWindow.endISO}`}>
-          <cds-date-picker-input
-            kind="from"
-            label-text="Permit start date"
-            placeholder="mm/dd/yyyy"
-          ></cds-date-picker-input>
-          <cds-date-picker-input
-            kind="to"
-            label-text="Permit end date"
-            placeholder="mm/dd/yyyy"
-          ></cds-date-picker-input>
-        </cds-date-picker>
-        <p class="requested-reminder t-label-01">
-          Applicant requested {requestedWindow.start} – {requestedWindow.end}
-        </p>
-      </cds-stack>
-
-      <!-- CEQA determination — a required either/or, so a radio group, defaulting
-           to N/A (the common case for scientific collection permits). -->
-      <cds-radio-button-group
-        name="ceqa"
-        legend-text="CEQA"
-        orientation="horizontal"
-        value="na"
-      >
-        <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
-        <cds-radio-button label-text="N/A" value="na"></cds-radio-button>
-      </cds-radio-button-group>
-    </cds-stack>
-  </cds-modal-body>
-  <cds-modal-footer>
-    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-    <cds-modal-footer-button kind="primary" id="approve-confirm" data-modal-close>Approve permit</cds-modal-footer-button>
-  </cds-modal-footer>
-</cds-modal>
-
+<!-- Confirmation dialogs for the workflow decisions. Overlays live outside normal
+     flow; Carbon owns the focus trap + return and the accessible heading. Approval
+     is no longer a header modal — it's the review wizard's Send step, reached via
+     Open review, where the reviewer confirms the window and conditions first. -->
 <cds-modal id="sign-permit-modal" size="sm">
   <cds-modal-header>
     <cds-modal-close-button></cds-modal-close-button>
@@ -434,9 +402,12 @@ const teamStorageKey = `permit-team-${id}`;
   // transition broadcasts `permit-status-changed` so other surfaces on the page —
   // notably the Special conditions tab, which freezes once the permit leaves review
   // — react without a reload.
-  //   Under review ──approve──▶ Out for signature ──sign──▶ Active
+  //   Under review ─[Start review]▶ (started) ─Open review▶ wizard ─Send▶ Out for signature ─sign▶ Active
   //                └─request changes─▶ Changes requested
   //                └─reject──────────▶ Rejected
+  // "Start review" is a phase within Under review, not a status: it sets the
+  // permit-review-started-${id} flag (who + when), which gates the detail body
+  // and the wizard. The status stays "Under review" throughout.
   const banner = document.getElementById('permit-banner');
   const permitId = banner?.dataset.permitId ?? '';
   const seededStatus = banner?.dataset.status ?? 'Under review';
@@ -453,16 +424,26 @@ const teamStorageKey = `permit-team-${id}`;
   const currentStatus = () =>
     (permitId && localStorage.getItem(statusKey)) || seededStatus;
 
+  // "Under review" has two phases — before and after a reviewer starts. The flag
+  // records who's reviewing + when; its presence is the whole gate.
+  const reviewStartedKey = `permit-review-started-${permitId}`;
+  const isReviewStarted = () => Boolean(permitId && localStorage.getItem(reviewStartedKey));
+
   // Reflect a status across every surface: the two status indicators and the
-  // action controls (only those tagged for the current status are shown).
+  // action controls. A plain [data-when] action shows for its status; a
+  // [data-phase] action (only within "Under review") additionally requires its
+  // phase to match the started flag, so Start review and Open review swap.
   const paintStatus = (status: string) => {
     const kind = STATUS_KIND[status] ?? 'unknown';
     document.querySelectorAll('.permit-status-indicator').forEach((el) => {
       el.setAttribute('kind', kind);
       el.setAttribute('label', status);
     });
+    const started = isReviewStarted();
     document.querySelectorAll<HTMLElement>('[data-when]').forEach((el) => {
-      el.hidden = el.dataset.when !== status;
+      let show = el.dataset.when === status;
+      if (show && el.dataset.phase) show = el.dataset.phase === (started ? 'started' : 'not-started');
+      el.hidden = !show;
     });
   };
 
@@ -478,17 +459,45 @@ const teamStorageKey = `permit-team-${id}`;
   // route each to the matching confirmation modal. Both the full header and the
   // compact bar carry a `.permit-actions` combo-button, so wire them all.
   // (Cancel / X / confirm all close natively via [data-modal-close].)
-  const approveModal = document.getElementById('approve-permit-modal') as any;
   const rejectModal = document.getElementById('reject-permit-modal') as any;
   const requestModal = document.getElementById('request-changes-modal') as any;
   const signModal = document.getElementById('sign-permit-modal') as any;
-  document.querySelectorAll('.permit-actions').forEach((combo) => {
+  const letterUrl = banner?.dataset.letterUrl;
+  const inFinalize = banner?.dataset.context === 'finalize';
+
+  // Start review — records that this reviewer has begun (who + when). That's the
+  // gate: it unlocks the application body on the detail page and the review
+  // wizard. Any trigger tagged .permit-start-review fires it — the header /
+  // compact-bar actions AND the big button on the gated detail body (same doc).
+  const startReview = () => {
+    if (!permitId) return;
+    if (!localStorage.getItem(reviewStartedKey)) {
+      const at = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      localStorage.setItem(reviewStartedKey, JSON.stringify({ by: 'You', at }));
+    }
+    // Starting drops the reviewer straight into the review wizard (final-letter);
+    // the flag is now set, so the wizard's guard admits them. Coming back to the
+    // permit later shows the unlocked detail with an "Open review" action.
+    if (letterUrl) { window.location.href = letterUrl; return; }
+    paintStatus(currentStatus()); // fallback only if the wizard URL is unwired
+  };
+  document.querySelectorAll('.permit-start-review').forEach((btn) => {
+    btn.addEventListener('click', startReview);
+  });
+
+  // Started-phase primary + decision menu. On the detail page the primary "Open
+  // review" enters the wizard (letterUrl); on the wizard itself ("Approve permit")
+  // the reviewer is already here, so it fires a `permit:approve` event the wizard
+  // catches to jump to its Review & send step. The menu is identical either way.
+  document.querySelectorAll('.permit-open-review').forEach((combo) => {
     (combo as any).onClick = (e: Event) => {
       const item = (e.target as HTMLElement).closest?.('cds-menu-item');
       const label = item?.getAttribute('label');
       if (label === 'Reject permit') rejectModal.open = true;
       else if (label === 'Request changes') requestModal.open = true;
-      else if (!item) approveModal.open = true; // primary "Approve permit"
+      else if (item) return; // other menu picks handled elsewhere
+      else if (inFinalize) document.dispatchEvent(new CustomEvent('permit:approve'));
+      else if (letterUrl) window.location.href = letterUrl; // primary "Open review"
     };
   });
   document.querySelectorAll('.permit-action-sign').forEach((btn) => {
@@ -503,40 +512,6 @@ const teamStorageKey = `permit-team-${id}`;
     });
   });
 
-  // Approving no longer jumps straight to "Out for signature". It captures the
-  // confirmed window + CEQA and hands off to the live final-letter view, where the
-  // reviewer reads the document, edits parks/dates, and THEN sends for signature
-  // (that step advances the status). Capture the picked window as ISO from the
-  // date-picker's change event; if untouched, the letter view falls back to the
-  // requested window it already carries.
-  const toISO = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  let approvedStartISO = '';
-  let approvedEndISO = '';
-  document.getElementById('approve-window')?.addEventListener('cds-date-picker-changed', (e) => {
-    const dates = (e as CustomEvent).detail?.selectedDates ?? [];
-    if (dates[0]) approvedStartISO = toISO(dates[0]);
-    if (dates[1]) approvedEndISO = toISO(dates[1]);
-  });
-  document.getElementById('approve-confirm')?.addEventListener('click', () => {
-    const letterUrl = banner?.dataset.letterUrl;
-    if (!letterUrl) return setStatus('Out for signature'); // fallback if unwired
-    const ceqa = (document.querySelector(
-      '#approve-permit-modal cds-radio-button-group[name="ceqa"]',
-    ) as any)?.value;
-    const finalKey = `permit-final-${permitId}`;
-    const prior = JSON.parse(localStorage.getItem(finalKey) || '{}');
-    localStorage.setItem(
-      finalKey,
-      JSON.stringify({
-        ...prior,
-        ...(approvedStartISO ? { startISO: approvedStartISO } : {}),
-        ...(approvedEndISO ? { endISO: approvedEndISO } : {}),
-        ceqa,
-      }),
-    );
-    window.location.href = letterUrl;
-  });
   document
     .getElementById('sign-confirm')
     ?.addEventListener('click', () => setStatus('Active'));

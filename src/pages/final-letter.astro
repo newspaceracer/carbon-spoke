@@ -51,6 +51,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
 import ApplicationReview from '../components/ApplicationReview.astro';
+import ContactCard from '../components/ContactCard.astro';
 import { permit } from '../data/permit';
 import { parks } from '../data/parks';
 import { districtKey } from '../data/conditions';
@@ -101,23 +102,74 @@ const pages = [
   { id: 'package', label: 'Review & send', secondaryLabel: 'The full package, then send for signature' },
 ];
 
-const districts = permit.studyAreas.districts.map((d) => ({
-  name: d.name,
-  key: districtKey(d.name),
-  coordinator: d.coordinator,
-  officePhone: d.coordinator.phone ?? '',
-  parks: d.parks,
-  available: parks
-    .filter((p) => p.district === d.name && !d.parks.includes(p.name))
-    .map((p) => ({ id: p.id, name: p.name })),
-}));
+// Candidate district contacts come from the user directory, scoped to the users
+// associated with that district (`detail` = the district name). The current
+// coordinator is always a selectable option — if they aren't in the directory,
+// prepend them so the current contact is still representable and pre-selected.
+const districtContactOptions = (districtName: string, coordinator: { name: string; email?: string; phone?: string }) => {
+  const key = districtKey(districtName);
+  const fromDirectory = userDirectory
+    .filter((u) => u.detail === districtName)
+    .map((u) => ({ id: u.id, name: u.name, role: u.role, email: u.email, phone: '' }));
+  const match = fromDirectory.find((o) => o.email === (coordinator.email ?? ''));
+  if (match) match.phone = coordinator.phone ?? ''; // keep the coordinator's phone on the default pick
+  const options = match
+    ? fromDirectory
+    : [{ id: `coord-${key}`, name: coordinator.name, role: 'District coordinator', email: coordinator.email ?? '', phone: coordinator.phone ?? '' }, ...fromDirectory];
+  return { options, selectedId: (match ?? options[0]).id };
+};
+
+const districts = permit.studyAreas.districts.map((d) => {
+  const { options, selectedId } = districtContactOptions(d.name, d.coordinator);
+  return {
+    name: d.name,
+    key: districtKey(d.name),
+    coordinator: d.coordinator,
+    officePhone: d.coordinator.phone ?? '',
+    parks: d.parks,
+    available: parks
+      .filter((p) => p.district === d.name && !d.parks.includes(p.name))
+      .map((p) => ({ id: p.id, name: p.name })),
+    contactOptions: options,
+    selectedContactId: selectedId,
+  };
+});
+
+// One flat parks list for step ②'s authorized-parks control (single list, not one
+// per district). Scoped to this permit's districts — the state parks directory for
+// those districts plus any already-authorized units the directory doesn't list, so
+// the current selection is always representable. Mirrors step ①'s Study areas.
+const permitDistrictNames = permit.studyAreas.districts.map((d) => d.name);
+const directoryParkOptions = parks
+  .filter((p) => permitDistrictNames.includes(p.district))
+  .map((p) => ({ name: p.name, district: p.district }));
+const directoryParkNames = new Set(directoryParkOptions.map((p) => p.name));
+const seededParkExtras = permit.studyAreas.districts.flatMap((d) =>
+  d.parks.filter((name) => !directoryParkNames.has(name)).map((name) => ({ name, district: d.name })),
+);
+const allParkOptions = [...directoryParkOptions, ...seededParkExtras].sort((a, b) => a.name.localeCompare(b.name));
+
+// A permit that ORIGINALLY authorizes a single district is locked to it: the
+// analyst may add/remove parks within that district but can't add parks from any
+// other district (that would make it a multi-district permit). A permit that
+// started multi-district can be pared down freely (with confirmation — see the
+// drop-district modal). "Originally" = the districts the submitted parks span.
+const originalDistrictsWithParks = permit.studyAreas.districts.filter((d) => d.parks.length > 0).map((d) => d.name);
+const originallySingle = originalDistrictsWithParks.length === 1;
+const soleDistrict = originallySingle ? originalDistrictsWithParks[0] : null;
+// When locked to one district, only that district's parks are offered.
+const scopedParkOptions = originallySingle ? allParkOptions.filter((p) => p.district === soleDistrict) : allParkOptions;
 
 const letterData = {
   permitId: permit.id,
   window: permit.activeWindow,
   districtKeys: districts.map((d) => d.key),
   districts,
-  pages: pages.map((p) => ({ label: p.label, secondaryLabel: p.secondaryLabel })),
+  // Park-locking rule (see above): originally-single permits can't gain other
+  // districts' parks.
+  originallySingle,
+  soleDistrict,
+  pages: pages.map((p) => ({ id: p.id, label: p.label, secondaryLabel: p.secondaryLabel })),
   permitUrl: withBase('/permit'),
   // The reviewer comment thread — SHARED with the permit detail page (same
   // storage key + seed), so the analyst reads the team's existing comments and
@@ -162,6 +214,7 @@ const letterData = {
       requestedWindow={permit.activeWindow}
       analysisTeam={permit.overview.analysisTeam}
       directory={userDirectory}
+      context="finalize"
     >
       <cds-breadcrumb slot="breadcrumb" no-trailing-slash>
         <cds-breadcrumb-item><cds-breadcrumb-link href={withBase('/permits')}>Permits</cds-breadcrumb-link></cds-breadcrumb-item>
@@ -225,10 +278,8 @@ const letterData = {
 
         <div class="field-group">
           <h3 class="field-group__title t-heading-compact-01">Permit type</h3>
-          <cds-dropdown id="fb-permittype" data-field="permitType" title-text="" value="multi-district">
-            <cds-dropdown-item value="multi-district">Multi-district permit</cds-dropdown-item>
-            <cds-dropdown-item value="single-district">Single-district permit</cds-dropdown-item>
-          </cds-dropdown>
+          <p id="fb-permittype" class="derived-value t-body-01">—</p>
+          <p class="field-hint t-label-01">Set automatically from the authorized parks — multi-district when they span more than one district.</p>
         </div>
 
         <div class="field-group">
@@ -248,9 +299,65 @@ const letterData = {
         </div>
 
         <div class="field-group">
-          <h3 class="field-group__title t-heading-compact-01">Authorized parks &amp; district contacts</h3>
-          <p class="field-hint t-label-01">The parks each district authorizes, and the coordinator applicants must contact. Add or remove parks per district.</p>
-          <div id="parks-input"></div>
+          <h3 class="field-group__title t-heading-compact-01">Authorized parks</h3>
+          <p class="field-hint t-label-01">Every park this permit authorizes, across all districts — the same set as Study areas on the previous step. Add or remove a park and the letter's contact list and permit type update to match.</p>
+          <!-- One flat list (not one per district). Same mechanic as step ①'s Study
+               areas: a filterable cds-multi-select over every in-scope park + a single
+               roster with a District column. The shell is static; the page script sets
+               the multi-select's value and repaints the roster — never rebuilding the
+               web component (which would lose filter text/focus). -->
+          <cds-multi-select
+            id="fb-parks-select"
+            filterable
+            selection-feedback="fixed"
+            title-text="Add parks"
+            label="Search by park or district name"
+          >
+            {scopedParkOptions.map((p) => (
+              <cds-multi-select-item value={p.name} data-district={p.district}>{p.name} — {p.district}</cds-multi-select-item>
+            ))}
+          </cds-multi-select>
+          <div class="selected">
+            <p class="selected__label t-label-01">Authorized parks <span id="fb-parks-count"></span></p>
+            <cds-table class="ro-table">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Park</cds-table-header-cell>
+                  <cds-table-header-cell>District</cds-table-header-cell>
+                  <cds-table-header-cell>Remove</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="fb-parks-body"></cds-table-body>
+            </cds-table>
+            <p class="field-hint t-label-01" id="fb-parks-empty" hidden>No parks authorized yet — add one above.</p>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <h3 class="field-group__title t-heading-compact-01">District contacts</h3>
+          <p class="field-hint t-label-01">The coordinator each district authorizes applicants to contact before field work — shown as a contact tile. Reassign it to another person in that district and the letter's contact list updates to match.</p>
+          <!-- One group per district: a ContactCard tile per candidate (only the
+               selected one shown) + a picker to reassign. Rendering the tiles up
+               front lets the script swap the visible one by toggling display —
+               matching the ContactCard pattern used for every other contact. -->
+          <div id="contacts-input">
+            {districts.map((d) => (
+              <div class="contact-group" data-contact-group={d.name}>
+                <div class="contact-group__tiles">
+                  {d.contactOptions.map((c) => (
+                    <div data-contact-tile={c.id} style={c.id === d.selectedContactId ? '' : 'display:none'}>
+                      <ContactCard role={d.name} contact={{ name: c.name, phone: c.phone, email: c.email }} />
+                    </div>
+                  ))}
+                </div>
+                <cds-dropdown class="contact-picker" data-contact-picker title-text="Change contact" value={d.selectedContactId}>
+                  {d.contactOptions.map((c) => (
+                    <cds-dropdown-item value={c.id}>{c.name} — {c.role}</cds-dropdown-item>
+                  ))}
+                </cds-dropdown>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div class="field-group">
@@ -293,8 +400,11 @@ const letterData = {
       </div>
     </section>
 
+    <!-- Actions sit UNDER the left content section, not full-bleed — so the column
+         span tracks the active step's main column (set in render()): step ① col-10,
+         step ② col-7, step ③ col-12 offset by col-start-3. -->
     <footer class="wiz-actions cds--css-grid">
-      <div class="wiz-actions__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+      <div class="wiz-actions__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
         <cds-button id="wiz-back" kind="secondary" hidden>Back</cds-button>
         <cds-button kind="ghost" href={withBase('/permit')}>Cancel</cds-button>
         <div class="wiz-actions__spacer"></div>
@@ -319,6 +429,25 @@ const letterData = {
     <cds-modal-footer>
       <cds-modal-footer-button kind="secondary" data-modal-close>Keep editing</cds-modal-footer-button>
       <cds-modal-footer-button kind="primary" id="send-confirm" data-modal-close>Send for signature</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Confirmation when removing a park would clear the LAST park in its district —
+       that drops the district (and its contact) from the permit, and may flip the
+       permit type from multi- to single-district. The body copy is set by the
+       script from which districts empty. Closing without confirming reverts. -->
+  <cds-modal id="drop-district-modal" size="sm" alert>
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Permit {permit.id}</cds-modal-label>
+      <cds-modal-heading id="drop-district-heading">Drop this district from the permit?</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <p class="t-body-01" id="drop-district-body"></p>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Keep park</cds-modal-footer-button>
+      <cds-modal-footer-button kind="danger" id="drop-district-confirm">Remove park</cds-modal-footer-button>
     </cds-modal-footer>
   </cds-modal>
 
@@ -401,7 +530,7 @@ const letterData = {
        this is only a fixed positioning wrapper (same pattern as apply's toast-host)
        around a stock cds-button. -->
   <div class="comments-fab">
-    <cds-button id="comments-open" kind="tertiary" size="md">
+    <cds-button id="comments-open" kind="ghost" size="md">
       Comments
       <span id="comments-count" class="comments-count" hidden></span>
     </cds-button>
@@ -441,18 +570,22 @@ const letterData = {
     // add/edit-condition modal — registered here so <sc-rich-text> upgrades.
     import '../components/sc-rich-text.ts';
 
+    interface ContactOption { id: string; name: string; role: string; email: string; phone: string }
     interface DistrictSeed {
       name: string; key: string;
       coordinator: { name: string; email?: string; phone?: string };
       officePhone: string; parks: string[];
       available: { id: string; name: string }[];
+      contactOptions: ContactOption[];
+      selectedContactId: string;
     }
     interface Specimen { species: string; quantity: string; portion: string; condition: string }
     interface LetterData {
       permitId: string;
       window: { start: string; end: string; startISO: string; endISO: string };
       districtKeys: string[]; districts: DistrictSeed[];
-      pages: { label: string; secondaryLabel: string }[];
+      originallySingle: boolean; soleDistrict: string | null;
+      pages: { id: string; label: string; secondaryLabel: string }[];
       permitUrl: string;
       comments: { author: string; time: string; text: string }[];
       currentUser: string;
@@ -471,6 +604,14 @@ const letterData = {
     const parksKey = `permit-parks-${permitId}`;
     const statusKey = `permit-status-${permitId}`;
     const stepKey = `permit-finalize-step-${permitId}`;
+    const reviewStartedKey = `permit-review-started-${permitId}`;
+
+    // Guard: the wizard is only viewable once a reviewer has started their review
+    // (the permit page's Start review sets the flag). A direct hit without it goes
+    // back to the permit, which shows the gate instead.
+    if (permitId && !localStorage.getItem(reviewStartedKey)) {
+      window.location.replace(data.permitUrl);
+    }
 
     const parseISO = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
     const fmt = (iso: string) => parseISO(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -487,6 +628,9 @@ const letterData = {
       reportISO: (persistedFinal.reportISO || plusYear(persistedFinal.startISO || data.window.startISO)) as string,
       reportOverridden: Boolean(persistedFinal.reportISO),
       parks: { ...Object.fromEntries(districts.map((d) => [d.name, d.parks])), ...JSON.parse(localStorage.getItem(parksKey) || '{}') } as Record<string, string[]>,
+      // Chosen district contact (a contactOptions id) per district — persisted edits
+      // win over the seeded coordinator.
+      contactIds: { ...Object.fromEntries(districts.map((d) => [d.name, d.selectedContactId])), ...(persistedFinal.contactIds || {}) } as Record<string, string>,
       conditions: loadPermitConditions(permitId, data.districtKeys) as PermitCondition[],
       note: (persistedFinal.note || '') as string,
       // Editable letter fields — persisted seeds win over the application seed.
@@ -500,11 +644,14 @@ const letterData = {
     const persistConditions = () => savePermitConditions(permitId, state.conditions);
     const persistFinal = () => localStorage.setItem(finalKey, JSON.stringify({
       ...persistedFinal, startISO: state.startISO, endISO: state.endISO, reportISO: state.reportISO,
-      note: state.note, fields: state.fields, specimens: state.specimens,
+      note: state.note, fields: state.fields, specimens: state.specimens, contactIds: state.contactIds,
     }));
 
-    const closeIcon =
-      '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M17.4141 16 24 9.4141 22.5859 8 16 14.5859 9.4143 8 8 9.4141 14.5859 16 8 22.5859 9.4143 24 16 17.4141 22.5859 24 24 22.5859 17.4141 16z"/></svg>';
+    // Trash glyph for row-level DELETE actions (remove a park / specimen /
+    // condition) — matches the application form's convention (StudyAreasStep,
+    // DataCollectionStep, …), where removing a data row is a trashcan, not an X.
+    const trashIcon =
+      '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>';
 
     // ── Editable letter fields (delegated input) ────────────────────────────────
     // cds-text-input retargets its inner input's `input` event to the host, which
@@ -515,7 +662,8 @@ const letterData = {
       (el as any).value = state.fields[el.dataset.field!] ?? '';
       el.addEventListener('input', () => { state.fields[el.dataset.field!] = (el as any).value; persistFinal(); renderPreview(); });
     });
-    // Dropdowns keyed by data-field — category (step ①) + permit type (step ②).
+    // Dropdowns keyed by data-field — category (step ①). Permit type is no longer
+    // an input; it's derived from the authorized parks (see refreshPermitType).
     document.querySelectorAll<HTMLElement>('cds-dropdown[data-field]').forEach((el) => {
       const field = el.dataset.field!;
       (el as any).value = state.fields[field];
@@ -526,62 +674,33 @@ const letterData = {
 
     // ── Authorized parks ────────────────────────────────────────────────────────
     // ONE authorized-parks set (state.parks, keyed by district) drives two editors
-    // and the letter:
-    //   • Study areas (step ①) — a filterable multi-select + roster, the SAME
-    //     construction as the application's Study areas step.
-    //   • Authorized parks & district contacts (step ②) — a per-district builder
-    //     with the coordinator shown, for finalizing the letter's contact list.
+    // and the letter — both now a SINGLE flat list (not one control per district):
+    //   • Study areas (step ①) — a filterable multi-select + Park/District roster.
+    //   • Authorized parks (step ②) — the SAME control, so both stay identical.
     // A change in either re-syncs the other via syncParks(), so they never drift.
-    const parksInput = $('parks-input');
-    const renderParksInput = () => {
-      if (!parksInput) return;
-      parksInput.innerHTML = districts.map((d) => {
-        const current = state.parks[d.name] || [];
-        const options = d.available.filter((a) => !current.includes(a.name));
-        const items = current.map((name) => `
-          <li class="row">
-            <span class="row__label t-body-01">${name}</span>
-            <cds-icon-button kind="ghost" size="sm" align="left" data-remove-park="${encodeURIComponent(name)}" data-district="${encodeURIComponent(d.name)}">
-              ${closeIcon}<span slot="tooltip-content">Remove ${name}</span>
-            </cds-icon-button>
-          </li>`).join('');
-        const adder = options.length
-          ? `<cds-combo-box class="adder" size="sm" data-add-park="${encodeURIComponent(d.name)}" label="" placeholder="Add a park in this district">
-               ${options.map((o) => `<cds-combo-box-item value="${o.name}">${o.name}</cds-combo-box-item>`).join('')}
-             </cds-combo-box>`
-          : `<p class="field-hint t-label-01">All directory parks in this district are listed.</p>`;
-        return `
-          <div class="subgroup">
-            <div class="subgroup__head">
-              <span class="subgroup__name t-heading-compact-01">${d.name}</span>
-              <cds-tag type="gray" size="sm">${current.length}</cds-tag>
-            </div>
-            <p class="field-hint t-label-01">Coordinator: ${d.coordinator.name}${d.coordinator.email ? ` · ${d.coordinator.email}` : ''}</p>
-            <ul class="rows">${items || '<li class="row row--empty t-label-01">No parks listed.</li>'}</ul>
-            ${adder}
-          </div>`;
-      }).join('');
-    };
-
-    // Study areas (step ①) — filterable multi-select + selected-parks roster.
-    const saSelect = $('sa-select') as any;
-    const saBody = $('sa-body');
-    const saCount = $('sa-count');
-    const saEmpty = $('sa-empty');
+    // Both shells are static markup; the script only sets each multi-select's value
+    // and repaints its roster — the web components are never rebuilt (rebuilding
+    // would lose filter text/focus and re-upgrade the element).
+    const saSelect = $('sa-select') as any;   // step ①
+    const fbSelect = $('fb-parks-select') as any; // step ②
     // Map every option's park name to its district, so a flat selection can be
-    // regrouped into the district-keyed state.parks the letter needs.
+    // regrouped into the district-keyed state.parks the letter needs. Both lists
+    // carry the same options; read from either.
     const parkDistrict = new Map<string, string>();
-    saSelect?.querySelectorAll('cds-multi-select-item').forEach((it: any) => {
+    [saSelect, fbSelect].forEach((sel: any) => sel?.querySelectorAll('cds-multi-select-item').forEach((it: any) => {
       parkDistrict.set(it.getAttribute('value') || '', it.dataset.district || '');
-    });
+    }));
     const selectedNames = () => Object.values(state.parks).flat();
-    const renderStudyAreas = () => {
+
+    // Render one park editor (select + roster) from the shared selection. `count`
+    // and `empty` are optional per editor.
+    const renderParkList = (sel: any, body: Element | null, count: Element | null, empty: HTMLElement | null) => {
       const names = selectedNames();
-      if (saSelect) saSelect.value = names.join(',');
-      if (saCount) saCount.textContent = names.length ? `(${names.length})` : '';
-      if (saEmpty) (saEmpty as HTMLElement).hidden = names.length > 0;
-      if (saBody) {
-        saBody.innerHTML = names
+      if (sel) sel.value = names.join(',');
+      if (count) count.textContent = names.length ? `(${names.length})` : '';
+      if (empty) empty.hidden = names.length > 0;
+      if (body) {
+        body.innerHTML = names
           .slice()
           .sort((a, b) => a.localeCompare(b))
           .map((name) => `
@@ -590,65 +709,143 @@ const letterData = {
               <cds-table-cell>${esc(parkDistrict.get(name) || '')}</cds-table-cell>
               <cds-table-cell>
                 <cds-icon-button kind="ghost" size="sm" align="left" data-remove-park="${encodeURIComponent(name)}">
-                  ${closeIcon}<span slot="tooltip-content">Remove ${esc(name)}</span>
+                  ${trashIcon}<span slot="tooltip-content">Remove ${esc(name)}</span>
                 </cds-icon-button>
               </cds-table-cell>
             </cds-table-row>`).join('');
       }
     };
+    const renderStudyAreas = () => renderParkList(saSelect, $('sa-body'), $('sa-count'), $('sa-empty') as HTMLElement | null);
+    const renderFbParks = () => renderParkList(fbSelect, $('fb-parks-body'), $('fb-parks-count'), $('fb-parks-empty') as HTMLElement | null);
 
-    // Re-render BOTH editors + the letter from the single source of truth.
-    const syncParks = () => { renderParksInput(); renderStudyAreas(); renderPreview(); };
+    // ── Permit type — DERIVED from the parks, not chosen. Multi-district when the
+    // authorized parks span more than one district; single-district otherwise. ────
+    const permitTypeEl = $('fb-permittype');
+    const refreshPermitType = () => {
+      const spanned = districts.filter((d) => (state.parks[d.name] || []).length > 0).length;
+      const type = spanned >= 2 ? 'multi-district' : 'single-district';
+      state.fields.permitType = type;
+      if (permitTypeEl) permitTypeEl.textContent = type === 'multi-district' ? 'Multi-district permit' : 'Single-district permit';
+    };
 
-    // Rebuild state.parks (district → names) from a flat list of selected names.
-    const regroupParks = (names: string[]) => {
+    // Re-render BOTH editors + the derived type + the letter from the single source.
+    const syncParks = () => { refreshPermitType(); renderStudyAreas(); renderFbParks(); renderPreview(); };
+
+    // Group a flat list of names into a NEW district→names map (pure — doesn't
+    // touch state, so a change can be previewed/confirmed before it's committed).
+    const groupNames = (names: string[]) => {
       const grouped: Record<string, string[]> = Object.fromEntries(districts.map((d) => [d.name, []]));
       names.forEach((name) => {
         const district = parkDistrict.get(name);
         if (district && grouped[district]) grouped[district].push(name);
       });
+      return grouped;
+    };
+    const countWithParks = (parksMap: Record<string, string[]>) =>
+      districts.filter((d) => (parksMap[d.name] || []).length > 0).length;
+
+    const commitParks = (grouped: Record<string, string[]>) => {
       state.parks = grouped;
+      persistParks(); syncParks();
     };
 
-    saSelect?.addEventListener('cds-multi-select-selected', () => {
-      const v = (saSelect.value ?? '') as string;
-      regroupParks(v ? v.split(',').filter(Boolean) : []);
-      persistParks(); syncParks();
+    // A change that clears the LAST park of a district needs confirmation: that
+    // district (and its contact) drops off the permit, and the type may flip from
+    // multi- to single-district. The change is held until the user confirms.
+    const dropModal = $('drop-district-modal') as any;
+    const dropBody = $('drop-district-body');
+    const dropHeading = $('drop-district-heading');
+    let pendingParks: Record<string, string[]> | null = null;
+
+    const requestParksChange = (grouped: Record<string, string[]>) => {
+      const emptied = districts
+        .filter((d) => (state.parks[d.name] || []).length > 0 && (grouped[d.name] || []).length === 0)
+        .map((d) => d.name);
+      if (!emptied.length) { commitParks(grouped); return; }
+
+      const after = countWithParks(grouped);
+      const flips = countWithParks(state.parks) >= 2 && after === 1;
+      const plural = emptied.length > 1;
+      const list = emptied.join(' and ');
+      let msg = `This clears the last authorized park in ${list}. ${plural ? 'Those districts' : 'That district'} will drop off the permit, so ${plural ? 'their' : 'its'} district contact is no longer listed on the letter.`;
+      if (flips) msg += ' It also changes this from a multi-district to a single-district permit.';
+      else if (after === 0) msg += ' No districts would remain authorized.';
+      if (dropHeading) dropHeading.textContent = flips ? 'Make this a single-district permit?' : (plural ? 'Drop these districts from the permit?' : 'Drop this district from the permit?');
+      if (dropBody) dropBody.textContent = msg;
+      pendingParks = grouped;
+      if (dropModal) dropModal.open = true;
+    };
+    $('drop-district-confirm')?.addEventListener('click', () => {
+      if (pendingParks) { commitParks(pendingParks); pendingParks = null; }
+      if (dropModal) dropModal.open = false;
+    });
+    // Any close that ISN'T a confirm (Keep park / X / Esc) reverts the pending
+    // change by re-syncing the editors from the unchanged state.
+    dropModal?.addEventListener('cds-modal-closed', () => {
+      if (pendingParks) { pendingParks = null; syncParks(); }
     });
 
-    // Step ② per-district builder — remove chip / add via combo.
-    parksInput?.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest?.('[data-remove-park]') as HTMLElement | null;
-      if (!btn) return;
-      const name = decodeURIComponent(btn.dataset.removePark || '');
-      const district = decodeURIComponent(btn.dataset.district || '');
-      state.parks[district] = (state.parks[district] || []).filter((p) => p !== name);
-      persistParks(); syncParks();
-    });
-    parksInput?.addEventListener('cds-combo-box-selected', (e: any) => {
-      const combo = (e.target as HTMLElement).closest?.('[data-add-park]') as HTMLElement | null;
-      const name = e.detail?.item?.getAttribute('value');
-      if (!combo || !name) return;
-      const district = decodeURIComponent(combo.dataset.addPark || '');
-      const list = state.parks[district] || [];
-      if (!list.includes(name)) {
-        state.parks[district] = [...list, name];
-        // A park added on step ② must be representable on step ①'s multi-select.
-        if (!parkDistrict.has(name)) parkDistrict.set(name, district);
-        persistParks();
+    // Both lists share the add path: read the flat multi-select value, then apply.
+    // Rule: an originally single-district permit can't gain another district's parks
+    // (the offered options are already scoped, so this only guards a stray value).
+    const onParksSelected = (sel: any) => {
+      const v = (sel?.value ?? '') as string;
+      const names = v ? v.split(',').filter(Boolean) : [];
+      if (data.originallySingle && names.some((n) => parkDistrict.get(n) !== data.soleDistrict)) {
+        syncParks(); // reject: revert the selection to the current parks
+        return;
       }
-      syncParks();
-    });
+      requestParksChange(groupNames(names));
+    };
+    saSelect?.addEventListener('cds-multi-select-selected', () => onParksSelected(saSelect));
+    fbSelect?.addEventListener('cds-multi-select-selected', () => onParksSelected(fbSelect));
 
-    // Roster remove (step ①) shares the [data-remove-park] hook but has no district
-    // attribute — resolve the district from the park→district map.
-    saBody?.addEventListener('click', (e) => {
+    // Roster remove — either list. No district attribute; resolve it from the map.
+    const onRosterRemove = (e: Event) => {
       const btn = (e.target as HTMLElement).closest?.('[data-remove-park]') as HTMLElement | null;
       if (!btn) return;
       const name = decodeURIComponent(btn.dataset.removePark || '');
       const district = parkDistrict.get(name);
-      if (district) state.parks[district] = (state.parks[district] || []).filter((p) => p !== name);
-      persistParks(); syncParks();
+      if (!district) return;
+      const grouped = Object.fromEntries(districts.map((d) => [d.name, [...(state.parks[d.name] || [])]]));
+      grouped[district] = grouped[district].filter((p) => p !== name);
+      requestParksChange(grouped);
+    };
+    $('sa-body')?.addEventListener('click', onRosterRemove);
+    $('fb-parks-body')?.addEventListener('click', onRosterRemove);
+
+    // ── District contacts (step ②) ───────────────────────────────────────────────
+    // Each district shows the selected contact as a ContactCard tile (one tile per
+    // candidate, only the selected one visible) + a picker to reassign. Options are
+    // the users associated with that district.
+    const contactFor = (districtName: string): ContactOption | null => {
+      const d = districts.find((x) => x.name === districtName);
+      if (!d) return null;
+      return d.contactOptions.find((c) => c.id === state.contactIds[districtName])
+        ?? d.contactOptions.find((c) => c.id === d.selectedContactId)
+        ?? null;
+    };
+    const contactGroups = [...document.querySelectorAll<HTMLElement>('[data-contact-group]')];
+    const renderContacts = () => {
+      contactGroups.forEach((group) => {
+        const name = group.dataset.contactGroup!;
+        const selId = state.contactIds[name];
+        const dd = group.querySelector('[data-contact-picker]') as any;
+        if (dd) dd.value = selId;
+        group.querySelectorAll<HTMLElement>('[data-contact-tile]').forEach((tile) => {
+          tile.style.display = tile.dataset.contactTile === selId ? '' : 'none';
+        });
+      });
+    };
+    contactGroups.forEach((group) => {
+      const name = group.dataset.contactGroup!;
+      const dd = group.querySelector('[data-contact-picker]') as any;
+      dd?.addEventListener('cds-dropdown-selected', (e: any) => {
+        const id = e.detail?.item?.value;
+        if (!id) return;
+        state.contactIds[name] = id;
+        persistFinal(); renderContacts(); renderPreview();
+      });
     });
 
     // ── Specimens input (step ①) ─────────────────────────────────────────────────
@@ -678,7 +875,7 @@ const letterData = {
               ${editIcon}<span slot="tooltip-content">Edit specimen</span>
             </cds-icon-button>
             <cds-icon-button kind="ghost" size="sm" data-remove-specimen="${i}">
-              ${closeIcon}<span slot="tooltip-content">Remove specimen</span>
+              ${trashIcon}<span slot="tooltip-content">Remove specimen</span>
             </cds-icon-button>
           </cds-table-cell>
         </cds-table-row>`).join('');
@@ -729,6 +926,10 @@ const letterData = {
     // district. Numbers mirror the letter's continuous numbering exactly.
     const conditionsInput = $('conditions-input')!;
     const owners = ['hq', ...data.districtKeys];
+    // Which scope sections are expanded. Starts all-open (unchanged view), and
+    // survives the innerHTML rebuilds in renderConditionsInput so collapsing a
+    // section sticks across add / edit / remove / reorder.
+    const openGroups = new Set(owners);
 
     const chevronUp = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 5 13 10 12.3 10.7 8 6.4 3.7 10.7 3 10z"/></svg>';
     const chevronDown = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 11 3 6 3.7 5.3 8 9.6 12.3 5.3 13 6z"/></svg>';
@@ -749,7 +950,7 @@ const letterData = {
       const numById: Record<string, number> = {};
       for (const owner of owners) for (const c of state.conditions.filter((x) => x.owner === owner)) numById[c.id] = ++running;
 
-      conditionsInput.innerHTML = owners.map((owner) => {
+      conditionsInput.innerHTML = `<cds-accordion>${owners.map((owner) => {
         const applied = state.conditions.filter((c) => c.owner === owner);
         const cards = applied.map((c, i) => `
           <li class="cond">
@@ -766,22 +967,22 @@ const letterData = {
                   ${editIcon}<span slot="tooltip-content">Edit condition</span>
                 </cds-icon-button>
                 <cds-icon-button kind="ghost" size="sm" data-remove-cond="${c.id}">
-                  ${closeIcon}<span slot="tooltip-content">Remove condition</span>
+                  ${trashIcon}<span slot="tooltip-content">Remove condition</span>
                 </cds-icon-button>
               </div>
             </div>
             <p class="cond__text t-body-01">${esc(condPreview(c))}</p>
           </li>`).join('');
         return `
-          <div class="subgroup">
-            <div class="subgroup__head">
+          <cds-accordion-item data-cond-group="${owner}" ${openGroups.has(owner) ? 'open' : ''}>
+            <div slot="title" class="cond-acc__title">
               <span class="subgroup__name t-heading-compact-01">${ownerLabel(owner)}</span>
               <cds-tag type="gray" size="sm">${applied.length}</cds-tag>
             </div>
             <ul class="cond-list">${cards || '<li class="cond cond--empty t-label-01">No conditions applied.</li>'}</ul>
             <cds-button kind="tertiary" size="sm" data-add-cond="${owner}">Add condition</cds-button>
-          </div>`;
-      }).join('');
+          </cds-accordion-item>`;
+      }).join('')}</cds-accordion>`;
     };
 
     // Reorder WITHIN an owner scope (a district condition can't jump into HQ).
@@ -916,6 +1117,14 @@ const letterData = {
       if (ad) { openConditionModal(ad.dataset.addCond!, null); return; }
     });
 
+    // Remember which scope sections are collapsed so a rebuild doesn't reopen them.
+    conditionsInput.addEventListener('cds-accordion-item-toggled', (e: any) => {
+      const owner = (e.target as HTMLElement)?.dataset?.condGroup;
+      if (!owner) return;
+      if (e.detail.open) openGroups.add(owner);
+      else openGroups.delete(owner);
+    });
+
     // ── Date pickers ──────────────────────────────────────────────────────────────
     const windowPicker = $('fb-window') as any;
     const reportPicker = $('fb-report') as any;
@@ -969,12 +1178,14 @@ const letterData = {
       // coordinator, and the authorized parks the applicant may work in).
       const contactBlocks = districts.map((d) => {
         const current = state.parks[d.name] || [];
+        const c = contactFor(d.name);
+        const coordLine = c ? `${c.name}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ''}` : '';
         return `
           <div class="ltr__contact">
             <div class="ltr__contact-head">
               <p class="ltr__district-name t-heading-compact-01">${d.name}</p>
               ${d.officePhone ? `<p class="ltr__coord t-label-01">District Office: ${d.officePhone}</p>` : ''}
-              <p class="ltr__coord t-label-01">${d.coordinator.name}${d.coordinator.phone ? ` · ${d.coordinator.phone}` : ''}${d.coordinator.email ? ` · ${d.coordinator.email}` : ''}</p>
+              ${coordLine ? `<p class="ltr__coord t-label-01">${esc(coordLine)}</p>` : ''}
             </div>
             <ul class="ltr__parks">${current.map((p) => `<li class="t-body-01">${p}</li>`).join('') || '<li class="t-body-01">—</li>'}</ul>
           </div>`;
@@ -1081,6 +1292,11 @@ const letterData = {
     const panels = [...document.querySelectorAll<HTMLElement>('.step')];
     const backBtn = $('wiz-back') as any;
     const nextBtn = $('wiz-next') as any;
+    // The action bar sits under the left content section, so its column tracks each
+    // step's main column: ① review col-10, ② letter col-7, ③ package col-12/start-3.
+    const actionsInner = document.querySelector<HTMLElement>('.wiz-actions__inner');
+    const ACTION_COLS = [['cds--lg:col-span-10'], ['cds--lg:col-span-7'], ['cds--lg:col-span-12', 'cds--lg:col-start-3']];
+    const ALL_ACTION_COLS = ['cds--lg:col-span-10', 'cds--lg:col-span-7', 'cds--lg:col-span-12', 'cds--lg:col-start-3'];
     const headEyebrow = $('page-head-eyebrow');
     const headTitle = $('page-head-title');
     const headSub = $('page-head-sub');
@@ -1094,6 +1310,7 @@ const letterData = {
       if (headTitle) headTitle.textContent = page.label;
       if (headSub) headSub.textContent = page.secondaryLabel;
       if (backBtn) backBtn.hidden = current === 0;
+      if (actionsInner) { actionsInner.classList.remove(...ALL_ACTION_COLS); actionsInner.classList.add(...ACTION_COLS[current]); }
       const last = current === PAGES - 1;
       if (nextBtn) nextBtn.textContent = last ? 'Send for signature' : 'Save and continue';
       if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1102,6 +1319,10 @@ const letterData = {
     if (progress) progress.onChange = (e: CustomEvent<{ index: number }>) => goTo(e.detail.index);
     backBtn?.addEventListener('click', () => goTo(current - 1));
     nextBtn?.addEventListener('click', () => { if (current === PAGES - 1) { sendModal.open = true; return; } goTo(current + 1); });
+    // The header's "Approve permit" action jumps to the "Review & send" step —
+    // the last step, where the package is confirmed and sent for signature.
+    const sendStep = data.pages.findIndex((p) => p.id === 'package');
+    document.addEventListener('permit:approve', () => goTo(sendStep < 0 ? PAGES - 1 : sendStep));
 
     // ── Comments: always-available thread, shared with the permit tab ───────────
     // Stored under the SAME key the permit detail page uses, so it's one
@@ -1184,8 +1405,10 @@ const letterData = {
     });
     renderThread();
 
-    renderParksInput();
+    refreshPermitType();
     renderStudyAreas();
+    renderFbParks();
+    renderContacts();
     renderSpecimensInput();
     renderConditionsInput();
     renderPreview();
@@ -1232,6 +1455,10 @@ const letterData = {
     #conditions-input :global(.cond__num) { display: inline-grid; place-items: center; min-inline-size: 1.25rem; block-size: 1.25rem; padding: 0 0.25rem; border-radius: 0.25rem; background: var(--cds-layer-accent-01, #e0e0e0); color: var(--cds-text-primary, #161616); font-weight: 600; }
     #conditions-input :global(.cond__text) { margin: 0; color: var(--cds-text-primary, #161616); }
     #conditions-input :global(.cond__actions) { display: flex; margin-inline-start: auto; }
+    /* Scope sections are collapsible cds-accordion-items; the header title slot
+       carries the scope name + count tag inline, filling the toggle's width. */
+    #conditions-input :global(.cond-acc__title) { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); inline-size: 100%; }
+    #conditions-input :global(.cond-acc__title .subgroup__name) { margin-inline-end: auto; }
 
     /* Add/edit modal — "or write a new one" divider + rich-text field label. */
     .cond-or { margin: var(--cds-spacing-03, 0.5rem) 0 0; color: var(--cds-text-secondary, #525252); }
@@ -1248,14 +1475,23 @@ const letterData = {
     .recap__line { margin: 0; color: var(--cds-text-primary, #161616); }
     .recap__line--muted { margin-top: var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
 
+    /* Permit type is derived, shown read-only. */
+    .derived-value { margin: 0; color: var(--cds-text-primary, #161616); }
+
+    /* District contacts (step ②) — a ContactCard tile per district + a reassignment
+       picker below it. One group per district. */
+    #contacts-input { display: grid; gap: var(--cds-spacing-05, 1rem); }
+    .contact-group { display: grid; gap: var(--cds-spacing-04, 0.75rem); }
+
     .subgroup { display: grid; gap: var(--cds-spacing-03, 0.5rem); margin-bottom: var(--cds-spacing-05, 1rem); }
     .subgroup__head { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); }
     .subgroup__name { margin: 0; }
-    .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.125rem; }
-    .row { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem); padding: var(--cds-spacing-02, 0.25rem) 0; border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0); }
-    .row__label { min-width: 0; }
-    .row--empty { color: var(--cds-text-secondary, #525252); border-bottom: 0; }
-    .adder { max-inline-size: 100%; }
+    /* Step ② authorized parks reuses step ①'s Study-areas mechanic: a filterable
+       multi-select over a selected-parks roster (one flat list). Layout only — the
+       controls are stock cds-*. */
+    .selected { margin-top: var(--cds-spacing-03, 0.5rem); }
+    .selected__label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
+    .col-fields .ro-table { display: block; }
 
     /* Package step (③) — recap of what's issued, then the letter. */
     .pkg-recap { margin-top: var(--cds-spacing-06, 1.5rem); }
@@ -1273,8 +1509,17 @@ const letterData = {
     #wiz-back[hidden] { display: none; }
 
     /* carbon-checked: fixed positioning host for a stock cds-button — Carbon ships
-       no floating-action container (same pattern as apply.astro's toast-host). */
-    .comments-fab { position: fixed; right: var(--cds-spacing-05, 1rem); bottom: var(--cds-spacing-05, 1rem); z-index: 8000; }
+       no floating-action container (same pattern as apply.astro's toast-host).
+       An OPAQUE layer plate (subtle border + elevation) backs the ghost button so
+       its interior never shows scrolling content through — the label stays legible
+       over anything behind it, and the shadow reads it as a distinct floating chip. */
+    .comments-fab {
+      position: fixed; right: var(--cds-spacing-05, 1rem); bottom: var(--cds-spacing-05, 1rem);
+      z-index: 8000;
+      background: var(--cds-layer-01, #f4f4f4);
+      border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
     .comments-count {
       display: inline-grid; place-items: center; min-width: 1.25rem; height: 1.25rem;
       margin-inline-start: var(--cds-spacing-03, 0.5rem); padding: 0 0.375rem;

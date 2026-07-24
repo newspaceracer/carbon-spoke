@@ -36,6 +36,15 @@ export interface Contact {
   address?: string;
 }
 
+/** An additional field-team member listed on the application. */
+export interface Participant {
+  name: string;
+  title?: string;
+  phone?: string;
+  email?: string;
+  comments?: string;
+}
+
 /** One lifecycle stage. `state` drives the Carbon progress-step visual. */
 export interface HistoryStep {
   label: string;
@@ -167,6 +176,15 @@ export const permit = {
       email: 'marine-lab@humboldt.edu',
       address: '1 Harpst St, Arcata, CA 95521',
     } as Contact,
+    // Who filed the application in the system — the department's sponsored-programs
+    // coordinator, submitting on the PI's behalf (the common academic routing).
+    // Distinct from the PI so the analyst knows who to reach on submission questions.
+    submitter: {
+      name: 'Daniel Okonkwo',
+      phone: '(707) 555-0198',
+      email: 'sponsored-programs@humboldt.edu',
+      address: '1 Harpst St, Arcata, CA 95521',
+    } as Contact,
     principalInvestigator: {
       name: 'Dr. Alena Reyes',
       phone: '(707) 555-0142',
@@ -180,11 +198,14 @@ export const permit = {
       address: '1 Harpst St, Arcata, CA 95521',
     } as Contact,
     participants: [
-      { name: 'Priya Nadar', phone: '(707) 555-0173', email: 'pnadar@humboldt.edu' },
-      { name: 'Helena Marsh', phone: '(510) 555-0128', email: 'hmarsh@humboldt.edu' },
-      { name: 'Marcus Webb', phone: '(916) 555-0184', email: 'mwebb@humboldt.edu' },
-      { name: 'Fiona Blake', phone: '', email: 'fblake@humboldt.edu' },
-    ] as Contact[],
+      { name: 'Priya Nadar', title: 'Graduate researcher', phone: '(707) 555-0173', email: 'pnadar@humboldt.edu', comments: 'Subtidal survey lead; AAUS scientific diver.' },
+      { name: 'Helena Marsh', title: 'Laboratory technician', phone: '(510) 555-0128', email: 'hmarsh@humboldt.edu', comments: '' },
+      { name: 'Marcus Webb', title: 'Undergraduate field assistant', phone: '(916) 555-0184', email: 'mwebb@humboldt.edu', comments: 'Field days only.' },
+      { name: 'Fiona Blake', title: 'Herbarium curator', phone: '', email: 'fblake@humboldt.edu', comments: '' },
+    ] as Participant[],
+    // Whether every field-team member is employed or insured by the institution
+    // conducting the research (drives the liability-waiver requirement upstream).
+    personnelInsured: true,
   },
 
   projectInfo: {

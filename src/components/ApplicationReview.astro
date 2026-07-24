@@ -15,6 +15,8 @@
 // persisted by the page script (final-letter.astro) — this component only renders
 // the controls. All read-only content is static, from data/permit.
 import PermitSection from './PermitSection.astro';
+import ContactCard from './ContactCard.astro';
+import FactGrid from './FactGrid.astro';
 import { permit } from '../data/permit';
 import { parks } from '../data/parks';
 
@@ -35,22 +37,11 @@ const t = permit.researchTeam;
 const pi = t.principalInvestigator;
 const org = t.organization;
 const fieldLead = t.fieldLead;
+const submitter = t.submitter;
 const pj = permit.projectInfo;
 const dc = permit.dataCollection;
 const ad = permit.additionalDocs;
 const sa = permit.studyAreas;
-
-// Read-back rows mirroring the application summary's Research team block. Each
-// contact carries name / phone / email / address in the permit record.
-const contactRows = (c: { name?: string; phone?: string; email?: string; address?: string }, nameLabel = 'Name') => [
-  { label: nameLabel, value: c.name },
-  { label: 'Phone', value: c.phone },
-  { label: 'Email', value: c.email },
-  { label: 'Address', value: c.address },
-].filter((r) => r.value);
-const orgRows = contactRows(org, 'Organization');
-const piRows = contactRows(pi);
-const fieldLeadRows = contactRows(fieldLead);
 
 // Study-area parks options for the filterable multi-select (same control as the
 // application's Study areas step). Scoped to this permit's districts: the state
@@ -83,30 +74,12 @@ const fileGlyph =
   <!-- ── Research team ────────────────────────────────────────────────────── -->
   <PermitSection title="Research team">
     <div class="subblock">
-      <h3 class="sub-head t-heading-02">Organization</h3>
-      <dl class="review">
-        {orgRows.map((r) => (
-          <div class="review__row"><dt class="review__label t-label-01">{r.label}</dt><dd class="review__value t-body-01">{r.value}</dd></div>
-        ))}
-      </dl>
-    </div>
-
-    <div class="subblock">
-      <h3 class="sub-head t-heading-02">Principal investigator</h3>
-      <dl class="review">
-        {piRows.map((r) => (
-          <div class="review__row"><dt class="review__label t-label-01">{r.label}</dt><dd class="review__value t-body-01">{r.value}</dd></div>
-        ))}
-      </dl>
-    </div>
-
-    <div class="subblock">
-      <h3 class="sub-head t-heading-02">Person in direct charge of field work</h3>
-      <dl class="review">
-        {fieldLeadRows.map((r) => (
-          <div class="review__row"><dt class="review__label t-label-01">{r.label}</dt><dd class="review__value t-body-01">{r.value}</dd></div>
-        ))}
-      </dl>
+      <div class="contact-grid">
+        <ContactCard role="Organization" contact={org} />
+        <ContactCard role="Submitter" contact={submitter} />
+        <ContactCard role="Principal investigator" contact={pi} />
+        <ContactCard role="Person in direct charge of field work" contact={fieldLead} />
+      </div>
     </div>
 
     <div class="subblock">
@@ -116,16 +89,22 @@ const fileGlyph =
           <cds-table-head>
             <cds-table-header-row>
               <cds-table-header-cell>Name</cds-table-header-cell>
-              <cds-table-header-cell>Phone</cds-table-header-cell>
-              <cds-table-header-cell>Email</cds-table-header-cell>
+              <cds-table-header-cell>Contact</cds-table-header-cell>
+              <cds-table-header-cell>Comments</cds-table-header-cell>
             </cds-table-header-row>
           </cds-table-head>
           <cds-table-body>
             {t.participants.map((p) => (
               <cds-table-row>
-                <cds-table-cell>{p.name}</cds-table-cell>
-                <cds-table-cell>{p.phone || '—'}</cds-table-cell>
-                <cds-table-cell>{p.email}</cds-table-cell>
+                <cds-table-cell>
+                  <span class="stack__primary t-body-01">{p.name}</span>
+                  {p.title && <span class="stack__secondary t-label-01">{p.title}</span>}
+                </cds-table-cell>
+                <cds-table-cell>
+                  <span class="stack__primary t-body-01">{p.email}</span>
+                  {p.phone && <span class="stack__secondary t-label-01">{p.phone}</span>}
+                </cds-table-cell>
+                <cds-table-cell>{p.comments || '—'}</cds-table-cell>
               </cds-table-row>
             ))}
           </cds-table-body>
@@ -133,6 +112,15 @@ const fileGlyph =
       ) : (
         <p class="sub-note t-body-01">No additional participants added.</p>
       )}
+    </div>
+
+    <div class="subblock">
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">All personnel employed or insured by the institution</dt>
+          <dd class="review__value t-body-01">{t.personnelInsured ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
     </div>
   </PermitSection>
 
@@ -166,11 +154,35 @@ const fileGlyph =
           <div class="review__row">
             <dt class="review__label t-label-01">{r.key}</dt>
             <dd class="review__value t-body-01">
-              {r.entries ? r.entries.map((e) => `${e.label}: ${e.value}`).join(' – ') : r.value}
+              {r.entries ? r.entries.map((e) => e.value).join(' – ') : r.value}
             </dd>
           </div>
         ))}
       </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Field investigation occurrences</h3>
+      {pj.fieldOccurrences.length ? (
+        <cds-table class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Occurrence</cds-table-header-cell>
+              <cds-table-header-cell>Date</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body>
+            {pj.fieldOccurrences.map((o, i) => (
+              <cds-table-row>
+                <cds-table-cell>Occurrence {i + 1}</cds-table-cell>
+                <cds-table-cell>{o}</cds-table-cell>
+              </cds-table-row>
+            ))}
+          </cds-table-body>
+        </cds-table>
+      ) : (
+        <p class="sub-note t-body-01">No field investigation occurrences added.</p>
+      )}
     </div>
   </PermitSection>
 
@@ -242,17 +254,19 @@ const fileGlyph =
       </cds-table>
       <p id="specimen-empty" class="sub-note t-body-01" hidden>No specimens added yet.</p>
     </div>
-    <div class="subblock">
-      <h3 class="sub-head t-heading-02">Curation &amp; laboratory</h3>
-      <dl class="review">
-        {[...dc.collection, ...dc.laboratory].map((r) => (
-          <div class="review__row">
-            <dt class="review__label t-label-01">{r.key}</dt>
-            <dd class="review__value t-body-01">{r.value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+    {dc.involvesCollection && (
+      <div class="subblock">
+        <h3 class="sub-head t-heading-02">Collection &amp; curation</h3>
+        <FactGrid rows={dc.collection} min="20rem" tiles />
+      </div>
+    )}
+
+    {dc.involvesLaboratory && (
+      <div class="subblock">
+        <h3 class="sub-head t-heading-02">Laboratory &amp; analysis</h3>
+        <FactGrid rows={dc.laboratory} min="20rem" tiles />
+      </div>
+    )}
   </PermitSection>
 
   <!-- ── Additional documents ─────────────────────────────────────────────── -->
@@ -314,6 +328,19 @@ const fileGlyph =
   .doc__type { color: var(--cds-text-secondary, #525252); margin-inline-start: auto; text-align: end; }
 
   .ro-table { display: block; }
+
+  /* Research team — lead contacts as a card grid (ContactCard = cds-tile), the
+     same layout as the permit detail page's Research team block. */
+  .contact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+  }
+
+  /* Stacked table cell — a primary line with a secondary line beneath (participant
+     name/title, email/phone). Layout only; type + color come from tokens. */
+  .stack__primary { display: block; color: var(--cds-text-primary, #161616); }
+  .stack__secondary { display: block; margin-top: 0.125rem; color: var(--cds-text-secondary, #525252); }
 
   /* Specimen roster head — the section title with its Add button, right-aligned.
      Same shape as the application form's roster head. */

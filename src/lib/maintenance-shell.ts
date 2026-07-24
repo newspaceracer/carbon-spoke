@@ -115,14 +115,27 @@ function mountIdentitySwitcher(): void {
 }
 
 // ── Dev-only permit state reset ─────────────────────────────────────────────
-// The permit workflow lives in localStorage — the status (permit-status-<id>), the
-// amendment flag (permit-amendment-<id>), and the approval/letter draft
-// (permit-final-<id>) — so a demoed permit stays wherever the last transition left
-// it. This testing control clears all of that and returns to the permit detail page
-// at its seeded "Under review" stage. It rides in the same dev panel and appears
-// whenever there's workflow state to reset, or whenever you're on the permit page —
-// so a tester stranded on a downstream view (e.g. the letter) can still get back.
-const PERMIT_STATE_PREFIXES = ['permit-status-', 'permit-amendment-', 'permit-final-'];
+// The whole permit workflow lives in localStorage, spread across several keys — the
+// lifecycle status, whether review was started, the wizard's step position, and the
+// letter/parks/conditions drafts plus the reviewer comment thread — so a demoed
+// permit stays wherever the last transition left it. Resetting must clear EVERY one
+// of them: dropping only the status but leaving `permit-review-started-<id>` set
+// lands the permit in "Under review + started", so the header reads "Open review"
+// and the review gate is already unsealed — never the true "Start review" zero.
+// This testing control wipes all of it and returns to the permit detail page at its
+// seeded "Under review" stage. It rides in the same dev panel and appears whenever
+// there's workflow state to reset, or whenever you're on the permit page — so a
+// tester stranded on a downstream view (e.g. the letter) can still get back.
+const PERMIT_STATE_PREFIXES = [
+  'permit-status-',          // lifecycle status (Under review → Out for signature …)
+  'permit-review-started-',  // the "review has begun" gate — the one the old list missed
+  'permit-finalize-step-',   // resume position in the finalize wizard
+  'permit-amendment-',       // amendment-exists flag
+  'permit-final-',           // letter draft (the ② finalize fields)
+  'permit-parks-',           // study-area park edits (wizard draft)
+  'permit-conditions-',      // applied special conditions (wizard draft)
+  'permit-comments-',        // reviewer comment thread — reverts to seed when cleared
+];
 
 function permitStateKeys(): string[] {
   const keys: string[] = [];
