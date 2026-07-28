@@ -18,6 +18,7 @@
 // This is a distinct screen from src/pages/index.astro (the dev prototype hub);
 // it self-lists there via the `prototype` export below.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
 import { withBase } from '../lib/base';
 
 export const prototype = {
@@ -192,6 +193,7 @@ const downloadIcon =
 ---
 
 <BaseLayout title="Apply for a research permit — CA State Parks">
+  <PermitNav slot="nav" />
   <main>
     <!-- Hero: a full-bleed dark theme zone (g100) over the g10 page. -->
     <section class="hero cds--g100">
