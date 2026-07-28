@@ -149,16 +149,14 @@ const seededParkExtras = permit.studyAreas.districts.flatMap((d) =>
 );
 const allParkOptions = [...directoryParkOptions, ...seededParkExtras].sort((a, b) => a.name.localeCompare(b.name));
 
-// A permit that ORIGINALLY authorizes a single district is locked to it: the
-// analyst may add/remove parks within that district but can't add parks from any
-// other district (that would make it a multi-district permit). A permit that
-// started multi-district can be pared down freely (with confirmation — see the
-// drop-district modal). "Originally" = the districts the submitted parks span.
+// Story 8 — the old "single can't become multi / multi can only shrink" lock is
+// DROPPED: a permit may flip either direction. Parks from any district are offered;
+// a change that alters the district span is a managed transition confirmed via the
+// drop-district modal, which re-derives the stored permit type.
 const originalDistrictsWithParks = permit.studyAreas.districts.filter((d) => d.parks.length > 0).map((d) => d.name);
 const originallySingle = originalDistrictsWithParks.length === 1;
 const soleDistrict = originallySingle ? originalDistrictsWithParks[0] : null;
-// When locked to one district, only that district's parks are offered.
-const scopedParkOptions = originallySingle ? allParkOptions.filter((p) => p.district === soleDistrict) : allParkOptions;
+const scopedParkOptions = allParkOptions;
 
 const letterData = {
   permitId: permit.id,
@@ -256,6 +254,10 @@ const letterData = {
         <div class="rail">
           <h3 class="rail__title t-heading-03">Special conditions</h3>
           <p class="rail__sub t-label-01">Standard conditions from headquarters and each district attach automatically. Add the conditional ones (e.g. Western Snowy Plover) from the catalog, or remove any that don't apply to this permit.</p>
+          <div class="rail__tools">
+            <cds-button kind="tertiary" size="md" id="cond-collapse-all">Collapse all</cds-button>
+            <cds-button kind="tertiary" size="md" id="cond-expand-all">Expand all</cds-button>
+          </div>
           <div id="conditions-input"></div>
         </div>
       </aside>
@@ -470,26 +472,39 @@ const letterData = {
         low-contrast
         hide-close-button
         title="Add a condition first"
-        subtitle="Pick a condition from the catalog or write one below."
+        subtitle="Select at least one saved condition, or switch to Write manually."
       ></cds-inline-notification>
 
       <cds-stack gap="6">
-        <div id="cond-pick-block">
+        <!-- Add mode only: pull a saved condition from the catalog, or write a
+             new one. Same switcher as the Add-member and permit condition modals —
+             one path at a time, not both stacked. -->
+        <div id="cond-mode-wrap">
+          <p class="cond-mode-label t-label-01" id="cond-mode-label">Pull a saved condition, or write a new one.</p>
+          <cds-content-switcher id="cond-mode" value="catalog">
+            <cds-content-switcher-item value="catalog" selected>From catalog</cds-content-switcher-item>
+            <cds-content-switcher-item value="manual">Write manually</cds-content-switcher-item>
+          </cds-content-switcher>
+        </div>
+
+        <!-- From catalog: attach saved conditions, never retype them. -->
+        <div id="cond-catalog">
           <cds-multi-select
             id="cond-pick"
-            title-text="Add from the catalog"
+            title-text="Saved conditions"
             label="Select saved conditions"
             filterable
           ></cds-multi-select>
-          <p class="cond-or t-label-01">or write a new one</p>
         </div>
 
-        <div>
-          <p class="cond-field-label t-label-01">Condition text</p>
-          <sc-rich-text id="cond-body" placeholder="The exact wording that will print on the permit. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
+        <!-- Write manually: type a new condition, optionally save it for reuse. -->
+        <div id="cond-manual" hidden>
+          <div>
+            <p class="cond-field-label t-label-01">Condition text</p>
+            <sc-rich-text id="cond-body" placeholder="The exact wording that will print on the permit. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
+          </div>
+          <cds-checkbox id="cond-save-catalog" label-text="Also save to the catalog for reuse"></cds-checkbox>
         </div>
-
-        <cds-checkbox id="cond-save-catalog" label-text="Also save to the catalog for reuse"></cds-checkbox>
       </cds-stack>
     </cds-modal-body>
     <cds-modal-footer>
@@ -566,6 +581,10 @@ const letterData = {
       ownerLabel, newConditionId, plainText,
       type PermitCondition, type ConditionOwner,
     } from '../data/conditions';
+    import { readIdentity } from '../lib/maintenance';
+    import { readPermitRole } from '../lib/permissions';
+    import { directory } from '../data/user';
+    import { permit } from '../data/permit';
     // Same rich-text condition editor the permit detail page uses in its
     // add/edit-condition modal — registered here so <sc-rich-text> upgrades.
     import '../components/sc-rich-text.ts';
@@ -606,10 +625,14 @@ const letterData = {
     const stepKey = `permit-finalize-step-${permitId}`;
     const reviewStartedKey = `permit-review-started-${permitId}`;
 
-    // Guard: the wizard is only viewable once a reviewer has started their review
-    // (the permit page's Start review sets the flag). A direct hit without it goes
-    // back to the permit, which shows the gate instead.
-    if (permitId && !localStorage.getItem(reviewStartedKey)) {
+    // Guard (Story 9 — the review wizard is the RA's editing surface): it's reachable
+    // only (1) once review has started AND (2) by the Responsible Agent or a System
+    // Admin. Anyone else — a Supporting Agent, an unassigned reviewer, a researcher —
+    // is sent back to the permit detail (which enforces its own read-only view). This
+    // closes the hole where a non-RA could edit parks/dates/conditions/signing here.
+    const wizIdentity = readIdentity();
+    const wizCanEdit = wizIdentity === 'admin' || readPermitRole(permitId) === 'responsible';
+    if (permitId && (!localStorage.getItem(reviewStartedKey) || !wizCanEdit)) {
       window.location.replace(data.permitUrl);
     }
 
@@ -744,8 +767,74 @@ const letterData = {
     const countWithParks = (parksMap: Record<string, string[]>) =>
       districts.filter((d) => (parksMap[d.name] || []).length > 0).length;
 
+    // The district keys that still have authorized parks (drives the conditions
+    // editor + letter preview so a dropped district disappears from both). Story 8.
+    const liveDistrictKeys = (): string[] =>
+      districts.filter((d) => (state.parks[d.name] || []).length > 0).map((d) => d.key);
+
+    // Story 8 — a district drop/flip is a MANAGED transition. On commit: prune the
+    // dropped district's Supporting Agents from the analysis team, and on a type flip
+    // auto-reassign the Responsible Agent (multi→single ⇒ the remaining district's
+    // Lead; single→multi ⇒ a random eligible HQ reviewer), notifying both agents.
+    const pruneDroppedSAs = (droppedNames: string[]) => {
+      const teamKey = `permit-team-${permitId}`;
+      let edits: any = {};
+      try { edits = JSON.parse(localStorage.getItem(teamKey) || '{}'); } catch { edits = {}; }
+      const removed = new Set<string>(Array.isArray(edits.removed) ? edits.removed : []);
+      const added = Array.isArray(edits.added) ? edits.added : [];
+      // Seed team members whose district (their `detail`) was dropped — never the
+      // highlighted lead. Plus any added members from a dropped district.
+      permit.overview.analysisTeam.forEach((m: any) => {
+        if (m.detail && droppedNames.includes(m.detail) && !m.highlight) removed.add(m.id);
+      });
+      const added2 = added.filter((u: any) => !droppedNames.includes(u.detail));
+      localStorage.setItem(teamKey, JSON.stringify({ removed: [...removed], added: added2 }));
+    };
+
+    const reassignOnFlip = (beforeLive: typeof districts, afterLive: typeof districts) => {
+      const dropped = beforeLive.filter((b) => !afterLive.some((a) => a.key === b.key)).map((d) => d.name);
+      if (dropped.length) pruneDroppedSAs(dropped);
+
+      const wasMulti = beforeLive.length >= 2, nowMulti = afterLive.length >= 2;
+      if (wasMulti === nowMulti) return; // no type flip → no RA reassignment
+
+      let newRA: { name: string } | null = null;
+      if (wasMulti && !nowMulti) {
+        // multi → single: the remaining district's Lead (its key IS the directory id).
+        const remaining = afterLive[0];
+        newRA = directory.find((u) => u.accountRole === 'district-lead' && u.district === remaining?.key) ?? null;
+      } else {
+        // single → multi: a random eligible HQ reviewer (prototype tiebreak).
+        const hqs = directory.filter((u) => u.accountRole === 'hq-technical');
+        newRA = hqs.length ? hqs[Math.floor(Math.random() * hqs.length)] : null;
+      }
+      if (!newRA) return;
+
+      localStorage.setItem(`permit-responsible-agent-${permitId}`, newRA.name);
+      const outgoing = data.currentUser || 'Reviewer';
+      const first = (n: string) => n.replace(/^(Dr\.?|Prof\.?)\s+/i, '').split(/\s+/)[0];
+      const vars = {
+        'Permit #': permitId, 'Project title': data.seed.projectTitle,
+        'Single/Multi': nowMulti ? 'Multi' : 'Single', 'Status': 'Under review',
+      };
+      // Simulated notifications (dynamic import keeps the module off the hot path).
+      import('../lib/notifications').then(({ sendEmail }) => {
+        sendEmail('EM-F', { ...vars, 'First name': first(newRA!.name) }, newRA!.name);
+        sendEmail('EM-G', { ...vars, 'First name': first(outgoing) }, outgoing);
+      });
+    };
+
     const commitParks = (grouped: Record<string, string[]>) => {
+      const beforeLive = districts.filter((d) => (state.parks[d.name] || []).length > 0);
+      const afterLive = districts.filter((d) => (grouped[d.name] || []).length > 0);
       state.parks = grouped;
+      // Story 8 — prune the special conditions of any district that just lost its
+      // last park: a dropped district's conditions must not persist or print.
+      const live = new Set(['hq', ...afterLive.map((d) => d.key)]);
+      const before = state.conditions.length;
+      state.conditions = state.conditions.filter((c) => live.has(c.owner));
+      if (state.conditions.length !== before) { persistConditions(); renderConditionsInput(); }
+      reassignOnFlip(beforeLive, afterLive);
       persistParks(); syncParks();
     };
 
@@ -761,16 +850,38 @@ const letterData = {
       const emptied = districts
         .filter((d) => (state.parks[d.name] || []).length > 0 && (grouped[d.name] || []).length === 0)
         .map((d) => d.name);
-      if (!emptied.length) { commitParks(grouped); return; }
+      // Story 8 — a newly-added district (single→multi) is equally consequential and
+      // is confirmed too, not just a drop.
+      const added = districts
+        .filter((d) => (state.parks[d.name] || []).length === 0 && (grouped[d.name] || []).length > 0)
+        .map((d) => d.name);
+      if (!emptied.length && !added.length) { commitParks(grouped); return; }
 
+      const before = countWithParks(state.parks);
       const after = countWithParks(grouped);
-      const flips = countWithParks(state.parks) >= 2 && after === 1;
-      const plural = emptied.length > 1;
-      const list = emptied.join(' and ');
-      let msg = `This clears the last authorized park in ${list}. ${plural ? 'Those districts' : 'That district'} will drop off the permit, so ${plural ? 'their' : 'its'} district contact is no longer listed on the letter.`;
-      if (flips) msg += ' It also changes this from a multi-district to a single-district permit.';
-      else if (after === 0) msg += ' No districts would remain authorized.';
-      if (dropHeading) dropHeading.textContent = flips ? 'Make this a single-district permit?' : (plural ? 'Drop these districts from the permit?' : 'Drop this district from the permit?');
+      const flipToSingle = before >= 2 && after === 1;
+      const flipToMulti = before === 1 && after >= 2;
+
+      let msg = '';
+      if (emptied.length) {
+        const plural = emptied.length > 1;
+        msg = `This clears the last authorized park in ${emptied.join(' and ')}. ${plural ? 'Those districts' : 'That district'} will drop off the permit, along with ${plural ? 'their' : 'its'} district contact and special conditions.`;
+      }
+      if (added.length) {
+        msg += `${msg ? ' ' : ''}This adds ${added.join(' and ')} to the permit.`;
+      }
+      if (flipToSingle) {
+        msg += ' It changes this to a single-district permit — a District Lead becomes the Responsible Agent (an HQ reviewer can no longer lead it).';
+      } else if (flipToMulti) {
+        msg += ' It changes this to a multi-district permit — an HQ reviewer becomes the Responsible Agent (a District Lead can no longer lead it).';
+      } else if (after === 0) {
+        msg += ' No districts would remain authorized.';
+      }
+      if (dropHeading) {
+        dropHeading.textContent = flipToSingle ? 'Make this a single-district permit?'
+          : flipToMulti ? 'Make this a multi-district permit?'
+          : (emptied.length > 1 ? 'Drop these districts from the permit?' : 'Drop this district from the permit?');
+      }
       if (dropBody) dropBody.textContent = msg;
       pendingParks = grouped;
       if (dropModal) dropModal.open = true;
@@ -791,10 +902,8 @@ const letterData = {
     const onParksSelected = (sel: any) => {
       const v = (sel?.value ?? '') as string;
       const names = v ? v.split(',').filter(Boolean) : [];
-      if (data.originallySingle && names.some((n) => parkDistrict.get(n) !== data.soleDistrict)) {
-        syncParks(); // reject: revert the selection to the current parks
-        return;
-      }
+      // Story 8 — no district lock: adding another district's parks is allowed and
+      // flips the permit to multi-district (confirmed in requestParksChange).
       requestParksChange(groupNames(names));
     };
     saSelect?.addEventListener('cds-multi-select-selected', () => onParksSelected(saSelect));
@@ -925,7 +1034,7 @@ const letterData = {
     // from the catalog, WRITE one from scratch, and REORDER — for HQ and each
     // district. Numbers mirror the letter's continuous numbering exactly.
     const conditionsInput = $('conditions-input')!;
-    const owners = ['hq', ...data.districtKeys];
+    const owners = ['hq', ...liveDistrictKeys()];
     // Which scope sections are expanded. Starts all-open (unchanged view), and
     // survives the innerHTML rebuilds in renderConditionsInput so collapsing a
     // section sticks across add / edit / remove / reorder.
@@ -1005,8 +1114,8 @@ const letterData = {
     // and edits an existing one. Catalog picker + save-to-catalog show only when
     // adding. A condition IS its text — the rich-text body is the whole thing.
     const condModal = $('cond-modal') as any;
+    const modeEl = () => $('cond-mode') as any;
     const pickEl = () => $('cond-pick') as any;
-    const pickBlock = $('cond-pick-block') as HTMLElement | null;
     const bodyModalEl = () => $('cond-body') as any;
     const saveCatalogEl = () => $('cond-save-catalog') as any;
     const warnEl = $('cond-modal-warning') as any;
@@ -1014,6 +1123,18 @@ const letterData = {
     const headingEl = $('cond-modal-heading');
     let modalOwner: ConditionOwner = 'hq';
     let editingId: string | null = null;
+
+    // Add mode offers two paths — pull from the catalog, or write a new condition —
+    // shown one at a time via the content switcher (like the Add-member modal).
+    const currentMode = (): 'catalog' | 'manual' => (modeEl()?.value === 'manual' ? 'manual' : 'catalog');
+    const applyMode = () => {
+      const mode = currentMode();
+      const cat = $('cond-catalog');
+      const man = $('cond-manual');
+      if (cat) cat.hidden = mode !== 'catalog';
+      if (man) man.hidden = mode !== 'manual';
+      if (warnEl) warnEl.hidden = true;
+    };
 
     // A short plain-text preview identifies a catalog item in the picker.
     const previewText = (html: string) => { const s = plainText(html); return s.length > 90 ? `${s.slice(0, 89)}…` : s; };
@@ -1037,10 +1158,25 @@ const letterData = {
       if (headingEl) headingEl.textContent = editing ? 'Edit condition' : 'Add condition';
       if (ownerLabelEl) ownerLabelEl.textContent = ownerLabel(owner);
       if (warnEl) warnEl.hidden = true;
-      // Catalog picker + save-to-catalog only make sense when adding.
-      if (pickBlock) pickBlock.hidden = editing;
-      if (saveCatalogEl()) { saveCatalogEl().hidden = editing; saveCatalogEl().checked = false; }
-      if (!editing) buildPicker(owner);
+
+      const modeWrap = $('cond-mode-wrap');
+      const catalogBlock = $('cond-catalog');
+      const manualBlock = $('cond-manual');
+      if (editing) {
+        // Editing an existing condition: text only — no catalog path, no switcher.
+        if (modeWrap) modeWrap.hidden = true;
+        if (catalogBlock) catalogBlock.hidden = true;
+        if (manualBlock) manualBlock.hidden = false;
+        if (saveCatalogEl()) saveCatalogEl().hidden = true;
+      } else {
+        // Adding: choose the catalog or the manual path via the switcher.
+        if (modeWrap) modeWrap.hidden = false;
+        if (modeEl()) modeEl().value = 'catalog';
+        buildPicker(owner);
+        if (saveCatalogEl()) { saveCatalogEl().hidden = false; saveCatalogEl().checked = false; }
+        applyMode();
+      }
+
       if (bodyModalEl()) bodyModalEl().value = c?.body ?? '';
       if (condModal) condModal.open = true;
     };
@@ -1068,18 +1204,19 @@ const letterData = {
         return;
       }
 
-      // Add mode — catalog picks and/or a written condition.
-      const inventory = loadInventory(modalOwner);
+      // Add mode — honor the active path: either catalog picks OR a written one.
       const additions: PermitCondition[] = [];
-      selectedInventoryIds().forEach((invId) => {
-        const it = inventory.find((x) => x.id === invId);
-        if (it && !state.conditions.some((c) => c.inventoryId === invId)) {
-          additions.push({ id: newConditionId(modalOwner === 'hq' ? 'hq' : modalOwner), owner: modalOwner,
-            source: 'inventory', inventoryId: it.id, body: it.body,
-            addedBy: data.currentUser, addedAt: 'Finalizing' });
-        }
-      });
-      if (body) {
+      if (currentMode() === 'catalog') {
+        const inventory = loadInventory(modalOwner);
+        selectedInventoryIds().forEach((invId) => {
+          const it = inventory.find((x) => x.id === invId);
+          if (it && !state.conditions.some((c) => c.inventoryId === invId)) {
+            additions.push({ id: newConditionId(modalOwner === 'hq' ? 'hq' : modalOwner), owner: modalOwner,
+              source: 'inventory', inventoryId: it.id, body: it.body,
+              addedBy: data.currentUser, addedAt: 'Finalizing' });
+          }
+        });
+      } else if (body) {
         additions.push({ id: newConditionId(modalOwner === 'hq' ? 'hq' : modalOwner), owner: modalOwner,
           source: 'custom', body, addedBy: data.currentUser, addedAt: 'Finalizing' });
         if (saveCatalogEl()?.checked) {
@@ -1089,13 +1226,22 @@ const letterData = {
           saveInventory(modalOwner, inv);
         }
       }
-      if (!additions.length) { if (warnEl) warnEl.hidden = false; return; }
+      if (!additions.length) {
+        if (warnEl) {
+          warnEl.subtitle = currentMode() === 'catalog'
+            ? 'Select at least one saved condition, or switch to Write manually.'
+            : 'Write the condition text before adding it.';
+          warnEl.hidden = false;
+        }
+        return;
+      }
       state.conditions = [...state.conditions, ...additions];
       persistConditions();
       if (condModal) condModal.open = false;
       renderConditionsInput(); renderPreview();
     };
     $('cond-modal-save')?.addEventListener('click', saveFromModal);
+    modeEl()?.addEventListener('cds-content-switcher-selected', applyMode);
 
     conditionsInput.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
@@ -1124,6 +1270,18 @@ const letterData = {
       if (e.detail.open) openGroups.add(owner);
       else openGroups.delete(owner);
     });
+
+    // Collapse all / Expand all — fold or unfold every scope section at once, and
+    // keep openGroups in step so the state sticks across rebuilds.
+    const setAllGroups = (open: boolean) => {
+      conditionsInput.querySelectorAll('cds-accordion-item[data-cond-group]').forEach((it) => {
+        const owner = (it as HTMLElement).dataset.condGroup;
+        if (owner) open ? openGroups.add(owner) : openGroups.delete(owner);
+        (it as any).open = open;
+      });
+    };
+    $('cond-collapse-all')?.addEventListener('click', () => setAllGroups(false));
+    $('cond-expand-all')?.addEventListener('click', () => setAllGroups(true));
 
     // ── Date pickers ──────────────────────────────────────────────────────────────
     const windowPicker = $('fb-window') as any;
@@ -1166,7 +1324,10 @@ const letterData = {
       let n = 0;
       const hqItems = state.conditions.filter((c) => c.owner === 'hq')
         .map((c) => `<li value="${++n}">${conditionBody(c)}</li>`).join('');
-      const districtCondBlocks = data.districtKeys.map((key) => {
+      // Story 8 — key the district condition blocks off the LIVE districts (those
+      // that still have parks), not the original seed, so a dropped district no
+      // longer prints "Special Conditions for …".
+      const districtCondBlocks = liveDistrictKeys().map((key) => {
         const applied = state.conditions.filter((c) => c.owner === key);
         if (!applied.length) return '';
         const name = districts.find((d) => d.key === key)?.name ?? ownerLabel(key);
@@ -1442,6 +1603,7 @@ const letterData = {
     @media (min-width: 66.01rem) { .rail { max-height: calc(100vh - 5rem); overflow-y: auto; } }
     .rail__title { margin: 0 0 var(--cds-spacing-03, 0.5rem); }
     .rail__sub { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
+    .rail__tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); margin: 0 0 var(--cds-spacing-05, 1rem); }
 
     /* Condition cards — the TEXT is the content, shown in full; a source pill and
        optional label caption it, reorder handles on the left, remove on the right. */
@@ -1460,8 +1622,12 @@ const letterData = {
     #conditions-input :global(.cond-acc__title) { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); inline-size: 100%; }
     #conditions-input :global(.cond-acc__title .subgroup__name) { margin-inline-end: auto; }
 
-    /* Add/edit modal — "or write a new one" divider + rich-text field label. */
-    .cond-or { margin: var(--cds-spacing-03, 0.5rem) 0 0; color: var(--cds-text-secondary, #525252); }
+    /* Add/edit modal — catalog / manual switcher, one path at a time.
+       cds-* set :host display, so a scoped [hidden] must force display:none. */
+    .cond-mode-label { margin: 0; color: var(--cds-text-secondary, #525252); }
+    #cond-mode-wrap { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+    #cond-manual { display: flex; flex-direction: column; gap: var(--cds-spacing-06, 1.25rem); }
+    #cond-mode-wrap[hidden], #cond-catalog[hidden], #cond-manual[hidden], #cond-save-catalog[hidden] { display: none; }
     .cond-field-label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
 
     .field-group { display: grid; gap: var(--cds-spacing-04, 0.75rem); margin-bottom: var(--cds-spacing-07, 2rem); }

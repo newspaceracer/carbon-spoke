@@ -15,6 +15,10 @@ review without sign-off).
 Related: the Admin-menu entry that opens this console — see
 `stories-primary-navigation.md` (CSPS-XXX).
 
+Related: requesting deactivation of a member's account from this console (a
+district-scoped action that routes to a System Admin) — see
+`stories-user-management.md` Story 4.
+
 ---
 
 ## Story 1 — Scope District administration access to the user's role

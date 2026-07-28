@@ -673,27 +673,6 @@ const notificationPrefs = notificationSeeds.map((s) => ({
     prefs.addEventListener('cds-toggle-changed', persist);
   });
 
-  // ── Staff optional-notification preferences (Story 17) ───────────────────────
-  // The three opt-out toggles map to specific emails via the notifications module
-  // (assignment → EM-F/G, signature → EM-A, status → EM-I). Regulated decisions
-  // (EM-C/D/E/H) have no toggle — always sent.
-  {
-    const box = document.getElementById('staff-notif-prefs');
-    if (box) {
-      import('../lib/notifications').then(({ loadPrefs, savePrefs }) => {
-        const prefs = loadPrefs();
-        const map: Record<string, 'assignment' | 'signature' | 'status'> = {
-          'pref-assignment': 'assignment', 'pref-signature': 'signature', 'pref-status': 'status',
-        };
-        Object.entries(map).forEach(([id, key]) => {
-          const t = document.getElementById(id) as any;
-          if (!t) return;
-          t.toggled = prefs[key] !== false;
-          t.addEventListener('cds-toggle-changed', () => savePrefs({ [key]: !!t.toggled }));
-        });
-      });
-    }
-  }
 
   // ── Align every switch to one vertical column ────────────────────────────
   // cds-toggle renders the label-text as a VISIBLE span to the left of the switch,
@@ -788,6 +767,33 @@ const notificationPrefs = notificationSeeds.map((s) => ({
       submitRequest(currentUser.id, role, (roleReason?.value ?? '').trim(), district);
       roleModal.open = false;
       showPending(role, district);
+    });
+  }
+</script>
+
+<!-- Staff notification preferences (Story 17) — isolated in its own module so it
+     runs independently of the main profile script. The three opt-out toggles map
+     to specific emails (assignment → EM-F/G, signature → EM-A, status → EM-I);
+     regulated decisions (EM-C/D/E/H) have no toggle and are always sent. -->
+<script>
+  const box = document.getElementById('staff-notif-prefs');
+  if (box) {
+    const PREFS_KEY = 'notif-prefs';
+    const loadPrefs = (): Record<string, boolean> => {
+      try { const r = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); return r && typeof r === 'object' ? r : {}; }
+      catch { return {}; }
+    };
+    const savePrefs = (patch: Record<string, boolean>) =>
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ ...loadPrefs(), ...patch }));
+    customElements.whenDefined('cds-toggle').then(() => {
+      const prefs = loadPrefs();
+      (['pref-assignment', 'pref-signature', 'pref-status'] as const).forEach((id) => {
+        const key = id.replace('pref-', '');
+        const t = document.getElementById(id) as any;
+        if (!t) return;
+        t.toggled = prefs[key] !== false; // default on
+        t.addEventListener('cds-toggle-changed', () => savePrefs({ [key]: !!t.toggled }));
+      });
     });
   }
 </script>

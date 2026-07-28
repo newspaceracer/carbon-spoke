@@ -88,7 +88,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
              identity. The client script scopes the switcher below to the districts
              that identity may edit (HQ roles → all; a district lead → the ones they
              lead) and shows it only when there's more than one to choose. -->
-        <cds-tile class="scope">
+        <cds-tile class="scope" id="scope-tile">
           <div class="scope__row">
             <div id="switcher-wrap" class="scope__switcher" hidden>
               <cds-dropdown id="district-switcher" title-text="District" value={d.id}>
@@ -98,10 +98,6 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
               </cds-dropdown>
             </div>
           </div>
-          <p class="scope__note t-label-01" id="scope-note">
-            A district lead is scoped to their own district — its mini system admin
-            for information, members, and contacts.
-          </p>
           <cds-inline-notification
             id="switcher-note"
             hidden
@@ -112,16 +108,6 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             subtitle="This prototype populates only North Coast Redwoods District. Picking another would scope this same console to it."
           ></cds-inline-notification>
         </cds-tile>
-
-        <!-- Save confirmation. -->
-        <cds-inline-notification
-          id="save-notice"
-          hidden
-          kind="success"
-          low-contrast
-          title="District saved"
-          subtitle="Your changes to this district have been saved."
-        ></cds-inline-notification>
 
         <!-- ── District information ─────────────────────────────────────────── -->
         <PermitSection title="District information">
@@ -144,11 +130,19 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             <cds-text-input id="e-phone" type="tel" label="District phone"></cds-text-input>
             <cds-text-input id="e-email" type="email" label="District email"></cds-text-input>
           </div>
+
+          <!-- Save is scoped to the district-information form above; it's disabled
+               until a field changes. Members and the default signer save themselves
+               at their own confirmation, so they aren't governed by this button. -->
+          <div class="form__actions">
+            <cds-button id="cancel-btn" kind="ghost" size="lg" href={withBase('/district')}>Cancel</cds-button>
+            <cds-button id="save-btn" type="button" size="lg" disabled>Save changes</cds-button>
+          </div>
         </PermitSection>
 
         <!-- ── Members ──────────────────────────────────────────────────────── -->
         <PermitSection title="Members">
-          <cds-button slot="aside" id="add-member" kind="tertiary" size="md">Add member</cds-button>
+          <cds-button slot="aside" id="add-member" kind="tertiary" size="md">Add user</cds-button>
           <p class="section-hint t-body-01">
             The people assigned to this district. A member's <strong>role</strong> sets how they join a permit's
             analysis team: the <strong>lead</strong> reviewer leads single-district permits (supporting on
@@ -156,15 +150,6 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             requested park matches their auto-assignment. Members marked a <strong>point of contact</strong> appear
             on the district's detail screen.
           </p>
-          <!-- Deactivation-request confirmation. -->
-          <cds-inline-notification
-            id="member-notice"
-            hidden
-            kind="success"
-            low-contrast
-            title=""
-            subtitle=""
-          ></cds-inline-notification>
           <div class="table-wrap">
             <cds-table>
               <cds-table-head>
@@ -183,21 +168,27 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
         <!-- ── Default signer (Story 7, single-district) ──────────────────────── -->
         <PermitSection title="Default signer">
+          <cds-button slot="aside" id="set-signer" kind="tertiary" size="md">Set default signer</cds-button>
           <p class="section-hint t-body-01">
             The second signature on this district's <strong>single-district</strong> permits.
-            The Responsible Agent signs first; this person co-signs to activate. Enter a
-            district member's email or an external person's — they're notified to sign via
-            DocuSign and need no account.
+            The Responsible Agent signs first; this person co-signs to activate. Choose a
+            district member or an external person — they're notified to sign via DocuSign and
+            need no account.
           </p>
-          <cds-text-input id="default-signer" type="email" label="Default signer email" placeholder="name@parks.ca.gov"></cds-text-input>
-          <cds-inline-notification id="ds-saved" style="display:none" kind="success" low-contrast hide-close-button
-            title="Default signer saved" subtitle="New single-district permits in this district route their second signature here."></cds-inline-notification>
+          <!-- carbon-checked: empty-state copy is prose, not a control — a <p> with a
+               Carbon type role is the house pattern (see the users console empty states). -->
+          <p id="signer-empty" class="empty t-body-01">No default signer set.</p>
+          <div id="signer-card" class="identity" hidden>
+            <p class="identity__name t-heading-compact-01" id="signer-name"></p>
+            <p class="identity__meta t-body-01">
+              <span id="signer-email"></span>
+              <span id="signer-tag"></span>
+            </p>
+            <div class="signer-actions">
+              <cds-button kind="ghost" size="sm" id="signer-remove">Remove</cds-button>
+            </div>
+          </div>
         </PermitSection>
-
-        <div class="form__actions">
-          <cds-button id="cancel-btn" kind="ghost" href={withBase('/district')}>Cancel</cds-button>
-          <cds-button id="save-btn" type="button">Save changes</cds-button>
-        </div>
       </div>
     </div>
 
@@ -205,8 +196,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     <cds-modal id="member-modal" size="sm">
       <cds-modal-header>
         <cds-modal-close-button></cds-modal-close-button>
-        <cds-modal-label id="member-modal-label">District member</cds-modal-label>
-        <cds-modal-heading id="member-modal-heading">Add member</cds-modal-heading>
+        <cds-modal-label id="member-modal-label">District user</cds-modal-label>
+        <cds-modal-heading id="member-modal-heading">Add user</cds-modal-heading>
       </cds-modal-header>
       <cds-modal-body>
         <cds-inline-notification
@@ -232,14 +223,14 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
           <!-- Existing user: pick, never type. Identity is owned by the account. -->
           <div id="m-existing">
-            <cds-combo-box id="m-user" title-text="User" label="Search users by name…"></cds-combo-box>
+            <cds-combo-box id="m-user" title-text="User" label="Search users by name…" autoalign></cds-combo-box>
             <div id="m-identity" class="identity" hidden>
               <p class="identity__name t-heading-compact-01" id="m-id-name"></p>
               <p class="identity__meta t-body-01">
                 <span id="m-id-email"></span>
                 <span id="m-id-phone"></span>
               </p>
-              <p class="identity__note t-label-01">Identity comes from this user's account — edit it from their profile, not here.</p>
+              <p class="identity__note t-label-01">These details come from the user's account — only the user or an admin can change them, not this page.</p>
             </div>
           </div>
 
@@ -256,7 +247,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
           <!-- Options are built client-side, scoped to who's acting: a district
                lead can only appoint assistants; HQ can set lead or assistant. -->
-          <cds-dropdown id="m-role" title-text="Role"></cds-dropdown>
+          <cds-dropdown id="m-role" title-text="Role" autoalign></cds-dropdown>
           <!-- carbon-checked: scope note for the role field — plain helper prose, no cds-* fits. -->
           <p class="modal-hint t-label-01" id="role-lock-note" hidden>
             Only HQ can change the district lead — a lead is an HQ appointment.
@@ -290,7 +281,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       </cds-modal-body>
       <cds-modal-footer>
         <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-        <cds-modal-footer-button kind="primary" id="m-save">Save member</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="m-save">Save user</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
 
@@ -298,19 +289,19 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     <cds-modal id="remove-modal" size="xs" danger>
       <cds-modal-header>
         <cds-modal-close-button></cds-modal-close-button>
-        <cds-modal-label>District member</cds-modal-label>
-        <cds-modal-heading id="remove-heading">Remove member</cds-modal-heading>
+        <cds-modal-label>District user</cds-modal-label>
+        <cds-modal-heading id="remove-heading">Remove user</cds-modal-heading>
       </cds-modal-header>
       <cds-modal-body>
         <!-- carbon-checked: confirmation prose has no cds-* component; a <p> with the
              Carbon type role is the house pattern for modal body copy. -->
         <p class="modal-hint t-body-01" id="remove-body">
-          Remove this member from the district? They’ll no longer be auto-assigned to permits or listed as a contact.
+          Remove this user from the district? They’ll no longer be auto-assigned to permits or listed as a contact.
         </p>
       </cds-modal-body>
       <cds-modal-footer>
         <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-        <cds-modal-footer-button kind="danger" id="remove-confirm">Remove member</cds-modal-footer-button>
+        <cds-modal-footer-button kind="danger" id="remove-confirm">Remove user</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
 
@@ -332,6 +323,58 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         <cds-modal-footer-button kind="primary" id="deact-confirm">Send request</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
+
+    <!-- ── Default-signer modal (same dual-path pattern as Add member) ─────── -->
+    <cds-modal id="signer-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Default signer</cds-modal-label>
+        <cds-modal-heading id="signer-modal-heading">Set default signer</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <cds-inline-notification
+          id="signer-warning"
+          hidden
+          kind="warning"
+          low-contrast
+          hide-close-button
+          title=""
+          subtitle=""
+        ></cds-inline-notification>
+
+        <div class="modal-grid">
+          <!-- Two ways to name the signer: an existing account, or an external
+               person who signs via DocuSign and needs no account. -->
+          <div id="signer-mode-wrap">
+            <p class="modal-hint t-label-01">Choose an existing user, or add an external person.</p>
+            <cds-content-switcher id="signer-mode" value="existing">
+              <cds-content-switcher-item value="existing" selected>Existing user</cds-content-switcher-item>
+              <cds-content-switcher-item value="external">External person</cds-content-switcher-item>
+            </cds-content-switcher>
+          </div>
+
+          <div id="signer-existing">
+            <!-- autoalign: Floating UI floats the open list out of the modal's
+                 scroll container so the options aren't clipped at the bottom. -->
+            <cds-combo-box id="signer-user" title-text="User" label="Search users by name…" autoalign></cds-combo-box>
+          </div>
+
+          <div id="signer-external" hidden>
+            <cds-text-input id="signer-ext-name" label="Full name" placeholder="e.g. Dana Reyes"></cds-text-input>
+            <cds-text-input id="signer-ext-email" type="email" label="Email" placeholder="name@example.org"></cds-text-input>
+            <p class="modal-hint t-label-01">They’re notified to sign via DocuSign and need no account.</p>
+          </div>
+        </div>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="signer-save">Save signer</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+
+    <!-- Toast host — Carbon toasts float top-right, stacked, and auto-dismiss.
+         Fixed, so it lives outside the grid flow (overlay layer). -->
+    <div id="toast-host" class="toast-host"></div>
   </main>
 </BaseLayout>
 
@@ -360,9 +403,17 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   type Park = { name: string; designation: string };
   type AutoAssign = { mode: 'none' | 'specific' | 'all'; parks: string[] };
   type Member = { userId: string; role: string; autoAssign: AutoAssign; published: boolean };
-  type State = { office: Office; parks: Park[]; members: Member[] };
+  // The default second signer: an existing account (by id) OR an external person
+  // (name + email, no account), or none.
+  type DefaultSigner =
+    | { kind: 'user'; userId: string }
+    | { kind: 'external'; name: string; email: string }
+    | null;
+  type State = { office: Office; parks: Park[]; members: Member[]; defaultSigner: DefaultSigner };
 
   const KEY = `manage-district-${district.id}`;
+  // Pre-modal builds stored the signer as a bare email under this key; migrated in.
+  const legacySignerKey = `default-signer-${district.id}`;
 
   const seed = (): State => ({
     office: {
@@ -376,7 +427,14 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       autoAssign: { mode: m.autoAssign.mode, parks: [...m.autoAssign.parks] },
       published: m.published,
     })),
+    defaultSigner: null,
   });
+
+  const normalizeSigner = (s: any): DefaultSigner => {
+    if (s && s.kind === 'user' && typeof s.userId === 'string') return { kind: 'user', userId: s.userId };
+    if (s && s.kind === 'external' && typeof s.email === 'string') return { kind: 'external', name: s.name ?? '', email: s.email };
+    return null;
+  };
 
   // A member record is only trustworthy if it references a real user AND a known
   // role. Records saved by an earlier build (inline name/email, no userId, or a
@@ -398,6 +456,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
           office: saved.office ?? base.office,
           parks: Array.isArray(saved.parks) ? saved.parks : base.parks,
           members: membersUsable ? savedMembers : base.members,
+          defaultSigner: normalizeSigner(saved.defaultSigner),
         };
       }
     } catch { /* malformed — fall back to seed */ }
@@ -406,10 +465,45 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
   let state: State = loadState();
 
+  // Migrate a legacy bare-email signer into the structured field, once.
+  if (!state.defaultSigner) {
+    const legacy = (localStorage.getItem(legacySignerKey) || '').trim();
+    if (legacy) state.defaultSigner = { kind: 'external', name: '', email: legacy };
+  }
+
+  // Single writer for the whole district record. Members and the default signer
+  // call this at their own confirmation (instant-apply); the district-information
+  // form calls it from "Save changes".
+  const persist = () => localStorage.setItem(KEY, JSON.stringify(state));
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   const $ = (id: string) => document.getElementById(id);
   const esc = (s = '') =>
     s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+
+  // Transient confirmations use a Carbon TOAST — floats top-right, auto-dismisses,
+  // stacks — the Carbon standard for time-based feedback (not a bar pinned to the
+  // top of the page). Each toast removes itself on close or after its timeout.
+  const toastHost = $('toast-host');
+  const toast = (title: string, subtitle = '', kind: 'success' | 'info' | 'warning' = 'success') => {
+    if (!toastHost) return;
+    const t = document.createElement('cds-toast-notification');
+    t.setAttribute('kind', kind);
+    // Carbon defaults a notification to role="alert" (assertive) — right for a
+    // warning, too aggressive for a routine confirmation. Set it explicitly BEFORE
+    // append so Carbon's "only if unset" default doesn't override: a success/info
+    // toast announces politely (role="status" → aria-live polite); a warning stays
+    // assertive. (Set before connectedCallback so the value sticks.)
+    t.setAttribute('role', kind === 'warning' ? 'alert' : 'status');
+    t.setAttribute('low-contrast', '');
+    t.setAttribute('title', title);
+    if (subtitle) t.setAttribute('subtitle', subtitle);
+    t.setAttribute('timeout', '6000'); // auto-dismiss
+    toastHost.appendChild(t);
+    t.addEventListener('cds-notification-closed', () => t.remove());
+    // Backstop cleanup in case the close event is missed.
+    window.setTimeout(() => t.remove(), 6600);
+  };
   // Standard house "remove a row" affordance: a ghost trash icon-button (removal
   // is already confirmed via the danger #remove-modal below).
   const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
@@ -658,12 +752,12 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     const heading = $('member-modal-heading');
     const label = $('member-modal-label');
     if (index >= 0) {
-      const who = resolveUser(m.userId)?.name ?? 'this member';
-      if (label) label.textContent = 'Edit member';
+      const who = resolveUser(m.userId)?.name ?? 'this user';
+      if (label) label.textContent = 'Edit user';
       if (heading) heading.textContent = `Edit ${who}`;
     } else {
-      if (label) label.textContent = 'District member';
-      if (heading) heading.textContent = 'Add member';
+      if (label) label.textContent = 'District user';
+      if (heading) heading.textContent = 'Add user';
     }
     if (mWarn) mWarn.hidden = true;
 
@@ -783,11 +877,15 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       published: !!($('m-published') as any)?.checked,
     };
 
-    if (editingIndex >= 0) state.members[editingIndex] = member;
+    const wasEditing = editingIndex >= 0;
+    if (wasEditing) state.members[editingIndex] = member;
     else state.members.push(member);
 
     renderMembers();
+    persist(); // members save at confirmation — not governed by "Save changes"
     modal.open = false;
+    const who = resolveUser(userId)?.name ?? 'The user';
+    toast(wasEditing ? 'User updated' : 'User added', `${who} was saved to ${district.name}.`);
   };
 
   // ── Remove member (confirm first) ──────────────────────────────────────────
@@ -805,9 +903,12 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
   $('remove-confirm')?.addEventListener('click', () => {
     if (pendingRemove >= 0) {
+      const who = resolveUser(state.members[pendingRemove]?.userId)?.name ?? 'The user';
       state.members.splice(pendingRemove, 1);
       pendingRemove = -1;
       renderMembers();
+      persist(); // instant-apply, like add/edit
+      toast('User removed', `${who} was removed from ${district.name}.`);
     }
     if (removeModal) removeModal.open = false;
   });
@@ -820,14 +921,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const deactReason = $('deact-reason') as any;
   let pendingDeact = -1;
 
-  const memberNotice = $('member-notice') as any;
-  const flashMember = (title: string, subtitle: string) => {
-    if (!memberNotice) return;
-    memberNotice.title = title;
-    memberNotice.subtitle = subtitle;
-    memberNotice.hidden = false;
-    memberNotice.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  };
+  const flashMember = (title: string, subtitle: string) => toast(title, subtitle);
 
   const openDeactivateModal = (index: number) => {
     pendingDeact = index;
@@ -863,20 +957,34 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     );
   });
 
-  // ── Collect + persist (single "Save changes") ──────────────────────────────
-  const collect = (): State => ({
-    office: {
-      address: { street: valOf('e-street'), unit: valOf('e-unit'), city: valOf('e-city'), state: valOf('e-state'), zip: valOf('e-zip') },
-      phone: valOf('e-phone'),
-      email: valOf('e-email'),
-    },
-    parks: state.parks, // read-only here — carried through untouched
-    members: state.members,
+  // ── District-information form: dirty-tracked "Save changes" ─────────────────
+  // Only the office fields are governed by "Save changes" (members + signer save
+  // themselves). The button stays disabled until a field differs from what's saved.
+  const collectOffice = (): Office => ({
+    address: { street: valOf('e-street'), unit: valOf('e-unit'), city: valOf('e-city'), state: valOf('e-state'), zip: valOf('e-zip') },
+    phone: valOf('e-phone'),
+    email: valOf('e-email'),
   });
+  const officeDirty = (): boolean => {
+    const o = collectOffice();
+    const s = state.office;
+    return (
+      o.phone !== s.phone || o.email !== s.email ||
+      o.address.street !== s.address.street || o.address.unit !== s.address.unit ||
+      o.address.city !== s.address.city || o.address.state !== s.address.state ||
+      o.address.zip !== s.address.zip
+    );
+  };
+  const updateSaveEnabled = () => {
+    const btn = $('save-btn') as any;
+    if (!btn) return;
+    if (officeDirty()) btn.removeAttribute('disabled');
+    else btn.setAttribute('disabled', '');
+  };
 
   // ── Scope bar ──────────────────────────────────────────────────────────────
   const switcherWrap = $('switcher-wrap');
-  const scopeNote = $('scope-note');
+  const scopeTile = $('scope-tile');
   const switcher = $('district-switcher') as any;
   const switcherNote = $('switcher-note') as any;
   const consoleBody = $('console-body');
@@ -887,8 +995,6 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   //  - one → lock to it (no switcher; the note names the district).
   //  - many → prune the switcher to just those and reveal it.
   const applyScope = async () => {
-    const hq = currentScope() === 'hq';
-
     if (editable.length === 0) {
       if (consoleBody) consoleBody.style.display = 'none';
       if (noAccess) noAccess.hidden = false;
@@ -916,14 +1022,11 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     }
 
     if (switcherWrap) switcherWrap.hidden = editable.length < 2;
-    if (scopeNote) {
-      scopeNote.textContent = hq
-        ? 'HQ reviewers administer every district. Pick a district to manage it.'
-        : editable.length > 1
-          ? `You lead ${editable.length} districts. Pick the one to manage.`
-          : `You lead ${editable[0].name} — its system admin for information, members, and contacts.`;
-    }
     if (switcherNote) switcherNote.hidden = (switcher?.value ?? district.id) === district.id;
+    // With the explanatory note gone, the scope tile only earns its space when
+    // there's a district to switch between. Hide it otherwise (cds-tile sets
+    // :host display, so toggle inline display, not the `hidden` attribute).
+    if (scopeTile) scopeTile.style.display = editable.length < 2 ? 'none' : '';
   };
 
   const syncBannerToSwitcher = () => {
@@ -934,10 +1037,128 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     bannerName.textContent = found?.textContent?.trim() || district.name;
   };
 
+  // ── Default signer (modal, same dual-path pattern as Add member) ────────────
+  const signerModal = $('signer-modal') as any;
+  const signerModeEl = () => $('signer-mode') as any;
+  const signerUserBox = () => $('signer-user') as any;
+
+  const signerCurrentMode = (): 'existing' | 'external' =>
+    signerModeEl()?.value === 'external' ? 'external' : 'existing';
+
+  const applySignerMode = () => {
+    const mode = signerCurrentMode();
+    const ex = $('signer-existing');
+    const ext = $('signer-external');
+    if (ex) ex.hidden = mode !== 'existing';
+    if (ext) ext.hidden = mode !== 'external';
+    const warn = $('signer-warning') as any;
+    if (warn) warn.hidden = true;
+  };
+
+  // Any internal account can be picked as the signer (not scoped like members).
+  const buildSignerUserOptions = (selected: string) => {
+    const box = signerUserBox();
+    if (!box) return;
+    box.innerHTML = directory
+      .map((u) => ({ id: u.id, r: resolveUser(u.id) }))
+      .sort((a, b) => (a.r?.name ?? '').localeCompare(b.r?.name ?? ''))
+      .map(({ id, r }) => `<cds-combo-box-item value="${esc(id)}">${esc(r?.name ?? id)} · ${esc(r?.email ?? '')}</cds-combo-box-item>`)
+      .join('');
+    box.value = selected || '';
+  };
+
+  const signerDisplay = (s: DefaultSigner): { name: string; email: string; tag: string } | null => {
+    if (!s) return null;
+    if (s.kind === 'user') {
+      const u = resolveUser(s.userId);
+      return u ? { name: u.name, email: u.email, tag: 'District / agency user' } : null;
+    }
+    return { name: s.name || s.email, email: s.name ? s.email : '', tag: 'External signer' };
+  };
+
+  const renderSigner = () => {
+    const d = signerDisplay(state.defaultSigner);
+    const empty = $('signer-empty');
+    const card = $('signer-card');
+    const btn = $('set-signer') as any;
+    if (empty) empty.hidden = !!d;
+    if (card) card.hidden = !d;
+    if (btn) btn.textContent = d ? 'Change default signer' : 'Set default signer';
+    if (d) {
+      if ($('signer-name')) $('signer-name')!.textContent = d.name;
+      if ($('signer-email')) $('signer-email')!.textContent = d.email;
+      if ($('signer-tag')) $('signer-tag')!.textContent = d.tag;
+    }
+  };
+
+  const openSignerModal = () => {
+    const s = state.defaultSigner;
+    if (signerModeEl()) signerModeEl().value = s?.kind === 'external' ? 'external' : 'existing';
+    buildSignerUserOptions(s?.kind === 'user' ? s.userId : '');
+    const extName = $('signer-ext-name') as any;
+    const extEmail = $('signer-ext-email') as any;
+    if (extName) { extName.value = s?.kind === 'external' ? s.name : ''; extName.invalid = false; }
+    if (extEmail) { extEmail.value = s?.kind === 'external' ? s.email : ''; extEmail.invalid = false; }
+    applySignerMode();
+    if ($('signer-modal-heading')) $('signer-modal-heading')!.textContent = s ? 'Change default signer' : 'Set default signer';
+    if (signerModal) signerModal.open = true;
+  };
+
+  $('set-signer')?.addEventListener('click', openSignerModal);
+  signerModeEl()?.addEventListener('cds-content-switcher-selected', applySignerMode);
+  signerUserBox()?.addEventListener('cds-combo-box-selected', () => {
+    const warn = $('signer-warning') as any;
+    if (warn) warn.hidden = true;
+  });
+
+  $('signer-save')?.addEventListener('click', () => {
+    const warn = $('signer-warning') as any;
+    const showSignerWarn = (title: string, subtitle: string) => {
+      if (warn) { warn.title = title; warn.subtitle = subtitle; warn.hidden = false; }
+    };
+    if (signerCurrentMode() === 'existing') {
+      const userId = signerUserBox()?.value || '';
+      if (!userId || !resolveUser(userId)) {
+        showSignerWarn('Select a user', 'Search and select an existing account, or switch to “External person”.');
+        return;
+      }
+      state.defaultSigner = { kind: 'user', userId };
+    } else {
+      const extName = $('signer-ext-name') as any;
+      const extEmail = $('signer-ext-email') as any;
+      const name = (extName?.value || '').trim();
+      const email = (extEmail?.value || '').trim();
+      if (!email) {
+        if (extEmail) { extEmail.invalid = true; extEmail.invalidText = 'Enter an email address.'; }
+        return;
+      }
+      state.defaultSigner = { kind: 'external', name, email };
+    }
+    persist(); // instant-apply at confirmation
+    renderSigner();
+    if (signerModal) signerModal.open = false;
+    toast('Default signer saved', 'Single-district permits in this district route their second signature here.');
+  });
+
+  $('signer-remove')?.addEventListener('click', () => {
+    state.defaultSigner = null;
+    persist();
+    renderSigner();
+    toast('Default signer removed', 'Single-district permits will have no preset second signer.');
+  });
+
   // ── Wire everything ────────────────────────────────────────────────────────
   populateOffice();
+  updateSaveEnabled(); // starts disabled — nothing changed yet
   renderMembers();
+  renderSigner();
   applyScope();
+
+  // District-information fields drive the dirty state for "Save changes".
+  ['e-street', 'e-unit', 'e-city', 'e-zip', 'e-phone', 'e-email'].forEach((id) =>
+    $(id)?.addEventListener('input', updateSaveEnabled),
+  );
+  $('e-state')?.addEventListener('cds-dropdown-selected', updateSaveEnabled);
 
   switcher?.addEventListener('cds-dropdown-selected', () => {
     syncBannerToSwitcher();
@@ -963,10 +1184,11 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   $('m-save')?.addEventListener('click', saveMember);
 
   $('save-btn')?.addEventListener('click', () => {
-    state = collect();
-    localStorage.setItem(KEY, JSON.stringify(state));
-    const notice = $('save-notice') as any;
-    if (notice) { notice.hidden = false; notice.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    if (!officeDirty()) return; // button is disabled anyway; guard the direct call
+    state.office = collectOffice();
+    persist();
+    updateSaveEnabled(); // now clean → disables again
+    toast('District information saved', 'The district office details have been updated.');
   });
 </script>
 
@@ -1005,11 +1227,34 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   }
   .scope__row cds-dropdown { min-width: 18rem; }
   .scope__switcher { min-width: 18rem; }
-  .scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
   #switcher-note { margin-top: 1rem; }
-  #switcher-note[hidden], #switcher-wrap[hidden], #save-notice[hidden], #no-access[hidden], #member-notice[hidden] { display: none; }
-  #member-notice { margin-bottom: 1rem; max-width: 48rem; }
-  #save-notice { max-width: 48rem; }
+  #switcher-note[hidden], #switcher-wrap[hidden], #no-access[hidden] { display: none; }
+
+  /* Toast host — Carbon toasts float in the top-right corner, stack downward,
+     and auto-dismiss (the transient pattern), not a bar pinned to the top of the
+     content. Fixed → outside grid flow. */
+  .toast-host {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    inline-size: min(24rem, calc(100vw - 2rem));
+    pointer-events: none;
+  }
+  .toast-host cds-toast-notification { pointer-events: auto; }
+  @media (max-width: 30rem) { .toast-host { left: 1rem; right: 1rem; inline-size: auto; } }
+
+  /* Default-signer display. */
+  .empty { margin: 0; padding: 0.5rem 0; color: var(--cds-text-secondary, #525252); }
+  #signer-empty[hidden], #signer-card[hidden] { display: none; }
+  .signer-actions { margin-top: 0.75rem; }
+  #signer-mode-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+  #signer-external { display: flex; flex-direction: column; gap: 1.25rem; }
+  #signer-existing[hidden], #signer-external[hidden], #signer-warning[hidden] { display: none; }
+  #signer-warning { margin-bottom: 0.5rem; }
 
   .section-hint {
     margin: 0 0 1.25rem;
@@ -1077,5 +1322,9 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
+    margin-top: 1.5rem;
+    /* Align to the field-grid's right edge, not the full column width, so the
+       buttons sit under the fields they save. */
+    max-width: 44rem;
   }
 </style>

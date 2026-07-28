@@ -104,6 +104,7 @@ export const permit = {
       { id: 'santos', role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', status: 'Pending review', addedAt: 'Jun 28, 2026', lastEditedAt: 'Jul 6, 2026 2:14 PM' },
       { id: 'cheng', role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', status: 'Pending review', addedAt: 'Jul 1, 2026' },
       { id: 'delgado', role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', status: 'Jul 5, 2026 8:45 AM', addedAt: 'Jun 29, 2026' },
+      { id: 'reyna', role: 'District reviewer', name: 'S. Reyna', detail: 'Mendocino District', status: 'Pending review', addedAt: 'Jun 30, 2026' },
     ],
 
     // Reviewer-applied handling tags. `tagOptions` is the curated vocabulary an

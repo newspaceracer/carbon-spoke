@@ -529,6 +529,9 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
               </PermitSection>
 
               <PermitSection title="District special conditions">
+                <!-- Shown by JS only when there's more than one district block to act on. -->
+                <cds-button slot="aside" id="sc-collapse-all" kind="tertiary" size="md" style="display:none">Collapse all</cds-button>
+                <cds-button slot="aside" id="sc-expand-all" kind="tertiary" size="md" style="display:none">Expand all</cds-button>
                 <p class="section-hint t-body-01">Additional conditions apply within each district on this permit.</p>
                 <div class="district-conditions" id="sc-district-blocks"></div>
               </PermitSection>
@@ -709,26 +712,39 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
           low-contrast
           hide-close-button
           title="Add a condition first"
-          subtitle="Pick a condition from the catalog or write one below."
+          subtitle="Select at least one saved condition, or switch to Write manually."
         ></cds-inline-notification>
 
         <cds-stack gap="6">
-          <div id="sc-pick-block">
+          <!-- Add mode only: pull a saved condition from the catalog, or write a
+               new one. Mirrors the Add-member modal's existing/new switcher —
+               one path at a time, not both stacked. -->
+          <div id="sc-mode-wrap">
+            <p class="modal-hint t-label-01" id="sc-mode-label">Pull a saved condition, or write a new one.</p>
+            <cds-content-switcher id="sc-mode" value="catalog">
+              <cds-content-switcher-item value="catalog" selected>From catalog</cds-content-switcher-item>
+              <cds-content-switcher-item value="manual">Write manually</cds-content-switcher-item>
+            </cds-content-switcher>
+          </div>
+
+          <!-- From catalog: attach saved conditions, never retype them. -->
+          <div id="sc-catalog">
             <cds-multi-select
               id="sc-pick"
-              title-text="Add from the catalog"
+              title-text="Saved conditions"
               label="Select saved conditions"
               filterable
             ></cds-multi-select>
-            <p class="sc-or t-label-01">or write a new one</p>
           </div>
 
-          <div>
-            <p class="field-label t-label-01">Condition text</p>
-            <sc-rich-text id="sc-body" placeholder="Write a condition. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
+          <!-- Write manually: type a new condition, optionally save it for reuse. -->
+          <div id="sc-manual" hidden>
+            <div>
+              <p class="field-label t-label-01">Condition text</p>
+              <sc-rich-text id="sc-body" placeholder="Write a condition. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
+            </div>
+            <cds-checkbox id="sc-save-catalog" label-text="Also save to the catalog for reuse"></cds-checkbox>
           </div>
-
-          <cds-checkbox id="sc-save-catalog" label-text="Also save to the catalog for reuse"></cds-checkbox>
         </cds-stack>
       </cds-modal-body>
       <cds-modal-footer>
@@ -1445,6 +1461,44 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
     }
   };
 
+  // ── Collapse / expand district blocks ─────────────────────────────────────
+  // A view aid: each district block can be folded to just its label, and the
+  // section header offers Collapse all / Expand all. Collapse state is kept here
+  // (by district key) so it survives the frequent re-renders on add/edit/remove.
+  const chevron = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 11L3 6 3.7 5.3 8 9.6 12.3 5.3 13 6z"/></svg>`;
+  const collapsedDistricts = new Set<string>();
+
+  // Fold a district's contained-list to its label only: hide every child that
+  // isn't the label (items + the add button) and rotate its chevron. cds-* set
+  // :host display, so hide via inline style rather than the [hidden] attribute.
+  const setListCollapsed = (list: Element, collapsed: boolean) => {
+    Array.from(list.children).forEach((child) => {
+      const el = child as HTMLElement;
+      if (el.slot === 'label') {
+        const svg = el.querySelector('cds-icon-button svg') as SVGElement | null;
+        if (svg) svg.style.transform = collapsed ? 'rotate(-90deg)' : '';
+        const tip = el.querySelector('cds-icon-button [slot="tooltip-content"]');
+        if (tip) tip.textContent = collapsed ? 'Expand' : 'Collapse';
+        return;
+      }
+      el.style.display = collapsed ? 'none' : '';
+    });
+  };
+
+  const toggleDistrict = (key: string) => {
+    const collapsed = !collapsedDistricts.has(key);
+    collapsed ? collapsedDistricts.add(key) : collapsedDistricts.delete(key);
+    const list = $('sc-district-blocks')?.querySelector(`cds-contained-list[data-district-key="${key}"]`);
+    if (list) setListCollapsed(list, collapsed);
+  };
+
+  const setAllCollapsed = (collapsed: boolean) => {
+    districts.forEach((d) => (collapsed ? collapsedDistricts.add(d.key) : collapsedDistricts.delete(d.key)));
+    $('sc-district-blocks')
+      ?.querySelectorAll('cds-contained-list[data-district-key]')
+      .forEach((list) => setListCollapsed(list, collapsed));
+  };
+
   const render = () => {
     // HQ block.
     const hqList = $('sc-hq-list');
@@ -1460,13 +1514,30 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
         ...districts.map((d) => {
           const list = document.createElement('cds-contained-list');
           list.setAttribute('kind', 'on-page');
+          list.dataset.districtKey = d.key;
 
+          // Label carries the district name/count and a chevron that collapses
+          // this block. Inline layout (not scoped CSS) since the element is built
+          // at runtime and Astro's scoped classes only reach template markup.
           const label = document.createElement('div');
           label.slot = 'label';
           label.className = 'district-label';
-          label.innerHTML =
+          label.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.5rem';
+
+          const labelText = document.createElement('div');
+          labelText.style.cssText = 'display:flex;flex-direction:column;gap:0.125rem;min-width:0';
+          labelText.innerHTML =
             `<span class="district-label__name">${d.name}</span>` +
             `<span class="district-label__count t-label-01">${d.parks} authorized parks</span>`;
+
+          const toggle = document.createElement('cds-icon-button');
+          toggle.setAttribute('kind', 'ghost');
+          toggle.setAttribute('size', 'sm');
+          toggle.setAttribute('align', 'left');
+          toggle.innerHTML = `${chevron}<span slot="tooltip-content">Collapse</span>`;
+          toggle.addEventListener('click', () => toggleDistrict(d.key));
+
+          label.append(labelText, toggle);
           list.appendChild(label);
 
           ensureAddButton(list, d.key);
@@ -1477,10 +1548,20 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
             empty.innerHTML = `<span class="cond__by t-label-01">No conditions for this district yet.</span>`;
             list.appendChild(empty);
           }
+
+          // Re-apply the collapse state this district was left in across renders.
+          setListCollapsed(list, collapsedDistricts.has(d.key));
           return list;
         }),
       );
     }
+
+    // Collapse all / Expand all only earn their place with more than one block.
+    const showAll = districts.length > 1 ? '' : 'none';
+    const collapseAll = $('sc-collapse-all') as HTMLElement | null;
+    const expandAll = $('sc-expand-all') as HTMLElement | null;
+    if (collapseAll) collapseAll.style.display = showAll;
+    if (expandAll) expandAll.style.display = showAll;
 
     // Lock banner.
     const notice = $('sc-locked-notice') as any;
@@ -1514,13 +1595,25 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
 
   // ── Add / edit modal ──────────────────────────────────────────────────────
   const modal = $('sc-condition-modal') as any;
-  const pickBlock = $('sc-pick-block') as HTMLElement | null;
+  const modeEl = () => $('sc-mode') as any;
   const pickEl = () => $('sc-pick') as any;
   const bodyEl = () => $('sc-body') as any;
   const saveCatalogEl = () => $('sc-save-catalog') as any;
   const warnEl = $('sc-modal-warning') as any;
   let modalOwner: ConditionOwner = 'hq';
   let editingGlobalIndex = -1;
+
+  // Add mode offers two paths — pull from the catalog, or write a new condition —
+  // shown one at a time via the content switcher (like the Add-member modal).
+  const currentMode = (): 'catalog' | 'manual' => (modeEl()?.value === 'manual' ? 'manual' : 'catalog');
+  const applyMode = () => {
+    const mode = currentMode();
+    const cat = $('sc-catalog');
+    const man = $('sc-manual');
+    if (cat) cat.hidden = mode !== 'catalog';
+    if (man) man.hidden = mode !== 'manual';
+    if (warnEl) warnEl.hidden = true;
+  };
 
   // A condition IS its text. Identify a catalog item by a short plain-text
   // preview of its body in the picker.
@@ -1557,12 +1650,22 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
     if (label) label.textContent = ownerLabel(owner);
     if (warnEl) warnEl.hidden = true;
 
-    // Catalog picker + "save to catalog" only make sense when adding.
-    if (pickBlock) pickBlock.hidden = editing;
-    if (saveCatalogEl()) saveCatalogEl().parentElement && ((saveCatalogEl() as HTMLElement).hidden = editing);
-    if (!editing) {
+    const modeWrap = $('sc-mode-wrap');
+    const catalogBlock = $('sc-catalog');
+    const manualBlock = $('sc-manual');
+    if (editing) {
+      // Editing an existing condition: text only — no catalog path, no switcher.
+      if (modeWrap) modeWrap.hidden = true;
+      if (catalogBlock) catalogBlock.hidden = true;
+      if (manualBlock) manualBlock.hidden = false;
+      if (saveCatalogEl()) saveCatalogEl().hidden = true;
+    } else {
+      // Adding: choose the catalog or the manual path via the switcher.
+      if (modeWrap) modeWrap.hidden = false;
+      if (modeEl()) modeEl().value = 'catalog';
       buildPicker(owner);
-      if (saveCatalogEl()) saveCatalogEl().checked = false;
+      if (saveCatalogEl()) { saveCatalogEl().hidden = false; saveCatalogEl().checked = false; }
+      applyMode();
     }
 
     if (bodyEl()) bodyEl().value = c?.body ?? '';
@@ -1592,27 +1695,27 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
       return;
     }
 
-    // Add mode: catalog picks + an optional typed condition.
-    const picks = selectedInventoryIds();
-    const inventory = loadInventory(modalOwner);
+    // Add mode: honor the active path — either catalog picks OR a typed condition.
     let added = 0;
 
-    picks.forEach((invId) => {
-      const it = inventory.find((x) => x.id === invId);
-      if (!it) return;
-      conditions.push({
-        id: newConditionId('c'),
-        owner: modalOwner,
-        source: 'inventory',
-        inventoryId: it.id,
-        body: it.body,
-        addedBy: reviewer,
-        addedAt: new Date().toISOString(),
+    if (currentMode() === 'catalog') {
+      const picks = selectedInventoryIds();
+      const inventory = loadInventory(modalOwner);
+      picks.forEach((invId) => {
+        const it = inventory.find((x) => x.id === invId);
+        if (!it) return;
+        conditions.push({
+          id: newConditionId('c'),
+          owner: modalOwner,
+          source: 'inventory',
+          inventoryId: it.id,
+          body: it.body,
+          addedBy: reviewer,
+          addedAt: new Date().toISOString(),
+        });
+        added++;
       });
-      added++;
-    });
-
-    if (body) {
+    } else if (body) {
       conditions.push({
         id: newConditionId('c'),
         owner: modalOwner,
@@ -1635,7 +1738,12 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
     }
 
     if (added === 0) {
-      if (warnEl) warnEl.hidden = false;
+      if (warnEl) {
+        warnEl.subtitle = currentMode() === 'catalog'
+          ? 'Select at least one saved condition, or switch to Write manually.'
+          : 'Write the condition text before adding it.';
+        warnEl.hidden = false;
+      }
       return;
     }
     persist();
@@ -1645,6 +1753,9 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
 
   // ── Wire + init ───────────────────────────────────────────────────────────
   $('sc-modal-save')?.addEventListener('click', saveFromModal);
+  modeEl()?.addEventListener('cds-content-switcher-selected', applyMode);
+  $('sc-collapse-all')?.addEventListener('click', () => setAllCollapsed(true));
+  $('sc-expand-all')?.addEventListener('click', () => setAllCollapsed(false));
 
   // A status change (fired by PermitHeader) freezes the tab without a reload once
   // the permit is approved / signed.
@@ -1908,7 +2019,14 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
 
   /* Special-conditions review workflow — layout only; look is cds-* + tokens. */
   .sc-scope__note { margin: 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
-  #sc-locked-notice[hidden], #sc-scope-tile[hidden], #sc-hq-empty[hidden], #sc-pick-block[hidden] { display: none; }
+  #sc-locked-notice[hidden], #sc-scope-tile[hidden], #sc-hq-empty[hidden] { display: none; }
+
+  /* Add-condition modal: catalog / manual switcher, one path at a time.
+     cds-* set :host display, so a scoped [hidden] must force display:none. */
+  #sc-mode-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+  #sc-mode-label { margin: 0; }
+  #sc-manual { display: flex; flex-direction: column; gap: 1.25rem; }
+  #sc-mode-wrap[hidden], #sc-catalog[hidden], #sc-manual[hidden], #sc-save-catalog[hidden] { display: none; }
   .sc-empty { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
 
   /* One applied condition: rich-text body over a quiet source/author meta line;
@@ -1929,7 +2047,6 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
   :global(.cond__actions) { display: flex; gap: 0.125rem; align-items: center; }
 
   /* Add/edit modal internals. */
-  .sc-or { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
   .field-label { display: block; margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
 
   /* Research team — lead contacts as a card grid (ContactCard = cds-tile);

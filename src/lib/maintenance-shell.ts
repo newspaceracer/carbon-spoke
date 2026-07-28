@@ -239,6 +239,8 @@ const PERMIT_STATE_PREFIXES = [
   'permit-supporting-review-', // SA supporting-review state (Story 10)
   'permit-signatures-',      // two-signature progress (Story 6)
   'permit-hold-',            // annual-report hold + override (Story 13)
+  'permit-renewal-hold-',    // renewal annual-report hold trigger (Story 13)
+  'permit-responsible-agent-', // auto-reassigned RA on a type flip (Story 8)
 ];
 
 function permitStateKeys(): string[] {
