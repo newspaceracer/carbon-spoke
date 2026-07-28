@@ -47,6 +47,7 @@ export const prototype = {
         <cds-dropdown id="login-as" title-text="Account (prototype)" value="admin" helper-text="No real auth — choose the account to sign in as.">
           <cds-dropdown-item value="admin">System Administrator</cds-dropdown-item>
           <cds-dropdown-item value="user">Reviewer (non-admin)</cds-dropdown-item>
+          <cds-dropdown-item value="researcher">Researcher (applicant)</cds-dropdown-item>
         </cds-dropdown>
 
         <cds-button id="login-submit" type="button" class="login__submit">Sign in</cds-button>
@@ -68,7 +69,7 @@ export const prototype = {
   const error = document.getElementById('login-error') as any;
 
   submit?.addEventListener('click', () => {
-    const account = (asDropdown?.value as 'admin' | 'user') || 'admin';
+    const account = (asDropdown?.value as 'admin' | 'user' | 'researcher') || 'admin';
     writeIdentity(account);
 
     if (account === 'admin') {

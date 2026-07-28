@@ -57,6 +57,8 @@ export interface SlimPermit {
   organization: string; // applicant entity
   permitStart: string; // ISO — "Permit start date"
   recordType: string;
+  permitType: string; // permit classification (Scientific Research & Collection, …)
+  renewalType: string; // New / Renewal / Amendment / Reissuance
   annualReportSubmitted: string; // 'Yes' | 'No'
   annualReportDue: string; // ISO — when the annual report is due (for delinquency-over-time)
   responsibleAnalyst: string; // for Tier 2 "processing time by analyst"
@@ -122,6 +124,8 @@ export const toSlim = (rows: readonly PermitRow[]): SlimPermit[] =>
     organization: p.organization,
     permitStart: p.permitStart,
     recordType: p.recordType,
+    permitType: p.permitType,
+    renewalType: p.renewalType,
     annualReportSubmitted: p.annualReportSubmitted,
     annualReportDue: p.annualReportDue,
     responsibleAnalyst: p.responsibleAnalyst,
@@ -270,8 +274,6 @@ function monthsEndingAt(endMonth: string, n: number): string[] {
   return out;
 }
 
-export type IntakeSeries = 'received' | 'approved' | 'rejected';
-
 export interface MonthlyIntake {
   months: string[];
   received: Record<string, number>;
@@ -306,29 +308,18 @@ export function monthlyIntakeDecisions(rows: readonly SlimPermit[], n = 18): Mon
   return { months, received, approved, rejected };
 }
 
-/** Trailing moving average of `vals` over `w` points (each point averaged with the
- *  up-to w-1 before it). */
-const movingAverage = (vals: readonly number[], w: number): number[] =>
-  vals.map((_, i) => {
-    const s = vals.slice(Math.max(0, i - w + 1), i + 1);
-    return s.reduce((a, b) => a + b, 0) / s.length;
-  });
-
-/** Carbon combo tabular data: grouped bars (Received / Approved / Rejected) plus a
- *  moving-average LINE that tracks the chosen focus series. */
-export function intakeComboData(
-  mi: MonthlyIntake,
-  avgOf: IntakeSeries = 'received',
-  window = 3,
-): { group: string; key: string; value: number }[] {
+/** Carbon combo tabular data for the intake/decisions chart: Approved + Rejected as
+ *  a STACKED bar (the two outcomes partition each month's decisions), and Received
+ *  as a LINE (intake). Bar height = decisions made that month; line = applications
+ *  received that month — kept as distinct measures because a decision lands on an
+ *  application received earlier, so they are not a breakdown of one cohort. */
+export function intakeDecisionsComboData(mi: MonthlyIntake): { group: string; key: string; value: number }[] {
   const data: { group: string; key: string; value: number }[] = [];
   for (const mm of mi.months) {
-    data.push({ group: 'Received', key: mm, value: mi.received[mm] });
     data.push({ group: 'Approved', key: mm, value: mi.approved[mm] });
     data.push({ group: 'Rejected', key: mm, value: mi.rejected[mm] });
+    data.push({ group: 'Received', key: mm, value: mi.received[mm] });
   }
-  const avg = movingAverage(mi.months.map((mm) => mi[avgOf][mm]), window);
-  mi.months.forEach((mm, i) => data.push({ group: 'Average', key: mm, value: Math.round(avg[i] * 10) / 10 }));
   return data;
 }
 
@@ -355,6 +346,88 @@ export function monthlyNewDelinquencies(
     if (idx.has(dm)) counts[dm]++;
   }
   return months.map((mm) => ({ group: 'New delinquencies', key: mm, value: counts[mm] }));
+}
+
+// ── Workload & review health ────────────────────────────────────────────────
+
+/** The latest submission date across a set — the "as of" reference for aging. */
+export const asOfDate = (rows: readonly SlimPermit[]): string =>
+  rows.reduce((mx, r) => (r.submitted > mx ? r.submitted : mx), '');
+
+/** Open (in-process) permits bucketed by how long they've been open — days from
+ *  Date submitted to `asOf`. The last bucket is everything past the 90-day target,
+ *  so a growing "Over 90 days" bar flags a stalling queue. Buckets stay in order. */
+export function openBacklogAging(rows: readonly SlimPermit[], asOf: string): Bucket[] {
+  const labels = ['0–30 days', '31–60 days', '61–90 days', 'Over 90 days'];
+  const counts = [0, 0, 0, 0];
+  const open = new Set(IN_PROCESS_STATUSES);
+  for (const r of rows) {
+    if (!open.has(r.status)) continue;
+    const age = daysBetween(r.submitted, asOf);
+    if (age <= 30) counts[0]++;
+    else if (age <= 60) counts[1]++;
+    else if (age <= 90) counts[2]++;
+    else counts[3]++;
+  }
+  return labels.map((group, i) => ({ group, value: counts[i] }));
+}
+
+/** How many permits needed 0, 1, or 2+ inquiry round-trips ("Returned to
+ *  submitter"). The inquiry-rate KPI says how often; this shows the spread. */
+export function inquiryRoundsDistribution(rows: readonly SlimPermit[]): Bucket[] {
+  const c = [0, 0, 0];
+  for (const r of rows) c[r.returns <= 0 ? 0 : r.returns === 1 ? 1 : 2]++;
+  return [
+    { group: 'No inquiries', value: c[0] },
+    { group: '1 inquiry', value: c[1] },
+    { group: '2+ inquiries', value: c[2] },
+  ];
+}
+
+// ── Composition & outcomes ────────────────────────────────────────────────────
+const RENEWAL_ORDER = ['New', 'Renewal', 'Amendment', 'Reissuance'] as const;
+
+/** Permit-type composition split by renewal type — a stacked bar ({ group, key,
+ *  value }: group = renewal type, key = permit type). Types ordered by volume. */
+export function permitTypeByRenewal(rows: readonly SlimPermit[]): { group: string; key: string; value: number }[] {
+  const byType = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    if (!byType.has(r.permitType)) byType.set(r.permitType, new Map());
+    const inner = byType.get(r.permitType)!;
+    inner.set(r.renewalType, (inner.get(r.renewalType) ?? 0) + 1);
+  }
+  const total = (inner: Map<string, number>) => [...inner.values()].reduce((a, b) => a + b, 0);
+  const types = [...byType.entries()].sort((a, b) => total(b[1]) - total(a[1]) || a[0].localeCompare(b[0]));
+  const data: { group: string; key: string; value: number }[] = [];
+  for (const [type, inner] of types) {
+    for (const rt of RENEWAL_ORDER) {
+      const v = inner.get(rt) ?? 0;
+      if (v > 0) data.push({ group: rt, key: type, value: v });
+    }
+  }
+  return data;
+}
+
+/** Approved vs rejected DECIDED permits per resource category — a stacked bar
+ *  ({ group: 'Approved' | 'Rejected', key: category }). Categories by volume. */
+export function decisionsByCategory(rows: readonly SlimPermit[]): { group: string; key: string; value: number }[] {
+  const byCat = new Map<string, { approved: number; rejected: number }>();
+  for (const r of rows) {
+    if (!r.decision) continue;
+    if (!byCat.has(r.category)) byCat.set(r.category, { approved: 0, rejected: 0 });
+    const o = byCat.get(r.category)!;
+    if (r.decision === 'approved') o.approved++;
+    else o.rejected++;
+  }
+  const cats = [...byCat.entries()].sort(
+    (a, b) => b[1].approved + b[1].rejected - (a[1].approved + a[1].rejected) || a[0].localeCompare(b[0]),
+  );
+  const data: { group: string; key: string; value: number }[] = [];
+  for (const [cat, o] of cats) {
+    data.push({ group: 'Approved', key: cat, value: o.approved });
+    data.push({ group: 'Rejected', key: cat, value: o.rejected });
+  }
+  return data;
 }
 
 // ── The headline metric set ──────────────────────────────────────────────────

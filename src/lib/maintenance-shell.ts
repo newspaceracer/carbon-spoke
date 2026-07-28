@@ -106,6 +106,7 @@ function mountIdentitySwitcher(): void {
   const options: { value: Identity; label: string }[] = [
     { value: 'admin', label: 'System Administrator' },
     { value: 'user', label: 'Reviewer (non-admin)' },
+    { value: 'researcher', label: 'Researcher (applicant)' },
     { value: 'pending', label: 'New user (pending role)' },
     { value: 'anon', label: 'Logged out' },
   ];

@@ -263,8 +263,11 @@ function buildHistory(
     return events;
   }
 
-  // ~28% of the rest took one inquiry round-trip (Under review → Returned → back).
-  if (r() < 0.28) {
+  // 0–2 inquiry round-trips (Under review → Returned → back), with decreasing odds
+  // — most permits need none, some need one, a few bounce twice.
+  let rounds = 0;
+  if (r() < 0.32) rounds = r() < 0.35 ? 2 : 1; // ~32% return at least once; ~1/3 of those twice
+  for (let n = 0; n < rounds; n++) {
     const returnedAt = addDays(cur, 6 + Math.floor(r() * 20));
     events.push({ from: 'Under review', to: 'Returned to submitter', at: returnedAt, by: analyst });
     const backAt = addDays(returnedAt, 5 + Math.floor(r() * 25));
@@ -319,11 +322,26 @@ export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
 
   // Submitted a little before the permit takes effect (same season).
   const subMonth = 1 + ((month + 9) % 12); // ~2 months earlier, wrapped
-  const submitted = iso(startYear, subMonth, day);
+  let submitted = iso(startYear, subMonth, day);
   const permitStart = iso(startYear, month, day);
   const permitEnd = iso(startYear + 1, month, day);
   // Annual report is due a month after the permit term ends.
   const annualReportDue = iso(startYear + 1, 1 + (month % 12), day);
+
+  // Keep the OPEN queue realistic: a permit still in process was submitted
+  // recently — an old application would have been decided by now — so backlog
+  // aging clusters within the 90-day target with a small stalled tail, instead of
+  // reading as uniformly ancient. (Only `submitted` + its history shift; the
+  // permit-term dates stay tied to the project year.)
+  const inProcess =
+    status.label === 'Under review' ||
+    status.label === 'Out for signature' ||
+    status.label === 'Returned to submitter';
+  if (inProcess) {
+    let ageDays = Math.floor(rng() * 85); // most within the target window
+    if (rng() < 0.18) ageDays = 90 + Math.floor(rng() * 130); // a stalled tail
+    submitted = addDays('2025-12-28', -ageDays);
+  }
 
   // Paperwork state follows status: an issued permit (Active or Expired) has a
   // signed doc on file; some of those have this year's annual report in.

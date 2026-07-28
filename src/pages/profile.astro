@@ -24,18 +24,35 @@ import PhoneField from '../components/PhoneField.astro';
 import { currentUser, divisions, requestableRoles } from '../data/user';
 import { districtDirectory } from '../data/district';
 import { notificationSeeds } from '../data/site-settings';
+import { applicant, applicantOrg } from '../data/application';
 
 export const prototype = {
   title: 'My profile',
   summary:
-    'The signed-in reviewer manages their own account — personal details, ' +
-    'notification delivery, and a read-only view of their role and assigned districts.',
+    'A persona-aware account page. Internal staff manage their details, notification ' +
+    'delivery, and a read-only role/district view; a public Researcher manages their ' +
+    'contact details and which permit emails they receive. Switch the Prototype identity.',
   tag: 'Internal tool',
 };
 
 const u = currentUser;
 const fullName = `${u.firstName} ${u.lastName}`;
 const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? '';
+
+// The public Researcher persona (permit applicant). Seeded from the applicant used
+// in the apply flow, so this profile and that flow describe one person. The profile
+// renders BOTH personas' persona-specific sections; a client script (see identity
+// below) shows the one matching the signed-in Prototype identity.
+const researcher = {
+  firstName: applicant.firstName,
+  lastName: applicant.lastName,
+  title: applicant.title,
+  email: applicant.email,
+  phone: applicant.phone,
+  address: applicant.address,
+  organization: applicantOrg.name,
+};
+const researcherName = `${researcher.firstName} ${researcher.lastName}`;
 
 // Dropdown options render alphabetically (states are already A–Z at the source).
 const divisionsSorted = [...divisions].sort((a, b) => a.label.localeCompare(b.label));
@@ -114,7 +131,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
             <dt class="stat__label t-label-01">Office phone</dt>
             <dd class="stat__value t-body-01" id="stat-phone">{u.phone}</dd>
           </div>
-          <div class="stat">
+          <div class="stat" id="stat-member">
             <dt class="stat__label t-label-01">Member since</dt>
             <dd class="stat__value t-body-01">{u.memberSince}</dd>
           </div>
@@ -130,7 +147,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
                until you deliberately enter edit mode. Save/Cancel then bound the
                transaction (see .form__actions, hidden until editing). -->
           <cds-button slot="aside" id="profile-edit" kind="ghost" size="sm">Edit</cds-button>
-          <p class="section-hint t-body-01">Update how you appear to applicants and other reviewers across the permitting system.</p>
+          <p class="section-hint t-body-01" id="personal-hint">Update how you appear to applicants and other reviewers across the permitting system.</p>
 
           <!-- Confirmation of a save. Hidden until the form is submitted. -->
           <cds-inline-notification
@@ -147,11 +164,14 @@ const notificationPrefs = notificationSeeds.map((s) => ({
               <cds-text-input id="f-firstName" label="First name" value={u.firstName} readonly></cds-text-input>
               <cds-text-input id="f-lastName" label="Last name" value={u.lastName} readonly></cds-text-input>
               <cds-text-input id="f-title" label="Job title" value={u.title} readonly></cds-text-input>
+              <!-- Staff carry a Division; a Researcher carries an Organization. Both
+                   are rendered; the script shows the one for the active persona. -->
               <cds-dropdown id="f-division" title-text="Division" value={u.division} read-only>
                 {divisionsSorted.map((d) => (
                   <cds-dropdown-item value={d.value}>{d.label}</cds-dropdown-item>
                 ))}
               </cds-dropdown>
+              <cds-text-input id="f-organization" label="Organization" value={researcher.organization} readonly style="display:none"></cds-text-input>
               <cds-text-input id="f-email" type="email" label="Email address" value={u.email} readonly></cds-text-input>
               <div class="field-grid__wide">
                 <PhoneField id="f-phone" label="Office phone" value={u.phone} />
@@ -189,32 +209,63 @@ const notificationPrefs = notificationSeeds.map((s) => ({
           </div>
         </PermitSection>
 
-        <PermitSection title="Notification preferences">
-          <p class="section-hint t-body-01">Choose which permit emails you receive. These are the messages the system sends about your applications and permits, delivered to <span class="prefs__email" id="prefs-email">{u.email}</span>.</p>
+        <!-- Staff notifications: internal reviewer activity (assignments, comments,
+             decisions, reports). Shown for the admin/reviewer identities. -->
+        <div data-persona="staff">
+          <PermitSection title="Notification preferences">
+            <p class="section-hint t-body-01">Choose which permit activity you're notified about. All notifications are sent by email to <span class="prefs__email">{u.email}</span>.</p>
 
-          <div class="prefs" id="notification-prefs" data-storage-key="profile-notifications">
-            {notificationPrefs.map((n) => (
-              <div class="prefs__row">
-                <div class="prefs__info">
-                  <p class="prefs__label t-heading-compact-01">{n.label}</p>
-                  <p class="prefs__desc t-body-01">{n.description}</p>
+            <div class="prefs notification-prefs" data-storage-key="profile-notifications-staff">
+              {u.notifications.map((n) => (
+                <div class="prefs__row">
+                  <div class="prefs__info">
+                    <p class="prefs__label t-heading-compact-01">{n.label}</p>
+                    <p class="prefs__desc t-body-01">{n.description}</p>
+                  </div>
+                  <cds-toggle
+                    class="prefs__toggle"
+                    data-key={n.key}
+                    label-text={`Email me: ${n.label}`}
+                    hide-label
+                    toggled={n.enabled || undefined}
+                  ></cds-toggle>
                 </div>
-                <cds-toggle
-                  class="prefs__toggle"
-                  data-key={n.key}
-                  label-text={`Email me: ${n.label}`}
-                  hide-label
-                  toggled={n.enabled || undefined}
-                ></cds-toggle>
-              </div>
-            ))}
-          </div>
-        </PermitSection>
+              ))}
+            </div>
+          </PermitSection>
+        </div>
+
+        <!-- Researcher notifications: the applicant-facing system emails, driven by
+             the same inventory a System Admin edits (notificationSeeds). Shown for
+             the Researcher identity. -->
+        <div data-persona="researcher" style="display:none">
+          <PermitSection title="Notification preferences">
+            <p class="section-hint t-body-01">Choose which permit emails you receive. These are the messages the system sends about your applications and permits, delivered to <span class="prefs__email">{researcher.email}</span>.</p>
+
+            <div class="prefs notification-prefs" data-storage-key="profile-notifications-researcher">
+              {notificationPrefs.map((n) => (
+                <div class="prefs__row">
+                  <div class="prefs__info">
+                    <p class="prefs__label t-heading-compact-01">{n.label}</p>
+                    <p class="prefs__desc t-body-01">{n.description}</p>
+                  </div>
+                  <cds-toggle
+                    class="prefs__toggle"
+                    data-key={n.key}
+                    label-text={`Email me: ${n.label}`}
+                    hide-label
+                    toggled={n.enabled || undefined}
+                  ></cds-toggle>
+                </div>
+              ))}
+            </div>
+          </PermitSection>
+        </div>
       </div>
 
-      <!-- ── Rail: role & access (read-only) ─────────────────────────────── -->
+      <!-- ── Rail: role & access (staff) / account (researcher), read-only ── -->
       <aside class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5">
-        <cds-tile class="access">
+        <cds-tile class="access" data-persona="staff">
           <h2 class="access__title t-heading-03">Role &amp; access</h2>
 
           <dl class="access__facts">
@@ -253,6 +304,29 @@ const notificationPrefs = notificationSeeds.map((s) => ({
             Your role and district assignments are managed by an administrator.
           </p>
           <cds-button id="request-role-btn" kind="tertiary" size="sm">Request role change</cds-button>
+        </cds-tile>
+
+        <!-- Researcher account panel — a public applicant has no internal role or
+             district assignments, so the rail states their account type and
+             organization instead, with a way to their applications. -->
+        <cds-tile class="access" data-persona="researcher" style="display:none">
+          <h2 class="access__title t-heading-03">Account</h2>
+
+          <dl class="access__facts">
+            <div class="access__fact">
+              <dt class="stat__label t-label-01">Account type</dt>
+              <dd><cds-tag type="green" size="md">Researcher</cds-tag></dd>
+            </div>
+          </dl>
+
+          <h3 class="access__subhead t-heading-01">Organization</h3>
+          <p class="researcher-org t-body-01">{researcher.organization}</p>
+
+          <p class="access__note t-label-01">
+            You submit and manage Scientific Research &amp; Collection Permit applications as a
+            member of the public.
+          </p>
+          <cds-button kind="tertiary" size="sm" href={withBase('/my-permits')}>View my applications</cds-button>
         </cds-tile>
       </aside>
     </div>
@@ -319,6 +393,64 @@ const notificationPrefs = notificationSeeds.map((s) => ({
   import { wireAddressFieldset } from '../lib/address-fields';
   import { wirePhoneField, formatDisplay } from '../lib/phone';
   import { pendingForUser, submitRequest, accountRoleDisplay, roleDisplay } from '../data/requests';
+  import { readIdentity } from '../lib/maintenance';
+  import { applicant, applicantOrg } from '../data/application';
+
+  // ── Persona: staff (admin/reviewer) vs researcher (public applicant) ─────
+  // The page renders BOTH personas' persona-specific sections; here we reveal the
+  // set matching the signed-in Prototype identity. cds-* elements set :host display
+  // (which outranks [hidden]), so we toggle inline display — the reliable lever.
+  const isResearcher = readIdentity() === 'researcher';
+  document.querySelectorAll<HTMLElement>('[data-persona]').forEach((el) => {
+    const forResearcher = el.dataset.persona === 'researcher';
+    el.style.display = forResearcher === isResearcher ? '' : 'none';
+  });
+  // Division (staff) / Organization (researcher) swap inside the shared form.
+  const fDivisionEl = document.getElementById('f-division') as any;
+  const fOrganizationEl = document.getElementById('f-organization') as any;
+  if (fDivisionEl) fDivisionEl.style.display = isResearcher ? 'none' : '';
+  if (fOrganizationEl) fOrganizationEl.style.display = isResearcher ? '' : 'none';
+  // Persona copy + banner bits.
+  const personalHintEl = document.getElementById('personal-hint');
+  if (personalHintEl) {
+    personalHintEl.textContent = isResearcher
+      ? 'Update your contact details for your permit applications.'
+      : 'Update how you appear to applicants and other reviewers across the permitting system.';
+  }
+  const memberStatEl = document.getElementById('stat-member') as HTMLElement | null;
+  if (memberStatEl) memberStatEl.style.display = isResearcher ? 'none' : '';
+
+  // The active persona's identity data — defaults, storage key, and the field that
+  // varies (Division vs Organization) all key off this.
+  const persona = isResearcher
+    ? {
+        scalarKey: 'organization',
+        defaults: {
+          firstName: applicant.firstName,
+          lastName: applicant.lastName,
+          title: applicant.title,
+          organization: applicantOrg.name,
+          email: applicant.email,
+        } as Record<string, string>,
+        phone: applicant.phone,
+        address: applicant.address as Address,
+        storageKey: 'profile-personal-researcher',
+        subExtra: applicantOrg.name,
+      }
+    : {
+        scalarKey: 'division',
+        defaults: {
+          firstName: currentUser.firstName,
+          lastName: currentUser.lastName,
+          title: currentUser.title,
+          division: currentUser.division,
+          email: currentUser.email,
+        } as Record<string, string>,
+        phone: currentUser.phone,
+        address: currentUser.address as Address,
+        storageKey: 'profile-personal',
+        subExtra: null as string | null,
+      };
 
   // ── Personal information: edit + persist (prototype-local) ──────────────
   // A static Astro prototype has no backend, so "saved" means localStorage —
@@ -331,12 +463,11 @@ const notificationPrefs = notificationSeeds.map((s) => ({
   const actions = document.getElementById('form-actions');
   const notice = document.getElementById('save-notice') as any;
 
-  // Identity scalars (name / title / division / email). Phone + mailing address
-  // are locale-sensitive widgets driven by their own controllers below, so
-  // they're kept out of this flat list.
-  const scalarIds = ['firstName', 'lastName', 'title', 'division', 'email'] as const;
-  type ScalarKey = (typeof scalarIds)[number];
-  const fieldEl = (k: ScalarKey) => document.getElementById(`f-${k}`) as any;
+  // Identity scalars: name / title / (division|organization) / email. The fourth
+  // key varies by persona. Phone + mailing address are locale-sensitive widgets
+  // driven by their own controllers below, so they're kept out of this flat list.
+  const scalarIds = ['firstName', 'lastName', 'title', persona.scalarKey, 'email'];
+  const fieldEl = (k: string) => document.getElementById(`f-${k}`) as any;
   // cds-dropdown exposes the readonly flag as `readOnly` / attr `read-only`;
   // cds-text-input uses `readonly`. One helper handles both.
   const setReadonly = (el: any, ro: boolean) => {
@@ -352,16 +483,10 @@ const notificationPrefs = notificationSeeds.map((s) => ({
   const addr = addrRoot ? wireAddressFieldset(addrRoot, { readonly: true }) : null;
   const phone = phoneRoot ? wirePhoneField(phoneRoot, { readonly: true }) : null;
 
-  // Seeded defaults; a saved edit overrides them.
-  const scalarDefaults: Record<ScalarKey, string> = {
-    firstName: currentUser.firstName,
-    lastName: currentUser.lastName,
-    title: currentUser.title,
-    division: currentUser.division,
-    email: currentUser.email,
-  };
-  const defaultPhone = currentUser.phone;                 // E.164
-  const defaultAddress = currentUser.address as Address;  // generic, country-aware
+  // Seeded defaults for the active persona; a saved edit overrides them.
+  const scalarDefaults = persona.defaults;
+  const defaultPhone = persona.phone;      // E.164
+  const defaultAddress = persona.address;  // generic, country-aware
   const divisionLabels: Record<string, string> = {
     'natural-resources': 'Natural Resources Division',
     'cultural-resources': 'Cultural Resources Division',
@@ -370,19 +495,12 @@ const notificationPrefs = notificationSeeds.map((s) => ({
     'science': 'Office of Scientific Review',
   };
 
-  // The persisted record: identity scalars + an E.164 phone + a generic address.
-  interface Personal {
-    firstName: string;
-    lastName: string;
-    title: string;
-    division: string;
-    email: string;
-    phone: string;
-    address: Address;
-  }
+  // The persisted record: identity scalars (flat, incl. the persona-variable key)
+  // + an E.164 phone + a generic address.
+  type Personal = Record<string, any> & { phone: string; address: Address };
 
   if (form && saveBtn && resetBtn && editBtn && actions && notice) {
-    const storageKey = form.dataset.storageKey || 'profile-personal';
+    const storageKey = persona.storageKey;
 
     const readStored = (): Partial<Personal> => {
       try {
@@ -411,22 +529,24 @@ const notificationPrefs = notificationSeeds.map((s) => ({
       const subEl = document.getElementById('banner-sub');
       const emailEl = document.getElementById('stat-email');
       const phoneEl = document.getElementById('stat-phone');
-      const prefsEmailEl = document.getElementById('prefs-email');
       const avatarEl = document.querySelector('#banner-avatar .avatar');
+      // Sub-line: "Title · Organization" (researcher) or "Title · Division" (staff).
+      const subExtra = isResearcher ? persona.subExtra ?? '' : divisionLabels[v.division] ?? '';
       if (nameEl) nameEl.textContent = name;
-      if (subEl) subEl.textContent = `${v.title} · ${divisionLabels[v.division] ?? ''}`;
+      if (subEl) subEl.textContent = `${v.title} · ${subExtra}`;
       if (emailEl) emailEl.textContent = v.email;
       // Phone is stored E.164; show it formatted for readers.
       if (phoneEl) phoneEl.textContent = formatDisplay(v.phone);
-      if (prefsEmailEl) prefsEmailEl.textContent = v.email;
+      // The visible notification-section email echoes the account email too.
+      document.querySelectorAll('.prefs__email').forEach((el) => (el.textContent = v.email));
       if (avatarEl) avatarEl.textContent = initials(v.firstName, v.lastName);
     };
 
     const current = (): Personal => {
-      const out = {} as Personal;
+      const out = { phone: '', address: defaultAddress } as Personal;
       scalarIds.forEach((k) => {
         const el = fieldEl(k);
-        (out as any)[k] = (el?.value ?? scalarDefaults[k]).toString();
+        out[k] = (el?.value ?? scalarDefaults[k]).toString();
       });
       out.phone = phone?.getValue() || defaultPhone;
       out.address = addr?.getValue() ?? defaultAddress;
@@ -436,19 +556,18 @@ const notificationPrefs = notificationSeeds.map((s) => ({
     // The persisted truth: seeded defaults overlaid with any saved edit. Guards
     // reject a stale record from an older build (flat US address / national phone).
     const savedValues = (): Personal => {
-      const s = readStored();
+      const s = readStored() as any;
       const okPhone = typeof s.phone === 'string' && s.phone.startsWith('+');
       const okAddr =
-        !!s.address && typeof s.address === 'object' && typeof (s.address as any).country === 'string';
-      return {
-        firstName: s.firstName ?? scalarDefaults.firstName,
-        lastName: s.lastName ?? scalarDefaults.lastName,
-        title: s.title ?? scalarDefaults.title,
-        division: s.division ?? scalarDefaults.division,
-        email: s.email ?? scalarDefaults.email,
-        phone: okPhone ? (s.phone as string) : defaultPhone,
-        address: okAddr ? (s.address as Address) : defaultAddress,
-      };
+        !!s.address && typeof s.address === 'object' && typeof s.address.country === 'string';
+      const out = {
+        phone: okPhone ? s.phone : defaultPhone,
+        address: okAddr ? s.address : defaultAddress,
+      } as Personal;
+      scalarIds.forEach((k) => {
+        out[k] = s[k] ?? scalarDefaults[k];
+      });
+      return out;
     };
 
     // View-first, like district/permit: the fields read read-only until you
@@ -511,20 +630,19 @@ const notificationPrefs = notificationSeeds.map((s) => ({
     });
   }
 
-  // ── Notification preferences: persist each toggle by key + channel ───────
-  const prefs = document.getElementById('notification-prefs');
-  if (prefs) {
+  // ── Notification preferences: persist each toggle by key ─────────────────
+  // Both persona lists (staff + researcher) are wired; each persists to its own
+  // storage key, so switching identity never crosses their saved state. Only the
+  // active persona's list is visible, but wiring both is harmless.
+  document.querySelectorAll<HTMLElement>('.notification-prefs').forEach((prefs) => {
     const prefsKey = prefs.dataset.storageKey || 'profile-notifications';
     const toggles = Array.from(prefs.querySelectorAll<HTMLElement>('cds-toggle'));
 
-    const stored = (() => {
-      try {
-        const parsed = JSON.parse(localStorage.getItem(prefsKey) || '{}');
-        return parsed && typeof parsed === 'object' ? parsed : {};
-      } catch {
-        return {};
-      }
-    })();
+    let stored: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem(prefsKey) || '{}');
+      if (parsed && typeof parsed === 'object') stored = parsed;
+    } catch {}
 
     const cellId = (t: HTMLElement) => t.dataset.key ?? '';
 
@@ -540,7 +658,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
       localStorage.setItem(prefsKey, JSON.stringify(state));
     };
     prefs.addEventListener('cds-toggle-changed', persist);
-  }
+  });
 
   // ── Align every switch to one vertical column ────────────────────────────
   // cds-toggle renders the label-text as a VISIBLE span to the left of the switch,
@@ -810,6 +928,11 @@ const notificationPrefs = notificationSeeds.map((s) => ({
     gap: 0.75rem;
   }
   .district__name { min-width: 0; }
+  /* Researcher account panel — organization line under the subhead. */
+  .researcher-org {
+    margin: 0 0 1.5rem;
+    color: var(--cds-text-primary, #161616);
+  }
   .access__note {
     margin: 0 0 1rem;
     color: var(--cds-text-secondary, #525252);

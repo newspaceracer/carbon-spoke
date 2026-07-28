@@ -35,7 +35,9 @@ export type SiteStatus = 'live' | 'maintenance';
 // 'pending' = signed in with a verified parks.ca.gov account that has NO reviewer
 // role yet (awaiting an admin's grant). It's logged in but can reach almost
 // nothing internal — see allowedWhilePending / enforcePending.
-export type Identity = 'admin' | 'user' | 'anon' | 'pending';
+// 'researcher' = a signed-in member of the public (permit applicant). Logged in,
+// non-internal: they own an applicant account/profile and submit applications.
+export type Identity = 'admin' | 'user' | 'anon' | 'pending' | 'researcher';
 
 export interface SiteState {
   status: SiteStatus;
@@ -96,7 +98,9 @@ export const isMaintenance = (): boolean => readState().status === 'maintenance'
 // ── Identity (prototype role simulation) ─────────────────────────────────────
 export function readIdentity(): Identity {
   const v = localStorage.getItem(IDENTITY_KEY);
-  return v === 'admin' || v === 'user' || v === 'anon' || v === 'pending' ? v : 'admin';
+  return v === 'admin' || v === 'user' || v === 'anon' || v === 'pending' || v === 'researcher'
+    ? v
+    : 'admin';
 }
 
 export function writeIdentity(id: Identity): void {
