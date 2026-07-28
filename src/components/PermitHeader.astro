@@ -54,11 +54,16 @@ interface Props {
    *  decision actions (Request changes / Reject permit). Defaults to the detail
    *  behavior. */
   context?: 'detail' | 'finalize';
+  /** The permit's district span, 'single' | 'multi'. Surfaced on the banner as
+   *  `data-permit-type` so the dev permit-role control can constrain its options
+   *  to what the active identity is eligible for on this type (Story 2). Derived
+   *  from the parks' district span today; a stored field in Story 8. */
+  permitType?: 'single' | 'multi';
 }
 
 const {
   id, name, organization, status, infoTags, flagTags, stats, requestedWindow,
-  analysisTeam, directory = [], context = 'detail',
+  analysisTeam, directory = [], context = 'detail', permitType,
 } = Astro.props;
 
 // The started-phase primary differs by mount: enter the wizard vs. approve from
@@ -92,16 +97,11 @@ const reviewMeta = (m: TeamMember) => {
 const reviewTotal = analysisTeam?.length ?? 0;
 const reviewDone = analysisTeam?.filter(isDone).length ?? 0;
 const reviewAllDone = reviewTotal > 0 && reviewDone === reviewTotal;
-// The add-reviewer combo lists directory users not already on the team.
-const onTeam = new Set(analysisTeam?.map((m) => m.id));
-const eligibleUsers = directory
-  .filter((u) => !onTeam.has(u.id))
-  .sort((a, b) => a.name.localeCompare(b.name));
 // Shared with the detail page's roster (removed/added edits).
 const teamStorageKey = `permit-team-${id}`;
 ---
 
-<header class="banner cds--g100" id="permit-banner" data-permit-id={id} data-status={status.label} data-letter-url={withBase('/final-letter')} data-context={context}>
+<header class="banner cds--g100" id="permit-banner" data-permit-id={id} data-status={status.label} data-letter-url={withBase('/final-letter')} data-context={context} data-permit-type={permitType}>
   <div class="banner__inner">
   <div class="banner__crumb"><slot name="breadcrumb" /></div>
   <div class="banner__main">
@@ -113,7 +113,7 @@ const teamStorageKey = `permit-team-${id}`;
         <cds-icon-indicator class="permit-status-indicator" size="20" kind={status.kind} label={status.label}></cds-icon-indicator>
       </div>
       <div class="banner__tags">
-        {infoTags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+        {infoTags.map((tag) => <cds-tag type={tag.type} size="lg">{tag.label}</cds-tag>)}
         {flagTags.map((tag) => (
           <cds-tag type={tag.type} size="lg">
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -316,30 +316,11 @@ const teamStorageKey = `permit-team-${id}`;
           status={reviewAllDone ? 'finished' : 'active'}
         ></cds-progress-bar>
 
-        <!-- Add a directory user to the review team. Button-first: "Add reviewer"
-             reveals the picker below and swaps the modal footer to Cancel / Add
-             reviewer, so the commit is the modal's OWN primary action — no
-             modal-on-modal, and no easy-to-miss trailing button. The picker sits
-             ABOVE the roster so its dropdown opens down into the list area. Only
-             existing users; the combo rebuilds after each change to exclude
-             whoever's already on. -->
-        <cds-button kind="tertiary" size="md" id="analysis-add-trigger" type="button">Add reviewer</cds-button>
-        <form class="team-add" id="analysis-add" style="display:none">
-          <cds-combo-box
-            id="analysis-add-select"
-            class="team-add__select"
-            title-text="Reviewer"
-            label="Search staff by name…"
-          >
-            {eligibleUsers.map((u) => (
-              <cds-combo-box-item value={u.id}>{u.name} — {u.role}</cds-combo-box-item>
-            ))}
-          </cds-combo-box>
-        </form>
-
-        <!-- Reviewer roster. Each row shows completion (icon-indicator, not colour
-             alone) and a remove control. Seed rows carry data-seed so removing one
-             is tracked differently from dropping a just-added user. -->
+        <!-- Reviewer roster — VIEW ONLY. This modal shows the analysis team and its
+             review progress; adding and removing reviewers is managed on the permit
+             Overview (a single management surface avoids two edit controls for one
+             team, and keeps this modal from stacking a picker/confirm on itself).
+             Each row shows completion via an icon-indicator (not colour alone). -->
         <ul class="review-roster" id="review-roster" data-team-key={teamStorageKey}>
           {analysisTeam.map((m) => {
             const meta = reviewMeta(m);
@@ -361,10 +342,6 @@ const teamStorageKey = `permit-team-${id}`;
                 </span>
                 <span class="review-row__when t-label-01">{meta.when}</span>
               </div>
-              <cds-icon-button kind="ghost" size="sm" align="left" data-remove>
-                <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M12 12h2v12h-2zM18 12h2v12h-2z"/><path d="M4 6v2h2v20a2 2 0 002 2h16a2 2 0 002-2V8h2V6zm4 22V8h16v20zM12 2h8v2h-8z"/></svg>
-                <span slot="tooltip-content">{`Remove ${m.name}`}</span>
-              </cds-icon-button>
             </li>
             );
           })}
@@ -372,14 +349,12 @@ const teamStorageKey = `permit-team-${id}`;
       </cds-stack>
     </cds-modal-body>
     <cds-modal-footer>
-      <cds-modal-footer-button kind="primary" id="analysis-done" data-modal-close>Done</cds-modal-footer-button>
-      <cds-modal-footer-button kind="secondary" id="analysis-add-cancel" style="display:none">Cancel</cds-modal-footer-button>
-      <cds-modal-footer-button kind="primary" id="analysis-add-save" style="display:none">Add reviewer</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" data-modal-close>Done</cds-modal-footer-button>
     </cds-modal-footer>
   </cds-modal>
 
-  <!-- Directory JSON + row template for the client add-reviewer flow. -->
-  <script type="application/json" id="analysis-directory" set:html={JSON.stringify(directory)}></script>
+  <!-- Row template — clones a roster row for reviewers added on the Overview and
+       replayed here from localStorage (view-only: no remove control). -->
   <template id="review-row-template">
     <li class="review-row" data-done="false">
       <span class="avatar avatar--md" aria-hidden="true"></span>
@@ -393,10 +368,6 @@ const teamStorageKey = `permit-team-${id}`;
         </span>
         <span class="review-row__when t-label-01"></span>
       </div>
-      <cds-icon-button kind="ghost" size="sm" align="left" data-remove>
-        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M12 12h2v12h-2zM18 12h2v12h-2z"/><path d="M4 6v2h2v20a2 2 0 002 2h16a2 2 0 002-2V8h2V6zm4 22V8h16v20zM12 2h8v2h-8z"/></svg>
-        <span slot="tooltip-content">Remove reviewer</span>
-      </cds-icon-button>
     </li>
   </template>
 )}
@@ -571,48 +542,30 @@ const teamStorageKey = `permit-team-${id}`;
   if (metricBtn && modal && roster) {
     metricBtn.addEventListener('click', () => (modal.open = true));
 
+    // VIEW ONLY. This modal displays the analysis team + review progress; it does
+    // not edit the team. Add/remove happens on the permit Overview, which writes
+    // the same `permit-team-${id}` localStorage this replays on load.
     const teamKey = (roster as HTMLElement).dataset.teamKey || 'permit-team';
     const tpl = document.getElementById('review-row-template') as HTMLTemplateElement;
-    const dirEl = document.getElementById('analysis-directory');
-    const addSelect = document.getElementById('analysis-add-select') as any;
-    const addForm = document.getElementById('analysis-add');
-    const addTrigger = document.getElementById('analysis-add-trigger');
-    const doneBtn = document.getElementById('analysis-done');
-    const cancelBtn = document.getElementById('analysis-add-cancel');
-    const saveBtn = document.getElementById('analysis-add-save');
     const bars = [
       document.getElementById('analysis-metric-bar'),
       document.getElementById('analysis-modal-bar'),
     ].filter(Boolean) as any[];
 
-    let directory: DirUser[] = [];
-    try { directory = JSON.parse(dirEl?.textContent || '[]'); } catch { directory = []; }
-    const byId = new Map(directory.map((u) => [u.id, u]));
-
-    // Today, formatted like the seeded dates ("Jul 22, 2026") — the "added" line
-    // for a reviewer joined just now. Completion is data-driven (a reviewer marks
-    // their own analysis done elsewhere), so nothing here toggles it.
     const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-    // localStorage — {removed, added} shared with the detail-page roster.
     const loadTeam = (): TeamEdits => {
       try {
         const p = JSON.parse(localStorage.getItem(teamKey) || '{}');
         return { removed: Array.isArray(p.removed) ? p.removed : [], added: Array.isArray(p.added) ? p.added : [] };
       } catch { return { removed: [], added: [] }; }
     };
-    const saveTeam = (e: TeamEdits) => localStorage.setItem(teamKey, JSON.stringify(e));
 
-    // Seed ids = the rows the server rendered — captured before edits are applied.
-    const seedIds = new Set(
-      Array.from(roster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!),
-    );
     const currentIds = () =>
       Array.from(roster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!);
-
     const rows = () => Array.from(roster.querySelectorAll<HTMLElement>('.review-row'));
 
-    // Recompute the two meters from the live roster (added reviewers are pending).
+    // Recompute the two meters from the roster (added reviewers are pending).
     const recompute = () => {
       const all = rows();
       const total = all.length;
@@ -626,41 +579,6 @@ const teamStorageKey = `permit-team-${id}`;
       });
     };
 
-    // Rebuild the combo to directory users not already on the team.
-    const refreshCombo = () => {
-      const onTeam = new Set(currentIds());
-      addSelect.value = '';
-      addSelect.innerHTML = '';
-      directory
-        .filter((u) => !onTeam.has(u.id))
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .forEach((u) => {
-          const item = document.createElement('cds-combo-box-item');
-          item.setAttribute('value', u.id);
-          item.textContent = `${u.name} — ${u.role}`;
-          addSelect.appendChild(item);
-        });
-    };
-
-    // Removal is immediate here (no confirm modal): the analysis-team modal is an
-    // edit surface, and the add-reviewer combo below re-adds anyone in one step —
-    // so this is as reversible as the draft rosters. Stacking a confirm modal on
-    // top of this modal would be the anti-pattern; base-page removals confirm,
-    // this one does not.
-    const removeMember = (id: string, row: HTMLElement) => {
-      row.remove();
-      const e = loadTeam();
-      if (seedIds.has(id)) { if (!e.removed.includes(id)) e.removed.push(id); }
-      else { e.added = e.added.filter((u) => u.id !== id); }
-      saveTeam(e);
-      refreshCombo();
-      recompute();
-    };
-
-    const wireRow = (row: HTMLElement) => {
-      row.querySelector('[data-remove]')?.addEventListener('click', () => removeMember(row.dataset.userId!, row));
-    };
-
     const buildRow = (u: DirUser): HTMLElement => {
       const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
       li.dataset.userId = u.id;
@@ -672,54 +590,13 @@ const teamStorageKey = `permit-team-${id}`;
       if (roleEl) roleEl.textContent = `${u.role} — ${u.detail}`;
       const whenEl = li.querySelector('.review-row__when');
       if (whenEl) whenEl.textContent = `Added ${today}`;
-      const removeLabel = li.querySelector('[data-remove] [slot="tooltip-content"]');
-      if (removeLabel) removeLabel.textContent = `Remove ${u.name}`;
       return li;
     };
 
-    const addMember = (): boolean => {
-      const id = addSelect.value;
-      if (!id || currentIds().includes(id)) return false;
-      const u = byId.get(id);
-      if (!u) return false;
-      const row = buildRow(u);
-      roster.appendChild(row);
-      wireRow(row);
-      const e = loadTeam();
-      e.removed = e.removed.filter((r) => r !== id);
-      if (!e.added.some((a) => a.id === id)) e.added.push(u);
-      saveTeam(e);
-      refreshCombo();
-      recompute();
-      return true;
-    };
-
-    // ── Add-reviewer mode ──
-    // The trigger reveals the picker and swaps the footer to Cancel / Add reviewer.
-    // The footer's own primary button is the commit — button-first, unmissable, and
-    // no modal stacked on this modal. (Inline style.display, not `hidden`: cds-*
-    // set their own :host display, so `hidden` won't collapse them.)
-    const show = (el: Element | null, on: boolean) => {
-      if (el) (el as HTMLElement).style.display = on ? '' : 'none';
-    };
-    const setAddMode = (on: boolean) => {
-      show(addForm, on); show(cancelBtn, on); show(saveBtn, on);
-      show(addTrigger, !on); show(doneBtn, !on);
-      if (on) { addSelect.value = ''; addSelect.focus?.(); }
-    };
-    setAddMode(false);
-    addTrigger?.addEventListener('click', () => setAddMode(true));
-    cancelBtn?.addEventListener('click', () => setAddMode(false));
-    saveBtn?.addEventListener('click', () => { addMember(); setAddMode(false); });
-    // Dismissing the modal mid-add (X / Esc) shouldn't leave it stuck in add mode.
-    modal.addEventListener('cds-modal-closed', () => setAddMode(false));
-
-    // ── Init: replay stored add/remove edits, wire, recompute ──
+    // ── Init: replay stored add/remove edits, recompute ──
     const edits = loadTeam();
     edits.removed.forEach((id) => roster.querySelector(`[data-user-id="${id}"]`)?.remove());
     edits.added.forEach((u) => { if (!currentIds().includes(u.id)) roster.appendChild(buildRow(u)); });
-    rows().forEach(wireRow);
-    refreshCombo();
     recompute();
   }
 </script>
@@ -952,13 +829,6 @@ const teamStorageKey = `permit-team-${id}`;
   .review-row:first-child {
     border-block-start: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   }
-  /* Signal the destructive intent on hover — cds-icon-button has no `danger`
-     kind. The hand-authored glyph has no fill="currentColor", so Carbon's
-     `color:` token can't tint it; set `fill` on the slotted (light-DOM) svg
-     directly with the danger token. */
-  .review-row cds-icon-button[data-remove]:hover svg {
-    fill: var(--cds-button-danger-primary, #da1e28);
-  }
   .review-row__id {
     min-width: 0;
   }
@@ -1004,19 +874,6 @@ const teamStorageKey = `permit-team-${id}`;
     .review-row__status {
       grid-column: 2 / -1;
     }
-  }
-  /* Add-a-reviewer: combo grows, button aligns to the input bottom (the combo's
-     title label floats above, so flex-end lines the two controls up). */
-  .team-add {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--cds-spacing-05, 1rem);
-  }
-  .team-add__select {
-    flex: 1 1 auto;
-  }
-  .team-add cds-button {
-    flex: 0 0 auto;
   }
 
   /* Approve modal: quiet reminder of the applicant's requested window, sitting

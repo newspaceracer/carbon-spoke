@@ -33,7 +33,6 @@ import ContactCard from '../components/ContactCard.astro';
 import Avatar from '../components/Avatar.astro';
 import { permit } from '../data/permit';
 import { userDirectory } from '../data/user';
-import { districtKey } from '../data/conditions';
 
 export const prototype = {
   title: 'Permit detail',
@@ -62,6 +61,12 @@ const stats = [
   { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
 ];
 
+// A permit's type is its district span: multi-district when its parks span more
+// than one district. Derived here (a stored field in Story 8); surfaced on the
+// header banner so the dev permit-role control can constrain its options.
+const permitType: 'single' | 'multi' =
+  permit.studyAreas.districts.length > 1 ? 'multi' : 'single';
+
 // Activities this permit involves. The Data-collection sections that used to
 // state these are now gated (hidden when not involved), so surface them as
 // header classification badges — derived from the SAME flags, so they agree.
@@ -89,15 +94,6 @@ const appliedTags = permit.overview.tagOptions.filter((t) => permit.overview.tag
 const tagStorageKey = `permit-tags-${permit.id}`;
 
 const t = permit.researchTeam;
-
-// Special conditions: the districts on this permit, each keyed to its condition
-// catalog. Drives the "Acting as" scope options + the per-district blocks; the
-// client script recomputes the same keys so the two surfaces agree.
-const permitDistricts = permit.studyAreas.districts.map((d) => ({
-  name: d.name,
-  key: districtKey(d.name),
-  parks: d.parks.length,
-}));
 ---
 
 <BaseLayout title={`${permit.id} — ${permit.name}`}>
@@ -121,6 +117,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
         flagTags={permit.flagTags}
         stats={stats}
         requestedWindow={permit.activeWindow}
+        permitType={permitType}
       >
         <cds-breadcrumb slot="breadcrumb" no-trailing-slash>
           <cds-breadcrumb-item>
@@ -236,6 +233,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                   </svg>
                   Internal only
                 </span>
+                <cds-button slot="aside" id="team-add-open" kind="tertiary" size="md" type="button">Add to team</cds-button>
                 <ul class="roster" id="team-roster" data-storage-key={teamStorageKey}>
                   {permit.overview.analysisTeam.map((m) => (
                     <li class:list={['roster__row', m.highlight && 'roster__row--active']} data-user-id={m.id}>
@@ -259,24 +257,6 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                     </li>
                   ))}
                 </ul>
-
-                <!-- Add an existing user to the team. The combo-box lists only
-                     directory users not already assigned; the script rebuilds its
-                     items after every add/remove so it never offers a duplicate. -->
-                <form class="team-add" id="team-add" data-storage-key={teamStorageKey}>
-                  <cds-combo-box
-                    id="team-add-select"
-                    class="team-add__select"
-                    title-text="Add an existing user"
-                    label="Search the user directory…"
-                    helper-text="Only users not already on the analysis team appear here."
-                  >
-                    {eligibleUsers.map((u) => (
-                      <cds-combo-box-item value={u.id}>{u.name} — {u.role}</cds-combo-box-item>
-                    ))}
-                  </cds-combo-box>
-                  <cds-button id="team-add-btn" kind="tertiary" size="md" type="button">Add to team</cds-button>
-                </form>
 
                 <!-- Template for JS-added roster rows: rendered inert here so its
                      markup carries Astro's scoped-style attributes, then cloned. -->
@@ -304,6 +284,35 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                      refresh the combo-box as the team changes. -->
                 <script type="application/json" id="user-directory" set:html={JSON.stringify(userDirectory)}></script>
               </PermitSection>
+
+              <!-- Add-to-team modal. Base page (not nested in another modal), so the
+                   normal button-first pattern applies: the section's "Add to team"
+                   opens this, you pick a user, and the modal's own "Add to team" is
+                   the commit. The combo lists only directory users not already on
+                   the team (rebuilt each time it opens). -->
+              <cds-modal id="team-add-modal" size="sm">
+                <cds-modal-header>
+                  <cds-modal-close-button></cds-modal-close-button>
+                  <cds-modal-label>Analysis team</cds-modal-label>
+                  <cds-modal-heading>Add to team</cds-modal-heading>
+                </cds-modal-header>
+                <cds-modal-body>
+                  <cds-combo-box
+                    id="team-add-select"
+                    title-text="Reviewer"
+                    label="Search the user directory…"
+                    helper-text="Only users not already on the analysis team appear here."
+                  >
+                    {eligibleUsers.map((u) => (
+                      <cds-combo-box-item value={u.id}>{u.name} — {u.role}</cds-combo-box-item>
+                    ))}
+                  </cds-combo-box>
+                </cds-modal-body>
+                <cds-modal-footer>
+                  <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+                  <cds-modal-footer-button kind="primary" id="team-add-confirm">Add to team</cds-modal-footer-button>
+                </cds-modal-footer>
+              </cds-modal>
 
               <PermitSection title="Comments">
                 <!-- Composer: stock cds-textarea + cds-button. New comments are
@@ -450,20 +459,12 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                 subtitle="This permit is approved — its special conditions are now part of the permit and can no longer be changed."
               ></cds-inline-notification>
 
-              <!-- Scope: reviewers act either for HQ or as a district's rep. The
-                   scope governs which block exposes its add/edit controls. -->
+              <!-- Scope: what this reviewer may edit is set by their role, not a
+                   self-selected control. HQ curates the headquarters block plus every
+                   district block; a district reviewer curates only their own. The note
+                   is filled client-side from the active identity. -->
               <cds-tile class="sc-scope" id="sc-scope-tile">
-                <div class="sc-scope__row">
-                  <cds-dropdown id="sc-acting-as" title-text="Acting as" value="hq">
-                    <cds-dropdown-item value="hq">HQ reviewer</cds-dropdown-item>
-                    {[...permitDistricts].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-                      <cds-dropdown-item value={d.key}>{d.name} representative</cds-dropdown-item>
-                    ))}
-                  </cds-dropdown>
-                </div>
-                <p class="sc-scope__note t-label-01" id="sc-scope-note">
-                  HQ reviewers manage the universal conditions that apply everywhere on this permit.
-                </p>
+                <p class="sc-scope__note t-label-01" id="sc-scope-note"></p>
               </cds-tile>
 
               <PermitSection title="Headquarters conditions">
@@ -774,6 +775,8 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 
 <script>
   import { withBase } from '../lib/base';
+  import { readIdentity } from '../lib/maintenance';
+  import { activeUser } from '../data/user';
   // cds-tabs renders only the tab strip; panel visibility is the app's job.
   const tabsEl = document.getElementById('permit-tabs') as any;
   const panels = Array.from(document.querySelectorAll<HTMLElement>('.panel'));
@@ -803,7 +806,10 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   const commentTemplate = document.getElementById('comment-template') as HTMLTemplateElement | null;
 
   if (composer && commentInput && commentSubmit && thread && commentTemplate) {
-    const author = composer.dataset.author || 'You';
+    // The comment author is the person behind the active prototype identity, not a
+    // hardcoded roster member — Story 1 (identity is the single global actor).
+    const actor = activeUser(readIdentity());
+    const author = actor?.name || composer.dataset.author || 'You';
     const storageKey = composer.dataset.storageKey || 'permit-comments';
 
     interface StoredComment { author: string; time: string; text: string; }
@@ -819,6 +825,10 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 
     const todayLabel = () =>
       new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    // Match the composer's own avatar to the active identity's author.
+    const composerAvatar = composer.querySelector('.avatar');
+    if (composerAvatar) composerAvatar.textContent = initials(author);
 
     // Clone the scoped template so both this page's and the Avatar's styles apply.
     const buildComment = (c: StoredComment): HTMLElement => {
@@ -877,11 +887,13 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   // combo-box is rebuilt after every change to exclude whoever is already on.
   const roster = document.getElementById('team-roster');
   const teamAddSelect = document.getElementById('team-add-select') as any;
-  const teamAddBtn = document.getElementById('team-add-btn');
+  const teamAddOpen = document.getElementById('team-add-open');
+  const teamAddModal = document.getElementById('team-add-modal') as any;
+  const teamAddConfirm = document.getElementById('team-add-confirm');
   const rowTemplate = document.getElementById('roster-row-template') as HTMLTemplateElement | null;
   const directoryEl = document.getElementById('user-directory');
 
-  if (roster && teamAddSelect && teamAddBtn && rowTemplate && directoryEl) {
+  if (roster && teamAddSelect && teamAddOpen && teamAddModal && teamAddConfirm && rowTemplate && directoryEl) {
     interface DirUser { id: string; name: string; role: string; detail: string; email: string; }
     interface TeamEdits { removed: string[]; added: DirUser[]; }
 
@@ -980,7 +992,16 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
       refreshCombo();
     };
 
-    teamAddBtn.addEventListener('click', addMember);
+    // Button-first: "Add to team" opens the modal (combo rebuilt to exclude the
+    // current team + cleared); the modal's own "Add to team" is the commit.
+    teamAddOpen.addEventListener('click', () => {
+      refreshCombo();
+      teamAddModal.open = true;
+    });
+    teamAddConfirm.addEventListener('click', () => {
+      addMember();
+      teamAddModal.open = false;
+    });
     refreshCombo();
   }
 
@@ -1054,6 +1075,9 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 <script>
   import '../components/sc-rich-text.ts';
   import { permit } from '../data/permit';
+  import { readIdentity } from '../lib/maintenance';
+  import { activeUser } from '../data/user';
+  import { curatableDistricts } from '../data/district';
   import {
     districtKey,
     ownerLabel,
@@ -1075,8 +1099,10 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
     key: districtKey(d.name),
     parks: d.parks.length,
   }));
-  const reviewer =
-    permit.overview.analysisTeam.find((m) => (m as any).highlight)?.name ?? 'Reviewer';
+  // Whoever adds a condition is the person behind the active prototype identity
+  // (Story 1: identity is the single global actor), not a hardcoded roster member.
+  const identity = readIdentity();
+  const reviewer = activeUser(identity)?.name ?? 'Reviewer';
 
   let conditions: PermitCondition[] = loadPermitConditions(
     permitId,
@@ -1088,9 +1114,21 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   const FROZEN_STATUSES = ['Out for signature', 'Active'];
   let locked = FROZEN_STATUSES.includes(localStorage.getItem(permitStatusKey(permitId)) ?? '');
 
-  const scopeEl = $('sc-acting-as') as any;
-  const currentScope = (): ConditionOwner => scopeEl?.value || 'hq';
-  const canEdit = (owner: ConditionOwner) => !locked && currentScope() === owner;
+  // Editable scope is derived from the active identity, not a self-selected "Acting
+  // as" control (Story 1). HQ roles curate the org-wide (hq) block plus every
+  // district block on this permit; a district lead/assistant curates only their own
+  // district('s) that appear on this permit; everyone else is read-only. Status
+  // still freezes everything (`locked`); full permit-role gating arrives in Story 9.4.
+  const isHQ = identity === 'admin' || identity === 'hq-technical';
+  const curatableKeys = new Set(curatableDistricts(identity).map((d) => d.id));
+  const editableOwners = new Set<ConditionOwner>();
+  if (isHQ) {
+    editableOwners.add('hq');
+    districts.forEach((d) => editableOwners.add(d.key));
+  } else {
+    districts.forEach((d) => { if (curatableKeys.has(d.key)) editableOwners.add(d.key); });
+  }
+  const canEdit = (owner: ConditionOwner) => !locked && editableOwners.has(owner);
 
   const persist = () => savePermitConditions(permitId, conditions);
 
@@ -1247,14 +1285,20 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   };
 
   // ── Scope note ────────────────────────────────────────────────────────────
+  // States what THIS identity may edit here — no picker to change it.
+  const oxford = (names: string[]) =>
+    names.length <= 1 ? names[0] ?? ''
+      : names.length === 2 ? `${names[0]} and ${names[1]}`
+      : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
   const applyScope = () => {
-    const owner = currentScope();
     const note = $('sc-scope-note');
     if (note) {
-      note.textContent =
-        owner === 'hq'
-          ? 'HQ reviewers manage the universal conditions that apply everywhere on this permit.'
-          : `You are acting for ${ownerLabel(owner)} — you can add and edit only that district's conditions.`;
+      const editableDistrictNames = districts.filter((d) => editableOwners.has(d.key)).map((d) => d.name);
+      note.textContent = isHQ
+        ? "You curate the headquarters conditions and every district's conditions on this permit."
+        : editableDistrictNames.length
+          ? `You curate special conditions for ${oxford(editableDistrictNames)} on this permit.`
+          : "You can view these special conditions but can't edit them in your role.";
     }
     render();
   };
@@ -1391,7 +1435,6 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   };
 
   // ── Wire + init ───────────────────────────────────────────────────────────
-  scopeEl?.addEventListener('cds-dropdown-selected', applyScope);
   $('sc-modal-save')?.addEventListener('click', saveFromModal);
 
   // A status change (fired by PermitHeader) freezes the tab without a reload once
@@ -1578,24 +1621,6 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
     color: var(--cds-text-secondary, #525252);
   }
 
-  /* Add-an-existing-user control: the combo-box grows; the button sits on the
-     field row (offset past the combo's label). Layout only — Carbon owns the
-     field and button looks. */
-  .team-add {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    margin-top: 1.5rem;
-    max-width: 34rem;
-  }
-  .team-add__select {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-  .team-add cds-button {
-    flex: 0 0 auto;
-    margin-top: 1.5rem;
-  }
 
   /* Application history — phases (Presubmittal, In review, …), each a labeled
      group with its own vertical cds-progress-indicator. Layout/spacing only;
@@ -1673,9 +1698,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
   .district-label__count { color: var(--cds-text-secondary, #525252); }
 
   /* Special-conditions review workflow — layout only; look is cds-* + tokens. */
-  .sc-scope__row { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: flex-end; }
-  .sc-scope__row cds-dropdown { min-width: 20rem; }
-  .sc-scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
+  .sc-scope__note { margin: 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
   #sc-locked-notice[hidden], #sc-scope-tile[hidden], #sc-hq-empty[hidden], #sc-pick-block[hidden] { display: none; }
   .sc-empty { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
 

@@ -280,7 +280,7 @@ const permitsHref = withBase('/permits');
       lede="Program metrics across the permit register. Set the date range, district, and resource category once — every count, chart, and list below follows the filter, and each number links through to that slice of the register."
       crumbs={[{ label: 'Administrator dashboard' }]}
     >
-      <cds-tag type="cool-gray" size="md">
+      <cds-tag type="cool-gray" size="lg">
         <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d={ICONS.locked} /></svg>
         System Admins only
       </cds-tag>
@@ -359,7 +359,7 @@ const permitsHref = withBase('/permits');
                   href={permitsHref + buildQuery(EMPTY_FILTER, ...(k.term ? [k.term] : []))}
                 >
                   {k.link}
-                  <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d={ICONS.arrowRight} /></svg>
+                  <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d={ICONS.arrowRight} /></svg>
                 </cds-link>
               </cds-tile>
             </div>

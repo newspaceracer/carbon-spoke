@@ -4,10 +4,10 @@ These are sibling stories for the **Templates & defaults** admin area, where a
 System Admin manages site-wide configuration self-service. Story 1 establishes
 the area; Stories 2–5 are the sections inside it. Story 2 extends the existing
 DPR65A/DPR65B document-management story to the remaining downloadable forms.
-Story 6 adds the variable affordance to the email editor; Stories 7–8 add rich
-text formatting and distinct variable tokens to the email **message**; Story 9
-standardizes the seeded applicant email copy and reconciles the variable names
-(resolving several open questions raised in Stories 5 and 6).
+Story 6 adds the variable affordance to the email editor; Story 7 makes the email
+**message** a rich text editor and renders variables as distinct tokens in it;
+Story 8 standardizes the seeded applicant email copy and reconciles the variable
+names (resolving several open questions raised in Stories 5 and 6).
 
 Notation: the final permit **letter body** template is tracked separately in
 **CSPS-211**; e-signature configuration is out of scope for all of these.
@@ -497,7 +497,7 @@ pipeline, not this editor.
   stripped? (The editor warns but does not block saving.)
 - [ ] Should literal square brackets be allowed in prose that is not a variable,
   and if so, how does the editor distinguish them from a token? (In the message,
-  Story 8 answers this: an inserted variable becomes a distinct token; typed
+  Story 7 answers this: an inserted variable becomes a distinct token; typed
   brackets stay prose and trip the unrecognized-token warning. Open for the
   subject, which stays plain text.)
 - [ ] Should the editor offer a preview that renders the template with sample
@@ -516,21 +516,23 @@ Let System Admin format the email message with rich text
 
 As a System Admin,
 I want to format an applicant email's message with rich text — emphasis, lists,
-headings, and links,
-So that the emails applicants receive are readable and structured, not a single
-block of plain text.
+headings, and links — and see inserted variables as distinct tokens,
+So that the emails applicants receive are readable and structured, and I can tell
+at a glance which parts are merge fields versus words I typed.
 
 Applicant emails are HTML when delivered. This replaces the plain-text message
-field in the Email notifications editor (Story 5) with a formatting editor. The
-subject stays a single-line plain field.
+field in the Email notifications editor (Story 5) with a formatting editor, and
+renders the variables from Story 6 as distinct tokens inside it. The subject stays
+a single-line plain field.
 
 **Roles affected:** System Admin. Downstream, the formatted email is received by
 Researcher, PI, PICOF, and Submitter.
 
 **Out of scope:** Editing the subject line, which stays plain text — see Story 5.
 Which events trigger emails and to whom they are sent — see Story 5. The variable
-affordance (showing and inserting merge fields) — see Story 6; rendering those
-variables as tokens — see Story 8. The final permit letter body — see CSPS-211.
+list, the insert action, and the unrecognized-token warning — see Story 6.
+Send-time substitution — the email send pipeline. The final permit letter body —
+see CSPS-211.
 
 ---
 
@@ -544,26 +546,40 @@ variables as tokens — see Story 8. The final permit letter body — see CSPS-2
 - When editing a notification, the message field is a rich text editor with a
   formatting toolbar.
 - The System Admin can apply bold, italic, strikethrough, and inline code;
-  headings; bulleted and numbered lists; a block quote; a code block; and a link.
-- The editor supports undo and redo of content and formatting changes.
+  headings; bulleted and numbered lists; a block quote; a code block; and a link,
+  with undo and redo.
 - On save, the formatted message is stored, and emails sent after the change use
   the formatted content.
 
+**Variables as tokens**
+- A variable inserted into the message (Story 6) renders as a distinct,
+  non-editable token showing its exact name (e.g. [Application Title]); it is
+  selected and deleted as one unit.
+- When a notification opens, any supported variable already present in its message
+  is shown as a token, not as plain bracketed text.
+- A bracketed string typed by hand is not a token: it stays plain text and
+  continues to trip the unrecognized-token warning (Story 6) — so tokens are
+  inserted, plain brackets are typed.
+
 **State & status transitions**
-- Saved formatting applies to emails sent after the change; emails already sent
-  are unaffected.
+- Saved formatting and tokens apply to emails sent after the change; emails
+  already sent are unaffected.
+- On save, each token is preserved as its exact bracketed name so the send process
+  fills it in; reopening shows it as a token again, unescaped and undoubled.
 
 **UI & field details**
 - The message field is labeled "Message".
-- The toolbar controls carry the system's standard button styling and show a
-  toggled (active) state when their formatting applies to the current selection.
+- Toolbar controls carry the system's standard button styling and a toggled
+  (active) state for formatting that applies to the current selection.
+- Tokens are styled distinctly from body text (a filled pill), legible in both
+  light and dark theme zones.
 - A link must start with `https://`, `http://`, or `mailto:`; the editor rejects
   any other scheme.
 
 **Edge cases & constraints**
 - A notification cannot be saved with an empty message (consistent with Story 5).
 - Existing plain-text template copy opens as formatted text — paragraphs and line
-  breaks are preserved — the first time it is edited in the rich text editor.
+  breaks preserved — the first time it is edited.
 
 ---
 
@@ -572,12 +588,15 @@ variables as tokens — see Story 8. The final permit letter body — see CSPS-2
 - **Environment note:** All emails in the QA environment route to a shared ESA
   inbox. Notify the ESA team before testing so the email can be forwarded for
   verification. Do not test against real applicant email addresses in QA.
-- **Test 1 — Format and send:** As System Admin, edit a notification's message,
-  apply bold and a bulleted list, and save. Trigger the email and confirm it
-  arrives with the formatting applied.
-- **Test 2 — Plain seed opens formatted:** Open a notification that has never
-  been edited. Confirm its seeded plain-text copy displays with its paragraph
-  breaks preserved, ready to format.
+- **Test 1 — Format and send:** Edit a message, apply bold and a bulleted list,
+  save, trigger the email, and confirm the formatting arrives.
+- **Test 2 — Variable as token:** Insert a variable; confirm it appears as a
+  distinct token and Backspace removes the whole token at once. Type a bracketed
+  string by hand (e.g. [Made Up]); confirm it stays plain text and the warning
+  names it.
+- **Test 3 — Plain seed opens formatted with tokens:** Open a never-edited
+  notification; confirm its seeded copy shows paragraph breaks and renders its
+  supported variables as tokens.
 
 ---
 
@@ -586,91 +605,12 @@ variables as tokens — see Story 8. The final permit letter body — see CSPS-2
   plain-text fallback part sent for clients that do not render HTML?
 - [ ] Should any block-level options (headings, code block) be removed for email,
   where such formatting renders inconsistently across mail clients?
-
----
-
-## Story 8 — Render inserted variables as distinct tokens in the message
-
-**Story Title**
-Show email variables as distinct tokens in the message editor
-
----
-
-**Description**
-
-As a System Admin,
-I want an inserted variable to look like a distinct token in the message, not
-ordinary text,
-So that I can tell at a glance which parts are merge fields the system fills in
-versus words I typed.
-
-This extends the variable affordance (Story 6): when a variable is inserted into
-the rich text message (Story 7), it renders as a non-editable token rather than
-bracketed text that reads like prose.
-
-**Roles affected:** System Admin.
-
-**Out of scope:** The subject field, which stays plain text — a variable inserted
-there remains literal bracketed text (see Story 6). The variable list and the
-insert action itself — see Story 6. The rich text editor — see Story 7. Send-time
-substitution — the email send pipeline.
-
----
-
-**Acceptance Criteria**
-
-**Access & permissions**
-- Only a System Admin sees the token rendering, within the Email notifications
-  message editor.
-
-**Happy path**
-- Inserting a variable into the message renders it as a visually distinct token
-  showing its exact name (e.g. [Application Title]).
-- A token behaves as a single unit: it is selected and deleted as one piece and
-  cannot be edited character-by-character.
-- When a notification opens, any supported variable already present in its
-  message is shown as a token, not as plain bracketed text.
-
-**State & status transitions**
-- On save, each token is preserved as its exact bracketed name so the send
-  process fills it in; reopening the message shows it as a token again, with no
-  change to the resolved value.
-
-**UI & field details**
-- Tokens are styled distinctly from body text (a filled pill) and stay legible in
-  both light and dark theme zones.
-
-**Edge cases & constraints**
-- A bracketed string the admin types by hand is not a token: it stays plain text
-  and continues to trip the unrecognized-token warning (Story 6). This gives a
-  clear signal — tokens are inserted, plain brackets are typed.
-- Tokens survive save and reload without being escaped or doubled.
-
----
-
-**Testing notes**
-
-- **Test 1 — Insert shows a token:** Edit a notification, place the cursor in the
-  message, and insert a variable. Confirm it appears as a distinct token, not
-  bracketed text, and that Backspace removes the whole token at once.
-- **Test 2 — Seed variable renders as token:** Open a notification whose seeded
-  message contains a supported variable. Confirm the variable is shown as a token.
-- **Test 3 — Typed brackets stay plain:** Type a bracketed string by hand (e.g.
-  [Made Up]). Confirm it is not a token and the unrecognized-token warning names
-  it.
-
----
-
-**Open questions**
 - [ ] Should the subject field also render inserted variables as tokens, or is
   plain bracketed text acceptable for a single-line field?
-- [ ] When a token's name is not in the current email's supported set (e.g. after
-  the supported set changes), should it still render as a token or downgrade to a
-  plain-text warning?
 
 ---
 
-## Story 9 — Standardize the applicant email template copy and variables
+## Story 8 — Standardize the applicant email template copy and variables
 
 **Story Title**
 Standardize applicant email subjects, greetings, and variable names

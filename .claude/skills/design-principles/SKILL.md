@@ -1,6 +1,6 @@
 ---
 name: design-principles
-description: The aesthetic, accessibility, and correctness rules for this Carbon spoke — load before styling, reviewing, or building ANY UI, and during /ship reviews. Covers token-first discipline (var(--cds-*) not SCSS $vars, never target .cds-- internals), Carbon's type scale (no imposed 16px floor), status meaning (colored Tag is NOT a status — use cds-icon-indicator/cds-shape-indicator; never color alone), the 2x Grid (CSS-Grid flavor: .cds--css-grid/.cds--css-grid-column/.cds--{bp}:col-span-N; the legacy .cds--row/.cds--col-lg-N are NOT in the prebuilt CSS), the WCAG 2.2 accessibility contract, overlay & confirmation patterns (never stack a modal on a modal — forgo, confirm inline, or offer undo; reserve confirms for consequential/destructive actions), control sizing & kind (never omit cds-button size=; page primary → lg, section/header actions → md, table-row cell actions → sm, icon-only/dense toolbars → sm; section-header action buttons are tertiary/outline, not ghost), icon-name verification, and mock-data rules. Distilled from IBM's Carbon guidance reconciled with the house rules. carbon-first owns the component lookup order; this skill owns how the result looks and behaves.
+description: The aesthetic, accessibility, and correctness rules for this Carbon spoke — load before styling, reviewing, or building ANY UI, and during /ship reviews. Covers token-first discipline (var(--cds-*) not SCSS $vars, never target .cds-- internals), Carbon's type scale (no imposed 16px floor), status meaning (colored Tag is NOT a status — use cds-icon-indicator/cds-shape-indicator; never color alone), the 2x Grid (CSS-Grid flavor: .cds--css-grid/.cds--css-grid-column/.cds--{bp}:col-span-N; the legacy .cds--row/.cds--col-lg-N are NOT in the prebuilt CSS), the WCAG 2.2 accessibility contract, overlay & confirmation patterns (never stack a modal on a modal — forgo, confirm inline, or offer undo; reserve confirms for consequential/destructive actions; match the add-control to the task — author→modal, attach-existing-bulk→multi-select, managed roster→base-page modal; one management surface per collection, the duplicate view is read-only), control sizing & kind (never omit cds-button size=; page primary → lg, section/header actions → md, table-row cell actions → sm, icon-only/dense toolbars → sm; section-header action buttons are tertiary/outline, not ghost; cds-tag size by context — grid→sm, header→lg, else→md; peer buttons share one affordance, no lone icons), icon-name verification, and mock-data rules. Distilled from IBM's Carbon guidance reconciled with the house rules. carbon-first owns the component lookup order; this skill owns how the result looks and behaves.
 ---
 
 # Design Principles (Carbon spoke)
@@ -114,11 +114,10 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
    confirm it — two overlays fight over the focus trap, scrim, and Escape
    handling, and it reads as a dialog stack the user gets lost in. Carbon's own
    guidance is against stacking. Pick one of these instead:
-   - **Forgo the confirm** when the action is reversible *in place* — e.g. a row
-     you can immediately re-add from a control in the same modal. Just act, like a
-     draft row. (This is why removing an analysis-team reviewer inside the team
-     modal is immediate, while removing a district member from its base page
-     confirms.)
+   - **Forgo the confirm** when the action is reversible *in place* — e.g. a draft
+     roster row you can immediately re-add. Just act. (A specimen/participant/park
+     removed during application entry is immediate; a district member removed on
+     its base page confirms.)
    - **Confirm inline** — swap the affected row/region into a "Confirm / Cancel"
      state within the same modal, no second overlay.
    - **Undo over confirm** — act immediately and surface an undo affordance
@@ -132,6 +131,20 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
    tag) and named destructive actions (Deny, Revoke). Do not gate quick, in-place
    draft edits (adding/removing a specimen, participant, or park during entry)
    behind a modal — that friction trains users to click through confirmations.
+4. **Match the add-control to the task, and never stack a modal to add:**
+   - *Author a new multi-field record* (doesn't exist yet) → a `cds-modal` form.
+   - *Attach existing items, low-stakes / bulk* (no confirm) → a filterable
+     `cds-multi-select` that **applies on selection** (permit tags, study-area parks).
+   - *Attach an existing item into a managed roster* (deliberate pick → confirm) →
+     a **button-first modal on a base page**: "Add X" opens a modal, you pick, the
+     modal's own primary button commits. NOT an inline combo + trailing "Add" —
+     that reverses the app's click-Add-then-do order and the trailing button is
+     easy to miss.
+5. **One management surface per collection.** Don't put add/remove controls for the
+   same collection in two places. If the collection also appears inside another
+   modal, that copy is **view-only** — managing it there would stack a modal on a
+   modal. (The analysis team is managed on the permit Overview; the header's
+   "Analysis review" modal only displays it + its progress.)
 
 ## 7. Control sizing & kind (Must)
 
@@ -164,6 +177,13 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
    with a `tooltip-content` slot naming the target ("Edit <name>"), not a labeled
    text/outline button — a full button is too heavy for card chrome. Reuse the
    house pencil/trash SVG so the icon matches the rest of the app.
+7. **`cds-tag` size follows context:** in a **table / grid** → `sm`; in a page /
+   banner **header** → `lg`; **everywhere else** (facts lists, modals, body) →
+   `md`, matching the elements around it. (A tag previewing a grid tag is the one
+   judgment call — match the grid at `sm` if fidelity matters.)
+8. **Consistent affordance across peer buttons.** Don't give one button in a set an
+   icon the others lack — the "Add …" section actions are text-only across the app,
+   so none carries a lone plus-icon.
 
 ## 8. Icons (Must)
 
@@ -178,6 +198,19 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
    `import Add16 from '@carbon/icons/es/add/16.js';`.
 3. **Decorative icons are `aria-hidden="true"`**; meaningful standalone icons get
    an accessible name.
+4. **A hand-authored SVG slotted into `cds-icon-button` or `cds-link` MUST carry
+   `fill="currentColor"`.** Those two hosts style the slotted icon with `color:`
+   only — *not* `fill:` — so a bare `<path>` renders the SVG default (black). It
+   only *looks* right in a light zone (≈ the near-black `--cds-icon-primary` token)
+   and goes wrong on a dark `cds--g90`/`cds--g100` zone, and on the selected /
+   hover / disabled states where the token changes but the black fill doesn't.
+   With `fill="currentColor"` the glyph tracks the host's `color` token in every
+   theme and state. **`cds-button`, `cds-tag`, `cds-clickable-tile`, and the
+   UI-shell actions all set `fill` on the slot themselves** — icons in those are
+   fine without an explicit fill, so don't cargo-cult it everywhere; it's the two
+   `color:`-only hosts that need it. (Verify a host's behavior by grepping its
+   shadow CSS for `::slotted(...){...fill...}` in
+   `node_modules/@carbon/web-components/es/components/<host>/*.js`.)
 
 ## 9. House aesthetic (Should — on top of Carbon)
 

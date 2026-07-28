@@ -184,6 +184,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     writePendingUserId,
     writeIdentity,
     clearPendingUserId,
+    type Identity,
   } from '../lib/maintenance';
   import { withBase } from '../lib/base';
 
@@ -269,10 +270,15 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     render();
   });
 
-  // ── Continue once granted: enter the app as the granted kind of user ────────
+  // ── Continue once granted: enter the app as the granted role ────────────────
+  // The granted account role IS a prototype identity (admin / hq-technical /
+  // district-lead / district-assistant), so we enter as that exact role rather
+  // than a generic non-admin reviewer. A still-roleless account stays pending.
   $('continue-btn')?.addEventListener('click', () => {
     const role = accountRoleOf(pid).role;
-    writeIdentity(role === 'admin' ? 'admin' : 'user');
+    const ROLE_IDENTITIES = ['admin', 'hq-technical', 'district-lead', 'district-assistant'] as const;
+    if (!(ROLE_IDENTITIES as readonly string[]).includes(role)) return; // not yet granted
+    writeIdentity(role as Identity);
     clearPendingUserId();
     location.href = withBase('/');
   });

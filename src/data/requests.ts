@@ -5,7 +5,7 @@
 // (which RESOLVES it), the same localStorage convention the rest of the
 // prototype uses. Browser-only: imported from client <script> blocks, never
 // Astro frontmatter (localStorage / Date exist only in the browser).
-import { directory, accountRoleMeta } from './user';
+import { directory, publicDirectory, accountRoleMeta } from './user';
 import { districtName } from './district';
 
 export type RequestStatus = 'pending' | 'approved' | 'denied';
@@ -380,18 +380,76 @@ export const revokeInvite = (userId: string): void => {
   saveAdded(addedUsers().filter((u) => u.id !== userId));
 };
 
-/** Resolve any user's identity — seeded directory OR an added user. */
+// ── Contact overlay (admin-editable name + phone) ────────────────────────────
+// An admin can correct a user's NAME and PHONE from the /users console — but
+// NEVER their email, which is the identity verified at sign-in. Like the role /
+// expertise overlays, this is a small userId → override map layered over the
+// seeded identity, so an edit propagates everywhere resolveUser is read (the
+// console tables, district rosters, permit rows). Email is intentionally absent.
+const CONTACT_KEY = 'admin-user-contact';
+
+interface ContactOverride {
+  name?: string;
+  phone?: string;
+}
+
+const loadContactOverlay = (): Record<string, ContactOverride> => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CONTACT_KEY) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+};
+
+/** Set (admin action) a user's editable contact fields — name and/or phone.
+ *  Email is not editable here (it verifies the account at sign-in). */
+export const setContact = (userId: string, contact: { name?: string; phone?: string }): void => {
+  const overlay = loadContactOverlay();
+  overlay[userId] = { ...overlay[userId], ...contact };
+  localStorage.setItem(CONTACT_KEY, JSON.stringify(overlay));
+};
+
+/** Apply any admin contact override (name / phone) over a base identity. */
+const withContact = <T extends { id: string; name: string; phone: string }>(base: T): T => {
+  const c = loadContactOverlay()[base.id];
+  return c ? { ...base, name: c.name ?? base.name, phone: c.phone ?? base.phone } : base;
+};
+
+/** Resolve any user's identity — seeded staff directory, PUBLIC directory, OR an
+ *  added user — with any admin contact override applied. */
 export const resolveUser = (
   userId: string,
 ): { id: string; name: string; email: string; phone: string } | undefined => {
   const seed = directory.find((u) => u.id === userId);
-  if (seed) return { id: seed.id, name: seed.name, email: seed.email, phone: seed.phone };
-  return addedUsers().find((u) => u.id === userId);
+  if (seed) return withContact({ id: seed.id, name: seed.name, email: seed.email, phone: seed.phone });
+  const pub = publicDirectory.find((u) => u.id === userId);
+  if (pub) return withContact({ id: pub.id, name: pub.name, email: pub.email, phone: pub.phone });
+  const added = addedUsers().find((u) => u.id === userId);
+  if (added) return withContact({ id: added.id, name: added.name, email: added.email, phone: added.phone });
+  return undefined;
 };
 
-/** Every user the console lists — seeded directory plus added users. Identity
- *  only; role / expertise / affiliation are resolved per row via the accessors. */
-export const listUsers = (): { id: string; name: string; email: string }[] => [
-  ...directory.map((u) => ({ id: u.id, name: u.name, email: u.email })),
-  ...addedUsers().map((u) => ({ id: u.id, name: u.name, email: u.email })),
-];
+/** Every INTERNAL user the console lists — seeded staff directory plus added
+ *  users, with contact overrides applied. Identity only; role / expertise /
+ *  affiliation are resolved per row via the accessors. */
+export const listUsers = (): { id: string; name: string; email: string }[] =>
+  [...directory, ...addedUsers()].map((u) => {
+    const r = resolveUser(u.id)!;
+    return { id: r.id, name: r.name, email: r.email };
+  });
+
+/** Every PUBLIC user the console lists — the applicant/researcher directory,
+ *  with contact overrides applied. These carry no agency role; `organization`
+ *  is their institution, shown for context. */
+export const listPublicUsers = (): {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  organization: string;
+}[] =>
+  publicDirectory.map((u) => {
+    const r = resolveUser(u.id)!;
+    return { id: r.id, name: r.name, email: r.email, phone: r.phone, organization: u.organization };
+  });

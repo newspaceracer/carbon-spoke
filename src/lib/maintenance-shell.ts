@@ -19,10 +19,20 @@ import {
   routePath,
   type Identity,
 } from './maintenance';
+import {
+  eligiblePermitRoles,
+  readPermitRole,
+  writePermitRole,
+  permitRoleLabel,
+  isReviewer,
+  type PermitRole,
+  type PermitType,
+} from './permissions';
 
 const BANNER_ID = 'maintenance-banner';
 const SWITCHER_ID = 'demo-identity-switcher';
 const RESET_ID = 'demo-permit-reset';
+const ROLE_ID = 'demo-permit-role';
 
 // ── Top banner ──────────────────────────────────────────────────────────
 function paintBanner(): void {
@@ -108,7 +118,6 @@ function mountIdentitySwitcher(): void {
     { value: 'hq-technical', label: 'HQ technical reviewer' },
     { value: 'district-lead', label: 'District lead technical reviewer' },
     { value: 'district-assistant', label: 'District assistant technical reviewer' },
-    { value: 'user', label: 'Reviewer (non-admin)' },
     { value: 'researcher', label: 'Researcher (applicant)' },
     { value: 'pending', label: 'New user (pending role)' },
     { value: 'anon', label: 'Logged out' },
@@ -120,7 +129,7 @@ function mountIdentitySwitcher(): void {
   box.className = 'demo-identity';
   box.innerHTML = `
     <p class="demo-identity__label t-label-01">Prototype identity</p>
-    <cds-dropdown value="${current}" size="sm" label="Identity">
+    <cds-dropdown value="${current}" size="sm" label="Identity" direction="top">
       ${options.map((o) => `<cds-dropdown-item value="${o.value}">${o.label}</cds-dropdown-item>`).join('')}
     </cds-dropdown>`;
   document.body.appendChild(box);
@@ -129,6 +138,60 @@ function mountIdentitySwitcher(): void {
     const value = e.detail?.item?.value as Identity | undefined;
     if (value && value !== readIdentity()) {
       writeIdentity(value);
+      location.reload();
+    }
+  });
+}
+
+// ── Dev-only per-permit permit-role control ─────────────────────────────────
+// The identity switcher sets the USER ROLE; this sets the PER-PERMIT permit-role
+// (Responsible Agent / Supporting Agent / Second Signer / Not assigned) — the
+// second axis of the two-layer actor model. It rides in the same dev panel, only
+// on the permit page and only for reviewer identities. CONSTRAINED: it offers just
+// the permit-roles the active identity is eligible for on this permit's type
+// (permissions.ts, from permissions-matrix.md §2/§3), so it doubles as a live
+// check of the eligibility rules. Single-select, persisted per permit
+// (`demo-permit-role-${id}`), reloads on change like the identity switcher so any
+// permit-role-dependent UI re-resolves.
+function mountPermitRoleControl(): void {
+  if (document.getElementById(ROLE_ID)) return;
+  const panel = document.getElementById(SWITCHER_ID);
+  if (!panel) return; // rides in the same dev panel
+  const banner = document.getElementById('permit-banner');
+  if (!banner) return; // permit page only
+
+  const identity = readIdentity();
+  if (!isReviewer(identity)) return; // researcher / pending / anon hold no review permit-role
+
+  const permitId = banner.getAttribute('data-permit-id') || '';
+  const permitType = (banner.getAttribute('data-permit-type') as PermitType) || 'single';
+  const eligible = eligiblePermitRoles(identity, permitType);
+  if (eligible.length === 0) return;
+
+  // Clamp a stored role the current identity can't hold on this permit type back to
+  // 'none' — keeps the per-permit hat consistent with eligibility after an identity
+  // switch, so the resolver never reads an impossible role×identity combination.
+  let current = readPermitRole(permitId);
+  if (!eligible.includes(current)) { current = 'none'; writePermitRole(permitId, current); }
+
+  const wrap = document.createElement('div');
+  wrap.id = ROLE_ID;
+  wrap.className = 'demo-permit-role';
+  // carbon-checked: dev-only affordance; the control is a stock cds-dropdown.
+  wrap.innerHTML = `
+    <p class="demo-identity__label t-label-01">Permit role (this permit)</p>
+    <cds-dropdown value="${current}" size="sm" label="Permit role" direction="top">
+      ${eligible.map((r) => `<cds-dropdown-item value="${r}">${permitRoleLabel[r]}</cds-dropdown-item>`).join('')}
+    </cds-dropdown>`;
+  // Sits under the identity switcher, above the reset control.
+  const reset = document.getElementById(RESET_ID);
+  if (reset) panel.insertBefore(wrap, reset); else panel.appendChild(wrap);
+
+  const dd = wrap.querySelector('cds-dropdown') as any;
+  dd?.addEventListener('cds-dropdown-selected', (e: any) => {
+    const value = e.detail?.item?.value as PermitRole | undefined;
+    if (value && value !== readPermitRole(permitId)) {
+      writePermitRole(permitId, value);
       location.reload();
     }
   });
@@ -155,6 +218,7 @@ const PERMIT_STATE_PREFIXES = [
   'permit-parks-',           // study-area park edits (wizard draft)
   'permit-conditions-',      // applied special conditions (wizard draft)
   'permit-comments-',        // reviewer comment thread — reverts to seed when cleared
+  'demo-permit-role-',       // the per-permit permit-role testing hat (Story 2)
 ];
 
 function permitStateKeys(): string[] {
@@ -192,6 +256,7 @@ function mountPermitReset(): void {
 export function decorateShell(): void {
   const run = () => {
     mountIdentitySwitcher();
+    mountPermitRoleControl();
     mountPermitReset();
     wireLogout();
     if (isMaintenance()) {

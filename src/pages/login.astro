@@ -45,8 +45,10 @@ export const prototype = {
 
         <!-- Prototype stand-in for credentials: which account you sign in as. -->
         <cds-dropdown id="login-as" title-text="Account (prototype)" value="admin" helper-text="No real auth — choose the account to sign in as.">
-          <cds-dropdown-item value="admin">System Administrator</cds-dropdown-item>
-          <cds-dropdown-item value="user">Reviewer (non-admin)</cds-dropdown-item>
+          <cds-dropdown-item value="admin">System administrator</cds-dropdown-item>
+          <cds-dropdown-item value="hq-technical">HQ technical reviewer</cds-dropdown-item>
+          <cds-dropdown-item value="district-lead">District lead technical reviewer</cds-dropdown-item>
+          <cds-dropdown-item value="district-assistant">District assistant technical reviewer</cds-dropdown-item>
           <cds-dropdown-item value="researcher">Researcher (applicant)</cds-dropdown-item>
         </cds-dropdown>
 
@@ -61,7 +63,7 @@ export const prototype = {
 </BaseLayout>
 
 <script>
-  import { writeIdentity, isMaintenance, ROUTES } from '../lib/maintenance';
+  import { writeIdentity, isMaintenance, ROUTES, type Identity } from '../lib/maintenance';
   import { withBase } from '../lib/base';
 
   const submit = document.getElementById('login-submit');
@@ -69,7 +71,7 @@ export const prototype = {
   const error = document.getElementById('login-error') as any;
 
   submit?.addEventListener('click', () => {
-    const account = (asDropdown?.value as 'admin' | 'user' | 'researcher') || 'admin';
+    const account = (asDropdown?.value as Identity) || 'admin';
     writeIdentity(account);
 
     if (account === 'admin') {

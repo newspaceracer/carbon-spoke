@@ -8,6 +8,8 @@
 // `states` (the US state list) also lives there with the rest of the address
 // metadata; re-exported here so existing importers keep their `from './user'`.
 import type { Address } from './address';
+import type { Identity } from '../lib/maintenance';
+import { applicant, applicantOrg } from './application';
 export { states } from './address';
 
 /** A division option for the personal-information dropdown. */
@@ -184,6 +186,82 @@ export const directory: DirectoryUser[] = [
 /** Resolve a directory user by id. */
 export const findUser = (id: string): DirectoryUser | undefined =>
   directory.find((u) => u.id === id);
+
+// ── Public user directory ────────────────────────────────────────────────────
+// Members of the PUBLIC who hold an account — the researchers/applicants who
+// submit permit applications (the researcher/applicant persona, not internal
+// staff). They carry NO agency account role or expertise; their account is an
+// external identity verified by email at sign-in. The /users console lists them
+// in a SEPARATE table from internal staff. The first row is the seeded applicant
+// persona (Renata Halvorsen — the `researcher` identity resolves to id
+// 'applicant'), so this directory and the application flow speak one identity.
+// All INVENTED, domain-credible, deterministic (house no-real-data rule).
+export interface PublicUser {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  /** The institution the applicant conducts research for. */
+  organization: string;
+}
+
+export const publicDirectory: PublicUser[] = [
+  { id: 'applicant', name: 'Renata Halvorsen', email: 'r.halvorsen@cascadiamarine.org', phone: '(415) 555-0173', organization: 'Cascadia Marine Research Institute' },
+  { id: 'pub-aranda', name: 'Miguel Aranda', email: 'm.aranda@cascadiamarine.org', phone: '(415) 555-0188', organization: 'Cascadia Marine Research Institute' },
+  { id: 'pub-deshmukh', name: 'Priya Deshmukh', email: 'p.deshmukh@cascadiamarine.org', phone: '(415) 555-0191', organization: 'Cascadia Marine Research Institute' },
+  { id: 'pub-boone', name: 'Gregory Boone', email: 'g.boone@bodegamarine.org', phone: '(707) 555-0206', organization: 'Bodega Marine Laboratory' },
+  { id: 'pub-underhill', name: 'Sadie Underhill', email: 's.underhill@westernmonarch.org', phone: '(831) 555-0142', organization: 'Western Monarch Watch' },
+  { id: 'pub-nakamura', name: 'Theo Nakamura', email: 't.nakamura@pointblue.org', phone: '(415) 555-0159', organization: 'Point Blue Conservation Science' },
+  { id: 'pub-okonkwo', name: 'Adaeze Okonkwo', email: 'a.okonkwo@calacademy.org', phone: '(415) 555-0167', organization: 'California Academy of Sciences' },
+];
+
+// ── Prototype identity → the person acting ──────────────────────────────────
+// readIdentity() yields a ROLE; the app also needs the concrete person behind that
+// role — for comment authorship, "who am I" on a permit, and (later) signer
+// identity. This bridges the two: each reviewer identity resolves to a
+// representative directory account; the researcher identity resolves to the seeded
+// applicant persona; pending/anon have no acting person. It's the single "who am I
+// as a person" resolver the roles-and-permissions work builds on.
+export interface ActiveUser {
+  /** Directory id for staff; a synthetic id for the researcher persona. */
+  id: string;
+  /** Full name as shown across the app (comment thread, rosters). */
+  name: string;
+  /** The prototype identity/role this person is acting as. */
+  identity: Identity;
+  /** District id for a district-scoped reviewer (omitted for HQ/admin/researcher). */
+  district?: string;
+  /** Organization (researcher) or affiliation (staff), for display. */
+  affiliation?: string;
+}
+
+// Which seeded directory account stands in for each reviewer identity. The demo
+// lead is J. Okafor (matches currentUser / the highlighted analysis-team member).
+const IDENTITY_TO_USER_ID: Partial<Record<Identity, string>> = {
+  admin: 'b-ramirez',
+  'hq-technical': 'l-tran',
+  'district-lead': 'j-okafor',
+  'district-assistant': 'k-whitfield',
+};
+
+/** The person currently acting, derived from the prototype identity. Null for the
+ *  roleless (pending) and logged-out (anon) states, which have no acting person. */
+export function activeUser(identity: Identity): ActiveUser | null {
+  const dirId = IDENTITY_TO_USER_ID[identity];
+  if (dirId) {
+    const u = findUser(dirId);
+    if (u) return { id: u.id, name: u.name, identity, district: u.district, affiliation: u.affiliation };
+  }
+  if (identity === 'researcher') {
+    return {
+      id: 'applicant',
+      name: `${applicant.firstName} ${applicant.lastName}`,
+      identity,
+      affiliation: applicantOrg.name,
+    };
+  }
+  return null; // pending / anon — no acting person
+}
 
 export const currentUser = {
   // The signed-in reviewer's directory id — ties this profile to its account row

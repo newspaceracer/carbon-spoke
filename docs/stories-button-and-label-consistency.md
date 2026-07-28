@@ -1,11 +1,12 @@
 # Button Sizing & Action-Label Consistency — Jira Stories
 
-Two stories from the UI consistency audit:
+Three stories from the UI consistency audit:
 
 - **Story 1** — Standardize button sizing across the app
 - **Story 2** — Align add/edit action labels and wording
+- **Story 3** — Standardize tag sizing and button affordance
 
-Both are cross-cutting UI-consistency work with no change to business logic,
+All are cross-cutting UI-consistency work with no change to business logic,
 permissions, or statuses.
 
 ---
@@ -171,3 +172,63 @@ question below rather than changed here.
   unchanged pending this answer.
 - [ ] Is "specimen" or "specimen type" the canonical NRD term for the added item —
   the heading now says "Add specimen"; confirm this matches product copy.
+
+---
+
+## Story 3 — Standardize tag sizing and button affordance
+
+**Story Title**
+Standardize tag sizing and button affordance
+
+---
+
+**Description**
+
+As a CA State Parks Staff user,
+I want tags to be sized consistently for their context and peer buttons to share
+one affordance,
+So that the interface reads as one system and no single tag or button looks
+arbitrarily larger or more decorated than its peers.
+
+**Roles affected:** All roles — tags and buttons appear across the app.
+
+**Out of scope:** Button size and kind for action buttons — Story 1. The colored
+meaning of tags (a tag's type/color is classification, not status) is unchanged.
+
+---
+
+**Acceptance Criteria**
+
+**UI & field details — tag sizing by context**
+- A `cds-tag` inside a table or data grid uses the small size.
+- A `cds-tag` in a page or banner header uses the large size (for example the
+  permit header's type tags, the application banner's "Amendment" marker, and the
+  administrator dashboard's "System Admins only" access badge).
+- A `cds-tag` anywhere else (facts lists, modals, body content) uses the medium
+  size, matching the elements around it (for example the profile's role and
+  permission tags).
+
+**UI & field details — button affordance**
+- Peer buttons in a set share one affordance: the "Add …" section actions are
+  text-only across the app, so none carries a lone icon. The Users console "Invite
+  user" button drops its plus-icon to match the other add buttons.
+
+---
+
+**Testing notes**
+
+- **Test 1 — Tag sizes:** Spot-check a table (small), the permit/application/
+  dashboard headers (large), and the profile facts (medium); confirm each tag
+  matches its context.
+- **Test 2 — Add buttons:** Confirm no "Add …" button carries an icon while its
+  peers do not.
+
+---
+
+**Open questions**
+- [ ] The resource category tag preview (in the add/edit modal) previews a tag that
+  renders at small in the grid, but sits in a modal (medium by the rule). Should
+  the preview match the grid at small for fidelity, or follow the modal context at
+  medium?
+- [ ] Should section-header count badges (the small count tags in a section's
+  aside) be treated as "header" (large) or left at their current compact size?

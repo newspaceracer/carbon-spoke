@@ -40,12 +40,11 @@ export type SiteStatus = 'live' | 'maintenance';
 // 'hq-technical' / 'district-lead' / 'district-assistant' = the review-role
 // identities that let a prototype exercise role-scoped screens (e.g. the district
 // admin console scopes its picker to the districts the role can edit; the special-
-// conditions catalog scopes to the districts the role may curate). All are
-// non-admin reviewers, so every guard here treats them exactly like 'user' — they
+// conditions catalog scopes to the districts the role may curate). All three are
+// non-admin reviewers, so every guard here treats them the same (non-admin) — they
 // only carry a finer role a screen reads via editableDistricts()/curatableDistricts().
 export type Identity =
   | 'admin'
-  | 'user'
   | 'anon'
   | 'pending'
   | 'researcher'
@@ -112,7 +111,7 @@ export const isMaintenance = (): boolean => readState().status === 'maintenance'
 // ── Identity (prototype role simulation) ─────────────────────────────────────
 export function readIdentity(): Identity {
   const v = localStorage.getItem(IDENTITY_KEY);
-  return v === 'admin' || v === 'user' || v === 'anon' || v === 'pending' ||
+  return v === 'admin' || v === 'anon' || v === 'pending' ||
     v === 'researcher' || v === 'hq-technical' || v === 'district-lead' ||
     v === 'district-assistant'
     ? v

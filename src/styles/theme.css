@@ -200,8 +200,9 @@ body.has-maintenance-banner cds-header { inset-block-start: 2rem; }
   text-transform: uppercase;
 }
 
-/* Testing reset — rides below the identity dropdown in the same dev panel,
-   separated by a hairline. */
+/* Per-permit permit-role control + testing reset — each rides below the control
+   above it in the same dev panel, separated by a hairline. */
+.demo-permit-role,
 .demo-reset {
   margin-block-start: var(--cds-spacing-04, 0.75rem);
   padding-block-start: var(--cds-spacing-04, 0.75rem);

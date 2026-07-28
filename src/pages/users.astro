@@ -20,7 +20,7 @@ import { withBase } from '../lib/base';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitSection from '../components/PermitSection.astro';
-import { directory, accountRoleOptions, expertiseOptions } from '../data/user';
+import { directory, publicDirectory, accountRoleOptions, expertiseOptions } from '../data/user';
 import { districtDirectory } from '../data/district';
 
 export const prototype = {
@@ -126,19 +126,15 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
           </div>
         </PermitSection>
 
-        <!-- ── All users (the account directory) ────────────────────────────── -->
-        <PermitSection title="All users">
+        <!-- ── Internal users (agency staff accounts) ───────────────────────── -->
+        <PermitSection title="Internal users">
           <cds-tag slot="aside" type="cool-gray" id="users-count">{directory.length}</cds-tag>
-          <cds-button slot="aside" kind="tertiary" size="md" id="add-user-btn">
-            Invite user
-            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
-              <path d="M17 15L17 8 15 8 15 15 8 15 8 17 15 17 15 24 17 24 17 17 24 17 24 15z"></path>
-            </svg>
-          </cds-button>
+          <cds-button slot="aside" kind="tertiary" size="md" id="add-user-btn">Invite user</cds-button>
           <p class="section-hint t-body-01">
-            Every account, its global role, and whether the person has accepted. Use
-            <strong>Edit</strong> to set a role, or <strong>Invite user</strong> to add one.
-            Per-district assignments are edited on the district’s management screen, not here.
+            Agency staff — their global role, expertise, and whether they’ve accepted. Use
+            <strong>Edit</strong> to change a name, contact details, or role, or
+            <strong>Invite user</strong> to add one. Per-district assignments are edited on the
+            district’s management screen, not here.
           </p>
           <div class="table-wrap">
             <cds-table>
@@ -156,64 +152,99 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             </cds-table>
           </div>
         </PermitSection>
+
+        <!-- ── Public users (applicant / researcher accounts) ───────────────── -->
+        <PermitSection title="Public users">
+          <cds-tag slot="aside" type="cool-gray" id="public-count">{publicDirectory.length}</cds-tag>
+          <p class="section-hint t-body-01">
+            Members of the public who apply for permits — researchers and their institutions. They
+            carry no agency role. Use <strong>Edit</strong> to correct a name or contact details;
+            their email verifies the account at sign-in and can’t be changed.
+          </p>
+          <div class="table-wrap">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>User</cds-table-header-cell>
+                  <cds-table-header-cell>Organization</cds-table-header-cell>
+                  <cds-table-header-cell>Phone</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="public-tbody"></cds-table-body>
+            </cds-table>
+          </div>
+        </PermitSection>
       </div>
     </div>
 
-    <!-- ── Manage-user modal: set the account role directly ─────────────────── -->
+    <!-- ── Edit-user modal: name + contact (email read-only), and role/expertise
+         for internal accounts ───────────────────────────────────────────────── -->
     <cds-modal id="user-modal" size="sm">
       <cds-modal-header>
         <cds-modal-close-button></cds-modal-close-button>
         <cds-modal-label>User account</cds-modal-label>
-        <cds-modal-heading>Manage user</cds-modal-heading>
+        <cds-modal-heading>Edit user</cds-modal-heading>
       </cds-modal-header>
       <cds-modal-body>
         <div class="modal-grid">
-          <!-- Identity is owned by the user's account (read-only here). -->
-          <div class="identity">
-            <p class="identity__name t-heading-compact-01" id="u-name"></p>
-            <p class="identity__meta t-body-01">
-              <span id="u-email"></span>
-              <span id="u-affil"></span>
-            </p>
-            <p class="identity__note t-label-01">Identity comes from this user’s account — only their role is set here.</p>
+          <!-- Editable identity — name + phone. -->
+          <cds-text-input id="u-name" label="Full name" placeholder="e.g. Jordan Rivera"></cds-text-input>
+          <cds-text-input id="u-phone" label="Phone" placeholder="(916) 555-0100"></cds-text-input>
+
+          <!-- Email is read-only: it verifies the account at sign-in, so it can't
+               be changed here. A labeled value block, not a disabled input. -->
+          <div class="readonly-field">
+            <p class="rf-label t-label-01">Email</p>
+            <p class="rf-value t-body-01" id="u-email"></p>
+            <p class="rf-note t-label-01">Verified at sign-in — can’t be changed here.</p>
           </div>
 
-          <!-- autoalign: Floating UI positions the open menu so it escapes the
-               modal's scroll container instead of being clipped/faded at the
-               bottom (Carbon drops the modal's mask fade when a dropdown auto-aligns). -->
-          <cds-dropdown id="u-role" title-text="Account role" autoalign>
-            {rolesSorted.map((r) => (
-              <cds-dropdown-item value={r.value}>{r.label}</cds-dropdown-item>
-            ))}
-          </cds-dropdown>
-          <!-- carbon-checked: the dropdown has no per-option helper slot; this <p>
-               is the reusable home for the selected role's description. -->
-          <p class="modal-desc t-label-01" id="u-role-desc"></p>
+          <!-- Organization — read-only context, shown for public users only. -->
+          <div class="readonly-field" id="u-org-wrap" hidden>
+            <p class="rf-label t-label-01">Organization</p>
+            <p class="rf-value t-body-01" id="u-org"></p>
+          </div>
 
-          <!-- District picker — shown only for a district-scoped role (lead /
-               assistant), which is always the lead/assistant OF a district. -->
-          <div id="u-district-wrap" hidden>
-            <cds-dropdown id="u-district" title-text="District" autoalign>
-              {districtsSorted.map((d) => (
-                <cds-dropdown-item value={d.id}>{d.name}</cds-dropdown-item>
+          <!-- Role & access — internal accounts only (public users carry no role). -->
+          <div id="u-role-section">
+            <!-- autoalign: Floating UI positions the open menu so it escapes the
+                 modal's scroll container instead of being clipped/faded at the
+                 bottom (Carbon drops the modal's mask fade when a dropdown auto-aligns). -->
+            <cds-dropdown id="u-role" title-text="Account role" autoalign>
+              {rolesSorted.map((r) => (
+                <cds-dropdown-item value={r.value}>{r.label}</cds-dropdown-item>
               ))}
             </cds-dropdown>
-          </div>
+            <!-- carbon-checked: the dropdown has no per-option helper slot; this <p>
+                 is the reusable home for the selected role's description. -->
+            <p class="modal-desc t-label-01" id="u-role-desc"></p>
 
-          <!-- Areas of expertise — only for HQ technical reviewers (≥1 required). -->
-          <div id="u-expertise-wrap" hidden>
-            <cds-multi-select id="u-expertise" title-text="Areas of expertise" label="Select areas" autoalign>
-              {expertiseOptions.map((e) => (
-                <cds-multi-select-item value={e.value}>{e.label}</cds-multi-select-item>
-              ))}
-            </cds-multi-select>
-            <p class="modal-hint t-label-01" id="u-expertise-hint"></p>
+            <!-- District picker — shown only for a district-scoped role (lead /
+                 assistant), which is always the lead/assistant OF a district. -->
+            <div id="u-district-wrap" hidden>
+              <cds-dropdown id="u-district" title-text="District" autoalign>
+                {districtsSorted.map((d) => (
+                  <cds-dropdown-item value={d.id}>{d.name}</cds-dropdown-item>
+                ))}
+              </cds-dropdown>
+            </div>
+
+            <!-- Areas of expertise — only for HQ technical reviewers (≥1 required). -->
+            <div id="u-expertise-wrap" hidden>
+              <cds-multi-select id="u-expertise" title-text="Areas of expertise" label="Select areas" autoalign>
+                {expertiseOptions.map((e) => (
+                  <cds-multi-select-item value={e.value}>{e.label}</cds-multi-select-item>
+                ))}
+              </cds-multi-select>
+              <p class="modal-hint t-label-01" id="u-expertise-hint"></p>
+            </div>
           </div>
         </div>
       </cds-modal-body>
       <cds-modal-footer>
         <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-        <cds-modal-footer-button kind="primary" id="u-save">Save role</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="u-save">Save changes</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
 
@@ -299,7 +330,9 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     affiliationOf,
     expertiseOf,
     setExpertise,
+    setContact,
     listUsers,
+    listPublicUsers,
     resolveUser,
     inviteUser,
     userStatus,
@@ -475,10 +508,44 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         const manage = document.createElement('cds-button');
         manage.setAttribute('kind', 'ghost'); manage.setAttribute('size', 'sm');
         manage.textContent = 'Edit';
-        manage.addEventListener('click', () => openUserModal(u.id));
+        manage.addEventListener('click', () => openUserModal(u.id, 'internal'));
         actionCell.appendChild(manage);
 
         row.append(userCell, statusCell, roleCell, expertiseCell, affilCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
+  // ── Public users (applicants / researchers) ─────────────────────────────────
+  const renderPublicUsers = () => {
+    const tbody = $('public-tbody');
+    if (!tbody) return;
+    const users = listPublicUsers();
+    const count = $('public-count');
+    if (count) count.textContent = String(users.length);
+
+    tbody.replaceChildren(
+      ...users.map((u) => {
+        const row = document.createElement('cds-table-row');
+
+        const userCell = document.createElement('cds-table-cell');
+        userCell.innerHTML = userCellHTML(u.name, u.email);
+
+        const orgCell = document.createElement('cds-table-cell');
+        orgCell.textContent = u.organization;
+
+        const phoneCell = document.createElement('cds-table-cell');
+        phoneCell.textContent = u.phone || '—';
+
+        const actionCell = document.createElement('cds-table-cell');
+        const edit = document.createElement('cds-button');
+        edit.setAttribute('kind', 'ghost'); edit.setAttribute('size', 'sm');
+        edit.textContent = 'Edit';
+        edit.addEventListener('click', () => openUserModal(u.id, 'public'));
+        actionCell.appendChild(edit);
+
+        row.append(userCell, orgCell, phoneCell, actionCell);
         return row;
       }),
     );
@@ -553,8 +620,13 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     );
   };
 
-  // ── Manage-user modal ─────────────────────────────────────────────────────────
+  // ── Edit-user modal ───────────────────────────────────────────────────────────
   const modal = $('user-modal') as any;
+  const nameEl = $('u-name') as any;
+  const phoneEl = $('u-phone') as any;
+  const roleSection = $('u-role-section');
+  const orgWrap = $('u-org-wrap');
+  const orgEl = $('u-org');
   const roleEl = $('u-role') as any;
   const roleDesc = $('u-role-desc');
   const districtWrap = $('u-district-wrap');
@@ -563,6 +635,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const expertiseEl = $('u-expertise') as any;
   const expertiseHint = $('u-expertise-hint');
   let editingUserId = '';
+  let editingKind: 'internal' | 'public' = 'internal';
 
   const HQ = 'hq-technical';
   const isScoped = (value: string) => !!accountRoleMeta(value)?.scoped;
@@ -585,45 +658,79 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     }
   };
 
-  const openUserModal = (userId: string) => {
+  const openUserModal = (userId: string, kind: 'internal' | 'public') => {
     editingUserId = userId;
+    editingKind = kind;
     const u = resolveUser(userId);
-    if ($('u-name')) $('u-name')!.textContent = u?.name ?? '';
+    if (nameEl) { nameEl.value = u?.name ?? ''; nameEl.invalid = false; }
+    if (phoneEl) phoneEl.value = u?.phone ?? '';
     if ($('u-email')) $('u-email')!.textContent = u?.email ?? '';
-    if ($('u-affil')) $('u-affil')!.textContent = affiliationOf(userId);
 
-    const { role, district } = accountRoleOf(userId);
-    if (roleEl) roleEl.value = role || accountRoleOptions[0].value;
-    if (districtEl) districtEl.value = district || 'north-coast-redwoods';
-    // Setting the multi-select's comma-joined value reconciles its checkboxes.
-    if (expertiseEl) expertiseEl.value = expertiseOf(userId).join(',');
-    syncForRole(roleEl?.value);
+    // Role/expertise apply to internal accounts only; public users carry none.
+    if (roleSection) roleSection.hidden = kind !== 'internal';
+    if (orgWrap) orgWrap.hidden = kind !== 'public';
+    if (kind === 'public') {
+      const pub = listPublicUsers().find((p) => p.id === userId);
+      if (orgEl) orgEl.textContent = pub?.organization ?? '';
+    } else {
+      const { role, district } = accountRoleOf(userId);
+      if (roleEl) roleEl.value = role || accountRoleOptions[0].value;
+      if (districtEl) districtEl.value = district || 'north-coast-redwoods';
+      // Setting the multi-select's comma-joined value reconciles its checkboxes.
+      if (expertiseEl) expertiseEl.value = expertiseOf(userId).join(',');
+      syncForRole(roleEl?.value);
+    }
     modal.open = true;
   };
 
   roleEl?.addEventListener('cds-dropdown-selected', () => syncForRole(roleEl.value));
 
   $('u-save')?.addEventListener('click', () => {
-    const value = roleEl?.value;
-    if (!value || !editingUserId) return;
-    const district = isScoped(value) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
-    // Expertise is an HQ-only attribute — non-HQ roles carry none.
-    const expertise = value === HQ ? (expertiseEl?.value || '').split(',').filter(Boolean) : [];
-    // Enforce the HQ-technical expertise rule before committing.
-    if (value === HQ && expertise.length === 0) {
-      if (expertiseHint) {
-        expertiseHint.textContent = 'HQ technical reviewers need at least one area of expertise.';
-        expertiseHint.setAttribute('data-error', '');
-      }
+    if (!editingUserId) return;
+
+    // Name is required — an account can't lose its display name. Phone is optional.
+    const name = (nameEl?.value || '').trim();
+    const phone = (phoneEl?.value || '').trim();
+    if (!name) {
+      if (nameEl) { nameEl.invalid = true; nameEl.invalidText = 'Enter a name.'; }
       return;
     }
-    setAccountRole(editingUserId, value, district);
-    setExpertise(editingUserId, expertise);
+
+    // Internal accounts also carry a role (+ HQ expertise); validate before saving.
+    let value = '';
+    let district: string | undefined;
+    let expertise: string[] = [];
+    if (editingKind === 'internal') {
+      value = roleEl?.value || '';
+      if (!value) return;
+      district = isScoped(value) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
+      // Expertise is an HQ-only attribute — non-HQ roles carry none.
+      expertise = value === HQ ? (expertiseEl?.value || '').split(',').filter(Boolean) : [];
+      if (value === HQ && expertise.length === 0) {
+        if (expertiseHint) {
+          expertiseHint.textContent = 'HQ technical reviewers need at least one area of expertise.';
+          expertiseHint.setAttribute('data-error', '');
+        }
+        return;
+      }
+    }
+
+    // Contact edits apply to every account; role/expertise only to internal ones.
+    setContact(editingUserId, { name, phone });
+    if (editingKind === 'internal') {
+      setAccountRole(editingUserId, value, district);
+      setExpertise(editingUserId, expertise);
+    }
+
     modal.open = false;
-    renderUsers();
-    renderRequests(); // current-role column may reference this user
-    const u = resolveUser(editingUserId);
-    flash('Role updated', `${u?.name ?? 'The user'} is now ${roleDisplay(value, district)}.`);
+    if (editingKind === 'internal') {
+      renderUsers();
+      renderRequests(); // current-role / name column may reference this user
+      flash('User updated', `${name} is now ${roleDisplay(value, district)}.`);
+    } else {
+      renderPublicUsers();
+      flash('User updated', `${name}’s details were saved.`);
+    }
   });
 
   // ── Add-user modal ──────────────────────────────────────────────────────────
@@ -707,6 +814,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   renderRequests();
   renderInvites();
   renderUsers();
+  renderPublicUsers();
 </script>
 
 <style>
