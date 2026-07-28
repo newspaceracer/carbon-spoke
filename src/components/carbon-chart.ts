@@ -19,6 +19,7 @@ import {
   SimpleBarChart,
   GroupedBarChart,
   StackedBarChart,
+  ComboChart,
   DonutChart,
   LineChart,
   type ChartTabularData,
@@ -31,6 +32,7 @@ const CHART_TYPES = {
   'simple-bar': SimpleBarChart,
   'grouped-bar': GroupedBarChart,
   'stacked-bar': StackedBarChart,
+  combo: ComboChart, // grouped bars + a line series (see comboChartTypes in options)
   donut: DonutChart,
   line: LineChart,
 } as const;

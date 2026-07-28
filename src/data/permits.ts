@@ -335,9 +335,23 @@ export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
   const responsibleAnalyst = role ? ME : pick(analysts);
   const supportingAnalysts = pickN(analysts, 1 + Math.floor(rng() * 2), [responsibleAnalyst]).join(', ');
 
+  // The full transition history (audit-log stand-in) — drives the decided-ever
+  // bucket below and the Tier 2 timing metrics.
+  const history = buildHistory(0x1a2b3c + i, submitted, status.label, responsibleAnalyst, permitEnd);
+  // "Decided" = the reviewer reached an approve OR reject decision at some point —
+  // approved (→ Out for signature / Active) or denied (→ Rejected). True even if the
+  // permit later expired: it WAS approved. Withdrawn is applicant-initiated, not a
+  // reviewer decision, so it's excluded.
+  const decidedEver = history.some(
+    (e) => e.to === 'Out for signature' || e.to === 'Active' || e.to === 'Rejected',
+  );
+
   const buckets = ['all'];
   if (role) buckets.push('mine');
   if (myDistricts.includes(district)) buckets.push('district');
+  // The reviewer's own permits she has already approved or rejected — the register
+  // scope the "My permits" board's "See all" link lands on.
+  if (role && decidedEver) buckets.push('mine-decided');
 
   return {
     permitId: `${String(startYear).slice(2)}-${pick(offices)}-${pad3(i)}`,
@@ -367,7 +381,7 @@ export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
     annualReportSubmitted: reportIn ? 'Yes' : 'No',
     annualReport: reportIn ? 'View report' : '',
     role,
-    history: buildHistory(0x1a2b3c + i, submitted, status.label, responsibleAnalyst, permitEnd),
+    history,
     _buckets: buckets,
   };
 });
@@ -376,6 +390,7 @@ export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
 export const scopeCounts = {
   mine: permits.filter((p) => p._buckets.includes('mine')).length,
   district: permits.filter((p) => p._buckets.includes('district')).length,
+  decided: permits.filter((p) => p._buckets.includes('mine-decided')).length,
   all: permits.length,
 };
 

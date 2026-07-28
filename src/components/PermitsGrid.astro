@@ -48,6 +48,7 @@ const icons = {
     <!-- Scope — filters rows by the reviewer's relationship to each permit. -->
     <cds-content-switcher id="pg-scope" class="permits-grid__scope" value="all" size="lg" aria-label="Permit scope">
       <cds-content-switcher-item value="mine">My permits · {scopeCounts.mine}</cds-content-switcher-item>
+      <cds-content-switcher-item value="mine-decided">My decisions · {scopeCounts.decided}</cds-content-switcher-item>
       <cds-content-switcher-item value="district">My district · {scopeCounts.district}</cds-content-switcher-item>
       <cds-content-switcher-item value="all">All permits · {scopeCounts.all}</cds-content-switcher-item>
     </cds-content-switcher>
@@ -189,13 +190,26 @@ const icons = {
     if (Array.isArray(prefs.columnState) && prefs.columnState.length) {
       grid.applyColumnState(prefs.columnState);
     }
-    const bucket = prefs.bucket || 'all';
-    scope.value = bucket;
+    // A `?scope=` deep-link (e.g. the My-permits board's "See all" link) takes
+    // precedence over a remembered scope, so landing here from another screen lands
+    // on the intended segment.
+    const params = new URLSearchParams(location.search);
+    const VALID_SCOPES = new Set(['all', 'mine', 'mine-decided', 'district']);
+    const urlScope = params.get('scope');
+    const bucket = urlScope && VALID_SCOPES.has(urlScope) ? urlScope : prefs.bucket || 'all';
     grid.setBucket(bucket);
+    if (urlScope && VALID_SCOPES.has(urlScope)) savePrefs({ bucket });
+    // Highlight the matching segment AFTER the switcher has upgraded + first-rendered
+    // — setting `.value` before its first Lit update resets it to the first item.
+    customElements.whenDefined('cds-content-switcher').then(async () => {
+      const el = scope as HTMLElement & { value: string; updateComplete?: Promise<unknown> };
+      if (el.updateComplete) await el.updateComplete;
+      scope.value = bucket;
+    });
 
     // A `?q=` deep-link (e.g. a dashboard click-through) takes precedence over a
     // remembered query, so landing here from a metric lands pre-filtered.
-    const urlQuery = new URLSearchParams(location.search).get('q');
+    const urlQuery = params.get('q');
     const query = urlQuery ?? prefs.query ?? '';
     if (query) {
       search.value = query;

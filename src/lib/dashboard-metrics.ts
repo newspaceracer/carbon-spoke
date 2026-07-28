@@ -58,7 +58,12 @@ export interface SlimPermit {
   permitStart: string; // ISO — "Permit start date"
   recordType: string;
   annualReportSubmitted: string; // 'Yes' | 'No'
+  annualReportDue: string; // ISO — when the annual report is due (for delinquency-over-time)
   responsibleAnalyst: string; // for Tier 2 "processing time by analyst"
+  // ── Decision (from the transition history) — for the monthly time series ──
+  /** ISO date the permit was approved (→ Active) or denied (→ Rejected); null if undecided. */
+  decidedAt: string | null;
+  decision: 'approved' | 'rejected' | null;
   // ── Tier 2 scalars, derived from the transition history (see deriveTimeline) ──
   /** Days from Date submitted to the approved/signed OR denied decision; null when
    *  the permit hasn't reached a decision yet (still in process) or was withdrawn. */
@@ -85,11 +90,15 @@ const daysBetween = (fromISO: string, toISO: string): number => {
 function deriveTimeline(history: readonly StatusEvent[], submitted: string) {
   const stageDays: Record<string, number> = {};
   let decisionAt: string | null = null;
+  let decision: 'approved' | 'rejected' | null = null;
   let returns = 0;
   for (let k = 0; k < history.length; k++) {
     const ev = history[k];
     if (ev.to === 'Returned to submitter') returns++;
-    if (decisionAt === null && (ev.to === 'Active' || ev.to === 'Rejected')) decisionAt = ev.at;
+    if (decisionAt === null && (ev.to === 'Active' || ev.to === 'Rejected')) {
+      decisionAt = ev.at;
+      decision = ev.to === 'Active' ? 'approved' : 'rejected';
+    }
     const next = history[k + 1];
     if (next) stageDays[ev.to] = (stageDays[ev.to] ?? 0) + Math.max(0, daysBetween(ev.at, next.at));
   }
@@ -97,6 +106,9 @@ function deriveTimeline(history: readonly StatusEvent[], submitted: string) {
     processingDays: decisionAt ? Math.max(0, daysBetween(submitted, decisionAt)) : null,
     stageDays,
     returns,
+    // Decision date + outcome — for the monthly approved/rejected time series.
+    decidedAt: decisionAt,
+    decision,
   };
 }
 
@@ -111,6 +123,7 @@ export const toSlim = (rows: readonly PermitRow[]): SlimPermit[] =>
     permitStart: p.permitStart,
     recordType: p.recordType,
     annualReportSubmitted: p.annualReportSubmitted,
+    annualReportDue: p.annualReportDue,
     responsibleAnalyst: p.responsibleAnalyst,
     ...deriveTimeline(p.history, p.submitted),
   }));
@@ -234,6 +247,114 @@ export function perYearByPermitStart(rows: readonly SlimPermit[], span = 5): Buc
     years.push({ group: String(y), value: perYear.get(y) ?? 0 });
   }
   return years;
+}
+
+// ── Time-series (monthly) ──────────────────────────────────────────────────────
+// Multi-series charts use Carbon's { group, key, value } tabular shape: `group` is
+// the series name (legend), `key` is the month on the domain axis, `value` the count.
+// These charts show a FIXED trailing window (not the date-range filter) so the trend
+// stays readable; District + Resource Category still scope them (scopeByDimensions).
+
+/** A month key from an ISO date — 'YYYY-MM'. String order == chronological order. */
+const monthKey = (iso: string) => iso.slice(0, 7);
+
+/** Contiguous 'YYYY-MM' list of length `n` ending at `endMonth` (inclusive), so
+ *  gap months render as zero instead of collapsing the axis. */
+function monthsEndingAt(endMonth: string, n: number): string[] {
+  const [y, mo] = endMonth.split('-').map(Number);
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, mo - 1 - i, 1));
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+export type IntakeSeries = 'received' | 'approved' | 'rejected';
+
+export interface MonthlyIntake {
+  months: string[];
+  received: Record<string, number>;
+  approved: Record<string, number>;
+  rejected: Record<string, number>;
+}
+
+/** Applications received, permits approved, and permits rejected — counted per
+ *  MONTH over the trailing `n` months. Received is bucketed by Date submitted;
+ *  approved/rejected by the decision date carried from the transition history. */
+export function monthlyIntakeDecisions(rows: readonly SlimPermit[], n = 18): MonthlyIntake {
+  let end = '';
+  for (const r of rows) {
+    const sm = monthKey(r.submitted);
+    if (sm > end) end = sm;
+    if (r.decidedAt) { const dm = monthKey(r.decidedAt); if (dm > end) end = dm; }
+  }
+  const months = end ? monthsEndingAt(end, n) : [];
+  const idx = new Set(months);
+  const received: Record<string, number> = {};
+  const approved: Record<string, number> = {};
+  const rejected: Record<string, number> = {};
+  for (const mm of months) { received[mm] = 0; approved[mm] = 0; rejected[mm] = 0; }
+  for (const r of rows) {
+    const sm = monthKey(r.submitted);
+    if (idx.has(sm)) received[sm]++;
+    if (r.decidedAt && r.decision) {
+      const dm = monthKey(r.decidedAt);
+      if (idx.has(dm)) (r.decision === 'approved' ? approved : rejected)[dm]++;
+    }
+  }
+  return { months, received, approved, rejected };
+}
+
+/** Trailing moving average of `vals` over `w` points (each point averaged with the
+ *  up-to w-1 before it). */
+const movingAverage = (vals: readonly number[], w: number): number[] =>
+  vals.map((_, i) => {
+    const s = vals.slice(Math.max(0, i - w + 1), i + 1);
+    return s.reduce((a, b) => a + b, 0) / s.length;
+  });
+
+/** Carbon combo tabular data: grouped bars (Received / Approved / Rejected) plus a
+ *  moving-average LINE that tracks the chosen focus series. */
+export function intakeComboData(
+  mi: MonthlyIntake,
+  avgOf: IntakeSeries = 'received',
+  window = 3,
+): { group: string; key: string; value: number }[] {
+  const data: { group: string; key: string; value: number }[] = [];
+  for (const mm of mi.months) {
+    data.push({ group: 'Received', key: mm, value: mi.received[mm] });
+    data.push({ group: 'Approved', key: mm, value: mi.approved[mm] });
+    data.push({ group: 'Rejected', key: mm, value: mi.rejected[mm] });
+  }
+  const avg = movingAverage(mi.months.map((mm) => mi[avgOf][mm]), window);
+  mi.months.forEach((mm, i) => data.push({ group: 'Average', key: mm, value: Math.round(avg[i] * 10) / 10 }));
+  return data;
+}
+
+/** New delinquencies per MONTH: an issued permit whose annual report came due that
+ *  month and is still not submitted becomes delinquent then. A falling line means
+ *  fewer permits are newly missing their deadline — the backlog is being curbed. */
+export function monthlyNewDelinquencies(
+  rows: readonly SlimPermit[],
+  n = 18,
+): { group: string; key: string; value: number }[] {
+  let end = '';
+  for (const r of rows) {
+    if (r.annualReportDue) { const dm = monthKey(r.annualReportDue); if (dm > end) end = dm; }
+  }
+  const months = end ? monthsEndingAt(end, n) : [];
+  const idx = new Set(months);
+  const counts: Record<string, number> = {};
+  for (const mm of months) counts[mm] = 0;
+  for (const r of rows) {
+    if (phaseOf(r.status) !== 'approved') continue; // issued (Active / Expired)
+    if (r.annualReportSubmitted === 'Yes') continue;
+    if (!r.annualReportDue) continue;
+    const dm = monthKey(r.annualReportDue);
+    if (idx.has(dm)) counts[dm]++;
+  }
+  return months.map((mm) => ({ group: 'New delinquencies', key: mm, value: counts[mm] }));
 }
 
 // ── The headline metric set ──────────────────────────────────────────────────

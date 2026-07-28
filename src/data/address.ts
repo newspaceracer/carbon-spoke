@@ -174,7 +174,7 @@ export const addressFormats: Record<string, CountryAddressFormat> = {
     postalPattern: '^\\d{5}(-\\d{4})?$',
     fields: [
       { key: 'line1', label: 'Street address', required: true },
-      { key: 'line2', label: 'Suite / unit (optional)', required: false },
+      { key: 'line2', label: 'Suite / unit', required: false },
       { key: 'city', label: 'City', required: true },
       { key: 'region', label: 'State', required: true, options: states },
       { key: 'postalCode', label: 'ZIP code', required: true },
@@ -192,7 +192,7 @@ export const addressFormats: Record<string, CountryAddressFormat> = {
       { key: 'region', label: 'Prefecture', required: true, options: jpPrefectures },
       { key: 'city', label: 'City / ward', required: true },
       { key: 'line1', label: 'Address', required: true },
-      { key: 'line2', label: 'Building / room (optional)', required: false },
+      { key: 'line2', label: 'Building / room', required: false },
     ],
   },
 
@@ -204,7 +204,7 @@ export const addressFormats: Record<string, CountryAddressFormat> = {
     postalPattern: '^[A-Za-z]{1,2}\\d[A-Za-z\\d]?\\s*\\d[A-Za-z]{2}$',
     fields: [
       { key: 'line1', label: 'Address', required: true },
-      { key: 'line2', label: 'Address line 2 (optional)', required: false },
+      { key: 'line2', label: 'Address line 2', required: false },
       { key: 'city', label: 'Town / city', required: true },
       { key: 'postalCode', label: 'Postcode', required: true },
     ],
@@ -218,7 +218,7 @@ export const addressFormats: Record<string, CountryAddressFormat> = {
     postalPattern: '^\\d{5}$',
     fields: [
       { key: 'line1', label: 'Street and house number', required: true },
-      { key: 'line2', label: 'Address line 2 (optional)', required: false },
+      { key: 'line2', label: 'Address line 2', required: false },
       { key: 'postalCode', label: 'Postal code', required: true },
       { key: 'city', label: 'City', required: true },
     ],
@@ -232,7 +232,7 @@ export const addressFormats: Record<string, CountryAddressFormat> = {
     postalPattern: '^\\d{5}-?\\d{3}$',
     fields: [
       { key: 'line1', label: 'Address', required: true },
-      { key: 'line2', label: 'Address line 2 (optional)', required: false },
+      { key: 'line2', label: 'Address line 2', required: false },
       { key: 'sublocality', label: 'Neighborhood', required: true },
       { key: 'city', label: 'City', required: true },
       { key: 'region', label: 'State', required: true, options: brStates },
@@ -247,7 +247,7 @@ export const addressFormats: Record<string, CountryAddressFormat> = {
     name: 'United Arab Emirates',
     fields: [
       { key: 'line1', label: 'Address', required: true },
-      { key: 'line2', label: 'Address line 2 (optional)', required: false },
+      { key: 'line2', label: 'Address line 2', required: false },
       { key: 'region', label: 'Emirate', required: true, options: aeEmirates },
     ],
   },
@@ -260,10 +260,10 @@ export const addressFormats: Record<string, CountryAddressFormat> = {
     postalPattern: '^[A-Za-z]\\d{2}\\s?[A-Za-z\\d]{4}$',
     fields: [
       { key: 'line1', label: 'Address', required: true },
-      { key: 'line2', label: 'Address line 2 (optional)', required: false },
+      { key: 'line2', label: 'Address line 2', required: false },
       { key: 'city', label: 'Town / city', required: true },
-      { key: 'region', label: 'County (optional)', required: false, options: ieCounties },
-      { key: 'postalCode', label: 'Eircode (optional)', required: false },
+      { key: 'region', label: 'County', required: false, options: ieCounties },
+      { key: 'postalCode', label: 'Eircode', required: false },
     ],
   },
 
@@ -278,7 +278,7 @@ export const addressFormats: Record<string, CountryAddressFormat> = {
       { key: 'city', label: 'City', required: true },
       { key: 'sublocality', label: 'District', required: false },
       { key: 'line1', label: 'Address', required: true },
-      { key: 'line2', label: 'Address line 2 (optional)', required: false },
+      { key: 'line2', label: 'Address line 2', required: false },
       { key: 'postalCode', label: 'Postal code', required: true },
     ],
   },

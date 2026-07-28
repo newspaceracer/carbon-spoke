@@ -23,6 +23,7 @@ import AddressFieldset from '../components/AddressFieldset.astro';
 import PhoneField from '../components/PhoneField.astro';
 import { currentUser, divisions, requestableRoles } from '../data/user';
 import { districtDirectory } from '../data/district';
+import { notificationSeeds } from '../data/site-settings';
 
 export const prototype = {
   title: 'My profile',
@@ -39,6 +40,45 @@ const divisionLabel = divisions.find((d) => d.value === u.division)?.label ?? ''
 // Dropdown options render alphabetically (states are already A–Z at the source).
 const divisionsSorted = [...divisions].sort((a, b) => a.label.localeCompare(b.label));
 const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompare(b.name));
+
+// Notification preferences are driven by the SAME system-email inventory a System
+// Admin edits in Templates & defaults (notificationSeeds, site-settings.ts) — one
+// source of truth, so the emails you can opt out of here are exactly the emails the
+// system sends. This map supplies the recipient-facing label + "when you get it"
+// line for each; the SET (which emails exist) comes from the seeds. Defaults to on
+// (opt-out model). District/internal emails are managed elsewhere and aren't listed.
+const notificationCopy: Record<string, { label: string; description: string; enabled?: boolean }> = {
+  'submission-confirmation': {
+    label: 'Submission confirmation',
+    description: 'When you successfully submit a permit application.',
+  },
+  returned: {
+    label: 'Application returned',
+    description: 'When a reviewer returns your application for revisions.',
+  },
+  rejected: {
+    label: 'Application rejected',
+    description: 'When a decision is reached and your application is not approved.',
+  },
+  approved: {
+    label: 'Permit approved',
+    description: 'When your permit is approved and ready to download.',
+  },
+  'annual-report-15': {
+    label: 'Annual report due in 15 days',
+    description: 'A reminder 15 days before your annual report is due.',
+  },
+  'annual-report-day': {
+    label: 'Annual report due today',
+    description: 'A reminder on the day your annual report is due.',
+  },
+};
+const notificationPrefs = notificationSeeds.map((s) => ({
+  key: s.id,
+  label: notificationCopy[s.id]?.label ?? s.name,
+  description: notificationCopy[s.id]?.description ?? '',
+  enabled: notificationCopy[s.id]?.enabled ?? true,
+}));
 ---
 
 <BaseLayout title={`My profile — ${fullName}`}>
@@ -150,10 +190,10 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         </PermitSection>
 
         <PermitSection title="Notification preferences">
-          <p class="section-hint t-body-01">Choose which permit activity you're notified about. All notifications are sent by email to <span class="prefs__email" id="prefs-email">{u.email}</span>.</p>
+          <p class="section-hint t-body-01">Choose which permit emails you receive. These are the messages the system sends about your applications and permits, delivered to <span class="prefs__email" id="prefs-email">{u.email}</span>.</p>
 
           <div class="prefs" id="notification-prefs" data-storage-key="profile-notifications">
-            {u.notifications.map((n) => (
+            {notificationPrefs.map((n) => (
               <div class="prefs__row">
                 <div class="prefs__info">
                   <p class="prefs__label t-heading-compact-01">{n.label}</p>
@@ -502,6 +542,35 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     prefs.addEventListener('cds-toggle-changed', persist);
   }
 
+  // ── Align every switch to one vertical column ────────────────────────────
+  // cds-toggle renders the label-text as a VISIBLE span to the left of the switch,
+  // and in @carbon/web-components@2.59.0 the `hide-label` attribute does NOT reflect
+  // to the hideLabel property — so that span stays in flow and its variable width
+  // pushes each switch to a different x, wrecking vertical scannability. The row's
+  // own .prefs__label already names each toggle, so the in-switch text is redundant.
+  // Apply the sr-only styling hideLabel was meant to (visually-hidden pattern): the
+  // switch column lines up, and the accessible name — computed from the wrapping
+  // <label> that still contains the span — is preserved. Forcing hideLabel=true is
+  // NOT an option: it relocates the full label text to the RIGHT of the switch.
+  const alignToggleSwitches = () => {
+    document.querySelectorAll<HTMLElement>('cds-toggle.prefs__toggle').forEach((t) => {
+      const span = (t as any).shadowRoot?.querySelector('.cds--toggle__label-text') as HTMLElement | null;
+      if (!span) return;
+      Object.assign(span.style, {
+        position: 'absolute',
+        width: '1px',
+        height: '1px',
+        margin: '-1px',
+        padding: '0',
+        overflow: 'hidden',
+        clip: 'rect(0 0 0 0)',
+        whiteSpace: 'nowrap',
+        border: '0',
+      });
+    });
+  };
+  customElements.whenDefined('cds-toggle').then(() => requestAnimationFrame(alignToggleSwitches));
+
   // ── Role-change request (prototype-local, shared with the /users console) ──
   // The user REQUESTS one of the requestable roles; an admin resolves it in the
   // users console. The request + the resulting account role live in the shared
@@ -700,17 +769,15 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     margin: 0.125rem 0 0;
     color: var(--cds-text-secondary, #525252);
   }
-  /* cds-toggle renders as [switch][side-text]; with hide-label Carbon fills that
-     side text with the label-text value (variable width per row), so
-     right-aligning the whole control lands each switch at a different x and the
-     switches look ragged. We keep label-text (the component's own hidden label
-     span still provides the accessible name), but collapse the visible side text
-     to zero width by zeroing the ONE token it uses — scoped to these toggles,
-     inherited into the shadow DOM via the custom property. Every toggle is then
-     switch-width only → identical width → aligned, at any size, no clipping. */
+  /* cds-toggle renders [label-text span][switch][On/Off]; the label-text span is a
+     variable-width visible label to the LEFT of the switch, so right-aligning the
+     control lands each switch at a different x (ragged column). Carbon's hide-label
+     would sr-only that span, but its attribute doesn't reflect to the property in
+     2.59.0 — so the profile script applies the sr-only styling in the shadow DOM
+     (see alignToggleSwitches). With the span out of flow every toggle is
+     switch + On/Off only → equal width → right-aligned to one clean column. */
   .prefs__toggle {
     justify-self: end;
-    --cds-body-01-font-size: 0;
   }
 
   /* Role & access rail — a read-only cds-tile. Surface/padding are the tile's;

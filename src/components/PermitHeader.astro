@@ -358,8 +358,9 @@ const teamStorageKey = `permit-team-${id}`;
                 </span>
                 <span class="review-row__when t-label-01">{meta.when}</span>
               </div>
-              <cds-icon-button kind="ghost" size="sm" align="left" data-remove aria-label={`Remove ${m.name}`}>
+              <cds-icon-button kind="ghost" size="sm" align="left" data-remove>
                 <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M12 12h2v12h-2zM18 12h2v12h-2z"/><path d="M4 6v2h2v20a2 2 0 002 2h16a2 2 0 002-2V8h2V6zm4 22V8h16v20zM12 2h8v2h-8z"/></svg>
+                <span slot="tooltip-content">{`Remove ${m.name}`}</span>
               </cds-icon-button>
             </li>
             );
@@ -387,8 +388,9 @@ const teamStorageKey = `permit-team-${id}`;
         </span>
         <span class="review-row__when t-label-01"></span>
       </div>
-      <cds-icon-button kind="ghost" size="sm" align="left" data-remove aria-label="Remove reviewer">
+      <cds-icon-button kind="ghost" size="sm" align="left" data-remove>
         <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M12 12h2v12h-2zM18 12h2v12h-2z"/><path d="M4 6v2h2v20a2 2 0 002 2h16a2 2 0 002-2V8h2V6zm4 22V8h16v20zM12 2h8v2h-8z"/></svg>
+        <span slot="tooltip-content">Remove reviewer</span>
       </cds-icon-button>
     </li>
   </template>
@@ -656,7 +658,8 @@ const teamStorageKey = `permit-team-${id}`;
       if (roleEl) roleEl.textContent = `${u.role} — ${u.detail}`;
       const whenEl = li.querySelector('.review-row__when');
       if (whenEl) whenEl.textContent = `Added ${today}`;
-      (li.querySelector('[data-remove]') as HTMLElement)?.setAttribute('aria-label', `Remove ${u.name}`);
+      const removeLabel = li.querySelector('[data-remove] [slot="tooltip-content"]');
+      if (removeLabel) removeLabel.textContent = `Remove ${u.name}`;
       return li;
     };
 
@@ -914,6 +917,13 @@ const teamStorageKey = `permit-team-${id}`;
   }
   .review-row:first-child {
     border-block-start: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  /* Signal the destructive intent on hover — cds-icon-button has no `danger`
+     kind. The hand-authored glyph has no fill="currentColor", so Carbon's
+     `color:` token can't tint it; set `fill` on the slotted (light-DOM) svg
+     directly with the danger token. */
+  .review-row cds-icon-button[data-remove]:hover svg {
+    fill: var(--cds-button-danger-primary, #da1e28);
   }
   .review-row__id {
     min-width: 0;
