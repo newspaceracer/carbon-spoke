@@ -261,7 +261,11 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
         {dateRows.map((r) => (
           <div class="review__row">
             <dt class="review__label t-label-01">{r.label}</dt>
-            <dd class="review__value t-body-01">{r.value}</dd>
+            {r.value ? (
+              <dd class="review__value t-body-01">{r.value}</dd>
+            ) : (
+              <dd class="review__value review__value--muted t-body-01">Not provided</dd>
+            )}
           </div>
         ))}
       </dl>
@@ -402,8 +406,10 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
             <p class="narrative__label t-label-01">Collection rationale</p>
             {dc.collectionRationaleInProposal ? (
               <p class="narrative__body deferred t-body-01">Answered in study proposal</p>
-            ) : (
+            ) : dc.collectionRationale ? (
               <p class="narrative__body t-body-01">{dc.collectionRationale}</p>
+            ) : (
+              <p class="narrative__body review__value--muted t-body-01">Not provided</p>
             )}
           </div>
 

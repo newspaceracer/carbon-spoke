@@ -97,25 +97,55 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
           </div>
         </PermitSection>
 
+        <!-- ── Pending invitations (invited, not yet accepted) ──────────────── -->
+        <PermitSection title="Pending invitations">
+          <cds-tag slot="aside" type="cool-gray" id="invites-count">0</cds-tag>
+          <p class="section-hint t-body-01">
+            People invited but not yet signed in. <strong>Resend</strong> or
+            <strong>revoke</strong> an invitation, or <strong>mark it accepted</strong> once the
+            person has joined.
+          </p>
+
+          <!-- carbon-checked: empty-state copy is prose, not a control — a <p> with a
+               Carbon type role is the house pattern (see the requests inbox above). -->
+          <p id="invites-empty" class="empty t-body-01" hidden>No pending invitations.</p>
+
+          <div class="table-wrap" id="invites-wrap">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>User</cds-table-header-cell>
+                  <cds-table-header-cell>Role</cds-table-header-cell>
+                  <cds-table-header-cell>Affiliation</cds-table-header-cell>
+                  <cds-table-header-cell>Invited</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="invites-tbody"></cds-table-body>
+            </cds-table>
+          </div>
+        </PermitSection>
+
         <!-- ── All users (the account directory) ────────────────────────────── -->
         <PermitSection title="All users">
           <cds-tag slot="aside" type="cool-gray" id="users-count">{directory.length}</cds-tag>
           <cds-button slot="aside" kind="tertiary" size="sm" id="add-user-btn">
-            Add user
+            Invite user
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
               <path d="M17 15L17 8 15 8 15 15 8 15 8 17 15 17 15 24 17 24 17 17 24 17 24 15z"></path>
             </svg>
           </cds-button>
           <p class="section-hint t-body-01">
-            Every account and its global role. Use <strong>Manage</strong> to set a role, or
-            <strong>Add user</strong> to create one. Per-district assignments are edited on the
-            district’s management screen, not here.
+            Every account, its global role, and whether the person has accepted. Use
+            <strong>Manage</strong> to set a role, or <strong>Invite user</strong> to add one.
+            Per-district assignments are edited on the district’s management screen, not here.
           </p>
           <div class="table-wrap">
             <cds-table>
               <cds-table-head>
                 <cds-table-header-row>
                   <cds-table-header-cell>User</cds-table-header-cell>
+                  <cds-table-header-cell>Status</cds-table-header-cell>
                   <cds-table-header-cell>Account role</cds-table-header-cell>
                   <cds-table-header-cell>Expertise</cds-table-header-cell>
                   <cds-table-header-cell>Affiliation</cds-table-header-cell>
@@ -170,8 +200,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             </cds-dropdown>
           </div>
 
-          <!-- Areas of expertise — required (≥1) for HQ technical reviewers. -->
-          <div>
+          <!-- Areas of expertise — only for HQ technical reviewers (≥1 required). -->
+          <div id="u-expertise-wrap" hidden>
             <cds-multi-select id="u-expertise" title-text="Areas of expertise" label="Select areas" autoalign>
               {expertiseOptions.map((e) => (
                 <cds-multi-select-item value={e.value}>{e.label}</cds-multi-select-item>
@@ -187,12 +217,12 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       </cds-modal-footer>
     </cds-modal>
 
-    <!-- ── Add-user modal: create an account, set its role + expertise ───────── -->
+    <!-- ── Invite-user modal: create a PENDING account, set its role + expertise ── -->
     <cds-modal id="add-modal" size="sm">
       <cds-modal-header>
         <cds-modal-close-button></cds-modal-close-button>
-        <cds-modal-label>User account</cds-modal-label>
-        <cds-modal-heading>Add user</cds-modal-heading>
+        <cds-modal-label>New account</cds-modal-label>
+        <cds-modal-heading>Invite user</cds-modal-heading>
       </cds-modal-header>
       <cds-modal-body>
         <div class="modal-grid">
@@ -219,8 +249,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             </cds-dropdown>
           </div>
 
-          <!-- Areas of expertise — required (≥1) for HQ technical reviewers. -->
-          <div>
+          <!-- Areas of expertise — only for HQ technical reviewers (≥1 required). -->
+          <div id="au-expertise-wrap" hidden>
             <cds-multi-select id="au-expertise" title-text="Areas of expertise" label="Select areas" autoalign>
               {expertiseOptions.map((e) => (
                 <cds-multi-select-item value={e.value}>{e.label}</cds-multi-select-item>
@@ -232,14 +262,14 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       </cds-modal-body>
       <cds-modal-footer>
         <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-        <cds-modal-footer-button kind="primary" id="au-save">Add user</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="au-save">Send invitation</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
   </main>
 </BaseLayout>
 
 <script>
-  import { accountRoleOptions, accountRoleMeta, findUser, expertiseLabel } from '../data/user';
+  import { accountRoleOptions, accountRoleMeta, expertiseLabel } from '../data/user';
   import {
     pendingRequests,
     decideRequest,
@@ -253,7 +283,11 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     setExpertise,
     listUsers,
     resolveUser,
-    addUser,
+    inviteUser,
+    userStatus,
+    pendingInvites,
+    resendInvite,
+    revokeInvite,
   } from '../data/requests';
   import { avatarHTML } from '../lib/avatar';
 
@@ -264,6 +298,25 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const userCellHTML = (name: string, email: string) =>
     `<div class="u-id">${avatarHTML(name, 'sm')}` +
     `<span class="u-idtext"><span class="u-name">${esc(name)}</span><span class="u-sub">${esc(email)}</span></span></div>`;
+
+  // Account status is STATE, not a category — an icon-indicator (icon + label),
+  // never a colored tag: pending until the invite is accepted, then active.
+  const statusCellHTML = (userId: string) =>
+    userStatus(userId) === 'invited'
+      ? '<cds-icon-indicator size="16" kind="pending" label="Invited"></cds-icon-indicator>'
+      : '<cds-icon-indicator size="16" kind="succeeded" label="Active"></cds-icon-indicator>';
+
+  // A quiet relative age for the invited timestamp ("Just now", "3 hr ago").
+  const timeAgo = (ms: number) => {
+    if (!ms) return '—';
+    const min = Math.round((Date.now() - ms) / 60000);
+    if (min < 1) return 'Just now';
+    if (min < 60) return `${min} min ago`;
+    const hr = Math.round(min / 60);
+    if (hr < 24) return `${hr} hr ago`;
+    const day = Math.round(hr / 24);
+    return `${day} day${day === 1 ? '' : 's'} ago`;
+  };
 
   const notice = $('admin-notice') as any;
   const flash = (title: string, subtitle: string) => {
@@ -287,7 +340,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
     tbody.replaceChildren(
       ...rows.map((req) => {
-        const user = findUser(req.userId);
+        const user = resolveUser(req.userId);
         const row = document.createElement('cds-table-row');
 
         const userCell = document.createElement('cds-table-cell');
@@ -354,6 +407,9 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         const userCell = document.createElement('cds-table-cell');
         userCell.innerHTML = userCellHTML(u.name, u.email);
 
+        const statusCell = document.createElement('cds-table-cell');
+        statusCell.innerHTML = statusCellHTML(u.id);
+
         const roleCell = document.createElement('cds-table-cell');
         // Just the role label — the district already lives in the Affiliation
         // column, so repeating it here (accountRoleDisplay adds it) is redundant.
@@ -373,7 +429,68 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         manage.addEventListener('click', () => openUserModal(u.id));
         actionCell.appendChild(manage);
 
-        row.append(userCell, roleCell, expertiseCell, affilCell, actionCell);
+        row.append(userCell, statusCell, roleCell, expertiseCell, affilCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
+  // ── Pending invitations ─────────────────────────────────────────────────────
+  const renderInvites = () => {
+    const tbody = $('invites-tbody');
+    const empty = $('invites-empty');
+    const wrap = $('invites-wrap');
+    if (!tbody) return;
+
+    const invites = pendingInvites();
+    const count = $('invites-count');
+    if (count) count.textContent = String(invites.length);
+    if (empty) empty.hidden = invites.length > 0;
+    if (wrap) wrap.hidden = invites.length === 0;
+
+    tbody.replaceChildren(
+      ...invites.map((inv) => {
+        const row = document.createElement('cds-table-row');
+
+        const userCell = document.createElement('cds-table-cell');
+        userCell.innerHTML = userCellHTML(inv.name, inv.email);
+
+        const roleCell = document.createElement('cds-table-cell');
+        roleCell.textContent = roleLabel(accountRoleOf(inv.id).role);
+
+        const affilCell = document.createElement('cds-table-cell');
+        affilCell.textContent = affiliationOf(inv.id);
+
+        const whenCell = document.createElement('cds-table-cell');
+        whenCell.textContent = timeAgo(inv.invitedAt);
+
+        const actionCell = document.createElement('cds-table-cell');
+        const wrapEl = document.createElement('div');
+        wrapEl.className = 'row-actions';
+
+        const resend = document.createElement('cds-button');
+        resend.setAttribute('kind', 'ghost'); resend.setAttribute('size', 'sm');
+        resend.textContent = 'Resend';
+        resend.addEventListener('click', () => {
+          resendInvite(inv.id);
+          renderInvites();
+          flash('Invitation resent', `A new invitation was sent to ${inv.email}.`);
+        });
+
+        const revoke = document.createElement('cds-button');
+        revoke.setAttribute('kind', 'danger-ghost'); revoke.setAttribute('size', 'sm');
+        revoke.textContent = 'Revoke';
+        revoke.addEventListener('click', () => {
+          revokeInvite(inv.id);
+          renderInvites();
+          renderUsers();
+          flash('Invitation revoked', `${inv.name}’s invitation was removed.`);
+        });
+
+        wrapEl.append(resend, revoke);
+        actionCell.appendChild(wrapEl);
+
+        row.append(userCell, roleCell, affilCell, whenCell, actionCell);
         return row;
       }),
     );
@@ -385,6 +502,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const roleDesc = $('u-role-desc');
   const districtWrap = $('u-district-wrap');
   const districtEl = $('u-district') as any;
+  const expertiseWrap = $('u-expertise-wrap');
   const expertiseEl = $('u-expertise') as any;
   const expertiseHint = $('u-expertise-hint');
   let editingUserId = '';
@@ -402,8 +520,10 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const syncForRole = (value: string) => {
     if (roleDesc) roleDesc.textContent = accountRoleMeta(value)?.description ?? '';
     if (districtWrap) districtWrap.hidden = !isScoped(value);
+    // Expertise applies only to HQ technical reviewers — hide it for every other role.
+    if (expertiseWrap) expertiseWrap.hidden = value !== HQ;
     if (expertiseHint) {
-      expertiseHint.textContent = expertiseHintText(value);
+      expertiseHint.textContent = value === HQ ? expertiseHintText(value) : '';
       expertiseHint.removeAttribute('data-error');
     }
   };
@@ -430,7 +550,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     const value = roleEl?.value;
     if (!value || !editingUserId) return;
     const district = isScoped(value) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
-    const expertise = (expertiseEl?.value || '').split(',').filter(Boolean);
+    // Expertise is an HQ-only attribute — non-HQ roles carry none.
+    const expertise = value === HQ ? (expertiseEl?.value || '').split(',').filter(Boolean) : [];
     // Enforce the HQ-technical expertise rule before committing.
     if (value === HQ && expertise.length === 0) {
       if (expertiseHint) {
@@ -458,6 +579,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const auRoleDesc = $('au-role-desc');
   const auDistrictWrap = $('au-district-wrap');
   const auDistrict = $('au-district') as any;
+  const auExpertiseWrap = $('au-expertise-wrap');
   const auExpertise = $('au-expertise') as any;
   const auExpertiseHint = $('au-expertise-hint');
 
@@ -466,8 +588,10 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const auSyncForRole = (value: string) => {
     if (auRoleDesc) auRoleDesc.textContent = accountRoleMeta(value)?.description ?? '';
     if (auDistrictWrap) auDistrictWrap.hidden = !isScoped(value);
+    // Expertise applies only to HQ technical reviewers — hide it for every other role.
+    if (auExpertiseWrap) auExpertiseWrap.hidden = value !== HQ;
     if (auExpertiseHint) {
-      auExpertiseHint.textContent = expertiseHintText(value);
+      auExpertiseHint.textContent = value === HQ ? expertiseHintText(value) : '';
       auExpertiseHint.removeAttribute('data-error');
     }
   };
@@ -498,7 +622,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     const phone = (auPhone?.value || '').trim();
     const role = auRole?.value || '';
     const district = isScoped(role) ? (auDistrict?.value || 'north-coast-redwoods') : undefined;
-    const expertise = (auExpertise?.value || '').split(',').filter(Boolean);
+    // Expertise is an HQ-only attribute — non-HQ roles carry none.
+    const expertise = role === HQ ? (auExpertise?.value || '').split(',').filter(Boolean) : [];
 
     let ok = true;
     if (!first) { if (auFirst) { auFirst.invalid = true; auFirst.invalidText = 'Enter a first name.'; } ok = false; }
@@ -514,14 +639,16 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     }
     if (!ok) return;
 
-    addUser({ name, email, phone, role, district, expertise });
+    inviteUser({ name, email, phone, role, district, expertise });
     addModal.open = false;
+    renderInvites();
     renderUsers();
-    flash('User added', `${name} was added as ${roleDisplay(role, district)}.`);
+    flash('Invitation sent', `${name} was invited as ${roleDisplay(role, district)}. They’ll show as active once they accept.`);
   });
 
   // ── Init ──────────────────────────────────────────────────────────────────────
   renderRequests();
+  renderInvites();
   renderUsers();
 </script>
 
@@ -561,7 +688,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     padding: 1.5rem 0;
     color: var(--cds-text-secondary, #525252);
   }
-  .empty[hidden], #requests-wrap[hidden], #admin-notice[hidden] { display: none; }
+  .empty[hidden], #requests-wrap[hidden], #invites-wrap[hidden], #admin-notice[hidden] { display: none; }
   #admin-notice { margin-bottom: 1.25rem; max-width: 52rem; }
 
   /* Tables — client-rendered cells use global classes. */

@@ -14,6 +14,7 @@
 // to production. Controls are stock cds-* (radio group, textarea, buttons, modal).
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PermitNav from '../../components/PermitNav.astro';
+import PageHeader from '../../components/PageHeader.astro';
 import PermitSection from '../../components/PermitSection.astro';
 import { withBase } from '../../lib/base';
 import { PUBLIC_MESSAGE_LIMIT } from '../../lib/maintenance';
@@ -32,24 +33,12 @@ export const prototype = {
   <PermitNav slot="nav" />
 
   <main class="page">
-    <header class="head cds--css-grid">
-      <div class="head__col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-        <cds-breadcrumb no-trailing-slash class="head__crumb">
-          <cds-breadcrumb-item>
-            <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
-          </cds-breadcrumb-item>
-          <cds-breadcrumb-item>
-            <cds-breadcrumb-link aria-current="page">Maintenance mode</cds-breadcrumb-link>
-          </cds-breadcrumb-item>
-        </cds-breadcrumb>
-        <h1 class="head__title t-heading-05">Maintenance mode console</h1>
-        <p class="head__lede t-body-02">
-          Take the CA State Parks Scientific Collecting Permit site into maintenance
-          mode, or restore it to production. While in maintenance, all pages route to
-          a public notice; you and other administrators keep access to this console.
-        </p>
-      </div>
-    </header>
+    <PageHeader
+      eyebrow="System administration"
+      title="Maintenance mode console"
+      crumbs={[{ label: 'Maintenance mode' }]}
+      lede="Take the CA State Parks Scientific Collecting Permit site into maintenance mode, or restore it to production. While in maintenance, all pages route to a public notice; you and other administrators keep access to this console."
+    />
 
     <div class="body cds--css-grid">
       <!-- Denied state — shown only to a non-admin who reaches this URL. -->
@@ -296,22 +285,10 @@ export const prototype = {
 
 <style>
   .page {
-    padding-block: 3rem 6rem;
-  }
-  .head__crumb {
-    display: block;
-    margin-bottom: var(--cds-spacing-05, 1rem);
-  }
-  .head__title {
-    margin: 0;
-  }
-  .head__lede {
-    margin: 0.75rem 0 0;
-    max-width: 42rem;
-    color: var(--cds-text-secondary, #525252);
+    padding-block: 0 6rem;
   }
   .body {
-    margin-top: var(--cds-spacing-08, 2.5rem);
+    margin-top: var(--cds-spacing-07, 2rem);
   }
   /* Console reads as a form column, capped to a readable measure (like profile). */
   .console {

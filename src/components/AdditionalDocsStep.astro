@@ -52,7 +52,7 @@ const proposalSections = [
     <cds-radio-button-group
       id="soil-gate"
       name="soil-gate"
-      legend-text="Will your project involve soil disturbance (placement of stakes, collection of soil cores, etc.)?"
+      legend-text="Will your project involve soil disturbance (placement of stakes, collection of soil cores, etc.)? (required)"
       orientation="horizontal"
       value={ad.soilDisturbance ? 'yes' : 'no'}
     >
@@ -64,7 +64,7 @@ const proposalSections = [
       <div>
         <cds-textarea
           id="soil-details"
-          label="Soil disturbance details"
+          label="Soil disturbance details (required)"
           rows="5"
           helper-text="Describe why the soil disturbance is necessary and the intended disposition of any material collected. Include a power analysis to justify your sample size."
           value={ad.soilDisturbanceDetails}
@@ -73,7 +73,7 @@ const proposalSections = [
 
       <div class="uploader">
         <p class="field-label t-label-01">
-          Soil disturbance areas and supporting documents
+          Soil disturbance areas and supporting documents <span class="req">(required)</span>
         </p>
         <cds-file-uploader-drop-container class="doc-drop" data-list="soil-docs-list" multiple accept=".pdf">
           Drag and drop files here, or click to upload
@@ -92,7 +92,7 @@ const proposalSections = [
     <cds-radio-button-group
       id="permits-gate"
       name="permits-gate"
-      legend-text="Will your project require additional federal, state, or local permits?"
+      legend-text="Will your project require additional federal, state, or local permits? (required)"
       orientation="horizontal"
       value={ad.additionalPermits ? 'yes' : 'no'}
     >
@@ -106,7 +106,7 @@ const proposalSections = [
            while neither is provided. -->
       <div class="requirement" role="group" aria-labelledby="permits-req-label">
         <p class="field-label t-label-01" id="permits-req-label">
-          Additional permits and supporting documents
+          Additional permits and supporting documents <span class="req">(required)</span>
         </p>
         <p class="requirement__hint t-body-01">
           Upload any permits you already have, or explain your plan below. At least one is required.
@@ -213,7 +213,7 @@ const proposalSections = [
   <PermitSection title="Required documents">
     <div class="uploader">
       <p class="field-label t-label-01">
-        Signed standard condition agreement form
+        Signed standard condition agreement form <span class="req">(required)</span>
       </p>
       <p class="uploader-sub t-body-01">
         The Principal Investigator, {ad.principalInvestigator}, must sign this required document.
@@ -224,12 +224,12 @@ const proposalSections = [
       </cds-file-uploader-drop-container>
       <div id="condition-docs-list" class="uploaded-list"></div>
       <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
-      <cds-link class="doc-download" href="#">Download the unsigned standard condition agreement form</cds-link>
+      <cds-link class="doc-download" href="#" data-doc="standard-condition">Download the unsigned standard condition agreement form</cds-link>
     </div>
 
     <div class="uploader">
       <p class="field-label t-label-01">
-        Signed waiver and indemnity agreement form
+        Signed waiver and indemnity agreement form <span class="req">(required)</span>
       </p>
       <p class="uploader-sub t-body-01">
         A representative of the organization authorized to agree to the indemnification terms must
@@ -241,7 +241,7 @@ const proposalSections = [
       </cds-file-uploader-drop-container>
       <div id="waiver-docs-list" class="uploaded-list"></div>
       <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
-      <cds-link class="doc-download" href="#">Download the unsigned waiver and indemnity agreement form</cds-link>
+      <cds-link class="doc-download" href="#" data-doc="waiver-indemnity">Download the unsigned waiver and indemnity agreement form</cds-link>
     </div>
   </PermitSection>
 
@@ -256,7 +256,7 @@ const proposalSections = [
     <cds-radio-button-group
       id="beyond-gate"
       name="beyond-gate"
-      legend-text="Will you conduct, or plan on conducting, research activities above and beyond simple use?"
+      legend-text="Will you conduct, or plan on conducting, research activities above and beyond simple use? (required)"
       orientation="horizontal"
       value={ad.beyondSimpleUse ? 'yes' : 'no'}
     >
@@ -266,13 +266,13 @@ const proposalSections = [
 
     <div id="beyond-yes" class="gate-body" hidden>
       <div class="uploader">
-        <p class="field-label t-label-01">Insurance addendum</p>
+        <p class="field-label t-label-01">Insurance addendum <span class="req">(required)</span></p>
         <cds-file-uploader-drop-container class="doc-drop" data-list="insurance-docs-list" data-single accept=".pdf">
           Drag and drop the signed form here, or click to upload
         </cds-file-uploader-drop-container>
         <div id="insurance-docs-list" class="uploaded-list"></div>
         <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
-        <cds-link class="doc-download" href="#">Download the unsigned insurance addendum</cds-link>
+        <cds-link class="doc-download" href="#" data-doc="dpr65a">Download the unsigned insurance addendum</cds-link>
       </div>
     </div>
   </PermitSection>
@@ -370,8 +370,32 @@ const proposalSections = [
     });
   });
 
-  // ── Download-form links — prototype stubs (no real form to serve) ────────
-  document.querySelectorAll('.doc-download').forEach((link) => {
+  // ── Download-form links — the regulated forms (DPR65A / DPR65B) ──────────
+  // The file served is whatever a System Admin has made current in Templates &
+  // defaults (src/data/regulated-docs.ts) — this is one of the "download
+  // locations." A static prototype has no real bytes, so we hand back a stub PDF
+  // NAMED with the current filename, which is what actually changes on replace.
+  import('../data/regulated-docs').then(({ currentDoc }) => {
+    document.querySelectorAll<HTMLElement>('.doc-download[data-doc]').forEach((link) => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const doc = currentDoc(link.dataset.doc || '');
+        if (!doc) return;
+        const blob = new Blob([`Placeholder for ${doc.code} — ${doc.filename}`], {
+          type: 'application/pdf',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    });
+  });
+
+  // Any other stubbed download links keep the no-op behavior.
+  document.querySelectorAll('.doc-download:not([data-doc])').forEach((link) => {
     link.addEventListener('click', (e) => e.preventDefault());
   });
 </script>

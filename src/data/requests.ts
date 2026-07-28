@@ -38,12 +38,18 @@ export interface RoleRequest {
 const REQUESTS_KEY = 'admin-role-requests';
 const ROLES_KEY = 'admin-account-roles';
 
+// 'none' is the roleless sentinel — a verified account that has no reviewer role
+// yet (see accountRoleOf). It's never a selectable role, only a display state.
+export const NO_ROLE = 'none';
+
 /** Display label for an account-role value (falls back to the raw value). */
-export const roleLabel = (value: string) => accountRoleMeta(value)?.label ?? value;
+export const roleLabel = (value: string) =>
+  value === NO_ROLE ? 'No role' : accountRoleMeta(value)?.label ?? value;
 
 /** Full display of a role + its district when scoped, e.g.
  *  "District lead technical reviewer · North Coast Redwoods District". */
 export const roleDisplay = (role: string, district?: string): string => {
+  if (role === NO_ROLE) return 'No role assigned';
   const meta = accountRoleMeta(role);
   const label = meta?.label ?? role;
   return meta?.scoped && district ? `${label} · ${districtName(district)}` : label;
@@ -109,6 +115,13 @@ export const pendingRequests = (): RoleRequest[] =>
 export const pendingForUser = (userId: string): RoleRequest | undefined =>
   loadRequests().find((r) => r.userId === userId && r.status === 'pending');
 
+/** A user's most recent request of ANY status — drives the pending home's state
+ *  (none / pending / denied / granted). */
+export const latestRequestForUser = (userId: string): RoleRequest | undefined =>
+  loadRequests()
+    .filter((r) => r.userId === userId)
+    .sort((a, b) => b.requestedAt - a.requestedAt)[0];
+
 /** Submit a request, replacing any existing pending one for the same user. The
  *  district is retained only for a district-scoped role. */
 export const submitRequest = (
@@ -162,7 +175,11 @@ export const accountRoleOf = (userId: string): AccountRole => {
   const overlay = loadRoleOverlay()[userId];
   if (overlay && typeof overlay === 'object' && overlay.role) return overlay;
   const seed = directory.find((u) => u.id === userId);
-  return seed ? { role: seed.accountRole, district: seed.district } : { role: 'hq-technical' };
+  if (seed) return { role: seed.accountRole, district: seed.district };
+  // A self-registered account with no role overlay is roleless — pending an
+  // admin's grant. (Invited users always get an overlay, so they never land here.)
+  if (addedUsers().some((u) => u.id === userId)) return { role: NO_ROLE };
+  return { role: 'hq-technical' }; // unknown id — legacy fallback
 };
 
 /** A user's current account role as a display string (with district if scoped). */
@@ -179,12 +196,18 @@ export const setAccountRole = (userId: string, role: string, district?: string):
   localStorage.setItem(ROLES_KEY, JSON.stringify(overlay));
 };
 
+/** Whether a user has an actual reviewer role yet — a seeded directory role or an
+ *  admin-granted overlay. False for a self-registered account still awaiting one. */
+export const hasAssignedRole = (userId: string): boolean =>
+  !!loadRoleOverlay()[userId]?.role || directory.some((u) => u.id === userId);
+
 /** A user's current affiliation. The two district-scoped roles are affiliated
  *  with their district; every other role (HQ technical reviewer / admin) is
  *  headquarters, shown as "HQ". Derived from the CURRENT account role, so it
  *  follows a role change immediately. */
 export const affiliationOf = (userId: string): string => {
   const { role, district } = accountRoleOf(userId);
+  if (role === NO_ROLE) return '—'; // roleless — no affiliation until granted a role
   const scoped = !!accountRoleMeta(role)?.scoped;
   return scoped && district ? districtName(district) : 'HQ';
 };
@@ -218,45 +241,143 @@ export const setExpertise = (userId: string, values: string[]): void => {
   localStorage.setItem(EXPERTISE_KEY, JSON.stringify(overlay));
 };
 
-// ── Added users ────────────────────────────────────────────────────────────────
-// Users created from the /users console. Their identity lives here; their role +
-// expertise are written to the overlays above (so accountRoleOf / expertiseOf /
-// affiliationOf resolve them the same way they resolve seeded users).
+// ── Added users & invitations ────────────────────────────────────────────────
+// Users created from the /users console or a district console. Their identity
+// lives here; their role + expertise are written to the overlays above (so
+// accountRoleOf / expertiseOf / affiliationOf resolve them the same way they
+// resolve seeded users).
+//
+// A created user starts as an INVITATION — `status: 'invited'` — until they
+// accept and become 'active'. This is the account axis of the same "who is
+// pending?" visibility the console needs; a district member referencing an
+// invited user simply shows as pending there too. Seeded directory users have
+// no record here, so they are always active.
 const ADDED_KEY = 'admin-added-users';
+
+export type UserStatus = 'invited' | 'active';
 
 export interface AddedUser {
   id: string;
   name: string;
   email: string;
   phone: string;
+  /** 'invited' until the user accepts; then 'active'. */
+  status: UserStatus;
+  /** Epoch ms the invitation was sent (re-stamped on resend). */
+  invitedAt: number;
+  /** District id this user was invited INTO, when invited from a district
+   *  console — context for the pending list. Absent for a plain account invite. */
+  invitedTo?: string;
 }
+
+/** Normalize a stored record. Records written by an earlier build have no
+ *  status/invitedAt — they predate invitations, so they read as already active. */
+const normalizeAdded = (u: any): AddedUser | null => {
+  if (!u || typeof u.id !== 'string') return null;
+  return {
+    id: u.id,
+    name: u.name ?? '',
+    email: u.email ?? '',
+    phone: u.phone ?? '',
+    status: u.status === 'invited' ? 'invited' : 'active',
+    invitedAt: typeof u.invitedAt === 'number' ? u.invitedAt : 0,
+    ...(typeof u.invitedTo === 'string' ? { invitedTo: u.invitedTo } : {}),
+  };
+};
 
 export const addedUsers = (): AddedUser[] => {
   try {
     const raw = JSON.parse(localStorage.getItem(ADDED_KEY) || '[]');
-    return Array.isArray(raw) ? raw : [];
+    return Array.isArray(raw) ? (raw.map(normalizeAdded).filter(Boolean) as AddedUser[]) : [];
   } catch {
     return [];
   }
 };
 
-/** Create a user: store their identity, then stamp their role + expertise into
- *  the shared overlays. Returns the new user's id. */
-export const addUser = (input: {
+const saveAdded = (list: AddedUser[]) => localStorage.setItem(ADDED_KEY, JSON.stringify(list));
+
+/** Invite a user into the system: store their identity as a PENDING account,
+ *  then stamp their role + expertise into the shared overlays so they resolve
+ *  everywhere. `invitedTo` records the district an invite came from, if any.
+ *  Returns the new user's id. */
+export const inviteUser = (input: {
   name: string;
   email: string;
   phone: string;
   role: string;
   district?: string;
   expertise: string[];
+  invitedTo?: string;
 }): string => {
   const id = `user-${Date.now()}`;
   const list = addedUsers();
-  list.push({ id, name: input.name, email: input.email, phone: input.phone });
-  localStorage.setItem(ADDED_KEY, JSON.stringify(list));
+  list.push({
+    id,
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    status: 'invited',
+    invitedAt: Date.now(),
+    ...(input.invitedTo ? { invitedTo: input.invitedTo } : {}),
+  });
+  saveAdded(list);
   setAccountRole(id, input.role, input.district);
   setExpertise(id, input.expertise);
   return id;
+};
+
+/** Self-service registration: a person creates their OWN account with a verified
+ *  parks.ca.gov email. Unlike inviteUser, it stamps NO role — the account is
+ *  active (email verified) but roleless until an admin approves a role request.
+ *  Returns the new user's id. */
+export const selfRegister = (input: { name: string; email: string; phone?: string }): string => {
+  const id = `user-${Date.now()}`;
+  const list = addedUsers();
+  list.push({
+    id,
+    name: input.name,
+    email: input.email,
+    phone: input.phone ?? '',
+    status: 'active', // email verified — but no role (see accountRoleOf → NO_ROLE)
+    invitedAt: Date.now(),
+  });
+  saveAdded(list);
+  return id;
+};
+
+/** A user's invitation status. Seeded directory users are always active; an
+ *  added user carries its own status. */
+export const userStatus = (userId: string): UserStatus =>
+  addedUsers().find((u) => u.id === userId)?.status ?? 'active';
+
+/** Everyone still pending acceptance — newest invite first. */
+export const pendingInvites = (): AddedUser[] =>
+  addedUsers()
+    .filter((u) => u.status === 'invited')
+    .sort((a, b) => b.invitedAt - a.invitedAt);
+
+/** Mark an invitation accepted — the user becomes active. */
+export const acceptInvite = (userId: string): void => {
+  const list = addedUsers();
+  const u = list.find((x) => x.id === userId);
+  if (!u || u.status === 'active') return;
+  u.status = 'active';
+  saveAdded(list);
+};
+
+/** Re-send an invitation — re-stamps the sent time. */
+export const resendInvite = (userId: string): void => {
+  const list = addedUsers();
+  const u = list.find((x) => x.id === userId);
+  if (!u) return;
+  u.invitedAt = Date.now();
+  saveAdded(list);
+};
+
+/** Revoke an invitation — removes the pending account entirely. A district
+ *  member referencing it is dropped on that console's next load (memberOk). */
+export const revokeInvite = (userId: string): void => {
+  saveAdded(addedUsers().filter((u) => u.id !== userId));
 };
 
 /** Resolve any user's identity — seeded directory OR an added user. */

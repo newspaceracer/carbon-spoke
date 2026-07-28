@@ -171,7 +171,7 @@ export const prototype = {
           kind="info"
           low-contrast
           title="You can leave and come back anytime"
-          subtitle="Your progress saves automatically, so you can finish later. Complete sections in any order, or use Save and continue to move ahead. Optional fields are labeled — everything else is required."
+          subtitle="Your progress saves automatically, so you can finish later. Complete sections in any order, or use Save and continue to move ahead. Every field is marked required or optional."
         ></cds-inline-notification>
 
         <section class="step" data-step="research-team">
@@ -415,6 +415,9 @@ export const prototype = {
       const panel = panels.get(id);
       if (panel) panel.hidden = i !== current;
     });
+    // Field errors are NOT flagged on plain navigation — walking through the form
+    // should stay clean. They fire only when the applicant tries to cross into the
+    // review step while incomplete (see revealErrors), which IS the submit attempt.
     // The indicator owns step states — set currentIndex and it marks the steps
     // before/at/after as complete/current/incomplete.
     if (progress) progress.currentIndex = current;
@@ -457,11 +460,43 @@ export const prototype = {
     goTo(i);
   };
 
+  // Field-level errors: flag a step's empty required fields with Carbon's red
+  // INVALID state — the same pattern as genuinely-wrong input. This is not
+  // premature scolding because it fires ONLY at the review gate (revealErrors),
+  // i.e. when the applicant tries to reach review/submit while incomplete; at that
+  // point an empty required field really is blocking their goal. The persistent
+  // "(required)" label marker is the at-rest signal during normal filling; this red
+  // is the failed-submit consequence. Empty-only (a filled field is never marked),
+  // self-clearing the moment the applicant fixes it. Issues whose gaps are uploads
+  // or rosters carry no `fields` and stay banner-only (no single input to flag).
+  const markFieldErrors = (stepId: string) => {
+    const panel = panels.get(stepId);
+    const issue = issues.find((it) => it.stepId === stepId);
+    if (!panel || !issue?.fields) return;
+    issue.fields.forEach(({ fieldId, message }) => {
+      const field = panel.querySelector(`#${fieldId}`) as any;
+      if (!field || field.invalid) return; // missing, or already flagged
+      if ((field.value ?? '').toString().trim()) return; // filled → requirement met
+      field.invalid = true;
+      field.invalidText = message;
+      field.addEventListener(
+        'input',
+        () => {
+          field.invalid = false;
+          field.invalidText = '';
+        },
+        { once: true },
+      );
+    });
+  };
+
   // Reveal an error banner at the top of each incomplete page (idempotent). The
   // banner names exactly what is missing, so a returning applicant sees the fixes
-  // in context — not just the modal's page list.
+  // in context — not just the modal's page list. Field-level flags are set alongside
+  // so the specific inputs light up too.
   const revealErrors = () => {
     issues.forEach((issue) => {
+      markFieldErrors(issue.stepId);
       const panel = panels.get(issue.stepId);
       if (!panel || panel.querySelector('.step-error')) return;
       const note = document.createElement('cds-inline-notification') as any;
@@ -515,6 +550,9 @@ export const prototype = {
       showSubmitted();
       return;
     }
+    // Advance freely — the draft always saves, and only the review step is gated on
+    // completeness. Field errors for the destination are flagged by render() on
+    // arrival, so any gaps on the page you land on are immediately visible.
     tryGoTo(current + 1);
   });
 

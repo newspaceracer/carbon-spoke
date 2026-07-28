@@ -46,11 +46,11 @@ const setRO = (el: any, ro: boolean) => {
  *  combo-box can resolve the selection. */
 function buildField(spec: AddressFieldSpec, prefix: string, value: string): HTMLElement {
   const id = `${prefix}-${spec.key}`;
-  // Mark only the OPTIONAL subfields (libaddressinput knows which are optional —
-  // e.g. a US address line 2); required is the silent default. This matches the
-  // "label the exceptions" convention used across the permit application, where
-  // required fields carry no marker.
-  const label = spec.required ? spec.label : `${spec.label} (optional)`;
+  // Mark EVERY subfield explicitly — (required) or (optional) — by its true
+  // per-country required-ness (libaddressinput knows which are optional, e.g. a US
+  // address line 2). Matches the permit application's per-field marking convention,
+  // where every field carries its own required/optional call-out (secondary text).
+  const label = spec.required ? `${spec.label} (required)` : `${spec.label} (optional)`;
   if (spec.options) {
     const cb = document.createElement('cds-combo-box') as any;
     cb.id = id;

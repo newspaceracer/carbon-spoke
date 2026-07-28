@@ -1,0 +1,829 @@
+---
+// Templates & defaults — the admin area for site-wide document templates and
+// configuration that changes rarely and affects every permit. Organized into
+// tabs, one per config domain:
+//
+//   • Regulated forms         — the official PDFs researchers download (DPR65A/B,
+//                               liability waiver addendum, insurance addendum).
+//                               Replace a file, self-service, no code deploy.
+//   • Letterhead & signatories — the agency identity + default signer on the
+//                               permit letter (today hardcoded in final-letter).
+//   • Permit defaults          — the permit-number format + default validity /
+//                               report-due cadence that seed each new permit.
+//   • Notifications            — the system emails applicants receive.
+//
+// No backend in this prototype: "current" values live in localStorage via
+// src/data/regulated-docs.ts and src/data/site-settings.ts — the same stores the
+// rest of the app reads, so an edit here is served everywhere. Access is
+// admin-only; a non-admin who reaches the URL is denied client-side (same
+// pattern as the maintenance-mode console). All controls are stock cds-*.
+//
+// View-first editing: the settings sections show current values read-only until
+// a deliberate Edit; only then do inputs appear. Nothing here is instant-edit.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PermitNav from '../../components/PermitNav.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import PermitSection from '../../components/PermitSection.astro';
+import { withBase } from '../../lib/base';
+import { regulatedDocSeeds, formatDocDate } from '../../data/regulated-docs';
+import {
+  letterheadSeed,
+  permitDefaultsSeed,
+  permitIdPreview,
+  reportDueCadenceOptions,
+  notificationSeeds,
+} from '../../data/site-settings';
+
+export const prototype = {
+  title: 'Templates & defaults',
+  summary:
+    'System administrators keep the site-wide templates and defaults current — the ' +
+    'regulated forms researchers download (DPR65A/B and more), the permit ' +
+    'letterhead, the permit-number and validity defaults, and the system emails ' +
+    'applicants receive — self-service, without a code deploy.',
+  tag: 'Admin tool',
+};
+---
+
+<BaseLayout title="Templates & defaults">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <PageHeader
+      eyebrow="System administration"
+      title="Templates & defaults"
+      crumbs={[{ label: 'Templates & defaults' }]}
+    />
+
+    <div class="body cds--css-grid">
+      <!-- Denied — shown only to a non-admin who reaches this URL. -->
+      <div id="denied" class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8" hidden>
+        <cds-actionable-notification
+          kind="error"
+          low-contrast
+          hide-close-button
+          title="Access denied"
+          subtitle="You don’t have permission to manage templates and defaults. This area is limited to system administrators."
+        >
+          <cds-actionable-notification-button slot="action" href={withBase('/')}>Return to site</cds-actionable-notification-button>
+        </cds-actionable-notification>
+      </div>
+
+      <!-- Console — the admin view. Hidden until client JS confirms admin. -->
+      <div id="console" class="console cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" hidden>
+        <!-- One long page: the four config domains stacked. Save confirmation is a
+             toast (corner-anchored), so it's visible after a save anywhere on the
+             page — an inline top banner would scroll out of view. -->
+
+        <!-- ── Regulated forms ────────────────────────────────────────────── -->
+        <div class="settings-block">
+          <PermitSection title="Regulated forms">
+            <p class="section-hint t-body-01">
+              The official forms researchers download during the application. Upload a
+              replacement PDF to update a form for everyone — the new file supersedes the
+              previous one immediately and is served from every download location. Only
+              the current version is kept; there is no version history.
+            </p>
+
+            <cds-table id="docs-table">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Document</cds-table-header-cell>
+                  <cds-table-header-cell>Current file</cds-table-header-cell>
+                  <cds-table-header-cell>Last updated</cds-table-header-cell>
+                  <cds-table-header-cell>Action</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body>
+                {regulatedDocSeeds.map((d) => (
+                  <cds-table-row data-doc={d.id}>
+                    <cds-table-cell>
+                      <span class="doc-name t-body-01">{d.code ?? d.title}</span>
+                      <span class="doc-desc t-label-01">{d.code ? d.title : d.description}</span>
+                    </cds-table-cell>
+                    <cds-table-cell>
+                      <span class="doc-file" data-file>{d.filename}</span>
+                    </cds-table-cell>
+                    <cds-table-cell>
+                      <span data-updated>{formatDocDate(d.updatedAt)}</span>
+                    </cds-table-cell>
+                    <cds-table-cell>
+                      <cds-button size="sm" kind="tertiary" class="replace-btn" data-doc={d.id} data-code={d.code ?? d.title}>
+                        Replace
+                      </cds-button>
+                    </cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+          </PermitSection>
+        </div>
+
+        <!-- ── Letterhead & signatories ───────────────────────────────────── -->
+        <div class="settings-block">
+          <PermitSection title="Letterhead & signatories">
+            <cds-button slot="aside" size="sm" kind="ghost" id="lh-edit">Edit</cds-button>
+
+            <p class="section-hint t-body-01">
+              The agency identity printed on every permit letter, and the classification
+              pre-filled for the letter signer.
+            </p>
+
+            <!-- Live preview: the masthead exactly as it prints on the permit letter
+                 (mirrors final-letter.astro's .ltr__letterhead). Updates as you type.
+                 carbon-checked: a document-fidelity preview of the letter masthead, not
+                 a reinvented UI control — same bespoke approach as the letter sheet. -->
+            <figure class="lh-preview" aria-label="Letterhead preview">
+              <figcaption class="lh-preview__cap t-label-01">Preview — as printed on the permit letter</figcaption>
+              <div class="lh-preview__sheet">
+                <p class="lh-preview__line t-label-01">State of California — <span data-prev="agency">{letterheadSeed.agency}</span> · <span data-prev="governorName">{letterheadSeed.governorName}</span>, Governor</p>
+                <p class="lh-preview__dept t-heading-compact-01" data-prev="department">{letterheadSeed.department}</p>
+                <p class="lh-preview__line t-label-01"><span data-prev="directorName">{letterheadSeed.directorName}</span>, Director · P.O. Box 942896, Sacramento, CA 94296-0001</p>
+              </div>
+            </figure>
+
+            <!-- Read view -->
+            <dl id="lh-read" class="facts">
+              <div class="fact"><dt class="t-label-01">Agency</dt><dd class="t-body-01" data-lh="agency">{letterheadSeed.agency}</dd></div>
+              <div class="fact"><dt class="t-label-01">Governor</dt><dd class="t-body-01" data-lh="governorName">{letterheadSeed.governorName}</dd></div>
+              <div class="fact"><dt class="t-label-01">Department</dt><dd class="t-body-01" data-lh="department">{letterheadSeed.department}</dd></div>
+              <div class="fact"><dt class="t-label-01">Director</dt><dd class="t-body-01" data-lh="directorName">{letterheadSeed.directorName}</dd></div>
+              <div class="fact"><dt class="t-label-01">Default signer classification</dt><dd class="t-body-01" data-lh="defaultSignerClassification">{letterheadSeed.defaultSignerClassification}</dd></div>
+            </dl>
+
+            <!-- Edit view -->
+            <div id="lh-form" class="edit-form" hidden>
+              <cds-text-input id="lh-agency" label="Agency" value={letterheadSeed.agency}></cds-text-input>
+              <cds-text-input id="lh-governorName" label="Governor" value={letterheadSeed.governorName}></cds-text-input>
+              <cds-text-input id="lh-department" label="Department" value={letterheadSeed.department}></cds-text-input>
+              <cds-text-input id="lh-directorName" label="Director" value={letterheadSeed.directorName}></cds-text-input>
+              <cds-text-input id="lh-defaultSignerClassification" label="Default signer classification" value={letterheadSeed.defaultSignerClassification}></cds-text-input>
+              <div class="edit-actions">
+                <cds-button kind="ghost" id="lh-cancel">Cancel</cds-button>
+                <cds-button kind="primary" id="lh-save">Save changes</cds-button>
+              </div>
+            </div>
+          </PermitSection>
+        </div>
+
+        <!-- ── Permit defaults ────────────────────────────────────────────── -->
+        <div class="settings-block">
+          <PermitSection title="Permit defaults">
+            <cds-button slot="aside" size="sm" kind="ghost" id="pd-edit">Edit</cds-button>
+
+            <p class="section-hint t-body-01">
+              The permit-number format and the defaults that seed each new permit. Changing
+              these affects permits created from now on, not permits already issued.
+            </p>
+
+            <!-- Read view -->
+            <dl id="pd-read" class="facts">
+              <div class="fact">
+                <dt class="t-label-01">Permit number format</dt>
+                <dd class="t-body-01"><span data-pd="preview">{permitIdPreview(permitDefaultsSeed)}</span></dd>
+              </div>
+              <div class="fact"><dt class="t-label-01">Default validity</dt><dd class="t-body-01"><span data-pd="validityMonths">{permitDefaultsSeed.validityMonths}</span> months</dd></div>
+              <div class="fact"><dt class="t-label-01">Summary report due</dt><dd class="t-body-01" data-pd="reportDueCadence">{permitDefaultsSeed.reportDueCadence}</dd></div>
+            </dl>
+
+            <!-- Edit view -->
+            <div id="pd-form" class="edit-form" hidden>
+              <cds-text-input id="pd-idPrefix" label="Permit number prefix" value={permitDefaultsSeed.idPrefix}></cds-text-input>
+              <cds-text-input id="pd-sequenceWidth" type="number" min="1" max="9" label="Sequence digits" value={String(permitDefaultsSeed.sequenceWidth)}></cds-text-input>
+              <p class="pd-preview t-label-01">Preview: <span id="pd-live-preview">{permitIdPreview(permitDefaultsSeed)}</span></p>
+              <cds-text-input id="pd-validityMonths" type="number" min="1" max="120" label="Default validity (months)" value={String(permitDefaultsSeed.validityMonths)}></cds-text-input>
+              <cds-dropdown id="pd-reportDueCadence" title-text="Summary report due" label="Select cadence" value={permitDefaultsSeed.reportDueCadence}>
+                {reportDueCadenceOptions.map((opt) => (
+                  <cds-dropdown-item value={opt}>{opt}</cds-dropdown-item>
+                ))}
+              </cds-dropdown>
+              <div class="edit-actions">
+                <cds-button kind="ghost" id="pd-cancel">Cancel</cds-button>
+                <cds-button kind="primary" id="pd-save">Save changes</cds-button>
+              </div>
+            </div>
+          </PermitSection>
+        </div>
+
+        <!-- ── Email notifications ────────────────────────────────────────── -->
+        <div class="settings-block">
+          <PermitSection title="Email notifications">
+            <p class="section-hint t-body-01">
+              The emails applicants receive at each step. Edit the subject and message
+              copy; changes apply to emails sent from now on.
+            </p>
+
+            <div class="notif-list">
+              {notificationSeeds.map((t) => (
+                <article class="notif" data-notif={t.id}>
+                  <div class="notif__head">
+                    <h3 class="notif__name t-heading-compact-01">{t.name}</h3>
+                    <cds-button size="sm" kind="ghost" class="notif-edit" data-notif={t.id}>Edit</cds-button>
+                  </div>
+                  <p class="notif__subject t-body-01"><span class="notif__k t-label-01">Subject</span> <span data-notif-subject>{t.subject}</span></p>
+                  <p class="notif__body t-body-01" data-notif-body>{t.body}</p>
+                </article>
+              ))}
+            </div>
+          </PermitSection>
+        </div>
+      </div>
+    </div>
+
+    <!-- Replace-document modal: PDF upload, validated before it can be confirmed. -->
+    <cds-modal id="replace-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Regulated forms</cds-modal-label>
+        <cds-modal-heading id="rm-heading">Replace document</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: prose inside a real cds-modal; a <p> with a Carbon type
+             role is the standard pattern (see maintenance-mode.astro's modals). -->
+        <p class="modal-hint t-body-01" id="rm-desc">
+          Upload a PDF to replace the current file. The new version becomes the file
+          researchers download right away.
+        </p>
+
+        <cds-file-uploader-drop-container id="rm-drop" accept=".pdf">
+          Drag and drop a PDF here, or click to upload
+        </cds-file-uploader-drop-container>
+        <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
+        <div id="rm-list" class="uploaded-list"></div>
+
+        <cds-inline-notification
+          id="rm-error"
+          hidden
+          kind="error"
+          low-contrast
+          hide-close-button
+          title="Unsupported file type"
+          subtitle="Upload a PDF file. Other formats aren’t accepted."
+        ></cds-inline-notification>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="rm-confirm" disabled>Replace document</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+
+    <!-- Edit-notification modal. -->
+    <cds-modal id="notif-modal" size="md">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Email notifications</cds-modal-label>
+        <cds-modal-heading id="nm-heading">Edit notification</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <cds-text-input id="nm-subject" label="Subject"></cds-text-input>
+        <div class="nm-body-wrap">
+          <cds-textarea id="nm-body" label="Message" rows="12"></cds-textarea>
+        </div>
+
+        <!-- Available variables: the system fills these in when the email is sent.
+             Click to insert at the cursor so the exact token is always correct. -->
+        <div class="nm-vars">
+          <p class="nm-vars__label t-label-01">Variables you can insert</p>
+          <p class="nm-vars__hint t-label-01">
+            The system fills these in when the email is sent. Click to insert one at your
+            cursor — don’t type them by hand, or they won’t be filled in.
+          </p>
+          <div id="nm-vars-list" class="nm-vars__chips"></div>
+        </div>
+
+        <cds-inline-notification
+          id="nm-unknown"
+          hidden
+          kind="warning"
+          low-contrast
+          hide-close-button
+          title="Unrecognized variables"
+          subtitle=""
+        ></cds-inline-notification>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="nm-save">Save changes</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+
+    <!-- carbon-checked: the feedback IS a stock cds-toast-notification (created in
+         the script below); this is only a fixed-position stacking host for it —
+         Carbon ships no positioning container for toasts (same as apply.astro). -->
+    <div id="toast-host" class="toast-host" aria-live="polite"></div>
+  </main>
+</BaseLayout>
+
+<script>
+  import { readIdentity } from '../../lib/maintenance';
+  import {
+    readRegulatedDocs,
+    replaceRegulatedDoc,
+    isPdf,
+    formatDocDate,
+  } from '../../data/regulated-docs';
+  import {
+    readLetterhead,
+    saveLetterhead,
+    readPermitDefaults,
+    savePermitDefaults,
+    permitIdPreview,
+    readNotifications,
+    saveNotification,
+  } from '../../data/site-settings';
+
+  const $ = (id: string): any => document.getElementById(id);
+  const deniedEl = $('denied');
+  const consoleEl = $('console');
+
+  // Access control: only an admin sees the console.
+  if (readIdentity() !== 'admin') {
+    deniedEl.hidden = false;
+    consoleEl.hidden = true;
+  } else {
+    deniedEl.hidden = true;
+    consoleEl.hidden = false;
+    initForms();
+    initLetterhead();
+    initDefaults();
+    initNotifications();
+  }
+
+  // Save confirmation as a corner-anchored toast, created into the fixed host —
+  // visible after a save anywhere down the long page. Same pattern as apply.astro.
+  const toastHost = () => $('toast-host');
+  function flash(subtitle: string) {
+    const host = toastHost();
+    if (!host) return;
+    const t = document.createElement('cds-toast-notification') as any;
+    t.kind = 'success';
+    t.title = 'Saved';
+    t.subtitle = subtitle;
+    t.timeout = 5000;
+    t.lowContrast = true;
+    host.appendChild(t);
+    t.addEventListener('cds-notification-closed', () => t.remove());
+  }
+
+  // ── Regulated forms: replace a PDF ─────────────────────────────────────
+  function initForms() {
+    const modal = $('replace-modal');
+    const heading = $('rm-heading');
+    const desc = $('rm-desc');
+    const drop = $('rm-drop');
+    const list = $('rm-list');
+    const errorEl = $('rm-error');
+    const confirmBtn = $('rm-confirm');
+
+    let targetId = '';
+    let targetCode = '';
+    let pendingName = '';
+
+    const paintRow = (doc: { id: string; filename: string; updatedAt: string }) => {
+      const row = document.querySelector(`cds-table-row[data-doc="${doc.id}"]`);
+      if (!row) return;
+      const fileEl = row.querySelector('[data-file]');
+      const updatedEl = row.querySelector('[data-updated]');
+      if (fileEl) fileEl.textContent = doc.filename;
+      if (updatedEl) updatedEl.textContent = formatDocDate(doc.updatedAt);
+    };
+    readRegulatedDocs().forEach(paintRow);
+
+    const resetModal = () => {
+      pendingName = '';
+      list.innerHTML = '';
+      errorEl.hidden = true;
+      confirmBtn.disabled = true;
+    };
+
+    document.querySelectorAll('.replace-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const el = btn as HTMLElement;
+        targetId = el.dataset.doc || '';
+        targetCode = el.dataset.code || '';
+        heading.textContent = `Replace ${targetCode}`;
+        desc.textContent =
+          `Upload a PDF to replace the current ${targetCode} file. The new version ` +
+          `becomes the file researchers download right away.`;
+        resetModal();
+        modal.open = true;
+      });
+    });
+
+    drop.addEventListener('cds-file-uploader-drop-container-changed', (e: Event) => {
+      const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
+      const file = files && files[0];
+      if (!file) return;
+      list.innerHTML = '';
+      if (!isPdf(file)) {
+        pendingName = '';
+        confirmBtn.disabled = true;
+        errorEl.hidden = false;
+        return;
+      }
+      errorEl.hidden = true;
+      pendingName = file.name;
+      const item = document.createElement('cds-file-uploader-item') as any;
+      item.state = 'edit';
+      item.size = 'md';
+      item.textContent = file.name;
+      item.addEventListener('cds-file-uploader-item-deleted', () => {
+        item.remove();
+        pendingName = '';
+        confirmBtn.disabled = true;
+      });
+      list.appendChild(item);
+      confirmBtn.disabled = false;
+    });
+
+    confirmBtn.addEventListener('click', () => {
+      if (confirmBtn.disabled || !targetId || !pendingName) return;
+      const updated = replaceRegulatedDoc(targetId, pendingName);
+      paintRow(updated);
+      modal.open = false;
+      flash(
+        `${targetCode} now downloads as “${updated.filename}”, last updated ` +
+          `${formatDocDate(updated.updatedAt)}. Researchers receive this file from now on.`,
+      );
+    });
+  }
+
+  // ── A view-first editor: read view ⇄ edit form, save merges + repaints ──
+  // fields: [{ key, inputId }]; read spans carry data-<attr>=key.
+  function viewFirst(opts: {
+    editBtn: string; readEl: string; formEl: string;
+    saveBtn: string; cancelBtn: string; dataAttr: string;
+    read: () => any; save: (v: any) => void;
+    fields: { key: string; inputId: string }[];
+    onOpen?: () => void; repaint: (v: any) => void; successMsg: string;
+  }) {
+    const editBtn = $(opts.editBtn);
+    const form = $(opts.formEl);
+    const read = $(opts.readEl);
+
+    const openEdit = () => {
+      const cur = opts.read();
+      opts.fields.forEach((f) => { $(f.inputId).value = String(cur[f.key] ?? ''); });
+      opts.onOpen?.();
+      read.hidden = true;
+      form.hidden = false;
+      editBtn.style.display = 'none';
+    };
+    const closeEdit = () => {
+      form.hidden = true;
+      read.hidden = false;
+      editBtn.style.display = '';
+    };
+
+    editBtn.addEventListener('click', openEdit);
+    // Cancel discards edits AND repaints from the store, so any live preview
+    // driven by the inputs (e.g. the letterhead masthead) reverts too.
+    $(opts.cancelBtn).addEventListener('click', () => { closeEdit(); opts.repaint(opts.read()); });
+    $(opts.saveBtn).addEventListener('click', () => {
+      const next = { ...opts.read() };
+      opts.fields.forEach((f) => {
+        const raw = $(f.inputId).value;
+        next[f.key] = typeof next[f.key] === 'number' ? Number(raw) : raw;
+      });
+      opts.save(next);
+      opts.repaint(next);
+      closeEdit();
+      flash(opts.successMsg);
+    });
+
+    // Repaint the read view from the store on load (overlay may differ from seed).
+    opts.repaint(opts.read());
+  }
+
+  function initLetterhead() {
+    const previewEls = document.querySelectorAll('.lh-preview [data-prev]');
+    const renderPreview = (v: any) => {
+      previewEls.forEach((el) => {
+        const k = (el as HTMLElement).dataset.prev!;
+        if (v[k] != null) el.textContent = v[k];
+      });
+    };
+    const repaint = (v: any) => {
+      document.querySelectorAll('#lh-read [data-lh]').forEach((el) => {
+        const k = (el as HTMLElement).dataset.lh!;
+        el.textContent = v[k];
+      });
+      renderPreview(v);
+    };
+    viewFirst({
+      editBtn: 'lh-edit', readEl: 'lh-read', formEl: 'lh-form',
+      saveBtn: 'lh-save', cancelBtn: 'lh-cancel', dataAttr: 'lh',
+      read: readLetterhead, save: saveLetterhead,
+      fields: [
+        { key: 'agency', inputId: 'lh-agency' },
+        { key: 'governorName', inputId: 'lh-governorName' },
+        { key: 'department', inputId: 'lh-department' },
+        { key: 'directorName', inputId: 'lh-directorName' },
+        { key: 'defaultSignerClassification', inputId: 'lh-defaultSignerClassification' },
+      ],
+      repaint,
+      successMsg: 'Letterhead updated. New permit letters use these values.',
+    });
+    // Live-update the masthead preview as the identity fields change (edit mode).
+    ['lh-agency', 'lh-governorName', 'lh-department', 'lh-directorName'].forEach((id) => {
+      $(id).addEventListener('input', () =>
+        renderPreview({
+          agency: $('lh-agency').value,
+          governorName: $('lh-governorName').value,
+          department: $('lh-department').value,
+          directorName: $('lh-directorName').value,
+        }),
+      );
+    });
+  }
+
+  function initDefaults() {
+    const livePreview = () => {
+      const v = {
+        idPrefix: $('pd-idPrefix').value,
+        sequenceWidth: Number($('pd-sequenceWidth').value) || 1,
+        validityMonths: 12, reportDueCadence: '',
+      };
+      $('pd-live-preview').textContent = permitIdPreview(v as any);
+    };
+    const repaint = (v: any) => {
+      $('pd-read').querySelector('[data-pd="preview"]').textContent = permitIdPreview(v);
+      $('pd-read').querySelector('[data-pd="validityMonths"]').textContent = String(v.validityMonths);
+      $('pd-read').querySelector('[data-pd="reportDueCadence"]').textContent = v.reportDueCadence;
+    };
+    viewFirst({
+      editBtn: 'pd-edit', readEl: 'pd-read', formEl: 'pd-form',
+      saveBtn: 'pd-save', cancelBtn: 'pd-cancel', dataAttr: 'pd',
+      read: readPermitDefaults, save: savePermitDefaults,
+      fields: [
+        { key: 'idPrefix', inputId: 'pd-idPrefix' },
+        { key: 'sequenceWidth', inputId: 'pd-sequenceWidth' },
+        { key: 'validityMonths', inputId: 'pd-validityMonths' },
+        { key: 'reportDueCadence', inputId: 'pd-reportDueCadence' },
+      ],
+      onOpen: () => {
+        $('pd-reportDueCadence').value = readPermitDefaults().reportDueCadence;
+        livePreview();
+      },
+      repaint,
+      successMsg: 'Permit defaults updated. New permits use these values.',
+    });
+    // Live-update the id preview as the prefix / width change.
+    $('pd-idPrefix').addEventListener('input', livePreview);
+    $('pd-sequenceWidth').addEventListener('input', livePreview);
+  }
+
+  function initNotifications() {
+    const modal = $('notif-modal');
+    const heading = $('nm-heading');
+    const subjectInput = $('nm-subject');
+    const bodyInput = $('nm-body');
+    const varsList = $('nm-vars-list');
+    const unknownEl = $('nm-unknown');
+    let targetId = '';
+    let currentVars: string[] = [];
+    // The field a chip inserts into — whichever the admin last put the caret in.
+    let lastFocused: any = bodyInput;
+
+    const paint = (t: { id: string; subject: string; body: string }) => {
+      const card = document.querySelector(`.notif[data-notif="${t.id}"]`);
+      if (!card) return;
+      card.querySelector('[data-notif-subject]')!.textContent = t.subject;
+      card.querySelector('[data-notif-body]')!.textContent = t.body;
+    };
+    readNotifications().forEach(paint);
+
+    // The editable element lives in the component's shadow root.
+    const inner = (host: any): HTMLInputElement | HTMLTextAreaElement | null =>
+      host.shadowRoot?.querySelector('textarea, input') ?? null;
+
+    // Insert a token at the caret of the last-focused field (subject or body).
+    const insertToken = (token: string) => {
+      const host = lastFocused;
+      const el = inner(host);
+      if (!el) {
+        host.value = (host.value || '') + token;
+      } else {
+        const s = el.selectionStart ?? el.value.length;
+        const e = el.selectionEnd ?? el.value.length;
+        el.value = el.value.slice(0, s) + token + el.value.slice(e);
+        el.dispatchEvent(new Event('input', { bubbles: true })); // sync the host value
+        const pos = s + token.length;
+        el.setSelectionRange(pos, pos);
+        el.focus();
+      }
+      validate();
+    };
+
+    // Live check: any [token] in the copy that isn't one this email fills in.
+    const validate = () => {
+      const text = `${subjectInput.value}\n${bodyInput.value}`;
+      const found = text.match(/\[[^\][]*\]/g) || [];
+      const allowed = new Set(currentVars);
+      const unknown = [...new Set(found.filter((x) => !allowed.has(x)))];
+      if (unknown.length) {
+        unknownEl.subtitle =
+          `These won’t be filled in when the email is sent: ${unknown.join(', ')}. ` +
+          `Insert one of the variables above, or remove the brackets.`;
+        unknownEl.hidden = false;
+      } else {
+        unknownEl.hidden = true;
+      }
+    };
+
+    // Track which field the caret is in.
+    [subjectInput, bodyInput].forEach((host) => {
+      host.addEventListener('focusin', () => (lastFocused = host));
+    });
+
+    // Wire the live check once — on first open, when the shadow inputs exist
+    // (they aren't upgraded yet at script load, so inner() is null then).
+    let inputsWired = false;
+    const wireInputs = () => {
+      if (inputsWired) return;
+      [subjectInput, bodyInput].forEach((host) => {
+        inner(host)?.addEventListener('input', validate);
+        host.addEventListener('input', validate); // Carbon also re-dispatches on the host
+      });
+      inputsWired = true;
+    };
+
+    document.querySelectorAll('.notif-edit').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        targetId = (btn as HTMLElement).dataset.notif || '';
+        const t = readNotifications().find((n) => n.id === targetId)!;
+        currentVars = t.variables || [];
+        heading.textContent = `Edit “${t.name}”`;
+        subjectInput.value = t.subject;
+        bodyInput.value = t.body;
+        lastFocused = bodyInput;
+
+        // Rebuild the insertable-variable chips for this email.
+        varsList.innerHTML = '';
+        currentVars.forEach((v) => {
+          const chip = document.createElement('cds-button') as any;
+          chip.setAttribute('kind', 'ghost');
+          chip.setAttribute('size', 'sm');
+          chip.textContent = v;
+          chip.addEventListener('click', () => insertToken(v));
+          varsList.appendChild(chip);
+        });
+
+        wireInputs();
+        validate();
+        modal.open = true;
+      });
+    });
+
+    $('nm-save').addEventListener('click', () => {
+      const subject = subjectInput.value.trim();
+      const body = bodyInput.value.trim();
+      if (!subject || !body) return;
+      saveNotification(targetId, subject, body);
+      paint({ id: targetId, subject, body });
+      modal.open = false;
+      flash('Notification updated. Emails sent from now on use this copy.');
+    });
+  }
+</script>
+
+<style>
+  /* Banner sits flush at top; body opens below it. Matches users.astro. */
+  .page {
+    padding-block: 0 6rem;
+  }
+  .body {
+    margin-top: var(--cds-spacing-07, 2rem);
+  }
+  .console {
+    max-width: 60rem;
+  }
+  #denied[hidden] { display: none; }
+  #console[hidden] { display: none; }
+
+  /* One long page: generous separation between stacked config sections. */
+  .settings-block + .settings-block {
+    margin-top: var(--cds-spacing-10, 4rem);
+  }
+
+  /* carbon-checked: fixed-position stacking host for stock cds-toast-notification
+     elements (Carbon ships no toast positioning container; same as apply.astro). */
+  .toast-host {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .section-hint {
+    margin: 0 0 1.5rem;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* Regulated-forms table cells. */
+  .doc-name { display: block; font-weight: 600; }
+  .doc-desc { display: block; color: var(--cds-text-secondary, #525252); }
+  .doc-file { word-break: break-all; }
+
+  /* Read-view fact list (letterhead / defaults). */
+  .facts {
+    display: grid;
+    gap: 1.25rem;
+    margin: 0;
+    max-width: 40rem;
+  }
+  .fact dt { color: var(--cds-text-secondary, #525252); margin-bottom: 0.25rem; }
+  .fact dd { margin: 0; }
+  #lh-read[hidden], #pd-read[hidden] { display: none; }
+
+  /* Letterhead live preview — the masthead as it prints on the permit letter. */
+  .lh-preview {
+    margin: 0 0 2rem;
+    max-width: 40rem;
+  }
+  .lh-preview__cap {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .lh-preview__sheet {
+    background: var(--cds-layer-01, #f4f4f4);
+    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    padding: 1.5rem 1.75rem;
+    border-bottom: 2px solid var(--cds-border-strong-01, #8d8d8d);
+  }
+  .lh-preview__sheet p { margin: 0; }
+  .lh-preview__dept {
+    margin: 0.25rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  /* Edit form: stacked inputs with an action row. */
+  .edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    max-width: 32rem;
+  }
+  .edit-form[hidden] { display: none; }
+  .pd-preview { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+
+  /* Notification cards. */
+  .notif-list { display: flex; flex-direction: column; gap: 1.5rem; max-width: 46rem; }
+  .notif {
+    padding: 1.25rem 1.5rem;
+    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    background: var(--cds-layer-01, #f4f4f4);
+  }
+  .notif__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+  .notif__name { margin: 0; }
+  .notif__k { color: var(--cds-text-secondary, #525252); margin-right: 0.5rem; }
+  .notif__subject { margin: 0.75rem 0 0.5rem; }
+  /* Keep line breaks from the copy, but clamp the card to a compact preview —
+     the full body is editable in the modal. */
+  .notif__body {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+    white-space: pre-line;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .uploader-hint { margin: 0.5rem 0 0; color: var(--cds-text-secondary, #525252); }
+  .uploaded-list { margin-top: 0.75rem; }
+  #rm-error { margin-top: 1rem; }
+  #rm-error[hidden] { display: none; }
+  .modal-hint { margin: 0 0 1.5rem; }
+  .nm-body-wrap { margin-top: 1.25rem; }
+
+  /* Insertable-variable helper under the message field. */
+  .nm-vars { margin-top: 1.25rem; }
+  .nm-vars__label { display: block; margin: 0 0 0.25rem; }
+  .nm-vars__hint {
+    margin: 0 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .nm-vars__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  #nm-unknown { margin-top: 1rem; }
+  #nm-unknown[hidden] { display: none; }
+</style>

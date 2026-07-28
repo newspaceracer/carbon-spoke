@@ -1,0 +1,34 @@
+---
+// Reusable Carbon chart section — the SANCTIONED charting option (see
+// carbon-chart.ts for why @carbon/charts is a real dependency, not a hand-rolled
+// primitive). Mirrors DataGrid.astro: config travels as a child JSON script, and
+// the client script below ships @carbon/charts ONLY on pages that render a chart.
+//
+// Give every chart a visible heading (the section owns that) AND a `label` — the
+// chart's SVG carries it as an accessible name, and Carbon renders a built-in
+// tabular view of the same data for non-visual users.
+interface Props {
+  /** A key of CHART_TYPES in carbon-chart.ts (e.g. 'simple-bar', 'donut'). */
+  type: string;
+  /** Carbon chart tabular data — [{ group, value, ... }]. */
+  data: unknown[];
+  /** Carbon chart options (axes, height, legend, …). */
+  options: Record<string, unknown>;
+  /** CSS height of the plotting area. */
+  height?: string;
+  /** DOM id so a page's filter script can find the chart to update it. */
+  chartId?: string;
+  /** Accessible name for the chart figure. */
+  label?: string;
+}
+const { type, data, options, height = '320px', chartId, label } = Astro.props;
+const config = JSON.stringify({ type, data, options });
+---
+
+<carbon-chart id={chartId} height={height} aria-label={label}>
+  <script type="application/json" set:html={config} is:inline></script>
+</carbon-chart>
+
+<script>
+  import '../components/carbon-chart.ts';
+</script>

@@ -153,7 +153,10 @@ export const project = {
     projectEnd: '2028-08-31',
     permitStart: '2026-09-15',
     permitEnd: '2027-09-14',
-    annualReport: '2027-12-15',
+    // Left blank on purpose: this is one of the gaps `applicationIssues` reports
+    // (project-info). Empty here so the field's error state reads true — an empty
+    // required field, not a filled field falsely flagged.
+    annualReport: '',
   },
   // Optional project-schedule attachment (a filename is DATA, not bytes). Provided
   // here to show the "optional-but-attached" state on the summary.
@@ -241,13 +244,9 @@ export const dataCollection = {
   // Specimen collection
   collectsSpecimens: true,
   collectionRationaleInProposal: false,
-  collectionRationale:
-    'Collection is necessary to measure physiological thermal tolerance and body condition, ' +
-    'which cannot be assessed non-destructively in the field. Mussel and algal samples are ' +
-    'analyzed for tissue condition indices and heat-shock protein (HSP70) expression; sea stars ' +
-    'are measured and released. Retained specimens are accessioned into the CMRI Invertebrate ' +
-    'Collection and made available for future study. Sample sizes follow a power analysis ' +
-    '(α = 0.05, power = 0.80) sized to detect a 15% shift in condition index across tidal heights.',
+  // Left blank on purpose: the other gap `applicationIssues` reports (data-collection).
+  // Neither typed nor deferred to the proposal, so the field's error state reads true.
+  collectionRationale: '',
   curation: {
     facility: 'Cascadia Marine Research Institute — Invertebrate Collection',
     official: 'Dr. Lena Okafor',
@@ -357,11 +356,25 @@ export const additionalDocs = {
 // to `applicationSteps`, so the page label comes from there. Study Areas is absent
 // on purpose: it's complete. Deterministic; a real app would derive this from the
 // live answers. INVENTED but tied to real seeded gaps (e.g. no PI résumé on file).
+/** A missing requirement that maps to a single concrete cds-* input, so the field
+ *  itself can carry Carbon's `invalid` state (red border + `invalid-text`) — not
+ *  just the page banner. Requirements that are uploads, rosters, or "either/or"
+ *  gates have no single field to flag, so they stay banner-only (no `fields` entry). */
+export interface FieldIssue {
+  /** DOM id of the cds-* field element to mark invalid (e.g. a cds-textarea). */
+  fieldId: string;
+  /** Message shown as that field's `invalid-text`. */
+  message: string;
+}
+
 export interface StepIssues {
   /** Matches an `applicationSteps` id; the page label is looked up from there. */
   stepId: string;
   /** Requirements still missing on the page — listed in that page's error banner. */
   missing: string[];
+  /** Field-level targets among the above — marked invalid on Save and continue.
+   *  Omitted when a page's gaps are uploads/rosters with no single input to flag. */
+  fields?: FieldIssue[];
 }
 
 export const applicationIssues: StepIssues[] = [
@@ -375,11 +388,18 @@ export const applicationIssues: StepIssues[] = [
   {
     stepId: 'project-info',
     missing: ['Enter the anticipated annual report due date.'],
+    fields: [{ fieldId: 'annual-report-date', message: 'Required to submit.' }],
   },
   {
     stepId: 'data-collection',
     missing: [
       'Provide a collection rationale, or mark it as answered in the study proposal.',
+    ],
+    fields: [
+      {
+        fieldId: 'collection-rationale',
+        message: 'Required to submit, or mark it as answered in the study proposal.',
+      },
     ],
   },
   {

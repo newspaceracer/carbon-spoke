@@ -13,6 +13,7 @@ import { withBase } from './base';
 import {
   ROUTES,
   isMaintenance,
+  isPending,
   readIdentity,
   writeIdentity,
   routePath,
@@ -68,6 +69,20 @@ function collapseNav(id: Identity): void {
   }
 }
 
+// ── Pending-role nav strip ────────────────────────────────────────────────
+// A roleless (pending) user can't reach any reviewer/admin page, so the browsing
+// nav + search + profile are hidden — only the product name and Log out remain.
+// The guard (enforcePending) already redirects stray clicks; this is appearance.
+function collapsePendingNav(): void {
+  const header = document.querySelector('cds-header');
+  if (!header) return;
+  header.querySelectorAll('cds-header-nav, .header__search, cds-side-nav').forEach((el) => {
+    (el as HTMLElement).style.display = 'none';
+  });
+  const profile = header.querySelector('cds-header-global-action[aria-label="Profile"]');
+  if (profile) (profile as HTMLElement).style.display = 'none';
+}
+
 // ── Log out (simulated) ─────────────────────────────────────────────────────
 // The prototype's Log out action ends the session: identity → anon, then land on
 // the notice (site down) or the login page (site up). Wired on every page.
@@ -91,6 +106,7 @@ function mountIdentitySwitcher(): void {
   const options: { value: Identity; label: string }[] = [
     { value: 'admin', label: 'System Administrator' },
     { value: 'user', label: 'Reviewer (non-admin)' },
+    { value: 'pending', label: 'New user (pending role)' },
     { value: 'anon', label: 'Logged out' },
   ];
   // carbon-checked: the panel frame is a dev-only affordance (not product UI);
@@ -185,6 +201,9 @@ export function decorateShell(): void {
       } else {
         collapseNav(id);
       }
+    } else if (isPending()) {
+      // Site live, but this user has no role yet — strip the nav to essentials.
+      collapsePendingNav();
     }
   };
   if (document.readyState === 'loading') {

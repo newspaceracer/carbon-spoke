@@ -27,10 +27,15 @@ export const ROUTES = {
   notice: '/maintenance',
   console: '/admin/maintenance-mode',
   login: '/login',
+  signup: '/signup',
+  pending: '/pending',
 } as const;
 
 export type SiteStatus = 'live' | 'maintenance';
-export type Identity = 'admin' | 'user' | 'anon';
+// 'pending' = signed in with a verified parks.ca.gov account that has NO reviewer
+// role yet (awaiting an admin's grant). It's logged in but can reach almost
+// nothing internal — see allowedWhilePending / enforcePending.
+export type Identity = 'admin' | 'user' | 'anon' | 'pending';
 
 export interface SiteState {
   status: SiteStatus;
@@ -42,6 +47,9 @@ export interface SiteState {
 
 const STATE_KEY = 'site-maintenance';
 const IDENTITY_KEY = 'demo-identity';
+// The directory id of the signed-in PENDING user (a self-registered account
+// awaiting a role). Only meaningful while identity === 'pending'.
+const PENDING_USER_KEY = 'pending-user-id';
 
 const DEFAULT_STATE: SiteState = { status: 'live', message: '', postedAt: null };
 
@@ -88,7 +96,7 @@ export const isMaintenance = (): boolean => readState().status === 'maintenance'
 // ── Identity (prototype role simulation) ─────────────────────────────────────
 export function readIdentity(): Identity {
   const v = localStorage.getItem(IDENTITY_KEY);
-  return v === 'admin' || v === 'user' || v === 'anon' ? v : 'admin';
+  return v === 'admin' || v === 'user' || v === 'anon' || v === 'pending' ? v : 'admin';
 }
 
 export function writeIdentity(id: Identity): void {
@@ -97,6 +105,18 @@ export function writeIdentity(id: Identity): void {
 
 export const isAdmin = (): boolean => readIdentity() === 'admin';
 export const isLoggedIn = (): boolean => readIdentity() !== 'anon';
+export const isPending = (): boolean => readIdentity() === 'pending';
+
+// ── Pending-user session (the self-registered account's directory id) ─────────
+export function readPendingUserId(): string | null {
+  return localStorage.getItem(PENDING_USER_KEY);
+}
+export function writePendingUserId(id: string): void {
+  localStorage.setItem(PENDING_USER_KEY, id);
+}
+export function clearPendingUserId(): void {
+  localStorage.removeItem(PENDING_USER_KEY);
+}
 
 // ── Path helpers ─────────────────────────────────────────────────────────
 /** The current app-absolute path with the deploy base stripped and no trailing
@@ -137,5 +157,32 @@ export function enforceMaintenance(): boolean {
   if (allowedDuringMaintenance(id)) return false;
   const target = id === 'admin' ? ROUTES.console : ROUTES.notice;
   location.replace(withBase(target));
+  return true;
+}
+
+// ── Pending-role guard ──────────────────────────────────────────────────────
+// A signed-in-but-roleless user (strict least privilege) can reach only their
+// pending home, the public applicant/register surfaces, and the auth pages.
+// Everything internal (reviewer + admin) routes back to /pending.
+const PENDING_ALLOWED = [
+  ROUTES.pending,
+  ROUTES.signup,
+  ROUTES.login,
+  ROUTES.notice,
+  '/landing',
+  '/apply',
+  '/search',
+];
+
+export function allowedWhilePending(at = routePath()): boolean {
+  return PENDING_ALLOWED.some((r) => isRoute(r, at));
+}
+
+/** Redirect a pending (roleless) user to their pending home when they land on
+ *  any page they can't reach yet. Returns true if it redirected. */
+export function enforcePending(): boolean {
+  if (readIdentity() !== 'pending') return false;
+  if (allowedWhilePending()) return false;
+  location.replace(withBase(ROUTES.pending));
   return true;
 }

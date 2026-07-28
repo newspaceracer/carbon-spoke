@@ -1,0 +1,83 @@
+---
+// PageHeader — the canonical page identity banner for this spoke: a full-bleed
+// dark (g100) masthead with a breadcrumb, an optional eyebrow, and the page
+// title, so every screen's header reads as one system. This is the SAME
+// construction users.astro / profile.astro / districts already use inline;
+// prefer this component for any new page and when reconciling old ones.
+//
+// A "Home" crumb is prepended automatically. Pass the rest of the trail in
+// `crumbs`; the last entry renders as the current page (aria-current), earlier
+// entries link if they carry an href. Extra header content (stats, a lede,
+// actions) goes in the default slot, inside the centered inner.
+import { withBase } from '../lib/base';
+
+interface Crumb {
+  label: string;
+  href?: string;
+}
+interface Props {
+  title: string;
+  /** Small label above the title, e.g. "System administration". */
+  eyebrow?: string;
+  /** Optional one-line description under the title. */
+  lede?: string;
+  /** Trail after Home; the last is the current page. */
+  crumbs?: Crumb[];
+}
+const { title, eyebrow, lede, crumbs = [] } = Astro.props;
+---
+
+<header class="banner cds--g100">
+  <div class="banner__inner">
+    <cds-breadcrumb no-trailing-slash class="banner__crumb">
+      <cds-breadcrumb-item>
+        <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
+      </cds-breadcrumb-item>
+      {crumbs.map((c, i) => (
+        <cds-breadcrumb-item>
+          {c.href && i < crumbs.length - 1 ? (
+            <cds-breadcrumb-link href={withBase(c.href)}>{c.label}</cds-breadcrumb-link>
+          ) : (
+            <cds-breadcrumb-link aria-current="page">{c.label}</cds-breadcrumb-link>
+          )}
+        </cds-breadcrumb-item>
+      ))}
+    </cds-breadcrumb>
+
+    {eyebrow && <p class="banner__eyebrow t-label-01">{eyebrow}</p>}
+    <h1 class="banner__name t-heading-05">{title}</h1>
+    {lede && <p class="banner__lede t-body-02">{lede}</p>}
+    <slot />
+  </div>
+</header>
+
+<style>
+  /* Full-bleed dark identity banner — layout only; color from --cds-* in the
+     g100 zone set by the class. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__crumb {
+    display: block;
+    margin-bottom: var(--cds-spacing-05, 1rem);
+  }
+  .banner__eyebrow {
+    margin: 0 0 var(--cds-spacing-02, 0.25rem);
+    color: var(--cds-text-secondary, #525252);
+  }
+  .banner__name {
+    margin: 0;
+  }
+  .banner__lede {
+    margin: var(--cds-spacing-03, 0.5rem) 0 0;
+    max-width: 46rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

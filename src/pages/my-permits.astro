@@ -16,6 +16,7 @@ import { withBase } from '../lib/base';
 */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
+import PageHeader from '../components/PageHeader.astro';
 import KanbanBoard from '../components/KanbanBoard.astro';
 import { permits } from '../data/permits';
 
@@ -36,24 +37,13 @@ export const prototype = {
   <PermitNav slot="nav" />
 
   <main class="page">
-    <div class="cds--css-grid cds--css-grid--full-width cds--css-grid--with-row-gap">
-      <cds-breadcrumb no-trailing-slash class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
-        <cds-breadcrumb-item>
-          <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
-        </cds-breadcrumb-item>
-        <cds-breadcrumb-item>
-          <cds-breadcrumb-link aria-current="page">My permits</cds-breadcrumb-link>
-        </cds-breadcrumb-item>
-      </cds-breadcrumb>
+    <PageHeader
+      title="My permits"
+      lede="Every permit you hold a role on, organized by where it sits in the review workflow. Drag a card between lanes — or use its menu — to move it. Open the full register to see all permits and your districts."
+      crumbs={[{ label: 'My permits' }]}
+    />
 
-      <header class="head cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-        <h1 class="head__title">My permits</h1>
-        <p class="head__lede t-body-01">
-          Every permit you hold a role on, organized by where it sits in the review
-          workflow. Drag a card between lanes — or use its menu — to move it. Open the
-          full register to see all permits and your districts.
-        </p>
-      </header>
+    <div class="body cds--css-grid cds--css-grid--full-width cds--css-grid--with-row-gap">
 
       <div class="board cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
         <KanbanBoard permits={mine} />
@@ -66,17 +56,9 @@ export const prototype = {
   /* Page-level LAYOUT only; width + margins owned by the 2x Grid, header offset
      by theme.css. */
   .page {
-    padding-block: 1.5rem 4rem;
+    padding-block: 0 4rem;
   }
-  .head__title {
-    margin: 0;
-    font-size: 2rem;
-    font-weight: 400;
-    line-height: 1.15;
-  }
-  .head__lede {
-    margin: 0.75rem 0 0;
-    max-width: 46rem;
-    color: var(--cds-text-secondary, #525252);
+  .body {
+    margin-top: var(--cds-spacing-07, 2rem);
   }
 </style>

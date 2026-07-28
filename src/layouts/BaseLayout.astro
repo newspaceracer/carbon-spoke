@@ -52,8 +52,10 @@ const { title = 'Carbon Spoke' } = Astro.props;
          register the components and paint the maintenance-aware shell treatments
          (banner, collapsed nav, logout, dev identity switcher). -->
     <script>
-      import { enforceMaintenance } from '../lib/maintenance';
-      if (!enforceMaintenance()) {
+      import { enforceMaintenance, enforcePending } from '../lib/maintenance';
+      // Maintenance takes precedence (site down for everyone), then the pending-role
+      // guard (a roleless user can't reach internal pages). Either may redirect.
+      if (!enforceMaintenance() && !enforcePending()) {
         import('../carbon.ts');
         import('../lib/maintenance-shell').then((m) => m.decorateShell());
       }

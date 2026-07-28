@@ -183,16 +183,38 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         ></cds-inline-notification>
 
         <div class="modal-grid">
-          <!-- Members are existing users only — pick, never type. Identity is
-               owned by the user's account (read-only here). -->
-          <cds-combo-box id="m-user" title-text="User" label="Search users by name…"></cds-combo-box>
-          <div id="m-identity" class="identity" hidden>
-            <p class="identity__name t-heading-compact-01" id="m-id-name"></p>
-            <p class="identity__meta t-body-01">
-              <span id="m-id-email"></span>
-              <span id="m-id-phone"></span>
-            </p>
-            <p class="identity__note t-label-01">Identity comes from this user's account — edit it from their profile, not here.</p>
+          <!-- Add mode only: add someone who already has an account, or invite a
+               brand-new person into the system and onto this district at once. -->
+          <div id="m-mode-wrap">
+            <p class="modal-hint t-label-01" id="m-mode-label">Add an existing account, or invite someone new.</p>
+            <cds-content-switcher id="m-mode" value="existing">
+              <cds-content-switcher-item value="existing" selected>Existing user</cds-content-switcher-item>
+              <cds-content-switcher-item value="new">Invite new user</cds-content-switcher-item>
+            </cds-content-switcher>
+          </div>
+
+          <!-- Existing user: pick, never type. Identity is owned by the account. -->
+          <div id="m-existing">
+            <cds-combo-box id="m-user" title-text="User" label="Search users by name…"></cds-combo-box>
+            <div id="m-identity" class="identity" hidden>
+              <p class="identity__name t-heading-compact-01" id="m-id-name"></p>
+              <p class="identity__meta t-body-01">
+                <span id="m-id-email"></span>
+                <span id="m-id-phone"></span>
+              </p>
+              <p class="identity__note t-label-01">Identity comes from this user's account — edit it from their profile, not here.</p>
+            </div>
+          </div>
+
+          <!-- New user: create a pending account AND add them to this district. -->
+          <div id="m-new" hidden>
+            <div class="name-row">
+              <cds-text-input id="m-first" label="First name" placeholder="e.g. Jordan"></cds-text-input>
+              <cds-text-input id="m-last" label="Last name" placeholder="e.g. Rivera"></cds-text-input>
+            </div>
+            <cds-text-input id="m-email" type="email" label="Email" placeholder="name@parks.ca.gov"></cds-text-input>
+            <cds-text-input id="m-phone" label="Phone (optional)" placeholder="(916) 555-0100"></cds-text-input>
+            <p class="modal-hint t-label-01">They’ll get an invitation and stay pending until they accept.</p>
           </div>
 
           <!-- Options are built client-side, scoped to who's acting: a district
@@ -259,7 +281,10 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
 <script>
   import { district, roleMeta, assignableRoles, memberRoles } from '../data/district';
-  import { directory, findUser } from '../data/user';
+  import { directory } from '../data/user';
+  // Member identity is resolved through resolveUser (seeded directory OR an
+  // invited/added account) so a newly invited member isn't treated as unknown.
+  import { inviteUser, resolveUser, userStatus } from '../data/requests';
 
   // ── Prototype-local district record (shared with the /district detail) ────
   // A member REFERENCES a user by id; name/email/phone are resolved from the
@@ -292,7 +317,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   // since-removed role) fail this and are discarded — so stale localStorage can't
   // poison the UI (unknown-user rows, duplicate role options).
   const memberOk = (m: any): boolean =>
-    !!m && typeof m.userId === 'string' && !!findUser(m.userId) && memberRoles.some((r) => r.value === m.role);
+    !!m && typeof m.userId === 'string' && !!resolveUser(m.userId) && memberRoles.some((r) => r.value === m.role);
 
   const loadState = (): State => {
     const base = seed();
@@ -351,9 +376,14 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       ...state.members.map((m, i) => {
         const row = document.createElement('cds-table-row');
 
-        const user = findUser(m.userId);
+        const user = resolveUser(m.userId);
         const nameCell = document.createElement('cds-table-cell');
-        nameCell.innerHTML = `<span class="m-name">${esc(user?.name ?? '(unknown user)')}</span><span class="m-sub">${esc(user?.email ?? '')}</span>`;
+        // An invited member shows a pending indicator until they accept — state,
+        // not a category, so an icon-indicator (icon + label), never a tag.
+        const pending = userStatus(m.userId) === 'invited'
+          ? '<span class="m-pending"><cds-icon-indicator size="16" kind="pending" label="Invited — pending acceptance"></cds-icon-indicator></span>'
+          : '';
+        nameCell.innerHTML = `<span class="m-name">${esc(user?.name ?? '(unknown user)')}</span><span class="m-sub">${esc(user?.email ?? '')}</span>${pending}`;
 
         const roleCell = document.createElement('cds-table-cell');
         roleCell.innerHTML = `<cds-tag type="${roleTag(m.role)}" size="sm">${esc(roleLabel(m.role))}</cds-tag>`;
@@ -408,6 +438,28 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const roleEl = () => $('m-role') as any;
   const aaGroup = () => $('m-autoassign') as any;
   const userBox = () => $('m-user') as any;
+  const modeEl = () => $('m-mode') as any;
+
+  // Add mode has two ways to name a member: pick an EXISTING account, or INVITE
+  // a new person. Edit mode has neither — the person is fixed.
+  const currentMode = (): 'existing' | 'new' => (modeEl()?.value === 'new' ? 'new' : 'existing');
+
+  const newFieldIds = ['m-first', 'm-last', 'm-email', 'm-phone'];
+  const clearNewFields = () => {
+    newFieldIds.forEach((id) => {
+      const el = $(id) as any;
+      if (el) { el.value = ''; el.invalid = false; }
+    });
+  };
+
+  const applyMode = () => {
+    const mode = currentMode();
+    const existing = $('m-existing');
+    const neu = $('m-new');
+    if (existing) existing.hidden = mode !== 'existing';
+    if (neu) neu.hidden = mode !== 'new';
+    if (mWarn) mWarn.hidden = true;
+  };
 
   const currentScope = (): 'lead' | 'hq' => ((($('acting-as') as any)?.value === 'hq') ? 'hq' : 'lead');
 
@@ -441,7 +493,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
   // The read-only identity panel reflects the picked user's account.
   const showIdentity = (userId: string) => {
-    const u = findUser(userId);
+    const u = resolveUser(userId);
     const wrap = $('m-identity');
     const nameEl = $('m-id-name');
     const emailEl = $('m-id-email');
@@ -506,7 +558,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     const heading = $('member-modal-heading');
     const label = $('member-modal-label');
     if (index >= 0) {
-      const who = findUser(m.userId)?.name ?? 'this member';
+      const who = resolveUser(m.userId)?.name ?? 'this member';
       if (label) label.textContent = 'Edit member';
       if (heading) heading.textContent = `Edit ${who}`;
     } else {
@@ -517,12 +569,22 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
     selectedUserId = m.userId;
     const box = userBox();
+    const modeWrap = $('m-mode-wrap');
+    const existingBlock = $('m-existing');
+    const newBlock = $('m-new');
     if (index >= 0) {
-      // Editing: the person is fixed — hide the picker, show their identity.
+      // Editing: the person is fixed — no mode choice, show their identity.
+      if (modeWrap) modeWrap.hidden = true;
+      if (existingBlock) existingBlock.hidden = false;
+      if (newBlock) newBlock.hidden = true;
       if (box) box.hidden = true;
       showIdentity(m.userId);
     } else {
-      // Adding: pick from users who aren't already members.
+      // Adding: choose an existing account or invite a new person.
+      if (modeWrap) modeWrap.hidden = false;
+      if (modeEl()) modeEl().value = 'existing';
+      clearNewFields();
+      applyMode();
       buildUserOptions();
       if (box) box.hidden = false;
       showIdentity(''); // nothing until they pick
@@ -538,25 +600,66 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     modal.open = true;
   };
 
-  const saveMember = () => {
-    // In add mode the user comes from the picker; in edit mode it's fixed.
-    const userId = editingIndex >= 0 ? selectedUserId : (userBox()?.value || '');
-    if (!userId || !findUser(userId)) {
-      showWarn('Select a user', 'District members are existing users — search and select one.');
-      return;
-    }
+  // Validate the invite-new fields and, if good, invite the person into the
+  // system scoped to THIS district (a member role IS a district-scoped account
+  // role). Returns the new user id, or '' when a field is missing.
+  const createInvitedMember = (role: string): string => {
+    const first = valOf('m-first');
+    const last = valOf('m-last');
+    const email = valOf('m-email');
+    const phone = valOf('m-phone');
 
+    let ok = true;
+    const fail = (id: string, msg: string) => {
+      const el = $(id) as any;
+      if (el) { el.invalid = true; el.invalidText = msg; }
+      ok = false;
+    };
+    if (!first) fail('m-first', 'Enter a first name.');
+    if (!last) fail('m-last', 'Enter a last name.');
+    if (!email) fail('m-email', 'Enter an email address.');
+    if (!ok) return '';
+
+    return inviteUser({
+      name: [first, last].filter(Boolean).join(' '),
+      email,
+      phone,
+      role,
+      district: district.id,
+      expertise: [],
+      invitedTo: district.id,
+    });
+  };
+
+  const saveMember = () => {
     const role = roleEl()?.value ?? 'district-assistant';
     const meta = roleMeta(role);
 
     // Exactly one lead per district — the single-district lead-analyst rule.
+    // Checked BEFORE any invite is created, so a rejected save leaves no orphan.
     if (meta.level === 'lead') {
       const other = state.members.find((x, i) => i !== editingIndex && roleMeta(x.role).level === 'lead');
       if (other) {
-        const otherName = findUser(other.userId)?.name ?? 'Another member';
+        const otherName = resolveUser(other.userId)?.name ?? 'Another member';
         showWarn('This district already has a lead', `${otherName} is the district lead. Change their role before assigning a new one.`);
         return;
       }
+    }
+
+    // Resolve WHO the member is: fixed on edit; picked or invited on add.
+    let userId = '';
+    if (editingIndex >= 0) {
+      userId = selectedUserId;
+    } else if (currentMode() === 'new') {
+      userId = createInvitedMember(role);
+      if (!userId) return; // a field is missing — inline errors already shown
+    } else {
+      userId = userBox()?.value || '';
+    }
+
+    if (!userId || !resolveUser(userId)) {
+      showWarn('Select a user', 'Search and select an existing account, or switch to “Invite new user”.');
+      return;
     }
 
     let autoAssign: AutoAssign = { mode: 'none', parks: [] };
@@ -594,7 +697,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const openRemoveModal = (index: number) => {
     pendingRemove = index;
     const m = state.members[index];
-    const who = findUser(m?.userId)?.name ?? 'this member';
+    const who = resolveUser(m?.userId)?.name ?? 'this member';
     const body = $('remove-body');
     if (body) body.textContent = `Remove ${who} from ${district.name}? They’ll no longer be auto-assigned to permits or listed as a contact.`;
     if (removeModal) removeModal.open = true;
@@ -661,6 +764,13 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     showIdentity(selectedUserId);
     if (selectedUserId && mWarn) mWarn.hidden = true;
   });
+  modeEl()?.addEventListener('cds-content-switcher-selected', applyMode);
+  newFieldIds.forEach((id) =>
+    $(id)?.addEventListener('input', () => {
+      const el = $(id) as any;
+      if (el) el.invalid = false;
+    }),
+  );
 
   $('add-member')?.addEventListener('click', () => openMemberModal(-1));
   $('m-save')?.addEventListener('click', saveMember);
@@ -734,11 +844,20 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   .table-wrap { overflow-x: auto; }
   :global(.m-name) { display: block; color: var(--cds-text-primary, #161616); }
   :global(.m-sub) { display: block; font-size: 0.75rem; color: var(--cds-text-secondary, #525252); }
+  :global(.m-pending) { display: block; margin-top: 0.25rem; }
   :global(.row-actions) { display: flex; gap: 0.25rem; }
 
   /* Member modal internals. */
   .modal-grid { display: flex; flex-direction: column; gap: 1.25rem; }
   #m-identity[hidden] { display: none; }
+
+  /* Add-mode: choose an existing account or invite a new person. */
+  #m-mode-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+  #m-mode-label { margin: 0; }
+  #m-new { display: flex; flex-direction: column; gap: 1.25rem; }
+  .name-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .name-row > * { flex: 1 1 10rem; min-width: 0; }
+  #m-mode-wrap[hidden], #m-existing[hidden], #m-new[hidden] { display: none; }
   .identity {
     padding: 1rem;
     background: var(--cds-layer-01, #f4f4f4);

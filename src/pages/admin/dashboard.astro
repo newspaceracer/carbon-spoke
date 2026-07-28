@@ -1,0 +1,784 @@
+---
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell) — reached from Admin tools ▸ Program dashboard.
+     spine:  main.page > 2x Grid (full-width)
+     sections:
+       - header      -> breadcrumb + title + "System Admins only" access note + lede
+       - filters     -> cds-tile: date range (cds-date-picker) + District & Resource
+                        Category (cds-multi-select) + Compare toggle + Clear. LIVE —
+                        every metric recomputes on change (no Apply button).
+       - empty       -> cds-actionable-notification, shown only when the filter matches 0.
+       - kpis         -> 5 cds-tile stat cards, each a click-through into the register.
+       - charts       -> 5 <CarbonChart/> distributions (district, category, status,
+                         per-year by permit-start, top parks). Bars/slices drill through.
+       - entities     -> cds-table: applicant entities (by Organization) + counts.
+       - tier2        -> the data-dependent (processing-time) metrics, marked PENDING
+                         with what each needs — never shown as a misleading zero.
+
+   carbon-checked: the .kpi / .chart-card / .tier2__row classes are LAYOUT-ONLY
+   modifiers applied to real <cds-tile> elements (see markup) — not hand-rolled
+   cards. No cds-* ships a metric stat-tile layout; the tile IS the Carbon
+   component and these classes only arrange its contents.
+
+   Metric engine: src/lib/dashboard-metrics.ts (pure) computes the SAME numbers here
+   (server render) and in the client script below (live recompute) — one source of
+   truth. Tier 1 only; the register records Date submitted + a signed FLAG but no
+   approved/signed DATE, so Tier 2 timing has no data and is surfaced as pending.
+
+   Access: System Admins only (Public Users / Researchers can't reach it). This is a
+   static prototype, so that's stated in the UI rather than enforced by a real guard.
+*/
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PermitNav from '../../components/PermitNav.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import CarbonChart from '../../components/CarbonChart.astro';
+import { withBase } from '../../lib/base';
+import { permits } from '../../data/permits';
+import {
+  toSlim,
+  EMPTY_FILTER,
+  applyFilter,
+  scopeByDimensions,
+  computeMetrics,
+  byDimension,
+  statusBreakdown,
+  perYearByPermitStart,
+  applicantEntities,
+  buildQuery,
+  processingStats,
+  medianDaysByDimension,
+  stageAverages,
+  inquiryStats,
+  TARGET_DAYS,
+} from '../../lib/dashboard-metrics';
+
+// Home-page card metadata — the hub globs pages and reads this to self-list.
+export const prototype = {
+  title: 'Administrator dashboard',
+  summary:
+    'Program metrics for System Admins: intake, on-hand, and distribution counts ' +
+    'across the permit register, with a shared date/district/category filter and ' +
+    'click-through into the filtered list.',
+  tag: 'Internal tool',
+};
+
+const slim = toSlim(permits);
+
+// Filter option lists — from the non-draft baseline, in system terminology.
+const baseline = scopeByDimensions(slim, EMPTY_FILTER);
+const districtOptions = [...new Set(baseline.map((p) => p.district))].sort();
+const categoryOptions = [...new Set(baseline.map((p) => p.category))].sort();
+const total = baseline.length;
+
+// Initial (unfiltered) render — the client recomputes the identical values on load.
+const scoped = applyFilter(slim, EMPTY_FILTER);
+const m = computeMetrics(scoped);
+const districtData = byDimension(scoped, 'district');
+const categoryData = byDimension(scoped, 'category');
+const statusData = statusBreakdown(scoped);
+const yearData = perYearByPermitStart(scopeByDimensions(slim, EMPTY_FILTER));
+const parkData = byDimension(scoped, 'park', { top: 10, other: false });
+const entities = applicantEntities(scoped);
+const APPLICANT_ROWS = 12;
+
+// Tier 2 — processing & timing (from the transition history; decided permits only).
+const ps = processingStats(scoped);
+const t2CategoryData = medianDaysByDimension(scoped, 'category');
+const t2AnalystData = medianDaysByDimension(scoped, 'responsibleAnalyst');
+const t2StageData = stageAverages(scoped);
+const inq = inquiryStats(scoped);
+const fmtDays = (v: number | null) => (v == null ? '—' : `${v.toLocaleString()}`);
+
+// The five headline stat cards. `term` is the register quick-filter term the tile
+// links through with (empty = whole register); the linked list is an honest superset
+// where a metric can't be reduced to one exact quick-filter term (see buildQuery).
+const kpis = [
+  { key: 'received', label: 'Applications received', value: m.received, term: '',
+    caption: 'Non-draft, within the date range', link: 'Open in register' },
+  { key: 'active', label: 'Active permits', value: m.active, term: 'Active',
+    caption: 'Issued and currently in effect', link: 'View active permits' },
+  { key: 'underReview', label: 'Under review', value: m.underReview, term: 'Under review',
+    caption: 'On hand in technical review', link: 'View under-review permits' },
+  { key: 'rejected', label: 'Denied', value: m.rejected, term: 'Rejected',
+    caption: 'Status: Rejected', link: 'View denied applications' },
+  { key: 'pendingAnnualReport', label: 'Pending annual report', value: m.pendingAnnualReport, term: 'Active',
+    caption: 'Issued permits with no report submitted', link: 'View permits owing a report' },
+] as const;
+
+// Chart option builders. No color config → Carbon's own accessible categorical
+// palette (each district/category/status is a labeled identity; the axis label,
+// not the hue, carries which is which). Toolbar off; single-measure bars need no
+// legend (the category axis already names every bar).
+const barH = {
+  axes: { left: { mapsTo: 'group', scaleType: 'labels' }, bottom: { mapsTo: 'value', title: 'Permits' } },
+  bars: { width: 14 },
+  legend: { enabled: false },
+  toolbar: { enabled: false },
+  grid: { x: { enabled: true }, y: { enabled: false } },
+};
+const barV = {
+  axes: { left: { mapsTo: 'value', title: 'Permits' }, bottom: { mapsTo: 'group', scaleType: 'labels', title: 'Permit start year' } },
+  legend: { enabled: false },
+  toolbar: { enabled: false },
+};
+const donut = {
+  donut: { center: { label: 'Applications' } },
+  legend: { enabled: true, position: 'right' },
+  toolbar: { enabled: false },
+};
+// Day-valued horizontal bars for the Tier 2 timing charts.
+const barMedianDays = {
+  axes: { left: { mapsTo: 'group', scaleType: 'labels' }, bottom: { mapsTo: 'value', title: 'Median days' } },
+  bars: { width: 14 },
+  legend: { enabled: false },
+  toolbar: { enabled: false },
+  grid: { x: { enabled: true }, y: { enabled: false } },
+};
+const barMeanDays = { ...barMedianDays, axes: { ...barMedianDays.axes, bottom: { mapsTo: 'value', title: 'Mean days' } } };
+
+// Icons (verified Carbon paths).
+const ICONS = {
+  arrowRight: 'M9.3 3.7 13.1 7.5 1 7.5 1 8.5 13.1 8.5 9.3 12.3 10 13 15 8 10 3z',
+  locked: 'M24,14H22V8A6,6,0,0,0,10,8v6H8a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H24a2,2,0,0,0,2-2V16A2,2,0,0,0,24,14ZM12,8a4,4,0,0,1,8,0v6H12ZM24,28H8V16H24Z',
+};
+
+const permitsHref = withBase('/permits');
+---
+
+<BaseLayout title="Administrator dashboard">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <!-- All slim rows the client recomputes from; kept small (dashboard fields only). -->
+    <script type="application/json" id="db-data" set:html={JSON.stringify(slim)} is:inline></script>
+
+    <PageHeader
+      title="Administrator dashboard"
+      lede="Program metrics across the permit register. Set the date range, district, and resource category once — every count, chart, and list below follows the filter, and each number links through to that slice of the register."
+      crumbs={[{ label: 'Administrator dashboard' }]}
+    >
+      <cds-tag type="cool-gray" size="md">
+        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d={ICONS.locked} /></svg>
+        System Admins only
+      </cds-tag>
+    </PageHeader>
+
+    <div class="body cds--css-grid cds--css-grid--full-width cds--css-grid--with-row-gap">
+
+      <!-- ── Filter bar ─────────────────────────────────────────────────────── -->
+      <section class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <cds-tile class="filters">
+          <div class="filters__controls">
+            <cds-dropdown id="db-range" class="filters__range" title-text="Date range" value="all">
+              <cds-dropdown-item value="all">All dates</cds-dropdown-item>
+              <cds-dropdown-item value="30d">Past 30 days</cds-dropdown-item>
+              <cds-dropdown-item value="3m">Past 3 months</cds-dropdown-item>
+              <cds-dropdown-item value="6m">Past 6 months</cds-dropdown-item>
+              <cds-dropdown-item value="12m">Past 12 months</cds-dropdown-item>
+              <cds-dropdown-item value="ytd">Year to date</cds-dropdown-item>
+              <cds-dropdown-item value="custom">Custom range</cds-dropdown-item>
+            </cds-dropdown>
+
+            <cds-date-picker id="db-dates" date-format="m/d/Y" class="filters__dates">
+              <cds-date-picker-input kind="from" label-text="From (date submitted)" placeholder="mm/dd/yyyy" size="md"></cds-date-picker-input>
+              <cds-date-picker-input kind="to" label-text="To (date submitted)" placeholder="mm/dd/yyyy" size="md"></cds-date-picker-input>
+            </cds-date-picker>
+
+            <cds-multi-select id="db-districts" class="filters__select" title-text="District" label="All districts" filterable autoalign>
+              {districtOptions.map((d) => <cds-multi-select-item value={d}>{d}</cds-multi-select-item>)}
+            </cds-multi-select>
+
+            <cds-multi-select id="db-categories" class="filters__select" title-text="Resource category" label="All categories" filterable autoalign>
+              {categoryOptions.map((c) => <cds-multi-select-item value={c}>{c}</cds-multi-select-item>)}
+            </cds-multi-select>
+          </div>
+
+          <div class="filters__actions">
+            <cds-toggle id="db-compare" size="sm" label-text="Compare to previous period" hide-label></cds-toggle>
+            <cds-button id="db-clear" kind="ghost" size="md">Clear filters</cds-button>
+          </div>
+        </cds-tile>
+
+        <p class="filters__summary t-body-01" id="db-count" aria-live="polite" data-total={total}>
+          Showing <strong>{m.received.toLocaleString()}</strong> of {total.toLocaleString()} non-draft applications
+        </p>
+        <p class="filters__comparenote t-label-01" id="db-compare-note" hidden>
+          Set both a From and To date to compare against the previous equal-length period.
+        </p>
+      </section>
+
+      <!-- ── Empty state ───────────────────────────────────────────────────── -->
+      <section id="db-empty" class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" style="display:none">
+        <cds-actionable-notification kind="info" title="No matching permits" hide-close-button low-contrast>
+          <span slot="subtitle">No applications match this filter. Widen the date range or clear a district or category.</span>
+        </cds-actionable-notification>
+      </section>
+
+      <!-- ── Everything filter-driven lives inside #db-content ─────────────── -->
+      <div id="db-content" class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <div class="cds--css-grid cds--css-grid--full-width cds--css-grid--with-row-gap db-inner">
+
+          <!-- KPI stat cards -->
+          <h2 class="section-title cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">Volume &amp; on-hand</h2>
+          {kpis.map((k) => (
+            <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-3 kpi-col">
+              <cds-tile class="kpi">
+                <p class="kpi__label t-label-01">{k.label}</p>
+                <p class="kpi__value" data-kpi={k.key}>{k.value.toLocaleString()}</p>
+                <p class="kpi__delta t-label-01" data-kpi-delta={k.key} hidden></p>
+                <p class="kpi__caption t-label-01">{k.caption}</p>
+                <cds-link
+                  class="kpi__link"
+                  data-kpi-link={k.key}
+                  data-term={k.term}
+                  href={permitsHref + buildQuery(EMPTY_FILTER, ...(k.term ? [k.term] : []))}
+                >
+                  {k.link}
+                  <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d={ICONS.arrowRight} /></svg>
+                </cds-link>
+              </cds-tile>
+            </div>
+          ))}
+
+          <!-- Distribution charts -->
+          <h2 class="section-title cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">Distribution</h2>
+
+          <div class="chart-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+            <cds-tile class="chart-card">
+              <h3 class="chart-card__title t-heading-compact-01">Permits by district</h3>
+              <CarbonChart chartId="db-chart-district" type="simple-bar" data={districtData} options={barH} height="360px" label="Permits by district" />
+              <p class="chart-card__hint t-label-01">Select a bar to open that district in the register.</p>
+            </cds-tile>
+          </div>
+
+          <div class="chart-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+            <cds-tile class="chart-card">
+              <h3 class="chart-card__title t-heading-compact-01">Permits by resource category</h3>
+              <CarbonChart chartId="db-chart-category" type="simple-bar" data={categoryData} options={barH} height="360px" label="Permits by resource category" />
+              <p class="chart-card__hint t-label-01">Select a bar to open that category in the register.</p>
+            </cds-tile>
+          </div>
+
+          <div class="chart-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+            <cds-tile class="chart-card">
+              <h3 class="chart-card__title t-heading-compact-01">Applications by status</h3>
+              <CarbonChart chartId="db-chart-status" type="donut" data={statusData} options={donut} height="320px" label="Applications by status" />
+              <p class="chart-card__hint t-label-01">Select a slice to open that status in the register.</p>
+            </cds-tile>
+          </div>
+
+          <div class="chart-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+            <cds-tile class="chart-card">
+              <h3 class="chart-card__title t-heading-compact-01">Permits per year</h3>
+              <p class="chart-card__sub t-label-01">By permit start date, last 5 years</p>
+              <CarbonChart chartId="db-chart-year" type="simple-bar" data={yearData} options={barV} height="280px" label="Permits per year by permit start date" />
+            </cds-tile>
+          </div>
+
+          <div class="chart-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+            <cds-tile class="chart-card">
+              <h3 class="chart-card__title t-heading-compact-01">Top park units</h3>
+              <p class="chart-card__sub t-label-01">Highest 10 by permit count</p>
+              <CarbonChart chartId="db-chart-park" type="simple-bar" data={parkData} options={barH} height="360px" label="Top park units by permit count" />
+              <p class="chart-card__hint t-label-01">Select a bar to open that park unit in the register.</p>
+            </cds-tile>
+          </div>
+
+          <!-- Applicant entities -->
+          <h2 class="section-title cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+            Applicant entities
+            <span class="section-title__meta t-label-01"><strong id="db-entity-count">{entities.count}</strong> organizations</span>
+          </h2>
+          <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Applicant entity (organization)</cds-table-header-cell>
+                  <cds-table-header-cell>Permits</cds-table-header-cell>
+                  <cds-table-header-cell>Register</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="db-entity-body">
+                {entities.list.slice(0, APPLICANT_ROWS).map((e) => (
+                  <cds-table-row>
+                    <cds-table-cell>{e.group}</cds-table-cell>
+                    <cds-table-cell>{e.value}</cds-table-cell>
+                    <cds-table-cell>
+                      <cds-link href={permitsHref + buildQuery(EMPTY_FILTER, e.group)}>View permits</cds-link>
+                    </cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+            <p class="entities__more t-label-01" id="db-entity-more" hidden></p>
+          </div>
+
+          <!-- ── Tier 2: processing & timing (live, from transition history) ── -->
+          <h2 class="section-title cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+            Processing &amp; timing
+            <span class="section-title__meta t-label-01" id="db-t2-scope" data-target={TARGET_DAYS}>
+              {ps.decided.toLocaleString()} of {ps.total.toLocaleString()} decided · in-process excluded
+            </span>
+          </h2>
+
+          <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4 kpi-col">
+            <cds-tile class="kpi">
+              <p class="kpi__label t-label-01">Median processing time</p>
+              <p class="kpi__value"><span data-t2="median">{fmtDays(ps.median)}</span> <span class="kpi__unit">days</span></p>
+              <p class="kpi__caption t-label-01">Submitted → approved/signed or denied</p>
+            </cds-tile>
+          </div>
+          <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4 kpi-col">
+            <cds-tile class="kpi">
+              <p class="kpi__label t-label-01">Average processing time</p>
+              <p class="kpi__value"><span data-t2="average">{fmtDays(ps.average)}</span> <span class="kpi__unit">days</span></p>
+              <p class="kpi__caption t-label-01">Skewed up by stalled outliers — median is the fairer headline</p>
+            </cds-tile>
+          </div>
+          <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4 kpi-col">
+            <cds-tile class="kpi">
+              <p class="kpi__label t-label-01">Over the {TARGET_DAYS}-day target</p>
+              <p class="kpi__value"><span data-t2="overPct">{ps.overTargetPct ?? '—'}</span><span class="kpi__unit">%</span></p>
+              <p class="kpi__caption t-label-01"><span data-t2="overCount">{ps.overTarget}</span>&nbsp;permits over {TARGET_DAYS} days</p>
+            </cds-tile>
+          </div>
+          <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-4 kpi-col">
+            <cds-tile class="kpi">
+              <p class="kpi__label t-label-01">Required inquiries</p>
+              <p class="kpi__value"><span data-t2="inqPct">{inq.pct}</span><span class="kpi__unit">%</span></p>
+              <p class="kpi__caption t-label-01"><span data-t2="inqCount">{inq.withInquiries}</span>&nbsp;returned to submitter at least once</p>
+            </cds-tile>
+          </div>
+
+          <div class="chart-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+            <cds-tile class="chart-card">
+              <h3 class="chart-card__title t-heading-compact-01">Processing time by resource category</h3>
+              <p class="chart-card__sub t-label-01">Median days, decided permits</p>
+              <CarbonChart chartId="db-t2-category" type="simple-bar" data={t2CategoryData} options={barMedianDays} height="360px" label="Median processing time by resource category" />
+              <p class="chart-card__hint t-label-01">Select a bar to open that category in the register.</p>
+            </cds-tile>
+          </div>
+          <div class="chart-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+            <cds-tile class="chart-card">
+              <h3 class="chart-card__title t-heading-compact-01">Processing time by responsible analyst</h3>
+              <p class="chart-card__sub t-label-01">Median days, decided permits</p>
+              <CarbonChart chartId="db-t2-analyst" type="simple-bar" data={t2AnalystData} options={barMedianDays} height="360px" label="Median processing time by responsible analyst" />
+              <p class="chart-card__hint t-label-01">Select a bar to open that analyst's permits in the register.</p>
+            </cds-tile>
+          </div>
+          <div class="chart-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+            <cds-tile class="chart-card">
+              <h3 class="chart-card__title t-heading-compact-01">Mean time in each workflow stage</h3>
+              <p class="chart-card__sub t-label-01">Average days a permit spends in each stage before moving on</p>
+              <CarbonChart chartId="db-t2-stage" type="simple-bar" data={t2StageData} options={barMeanDays} height="220px" label="Mean days in each workflow stage" />
+            </cds-tile>
+          </div>
+
+          <p class="t2-footnote t-label-01 cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+            Computed from recorded status-transition history; in-process and withdrawn permits (no decision date) are excluded from these figures. In production, permits that predate transition logging appear here only once their history is backfilled.
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script>
+  import {
+    type SlimPermit,
+    type DashboardFilter,
+    applyFilter,
+    scopeByDimensions,
+    computeMetrics,
+    byDimension,
+    statusBreakdown,
+    perYearByPermitStart,
+    applicantEntities,
+    buildQuery,
+    processingStats,
+    medianDaysByDimension,
+    stageAverages,
+    inquiryStats,
+  } from '../../lib/dashboard-metrics';
+
+  const base = document.querySelector('base')?.getAttribute('href') || '/';
+  const permitsHref = new URL('permits', new URL(base, location.origin)).pathname;
+
+  const permits: SlimPermit[] = JSON.parse(
+    document.getElementById('db-data')?.textContent || '[]',
+  );
+
+  // Live filter state.
+  const filter: DashboardFilter = { from: '', to: '', districts: [], categories: [] };
+  let compare = false;
+
+  // ── element handles ────────────────────────────────────────────────────────
+  interface ChartEl extends HTMLElement { setData(d: unknown[]): void }
+  const chart = (id: string) => document.getElementById(id) as ChartEl | null;
+  const charts = {
+    district: chart('db-chart-district'),
+    category: chart('db-chart-category'),
+    status: chart('db-chart-status'),
+    year: chart('db-chart-year'),
+    park: chart('db-chart-park'),
+    t2cat: chart('db-t2-category'),
+    t2analyst: chart('db-t2-analyst'),
+    t2stage: chart('db-t2-stage'),
+  };
+  const t2ScopeEl = document.getElementById('db-t2-scope')!;
+  const TARGET_DAYS = Number(t2ScopeEl.dataset.target || '90');
+  const setT2 = (key: string, text: string) => {
+    const el = document.querySelector(`[data-t2="${key}"]`);
+    if (el) el.textContent = text;
+  };
+  const fmtDays = (v: number | null) => (v == null ? '—' : v.toLocaleString());
+
+  const countEl = document.getElementById('db-count')!;
+  const total = Number(countEl.dataset.total || '0');
+  const emptyEl = document.getElementById('db-empty')!;
+  const contentEl = document.getElementById('db-content')!;
+  const compareNote = document.getElementById('db-compare-note')!;
+  const entityCountEl = document.getElementById('db-entity-count')!;
+  const entityBody = document.getElementById('db-entity-body')!;
+  const entityMore = document.getElementById('db-entity-more')!;
+  const APPLICANT_ROWS = 12;
+
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+
+  // ── previous-period helper (compare) ────────────────────────────────────────
+  const MS = 86400000;
+  const parseISO = (s: string) => {
+    const [y, mo, d] = s.split('-').map(Number);
+    return Date.UTC(y, mo - 1, d);
+  };
+  const fmtISO = (t: number) => new Date(t).toISOString().slice(0, 10);
+  function previousPeriod(f: DashboardFilter): DashboardFilter | null {
+    if (!f.from || !f.to) return null;
+    const from = parseISO(f.from);
+    const to = parseISO(f.to);
+    const len = to - from;
+    const prevTo = from - MS;
+    const prevFrom = prevTo - len;
+    return { ...f, from: fmtISO(prevFrom), to: fmtISO(prevTo) };
+  }
+
+  // ── render ──────────────────────────────────────────────────────────────────
+  function render() {
+    const scoped = applyFilter(permits, filter);
+    const dimScoped = scopeByDimensions(permits, filter); // for the per-year (permit-start) chart
+    const m = computeMetrics(scoped);
+
+    // Empty state gates the whole filter-driven region.
+    const empty = scoped.length === 0;
+    emptyEl.style.display = empty ? '' : 'none';
+    contentEl.style.display = empty ? 'none' : '';
+
+    // Count line.
+    countEl.innerHTML = `Showing <strong>${m.received.toLocaleString()}</strong> of ${total.toLocaleString()} non-draft applications`;
+
+    if (empty) return;
+
+    // KPI numbers + click-through links.
+    const kpiValues: Record<string, number> = {
+      received: m.received,
+      active: m.active,
+      underReview: m.underReview,
+      rejected: m.rejected,
+      pendingAnnualReport: m.pendingAnnualReport,
+    };
+    for (const [key, value] of Object.entries(kpiValues)) {
+      const el = document.querySelector(`[data-kpi="${key}"]`);
+      if (el) el.textContent = value.toLocaleString();
+      const link = document.querySelector(`[data-kpi-link="${key}"]`) as HTMLAnchorElement | null;
+      if (link) {
+        const term = link.dataset.term || '';
+        link.setAttribute('href', permitsHref + buildQuery(filter, ...(term ? [term] : [])));
+      }
+    }
+
+    // Compare deltas.
+    const prev = compare ? previousPeriod(filter) : null;
+    compareNote.hidden = !(compare && !prev);
+    const prevM = prev ? computeMetrics(applyFilter(permits, prev)) : null;
+    for (const key of Object.keys(kpiValues)) {
+      const deltaEl = document.querySelector(`[data-kpi-delta="${key}"]`) as HTMLElement | null;
+      if (!deltaEl) continue;
+      if (!prevM) { deltaEl.hidden = true; continue; }
+      const now = kpiValues[key];
+      const was = (prevM as unknown as Record<string, number>)[key];
+      const diff = now - was;
+      const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
+      deltaEl.hidden = false;
+      deltaEl.className = `kpi__delta t-label-01 ${cls}`;
+      // Direction lives in the WORDS ("more"/"fewer"), not just the color — so the
+      // delta reads on its own (WCAG 1.4.1) without decoding a glyph or hue.
+      deltaEl.textContent =
+        diff === 0
+          ? 'No change from previous period'
+          : `${Math.abs(diff).toLocaleString()} ${diff > 0 ? 'more' : 'fewer'} than previous period`;
+    }
+
+    // Charts.
+    charts.district?.setData(byDimension(scoped, 'district'));
+    charts.category?.setData(byDimension(scoped, 'category'));
+    charts.status?.setData(statusBreakdown(scoped));
+    charts.year?.setData(perYearByPermitStart(dimScoped));
+    charts.park?.setData(byDimension(scoped, 'park', { top: 10, other: false }));
+
+    // Applicant entities.
+    const ent = applicantEntities(scoped);
+    entityCountEl.textContent = String(ent.count);
+    entityBody.innerHTML = ent.list
+      .slice(0, APPLICANT_ROWS)
+      .map(
+        (e) =>
+          `<cds-table-row><cds-table-cell>${esc(e.group)}</cds-table-cell><cds-table-cell>${e.value}</cds-table-cell>` +
+          `<cds-table-cell><cds-link href="${permitsHref}${buildQuery(filter, e.group)}">View permits</cds-link></cds-table-cell></cds-table-row>`,
+      )
+      .join('');
+    const more = ent.count - Math.min(APPLICANT_ROWS, ent.list.length);
+    entityMore.hidden = more <= 0;
+    if (more > 0) entityMore.textContent = `Showing the top ${APPLICANT_ROWS} of ${ent.count} entities.`;
+
+    // Tier 2 — processing & timing (decided permits only).
+    const ps = processingStats(scoped);
+    const inq = inquiryStats(scoped);
+    t2ScopeEl.textContent = `${ps.decided.toLocaleString()} of ${ps.total.toLocaleString()} decided · in-process excluded`;
+    setT2('median', fmtDays(ps.median));
+    setT2('average', fmtDays(ps.average));
+    setT2('overPct', ps.overTargetPct == null ? '—' : String(ps.overTargetPct));
+    setT2('overCount', String(ps.overTarget));
+    setT2('inqPct', String(inq.pct));
+    setT2('inqCount', String(inq.withInquiries));
+    charts.t2cat?.setData(medianDaysByDimension(scoped, 'category'));
+    charts.t2analyst?.setData(medianDaysByDimension(scoped, 'responsibleAnalyst'));
+    charts.t2stage?.setData(stageAverages(scoped));
+  }
+
+  // ── wire filter controls (live) ─────────────────────────────────────────────
+  const selectedValues = (el: Element) =>
+    [...el.querySelectorAll('cds-multi-select-item[selected]')].map((i) => i.getAttribute('value') || '');
+
+  document.getElementById('db-districts')?.addEventListener('cds-multi-select-selected', (e) => {
+    filter.districts = selectedValues(e.currentTarget as Element);
+    render();
+  });
+  document.getElementById('db-categories')?.addEventListener('cds-multi-select-selected', (e) => {
+    filter.categories = selectedValues(e.currentTarget as Element);
+    render();
+  });
+
+  const dates = document.getElementById('db-dates');
+  const rangeSel = document.getElementById('db-range') as any;
+  const toISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  // Presets anchor to the most recent submission in the DATA (not the real "today"),
+  // so "Past 6 months" always lands on records — this dataset runs 2023–2025.
+  const anchorISO = permits.reduce((mx, p) => (p.submitted > mx ? p.submitted : mx), '');
+  const fmtUS = (iso: string) => { const [y, m, d] = iso.split('-'); return `${m}/${d}/${y}`; };
+  const shiftDays = (iso: string, n: number) => fmtISO(parseISO(iso) - n * MS);
+  const shiftMonths = (iso: string, n: number) => {
+    const d = new Date(parseISO(iso));
+    d.setUTCMonth(d.getUTCMonth() - n);
+    return fmtISO(d.getTime());
+  };
+  const presetRange = (v: string): { from: string; to: string } => {
+    if (!anchorISO) return { from: '', to: '' };
+    switch (v) {
+      case '30d': return { from: shiftDays(anchorISO, 30), to: anchorISO };
+      case '3m': return { from: shiftMonths(anchorISO, 3), to: anchorISO };
+      case '6m': return { from: shiftMonths(anchorISO, 6), to: anchorISO };
+      case '12m': return { from: shiftMonths(anchorISO, 12), to: anchorISO };
+      case 'ytd': return { from: `${anchorISO.slice(0, 4)}-01-01`, to: anchorISO };
+      default: return { from: '', to: '' }; // 'all'
+    }
+  };
+  const setPickerInputs = (from: string, to: string) => {
+    const inputs = document.querySelectorAll('#db-dates cds-date-picker-input');
+    if (inputs[0]) (inputs[0] as HTMLInputElement).value = from ? fmtUS(from) : '';
+    if (inputs[1]) (inputs[1] as HTMLInputElement).value = to ? fmtUS(to) : '';
+  };
+  const applyPreset = (v: string) => {
+    if (v === 'custom') return; // keep current dates — the user edits the pickers
+    const { from, to } = presetRange(v);
+    filter.from = from;
+    filter.to = to;
+    const dp = dates as any;
+    if (from && to) dp.value = `${from}/${to}`; // reflects the range in the calendar
+    else dp?.calendar?.clear?.();
+    setPickerInputs(from, to); // guarantee the m/d/yyyy display
+    render();
+  };
+  rangeSel?.addEventListener('cds-dropdown-selected', (e) =>
+    applyPreset(((e as CustomEvent).detail?.item?.value as string) || rangeSel.value),
+  );
+
+  dates?.addEventListener('cds-date-picker-changed', (e) => {
+    const picked = (e as CustomEvent).detail?.selectedDates as Date[] | undefined;
+    filter.from = picked?.[0] ? toISO(picked[0]) : '';
+    filter.to = picked?.[1] ? toISO(picked[1]) : '';
+    if (rangeSel) rangeSel.value = 'custom'; // a manual edit means a Custom range
+    render();
+  });
+
+  document.getElementById('db-compare')?.addEventListener('cds-toggle-changed', (e) => {
+    compare = Boolean((e as CustomEvent).detail?.checked);
+    render();
+  });
+
+  document.getElementById('db-clear')?.addEventListener('click', () => {
+    filter.from = filter.to = '';
+    filter.districts = [];
+    filter.categories = [];
+    // Reset the controls themselves.
+    (document.getElementById('db-districts') as HTMLElement & { clear?: () => void })?.clear?.();
+    (document.getElementById('db-categories') as HTMLElement & { clear?: () => void })?.clear?.();
+    document.querySelectorAll('#db-dates cds-date-picker-input').forEach((i) => ((i as HTMLInputElement).value = ''));
+    (document.getElementById('db-dates') as any)?.calendar?.clear?.();
+    if (rangeSel) rangeSel.value = 'all';
+    render();
+  });
+
+  // Chart bar/slice drill-through → the register, filtered to that group.
+  for (const el of Object.values(charts)) {
+    el?.addEventListener('carbon-chart-select', (e) => {
+      const group = (e as CustomEvent).detail?.group as string | undefined;
+      if (group && group !== 'Other') location.href = permitsHref + buildQuery(filter, group);
+    });
+  }
+
+  // First paint (syncs with the server-rendered values).
+  render();
+</script>
+
+<style>
+  /* Page-level LAYOUT only — controls are cds-* + --cds-* tokens. */
+  .page {
+    padding-block: 0 4rem;
+  }
+  .body {
+    margin-top: var(--cds-spacing-07, 2rem);
+  }
+
+  /* Filter bar */
+  .filters {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem 1rem;
+    flex-wrap: wrap;
+  }
+  .filters__controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    flex: 1 1 32rem;
+  }
+  .filters__select {
+    min-width: 15rem;
+    flex: 1 1 15rem;
+  }
+  .filters__range {
+    min-width: 12rem;
+    flex: 0 1 12rem;
+  }
+  .filters__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .filters__summary {
+    margin: 0.75rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .filters__comparenote {
+    margin: 0.25rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* The inner grid inherits the page grid's columns. */
+  .db-inner {
+    padding: 0;
+  }
+  .section-title {
+    margin: 1rem 0 0;
+    font-size: 1.25rem;
+    font-weight: 400;
+    line-height: 1.2;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .section-title__meta {
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* KPI stat tiles (layout on real cds-tile — see carbon-checked note in header) */
+  .kpi-col { min-width: 0; }
+  .kpi {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .kpi__label {
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .kpi__value {
+    margin: 0.25rem 0 0;
+    font-size: 2.25rem;
+    font-weight: 300;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+  .kpi__delta { margin: 0.125rem 0 0; }
+  .kpi__delta.up { color: var(--cds-support-success, #24a148); }
+  .kpi__delta.down { color: var(--cds-support-error, #da1e28); }
+  .kpi__delta.flat { color: var(--cds-text-secondary, #525252); }
+  .kpi__caption {
+    margin: 0.5rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+    /* flex-grow so the link pins to the bottom of every tile, regardless of caption length */
+    flex: 1 1 auto;
+  }
+  .kpi__link {
+    margin-top: 0.75rem;
+  }
+  .kpi__unit {
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  /* Chart tiles (layout on real cds-tile) */
+  .chart-col { min-width: 0; }
+  .chart-card {
+    height: 100%;
+  }
+  .chart-card__title {
+    margin: 0;
+  }
+  .chart-card__sub {
+    margin: 0.125rem 0 0.5rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .chart-card__hint {
+    margin: 0.5rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .entities__more {
+    margin: 0.5rem 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .t2-footnote {
+    margin: 0.5rem 0 0;
+    max-width: 60rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+</style>

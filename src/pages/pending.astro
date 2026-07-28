@@ -1,0 +1,332 @@
+---
+// The home for a signed-in but ROLELESS user (a self-registered parks.ca.gov
+// account awaiting a role). Strict least privilege: they can reach almost nothing
+// internal (enforcePending redirects the rest here), so this page is where they
+// see their status, request a role, and — once an admin approves — enter the app.
+//
+//   manifest:
+//     shell:  PermitNav, stripped to name + Log out by collapsePendingNav.
+//     header: identity banner (g100) — "Welcome" + account status.
+//     spine:  main.page > single centered column
+//     states: none → Request access · pending → awaiting approval ·
+//             denied → request again · granted → Continue to the app.
+// Prototype-local: role requests + grants persist via src/data/requests.ts
+// (shared with the /users admin console that approves them).
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitSection from '../components/PermitSection.astro';
+import { withBase } from '../lib/base';
+import { requestableRoles } from '../data/user';
+import { districtDirectory } from '../data/district';
+
+export const prototype = {
+  title: 'Pending access',
+  summary:
+    'The home for a signed-in but roleless user. They see their account status, ' +
+    'request a reviewer role for admin approval, and enter the app once granted.',
+  tag: 'System',
+};
+
+const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompare(b.name));
+---
+
+<BaseLayout title="Pending access — CA State Parks">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <p class="banner__eyebrow t-label-01">Getting started</p>
+        <h1 class="banner__name t-heading-05" id="welcome">Welcome</h1>
+        <p class="banner__meta t-body-01" id="account-line"></p>
+      </div>
+    </header>
+
+    <div class="body">
+      <div class="col">
+        <!-- Account status: active (email verified) but no role yet. -->
+        <cds-tile class="status">
+          <div class="status__row">
+            <cds-icon-indicator size="16" kind="pending" label="No role yet" id="status-ind"></cds-icon-indicator>
+            <p class="status__text t-body-01" id="status-text">
+              Your account is active, but it has no role yet — so you can’t review permits.
+              Request a role to get started.
+            </p>
+          </div>
+        </cds-tile>
+
+        <!-- ── State: no request yet ─────────────────────────────────────────── -->
+        <div id="state-none">
+          <PermitSection title="Request access">
+            <p class="section-hint t-body-01">
+              Choose the role that matches your work. An administrator reviews and approves it —
+              you’ll get access as soon as they do.
+            </p>
+            <cds-button id="request-btn">Request a role</cds-button>
+          </PermitSection>
+        </div>
+
+        <!-- ── State: request pending ────────────────────────────────────────── -->
+        <div id="state-pending" hidden>
+          <cds-inline-notification
+            id="pending-note"
+            kind="info"
+            low-contrast
+            hide-close-button
+            title="Request submitted"
+            subtitle=""
+          ></cds-inline-notification>
+          <p class="section-hint t-body-01">
+            An administrator will review your request. You can change what you asked for while it’s pending.
+          </p>
+          <cds-button id="change-btn" kind="tertiary">Change request</cds-button>
+        </div>
+
+        <!-- ── State: request declined ───────────────────────────────────────── -->
+        <div id="state-denied" hidden>
+          <cds-inline-notification
+            id="denied-note"
+            kind="warning"
+            low-contrast
+            hide-close-button
+            title="Request declined"
+            subtitle="An administrator declined your role request. You can request access again."
+          ></cds-inline-notification>
+          <cds-button id="again-btn">Request access again</cds-button>
+        </div>
+
+        <!-- ── State: role granted ───────────────────────────────────────────── -->
+        <div id="state-granted" hidden>
+          <cds-inline-notification
+            id="granted-note"
+            kind="success"
+            low-contrast
+            hide-close-button
+            title="Access granted"
+            subtitle=""
+          ></cds-inline-notification>
+          <cds-button id="continue-btn">Continue to the app</cds-button>
+        </div>
+
+        <!-- What a roleless user can still do while waiting. -->
+        <PermitSection title="While you wait">
+          <p class="section-hint t-body-01">
+            You can browse the public permit register without a role. Reviewer tools unlock once your role is approved.
+          </p>
+          <cds-link href={withBase('/search')}>Browse the public permit register</cds-link>
+        </PermitSection>
+      </div>
+    </div>
+
+    <!-- ── Request-a-role modal (mirrors the profile role request) ──────────── -->
+    <cds-modal id="role-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Account access</cds-modal-label>
+        <cds-modal-heading>Request a role</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: prose intro has no cds-* component; a <p> with a Carbon
+             type role is the house pattern for modal body copy. -->
+        <p class="modal-hint t-body-01">
+          Pick the role that matches your work. An administrator reviews and approves it.
+        </p>
+        <cds-radio-button-group
+          id="pend-role"
+          name="requested-role"
+          orientation="vertical"
+          label-text="Requested role"
+        >
+          {requestableRoles.map((r) => (
+            <cds-radio-button label-text={r.label} value={r.value}></cds-radio-button>
+          ))}
+        </cds-radio-button-group>
+        <p class="modal-desc t-body-01" id="pend-role-desc" hidden></p>
+
+        <!-- District picker — only for a district-scoped role (lead / assistant). -->
+        <div id="pend-district-wrap" class="modal-district" hidden>
+          <cds-dropdown id="pend-district" title-text="District" value="north-coast-redwoods" autoalign>
+            {districtsSorted.map((d) => (
+              <cds-dropdown-item value={d.id}>{d.name}</cds-dropdown-item>
+            ))}
+          </cds-dropdown>
+        </div>
+
+        <cds-textarea
+          id="pend-reason"
+          class="modal-reason"
+          label="Reason for request (optional)"
+          placeholder="Briefly explain your role and which district or program you support…"
+          rows="3"
+        ></cds-textarea>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="pend-submit">Submit request</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+  </main>
+</BaseLayout>
+
+<script>
+  import { requestableRoles, accountRoleMeta } from '../data/user';
+  import {
+    selfRegister,
+    resolveUser,
+    submitRequest,
+    latestRequestForUser,
+    hasAssignedRole,
+    accountRoleOf,
+    roleDisplay,
+  } from '../data/requests';
+  import {
+    readPendingUserId,
+    writePendingUserId,
+    writeIdentity,
+    clearPendingUserId,
+  } from '../lib/maintenance';
+  import { withBase } from '../lib/base';
+
+  const $ = (id: string) => document.getElementById(id) as any;
+
+  // Resolve the signed-in pending account. Arriving via the dev identity switcher
+  // (no prior signup) seeds a credible demo account so the flow is always clickable.
+  let pid = readPendingUserId();
+  if (!pid) {
+    pid = selfRegister({ name: 'Taylor Nguyen', email: 'taylor.nguyen@parks.ca.gov' });
+    writePendingUserId(pid);
+  }
+  const me = resolveUser(pid);
+
+  // ── Identity banner ────────────────────────────────────────────────────────
+  const firstName = (me?.name || 'there').split(' ')[0];
+  if ($('welcome')) $('welcome').textContent = `Welcome, ${firstName}`;
+  if ($('account-line')) $('account-line').textContent = me?.email ? `Signed in as ${me.email}` : '';
+
+  // ── State machine ──────────────────────────────────────────────────────────
+  const regions = ['state-none', 'state-pending', 'state-denied', 'state-granted'];
+  const show = (id: string) => regions.forEach((r) => { const el = $(r); if (el) el.hidden = r !== id; });
+
+  const render = () => {
+    if (hasAssignedRole(pid)) {
+      const { role, district } = accountRoleOf(pid);
+      if ($('granted-note')) $('granted-note').subtitle = `You’re now ${roleDisplay(role, district)}. Continue to start reviewing.`;
+      if ($('status-ind')) { $('status-ind').setAttribute('kind', 'succeeded'); $('status-ind').setAttribute('label', 'Role granted'); }
+      if ($('status-text')) $('status-text').textContent = 'Your role has been approved. Continue to the app to get started.';
+      show('state-granted');
+      return;
+    }
+    const latest = latestRequestForUser(pid);
+    if (latest?.status === 'pending') {
+      if ($('pending-note')) $('pending-note').subtitle = `Requested: ${roleDisplay(latest.role, latest.district)} · Pending admin approval`;
+      show('state-pending');
+    } else if (latest?.status === 'denied') {
+      show('state-denied');
+    } else {
+      show('state-none');
+    }
+  };
+
+  // ── Request modal ──────────────────────────────────────────────────────────
+  const modal = $('role-modal');
+  const roleGroup = $('pend-role');
+  const roleDesc = $('pend-role-desc');
+  const districtWrap = $('pend-district-wrap');
+  const districtEl = $('pend-district');
+
+  const isScoped = (value: string) => !!accountRoleMeta(value)?.scoped;
+  const syncForRole = (value: string) => {
+    if (roleDesc) {
+      const desc = requestableRoles.find((r) => r.value === value)?.description ?? '';
+      roleDesc.textContent = desc;
+      roleDesc.hidden = !desc;
+    }
+    if (districtWrap) districtWrap.hidden = !isScoped(value);
+  };
+  roleGroup?.addEventListener('cds-radio-button-group-changed', () => syncForRole(roleGroup.value));
+
+  const openModal = () => {
+    // Preselect the current request, if any, so "Change request" reopens it.
+    const open = latestRequestForUser(pid);
+    if (open && open.status === 'pending') {
+      roleGroup.value = open.role;
+      if (districtEl && open.district) districtEl.value = open.district;
+    }
+    syncForRole(roleGroup?.value);
+    modal.open = true;
+  };
+
+  $('request-btn')?.addEventListener('click', openModal);
+  $('change-btn')?.addEventListener('click', openModal);
+  $('again-btn')?.addEventListener('click', openModal);
+
+  $('pend-submit')?.addEventListener('click', () => {
+    const role = roleGroup?.value;
+    if (!role) return; // require a selection
+    const district = isScoped(role) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
+    submitRequest(pid, role, ($('pend-reason')?.value ?? '').trim(), district);
+    modal.open = false;
+    render();
+  });
+
+  // ── Continue once granted: enter the app as the granted kind of user ────────
+  $('continue-btn')?.addEventListener('click', () => {
+    const role = accountRoleOf(pid).role;
+    writeIdentity(role === 'admin' ? 'admin' : 'user');
+    clearPendingUserId();
+    location.href = withBase('/');
+  });
+
+  render();
+</script>
+
+<style>
+  .page { padding-block: 0 6rem; }
+
+  /* Identity banner — same construction as the admin screens. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 48rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+  .banner__name { margin: 0; }
+  .banner__meta { margin: var(--cds-spacing-03, 0.5rem) 0 0; color: var(--cds-text-secondary, #8d8d8d); }
+
+  .body { margin-top: var(--cds-spacing-07, 2rem); }
+  .col {
+    max-inline-size: 48rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+    min-width: 0;
+  }
+
+  .status { padding: var(--cds-spacing-05, 1rem); }
+  .status__row { display: flex; align-items: flex-start; gap: 0.625rem; }
+  .status__text { margin: 0; color: var(--cds-text-secondary, #525252); }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 44rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  #state-none[hidden], #state-pending[hidden], #state-denied[hidden], #state-granted[hidden] { display: none; }
+  #state-pending .section-hint { margin-top: 1rem; }
+  #pending-note, #denied-note, #granted-note { margin-bottom: 1rem; }
+
+  /* Request modal internals (mirror profile). */
+  .modal-hint { margin: 0 0 1rem; color: var(--cds-text-secondary, #525252); }
+  .modal-desc { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
+  .modal-desc[hidden] { display: none; }
+  .modal-district { margin-top: 1rem; }
+  .modal-district[hidden] { display: none; }
+  .modal-reason { margin-top: 1rem; }
+</style>

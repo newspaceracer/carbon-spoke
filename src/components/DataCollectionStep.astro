@@ -31,7 +31,7 @@ const cur = dc.curation;
     <cds-radio-button-group
       id="specimen-gate"
       name="specimen-gate"
-      legend-text="Will your project involve collection of specimens?"
+      legend-text="Will your project involve collection of specimens? (required)"
       orientation="horizontal"
       value={dc.collectsSpecimens ? 'yes' : 'no'}
     >
@@ -43,7 +43,7 @@ const cur = dc.curation;
       <!-- Specimen roster: same modal-add pattern as Additional participants. -->
       <div class="roster">
         <div class="roster__head">
-          <p class="field-label t-label-01">Types of specimens to be collected</p>
+          <p class="field-label t-label-01">Types of specimens to be collected <span class="req">(required)</span></p>
           <cds-button id="add-specimen" kind="tertiary" size="sm">Add specimen</cds-button>
         </div>
         <cds-table id="specimen-table">
@@ -66,7 +66,7 @@ const cur = dc.curation;
            sits between the shared label and the field, and collapses the textarea
            when set so the either/or is unmistakable. -->
       <div class="proposal-field" role="group" aria-labelledby="collection-rationale-label">
-        <p class="proposal-field__label t-label-01" id="collection-rationale-label">Collection rationale</p>
+        <p class="proposal-field__label t-label-01" id="collection-rationale-label">Collection rationale <span class="req">(required)</span></p>
         <cds-checkbox
           class="answered-in-proposal"
           data-target="collection-rationale"
@@ -98,15 +98,15 @@ const cur = dc.curation;
 
       <!-- Curation facility contact. -->
       <div class="subsection">
-        <p class="field-label t-label-01">Curation facility</p>
+        <p class="field-label t-label-01">Curation facility <span class="req">(required)</span></p>
         <div class="field-grid">
           <div class="field-grid__wide">
-            <cds-text-input id="cur-facility" label="Facility name" value={cur.facility}></cds-text-input>
+            <cds-text-input id="cur-facility" label="Facility name (required)" value={cur.facility}></cds-text-input>
           </div>
-          <cds-text-input id="cur-official" label="Responsible official" value={cur.official}></cds-text-input>
-          <cds-text-input id="cur-phone" type="tel" label="Phone number" value={cur.phone}></cds-text-input>
+          <cds-text-input id="cur-official" label="Responsible official (required)" value={cur.official}></cds-text-input>
+          <cds-text-input id="cur-phone" type="tel" label="Phone number (required)" value={cur.phone}></cds-text-input>
           <div class="field-grid__wide">
-            <cds-text-input id="cur-email" type="email" label="Email address" value={cur.email}></cds-text-input>
+            <cds-text-input id="cur-email" type="email" label="Email address (required)" value={cur.email}></cds-text-input>
           </div>
         </div>
       </div>
@@ -118,7 +118,7 @@ const cur = dc.curation;
     <cds-radio-button-group
       id="lab-gate"
       name="lab-gate"
-      legend-text="Will your project involve laboratory work?"
+      legend-text="Will your project involve laboratory work? (required)"
       orientation="horizontal"
       value={dc.labWork ? 'yes' : 'no'}
     >
@@ -129,18 +129,18 @@ const cur = dc.curation;
     <div id="lab-yes" class="gate-body" hidden>
       <div class="field-grid">
         <div class="field-grid__wide">
-          <cds-text-input id="lab-facility" label="Laboratory facility name" value={lab.facility}></cds-text-input>
+          <cds-text-input id="lab-facility" label="Laboratory facility name (required)" value={lab.facility}></cds-text-input>
         </div>
-        <cds-text-input id="lab-official" label="Responsible official" value={lab.official}></cds-text-input>
-        <cds-text-input id="lab-phone" type="tel" label="Phone number" value={lab.phone}></cds-text-input>
+        <cds-text-input id="lab-official" label="Responsible official (required)" value={lab.official}></cds-text-input>
+        <cds-text-input id="lab-phone" type="tel" label="Phone number (required)" value={lab.phone}></cds-text-input>
         <div class="field-grid__wide">
-          <cds-text-input id="lab-email" type="email" label="Email address" value={lab.email}></cds-text-input>
+          <cds-text-input id="lab-email" type="email" label="Email address (required)" value={lab.email}></cds-text-input>
         </div>
       </div>
 
       <cds-date-picker class="lab-dates" value={`${lab.startDate}/${lab.endDate}`}>
-        <cds-date-picker-input kind="from" label-text="Lab study start date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
-        <cds-date-picker-input kind="to" label-text="Lab study end date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="from" label-text="Lab study start date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+        <cds-date-picker-input kind="to" label-text="Lab study end date (required)" placeholder="mm/dd/yyyy"></cds-date-picker-input>
       </cds-date-picker>
     </div>
   </PermitSection>
@@ -153,7 +153,7 @@ const cur = dc.curation;
     </p>
 
     <div class="proposal-field" role="group" aria-labelledby="study-procedures-label">
-      <p class="proposal-field__label t-label-01" id="study-procedures-label">Study procedures</p>
+      <p class="proposal-field__label t-label-01" id="study-procedures-label">Study procedures <span class="req">(required)</span></p>
       <cds-checkbox
         class="answered-in-proposal"
         data-target="study-procedures"
@@ -184,7 +184,7 @@ const cur = dc.curation;
     </div>
 
     <div class="proposal-field" role="group" aria-labelledby="data-location-label">
-      <p class="proposal-field__label t-label-01" id="data-location-label">Location of data and data products collected under this permit</p>
+      <p class="proposal-field__label t-label-01" id="data-location-label">Location of data and data products collected under this permit <span class="req">(required)</span></p>
       <cds-checkbox
         class="answered-in-proposal"
         data-target="data-location"
@@ -214,12 +214,12 @@ const cur = dc.curation;
   <cds-modal-body>
     <div class="field-grid">
       <div class="field-grid__wide">
-        <cds-text-input id="ns-species" label="Species"></cds-text-input>
+        <cds-text-input id="ns-species" label="Species (required)"></cds-text-input>
       </div>
-      <cds-text-input id="ns-quantity" label="Quantity"></cds-text-input>
-      <cds-text-input id="ns-size" label="Size"></cds-text-input>
+      <cds-text-input id="ns-quantity" label="Quantity (required)"></cds-text-input>
+      <cds-text-input id="ns-size" label="Size (required)"></cds-text-input>
       <div class="field-grid__wide">
-        <cds-text-input id="ns-condition" label="Condition"></cds-text-input>
+        <cds-text-input id="ns-condition" label="Condition (required)"></cds-text-input>
       </div>
     </div>
   </cds-modal-body>
@@ -454,7 +454,9 @@ const cur = dc.curation;
   .field-label {
     color: var(--cds-text-secondary, #525252);
   }
-  .field-label .opt {
+  .field-label .opt,
+  .field-label .req,
+  .proposal-field__label .req {
     color: var(--cds-text-secondary, #525252);
   }
   .subsection .field-label {

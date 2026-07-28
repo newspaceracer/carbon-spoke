@@ -8,6 +8,7 @@
 // in for credentials — it decides which identity you sign in as. Composed from
 // stock cds-* (tile, text inputs, dropdown, button, notification).
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { withBase } from '../lib/base';
 
 export const prototype = {
   title: 'Sign in',
@@ -50,6 +51,10 @@ export const prototype = {
 
         <cds-button id="login-submit" type="button" class="login__submit">Sign in</cds-button>
       </form>
+
+      <p class="login__alt t-label-01">
+        New to the system? <cds-link href={withBase('/signup')}>Create an account</cds-link>
+      </p>
     </cds-tile>
   </main>
 </BaseLayout>
@@ -113,4 +118,8 @@ export const prototype = {
     gap: var(--cds-spacing-05, 1rem);
   }
   .login__submit { margin-top: var(--cds-spacing-03, 0.5rem); }
+  .login__alt {
+    margin: var(--cds-spacing-06, 1.5rem) 0 0;
+    color: var(--cds-text-secondary, #525252);
+  }
 </style>

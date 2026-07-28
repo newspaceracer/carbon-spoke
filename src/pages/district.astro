@@ -141,7 +141,9 @@ const buildingIcon = `<svg viewBox="0 0 32 32" fill="currentColor" fill-rule="ev
 
 <script>
   import { district, roleMeta, memberRoles } from '../data/district';
-  import { findUser } from '../data/user';
+  // resolveUser (not findUser) so an invited/added member resolves too — otherwise
+  // one invited member would fail memberOk and discard ALL saved members.
+  import { resolveUser } from '../data/requests';
   import { avatarHTML } from '../lib/avatar';
 
   // Read-only hydration from the shared prototype-local record the Manage district
@@ -167,7 +169,7 @@ const buildingIcon = `<svg viewBox="0 0 32 32" fill="currentColor" fill-rule="ev
   // Discard member records saved by an earlier build (no userId / removed role) so
   // stale localStorage can't render unknown contacts. Matches the console's guard.
   const memberOk = (m: any): boolean =>
-    !!m && typeof m.userId === 'string' && !!findUser(m.userId) && memberRoles.some((r) => r.value === m.role);
+    !!m && typeof m.userId === 'string' && !!resolveUser(m.userId) && memberRoles.some((r) => r.value === m.role);
 
   const load = (): State => {
     const base = seed();
@@ -215,7 +217,7 @@ const buildingIcon = `<svg viewBox="0 0 32 32" fill="currentColor" fill-rule="ev
     const contacts = state.members.filter((m) => m.published);
     grid.replaceChildren(
       ...contacts.map((c) => {
-        const u = findUser(c.userId);
+        const u = resolveUser(c.userId);
         const name = u?.name ?? '';
         const tile = document.createElement('cds-tile');
         tile.className = 'dcontact';

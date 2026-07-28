@@ -193,10 +193,14 @@ const icons = {
     scope.value = bucket;
     grid.setBucket(bucket);
 
-    const query = prefs.query || '';
+    // A `?q=` deep-link (e.g. a dashboard click-through) takes precedence over a
+    // remembered query, so landing here from a metric lands pre-filtered.
+    const urlQuery = new URLSearchParams(location.search).get('q');
+    const query = urlQuery ?? prefs.query ?? '';
     if (query) {
       search.value = query;
       grid.setQuickFilter(query);
+      if (urlQuery) savePrefs({ query });
     }
 
     syncColumnManager();

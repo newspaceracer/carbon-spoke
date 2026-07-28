@@ -159,6 +159,21 @@ const roles = ['Lead analyst', 'Supporting analyst', 'District reviewer', 'Techn
 
 const offices = ['411', '635', '208', '733', '512', '309', '874'] as const;
 
+/** One entry in a permit's status-transition history — the prototype's stand-in
+ *  for the audit row the real system writes on every status change. This is the
+ *  data that makes the Tier 2 timing metrics computable (approved/signed date,
+ *  per-stage duration, inquiry round-trips). */
+export interface StatusEvent {
+  /** The status left (null on the initial creation row). */
+  from: string | null;
+  /** The status entered. */
+  to: string;
+  /** ISO YYYY-MM-DD the transition was recorded. */
+  at: string;
+  /** Who recorded it — an analyst name, 'Applicant', or 'System'. */
+  by: string;
+}
+
 export interface PermitRow {
   /** Application / Permit # — the row identifier. */
   permitId: string;
@@ -199,6 +214,8 @@ export interface PermitRow {
   annualReport: string;
   /** The reviewer's role on this permit, or '' when she has none. Drives buckets. */
   role: string;
+  /** Full status-transition history, oldest first, ending at the current status. */
+  history: StatusEvent[];
   /** Precomputed filter buckets the grid's scope switcher reads. */
   _buckets: string[];
 }
@@ -207,6 +224,83 @@ const COUNT = 960;
 const pad3 = (n: number) => String(n).padStart(3, '0');
 const iso = (y: number, m: number, d: number) =>
   `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+// Shift an ISO date by whole days (UTC math — TZ-safe, never `new Date(isoString)`).
+const addDays = (isoDate: string, days: number): string => {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d) + days * 86400000);
+  return iso(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
+};
+
+// Synthesize a deterministic status-transition history ending at the permit's
+// CURRENT status — the stand-in for the DB audit log the real system will record
+// on every status change. Uses a PER-PERMIT seeded RNG so it does NOT touch the
+// main data stream (ids, statuses, dates stay identical to before). Shape is
+// realistic: ~12% of reviews stall long enough to pull the AVERAGE above the
+// MEDIAN, and ~28% take one inquiry round-trip back to the applicant — so the
+// Tier 2 metrics have credible skew and a real "requires inquiries" population.
+function buildHistory(
+  seed: number,
+  submitted: string,
+  status: string,
+  analyst: string,
+  permitEnd: string,
+): StatusEvent[] {
+  const r = mulberry32(seed);
+  const events: StatusEvent[] = [];
+
+  events.push({ from: null, to: 'Draft', at: addDays(submitted, -(3 + Math.floor(r() * 25))), by: 'Applicant' });
+  if (status === 'Draft') return events;
+
+  events.push({ from: 'Draft', to: 'Under review', at: submitted, by: 'Applicant' });
+  if (status === 'Under review') return events;
+
+  let cur = submitted; // when the current open interval began
+
+  // A permit sitting in "Returned to submitter" ends there.
+  if (status === 'Returned to submitter') {
+    events.push({ from: 'Under review', to: 'Returned to submitter', at: addDays(cur, 8 + Math.floor(r() * 32)), by: analyst });
+    return events;
+  }
+
+  // ~28% of the rest took one inquiry round-trip (Under review → Returned → back).
+  if (r() < 0.28) {
+    const returnedAt = addDays(cur, 6 + Math.floor(r() * 20));
+    events.push({ from: 'Under review', to: 'Returned to submitter', at: returnedAt, by: analyst });
+    const backAt = addDays(returnedAt, 5 + Math.floor(r() * 25));
+    events.push({ from: 'Returned to submitter', to: 'Under review', at: backAt, by: 'Applicant' });
+    cur = backAt;
+  }
+
+  // Main review to the decision, with a stalled long tail on some permits.
+  let reviewDays = 8 + Math.floor(r() * 32);
+  if (r() < 0.12) reviewDays += 50 + Math.floor(r() * 110);
+  const decisionAt = addDays(cur, reviewDays);
+
+  if (status === 'Rejected') {
+    events.push({ from: 'Under review', to: 'Rejected', at: decisionAt, by: analyst });
+    return events;
+  }
+  if (status === 'Withdrawn') {
+    events.push({ from: 'Under review', to: 'Withdrawn', at: addDays(cur, 2 + Math.floor(r() * 20)), by: 'Applicant' });
+    return events;
+  }
+
+  // Approved → out for signature.
+  events.push({ from: 'Under review', to: 'Out for signature', at: decisionAt, by: analyst });
+  if (status === 'Out for signature') return events;
+
+  // Signed → active.
+  const activeAt = addDays(decisionAt, 3 + Math.floor(r() * 18));
+  events.push({ from: 'Out for signature', to: 'Active', at: activeAt, by: analyst });
+  if (status === 'Active') return events;
+
+  // Active → expired at the permit's end date (fallback: a year on).
+  if (status === 'Expired') {
+    events.push({ from: 'Active', to: 'Expired', at: permitEnd > activeAt ? permitEnd : addDays(activeAt, 365), by: 'System' });
+  }
+  return events;
+}
 
 export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
   const district = pick(districts);
@@ -273,6 +367,7 @@ export const permits: PermitRow[] = Array.from({ length: COUNT }, (_, i) => {
     annualReportSubmitted: reportIn ? 'Yes' : 'No',
     annualReport: reportIn ? 'View report' : '',
     role,
+    history: buildHistory(0x1a2b3c + i, submitted, status.label, responsibleAnalyst, permitEnd),
     _buckets: buckets,
   };
 });
