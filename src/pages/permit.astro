@@ -323,7 +323,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                       rows="2"
                     ></cds-textarea>
                     <div class="composer__actions">
-                      <cds-button id="comment-submit" size="sm" type="button">Comment</cds-button>
+                      <cds-button id="comment-submit" size="md" type="button">Comment</cds-button>
                     </div>
                   </div>
                 </form>
@@ -600,7 +600,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                           <div class="doc-actions">
                             <cds-button
                               kind="ghost"
-                              size="sm"
+                              size="md"
                               href={f.href}
                               target="_blank"
                               rel="noopener"
@@ -614,7 +614,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
                             </cds-button>
                             <cds-button
                               kind="ghost"
-                              size="sm"
+                              size="md"
                               href={f.href}
                               download={f.name}
                               tooltip-text={`Download ${f.name}`}
@@ -678,6 +678,26 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
       <cds-modal-footer>
         <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
         <cds-modal-footer-button kind="primary" id="sc-modal-save">Save condition</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+
+    <!-- ── Remove-condition confirmation ──────────────────────────────────── -->
+    <cds-modal id="sc-remove-modal" size="xs" danger>
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Special condition</cds-modal-label>
+        <cds-modal-heading>Remove condition</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: confirmation prose has no cds-* component; a <p> with the
+             Carbon type role is the house pattern for modal body copy. -->
+        <p class="modal-hint t-body-01">
+          Remove this condition from the permit? It won’t print on the final letter.
+        </p>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="danger" id="sc-remove-confirm">Remove condition</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
   </main>
@@ -1074,6 +1094,26 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 
   const persist = () => savePermitConditions(permitId, conditions);
 
+  // ── Remove a condition ────────────────────────────────────────────────────
+  // Standard house "remove a row" affordance: a ghost trash icon-button. A
+  // condition prints on the permit, so removal is confirmed via a danger modal
+  // rather than deleting on the first click.
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
+  const scRemoveModal = $('sc-remove-modal') as any;
+  let pendingRemove: PermitCondition | null = null;
+  const openRemoveModal = (c: PermitCondition) => {
+    pendingRemove = c;
+    if (scRemoveModal) scRemoveModal.open = true;
+  };
+  $('sc-remove-confirm')?.addEventListener('click', () => {
+    if (pendingRemove) {
+      const idx = conditions.indexOf(pendingRemove);
+      if (idx >= 0) { conditions.splice(idx, 1); persist(); render(); }
+      pendingRemove = null;
+    }
+    if (scRemoveModal) scRemoveModal.open = false;
+  });
+
   const sourceLabel = (c: PermitCondition) =>
     c.source === 'default' ? 'Standard' : c.source === 'inventory' ? 'From catalog' : 'Custom';
 
@@ -1120,15 +1160,16 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
         render();
       };
 
+      const rm = document.createElement('cds-icon-button');
+      rm.setAttribute('kind', 'ghost'); rm.setAttribute('size', 'sm'); rm.setAttribute('align', 'left');
+      rm.innerHTML = `${trash}<span slot="tooltip-content">Remove condition</span>`;
+      rm.addEventListener('click', () => openRemoveModal(c));
+
       actions.append(
         mkBtn('↑', 'ghost', idxInOwner === 0, () => move(-1)),
         mkBtn('↓', 'ghost', idxInOwner === ownerConds.length - 1, () => move(1)),
         mkBtn('Edit', 'ghost', false, () => openModal(c.owner, globalIndex())),
-        mkBtn('Remove', 'danger-ghost', false, () => {
-          conditions.splice(globalIndex(), 1);
-          persist();
-          render();
-        }),
+        rm,
       );
       item.appendChild(actions);
     }
@@ -1152,7 +1193,7 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
       btn = document.createElement('cds-button');
       btn.setAttribute('slot', 'action');
       btn.setAttribute('kind', 'tertiary');
-      btn.setAttribute('size', 'sm');
+      btn.setAttribute('size', 'md');
       btn.textContent = 'Add condition';
       btn.addEventListener('click', () => openModal(owner, -1));
       listEl.appendChild(btn);
@@ -1255,6 +1296,10 @@ const permitDistricts = permit.studyAreas.districts.map((d) => ({
 
     const heading = $('sc-modal-heading');
     if (heading) heading.textContent = editing ? 'Edit condition' : 'Add condition';
+    // The primary action reads as the verb it performs: "Add condition" on a new
+    // one, "Save changes" when editing an existing one.
+    const saveBtn = $('sc-modal-save');
+    if (saveBtn) saveBtn.textContent = editing ? 'Save changes' : 'Add condition';
     const label = $('sc-modal-label');
     if (label) label.textContent = ownerLabel(owner);
     if (warnEl) warnEl.hidden = true;

@@ -204,8 +204,8 @@ const teamStorageKey = `permit-team-${id}`;
     <cds-icon-indicator class="permit-status-indicator" size="16" kind={status.kind} label={status.label}></cds-icon-indicator>
     <span class="compactbar__window t-body-01">{requestedWindow.start} – {requestedWindow.end}</span>
     <div class="compactbar__spacer"></div>
-    <cds-button data-when="Under review" data-phase="not-started" class="permit-start-review" size="sm">Start review</cds-button>
-    <cds-combo-button data-when="Under review" data-phase="started" class="permit-open-review" size="sm" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+    <cds-button data-when="Under review" data-phase="not-started" class="permit-start-review" size="md">Start review</cds-button>
+    <cds-combo-button data-when="Under review" data-phase="started" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
       <cds-menu>
         <cds-menu-item label="Request changes"></cds-menu-item>
         {!finalize && <cds-menu-item label="Download"></cds-menu-item>}
@@ -213,8 +213,8 @@ const teamStorageKey = `permit-team-${id}`;
         <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
       </cds-menu>
     </cds-combo-button>
-    <cds-button data-when="Out for signature" class="permit-action-sign" size="sm" hidden>Sign permit</cds-button>
-    <cds-button data-when="Active" class="permit-action-amend" size="sm" href={amendHref} hidden>Request amendment</cds-button>
+    <cds-button data-when="Out for signature" class="permit-action-sign" size="md" hidden>Sign permit</cds-button>
+    <cds-button data-when="Active" class="permit-action-amend" size="md" href={amendHref} hidden>Request amendment</cds-button>
   </div>
 </div>
 
@@ -316,22 +316,25 @@ const teamStorageKey = `permit-team-${id}`;
           status={reviewAllDone ? 'finished' : 'active'}
         ></cds-progress-bar>
 
-        <!-- Add a directory user to the review team. Sits ABOVE the roster so its
-             dropdown opens down into the list area (not off the modal's bottom
-             edge, where the body's scroll would clip it). Only existing users;
-             the combo rebuilds after each change to exclude whoever's already on. -->
-        <form class="team-add" id="analysis-add">
+        <!-- Add a directory user to the review team. Button-first: "Add reviewer"
+             reveals the picker below and swaps the modal footer to Cancel / Add
+             reviewer, so the commit is the modal's OWN primary action — no
+             modal-on-modal, and no easy-to-miss trailing button. The picker sits
+             ABOVE the roster so its dropdown opens down into the list area. Only
+             existing users; the combo rebuilds after each change to exclude
+             whoever's already on. -->
+        <cds-button kind="tertiary" size="md" id="analysis-add-trigger" type="button">Add reviewer</cds-button>
+        <form class="team-add" id="analysis-add" style="display:none">
           <cds-combo-box
             id="analysis-add-select"
             class="team-add__select"
-            title-text="Add a reviewer"
+            title-text="Reviewer"
             label="Search staff by name…"
           >
             {eligibleUsers.map((u) => (
               <cds-combo-box-item value={u.id}>{u.name} — {u.role}</cds-combo-box-item>
             ))}
           </cds-combo-box>
-          <cds-button kind="tertiary" size="md" id="analysis-add-btn" type="button">Add reviewer</cds-button>
         </form>
 
         <!-- Reviewer roster. Each row shows completion (icon-indicator, not colour
@@ -369,7 +372,9 @@ const teamStorageKey = `permit-team-${id}`;
       </cds-stack>
     </cds-modal-body>
     <cds-modal-footer>
-      <cds-modal-footer-button kind="primary" data-modal-close>Done</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="analysis-done" data-modal-close>Done</cds-modal-footer-button>
+      <cds-modal-footer-button kind="secondary" id="analysis-add-cancel" style="display:none">Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="analysis-add-save" style="display:none">Add reviewer</cds-modal-footer-button>
     </cds-modal-footer>
   </cds-modal>
 
@@ -570,7 +575,11 @@ const teamStorageKey = `permit-team-${id}`;
     const tpl = document.getElementById('review-row-template') as HTMLTemplateElement;
     const dirEl = document.getElementById('analysis-directory');
     const addSelect = document.getElementById('analysis-add-select') as any;
-    const addBtn = document.getElementById('analysis-add-btn');
+    const addForm = document.getElementById('analysis-add');
+    const addTrigger = document.getElementById('analysis-add-trigger');
+    const doneBtn = document.getElementById('analysis-done');
+    const cancelBtn = document.getElementById('analysis-add-cancel');
+    const saveBtn = document.getElementById('analysis-add-save');
     const bars = [
       document.getElementById('analysis-metric-bar'),
       document.getElementById('analysis-modal-bar'),
@@ -633,6 +642,11 @@ const teamStorageKey = `permit-team-${id}`;
         });
     };
 
+    // Removal is immediate here (no confirm modal): the analysis-team modal is an
+    // edit surface, and the add-reviewer combo below re-adds anyone in one step —
+    // so this is as reversible as the draft rosters. Stacking a confirm modal on
+    // top of this modal would be the anti-pattern; base-page removals confirm,
+    // this one does not.
     const removeMember = (id: string, row: HTMLElement) => {
       row.remove();
       const e = loadTeam();
@@ -663,11 +677,11 @@ const teamStorageKey = `permit-team-${id}`;
       return li;
     };
 
-    const addMember = () => {
+    const addMember = (): boolean => {
       const id = addSelect.value;
-      if (!id || currentIds().includes(id)) return;
+      if (!id || currentIds().includes(id)) return false;
       const u = byId.get(id);
-      if (!u) return;
+      if (!u) return false;
       const row = buildRow(u);
       roster.appendChild(row);
       wireRow(row);
@@ -677,8 +691,28 @@ const teamStorageKey = `permit-team-${id}`;
       saveTeam(e);
       refreshCombo();
       recompute();
+      return true;
     };
-    addBtn?.addEventListener('click', addMember);
+
+    // ── Add-reviewer mode ──
+    // The trigger reveals the picker and swaps the footer to Cancel / Add reviewer.
+    // The footer's own primary button is the commit — button-first, unmissable, and
+    // no modal stacked on this modal. (Inline style.display, not `hidden`: cds-*
+    // set their own :host display, so `hidden` won't collapse them.)
+    const show = (el: Element | null, on: boolean) => {
+      if (el) (el as HTMLElement).style.display = on ? '' : 'none';
+    };
+    const setAddMode = (on: boolean) => {
+      show(addForm, on); show(cancelBtn, on); show(saveBtn, on);
+      show(addTrigger, !on); show(doneBtn, !on);
+      if (on) { addSelect.value = ''; addSelect.focus?.(); }
+    };
+    setAddMode(false);
+    addTrigger?.addEventListener('click', () => setAddMode(true));
+    cancelBtn?.addEventListener('click', () => setAddMode(false));
+    saveBtn?.addEventListener('click', () => { addMember(); setAddMode(false); });
+    // Dismissing the modal mid-add (X / Esc) shouldn't leave it stuck in add mode.
+    modal.addEventListener('cds-modal-closed', () => setAddMode(false));
 
     // ── Init: replay stored add/remove edits, wire, recompute ──
     const edits = loadTeam();

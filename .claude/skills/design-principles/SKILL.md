@@ -1,6 +1,6 @@
 ---
 name: design-principles
-description: The aesthetic, accessibility, and correctness rules for this Carbon spoke — load before styling, reviewing, or building ANY UI, and during /ship reviews. Covers token-first discipline (var(--cds-*) not SCSS $vars, never target .cds-- internals), Carbon's type scale (no imposed 16px floor), status meaning (colored Tag is NOT a status — use cds-icon-indicator/cds-shape-indicator; never color alone), the 2x Grid (CSS-Grid flavor: .cds--css-grid/.cds--css-grid-column/.cds--{bp}:col-span-N; the legacy .cds--row/.cds--col-lg-N are NOT in the prebuilt CSS), the WCAG 2.2 accessibility contract, icon-name verification, and mock-data rules. Distilled from IBM's Carbon guidance reconciled with the house rules. carbon-first owns the component lookup order; this skill owns how the result looks and behaves.
+description: The aesthetic, accessibility, and correctness rules for this Carbon spoke — load before styling, reviewing, or building ANY UI, and during /ship reviews. Covers token-first discipline (var(--cds-*) not SCSS $vars, never target .cds-- internals), Carbon's type scale (no imposed 16px floor), status meaning (colored Tag is NOT a status — use cds-icon-indicator/cds-shape-indicator; never color alone), the 2x Grid (CSS-Grid flavor: .cds--css-grid/.cds--css-grid-column/.cds--{bp}:col-span-N; the legacy .cds--row/.cds--col-lg-N are NOT in the prebuilt CSS), the WCAG 2.2 accessibility contract, overlay & confirmation patterns (never stack a modal on a modal — forgo, confirm inline, or offer undo; reserve confirms for consequential/destructive actions), control sizing & kind (never omit cds-button size=; page primary → lg, section/header actions → md, table-row cell actions → sm, icon-only/dense toolbars → sm; section-header action buttons are tertiary/outline, not ghost), icon-name verification, and mock-data rules. Distilled from IBM's Carbon guidance reconciled with the house rules. carbon-first owns the component lookup order; this skill owns how the result looks and behaves.
 ---
 
 # Design Principles (Carbon spoke)
@@ -107,7 +107,65 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
 7. **Custom motion respects `prefers-reduced-motion`.** Carbon's own motion
    already does; anything you add must too.
 
-## 6. Icons (Must)
+## 6. Overlays & confirmation (Must)
+
+1. **Never stack a modal on a modal.** If a control lives inside an open
+   `cds-modal` (or side panel/drawer), do NOT open a second `cds-modal` on top to
+   confirm it — two overlays fight over the focus trap, scrim, and Escape
+   handling, and it reads as a dialog stack the user gets lost in. Carbon's own
+   guidance is against stacking. Pick one of these instead:
+   - **Forgo the confirm** when the action is reversible *in place* — e.g. a row
+     you can immediately re-add from a control in the same modal. Just act, like a
+     draft row. (This is why removing an analysis-team reviewer inside the team
+     modal is immediate, while removing a district member from its base page
+     confirms.)
+   - **Confirm inline** — swap the affected row/region into a "Confirm / Cancel"
+     state within the same modal, no second overlay.
+   - **Undo over confirm** — act immediately and surface an undo affordance
+     (e.g. a `cds-actionable-notification`).
+2. **Confirmation modals open from a base page, never from within another
+   overlay.** A destructive/consequential action taken *on a page* (deleting a
+   shared or downstream record) gets a `danger` `cds-modal`; the same class of
+   action taken *inside* an editing modal uses an in-modal alternative above.
+3. **Reserve a confirm for the consequential.** Confirm removals of shared or
+   downstream records (a district member, a printed special condition, a category
+   tag) and named destructive actions (Deny, Revoke). Do not gate quick, in-place
+   draft edits (adding/removing a specimen, participant, or park during entry)
+   behind a modal — that friction trains users to click through confirmations.
+
+## 7. Control sizing & kind (Must)
+
+1. **Never omit `size=` on `cds-button`.** Its default is `lg` (48px) — omitting it
+   silently ships a large button. Set the size explicitly, every time.
+2. **House button scale, by context:**
+   - Page-level form submit / primary CTA → `lg`.
+   - Section-header / card-header / rail / standalone labeled action → `md`.
+   - **Action button *inside a `cds-table` / `DataGrid` row cell* → `sm`** (Edit,
+     Approve, Deny, replace, and the per-row action cluster of a `cds-contained-list`
+     item). Dense per-row actions read `sm`, not `md`.
+   - Never leave a labeled button at the implicit default.
+3. **Icon-only + dense chrome stay `sm`:** `cds-icon-button` (row remove, overflow)
+   and dense editor toolbars (the rich-text formatting bar) use `size="sm"` — `md`
+   bloats row height and toolbars.
+4. **Don't mix scales in one action row** — a cluster of buttons is all one size
+   (all `sm` in a table row, all `md` in a header), never a mix. A labeled button
+   sitting beside an icon-button in a row matches it at `sm`.
+5. **Kind follows position:**
+   - **Section-header action** (`PermitSection` `slot="aside"`, both "Add …" and
+     "Edit") → `tertiary` (outline). One outlined affordance per section header.
+   - **Table / grid row-cell action** → `ghost` (and `danger-ghost` for the
+     destructive one, e.g. Deny/Revoke). Row actions are low-emphasis — never
+     `primary` or `tertiary` in a row, even the affirmative one (Approve is ghost
+     beside a danger-ghost Deny).
+   - A grid's own *toolbar* chrome (column manager, Reset) is not a row action —
+     it keeps its section-level treatment.
+6. **Inside a compact card, prefer an icon-button over a text button.** A per-card
+   action (e.g. Edit on an Email-notification card) is a ghost `cds-icon-button`
+   with a `tooltip-content` slot naming the target ("Edit <name>"), not a labeled
+   text/outline button — a full button is too heavy for card chrome. Reuse the
+   house pencil/trash SVG so the icon matches the rest of the app.
+
+## 8. Icons (Must)
 
 1. **Never guess a Carbon icon export/slug from memory** — the names are not
    predictable (`chart--win-loss` → `ChartWinLoss`, `face--satisfied--filled` →
@@ -121,7 +179,7 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
 3. **Decorative icons are `aria-hidden="true"`**; meaningful standalone icons get
    an accessible name.
 
-## 7. House aesthetic (Should — on top of Carbon)
+## 9. House aesthetic (Should — on top of Carbon)
 
 - **Surfaces are a design tool — use them with intent.** Tiles (`cds-tile`),
   value layers (`--cds-layer-01/02`), and boxed cards are legitimate ways to
@@ -141,7 +199,7 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
 - **Never leak internal vocabulary** (ticket keys, tenant/data-model names) into
   user-facing copy.
 
-## 8. Mock data (Must)
+## 10. Mock data (Must)
 
 - **Invented, never derived** — realistic but fictional; never copied or lightly
   sanitized from real client documents. These repos are public.

@@ -5,11 +5,12 @@ import { withBase } from '../lib/base';
      header: identity banner (g100) — "Special conditions" + crumb.
      spine:  main.page > .cds--css-grid (single full-width column)
      sections:
-       - Scope bar  -> who you're acting as (HQ reviewer vs a District
-                       representative). The console is ONE screen filtered by
-                       scope: HQ curates the org-wide catalog; a district rep
-                       curates only their district's catalog. Mirrors the
-                       manage-district "Acting as" pattern.
+       - Scope bar  -> a Catalog picker scoped to the SIGNED-IN Prototype identity
+                       (editableDistricts): HQ roles get the org-wide catalog + every
+                       district; a district lead gets the districts they lead, and it
+                       hides when there's only one. WHO is curating is the identity,
+                       not a picked role. An identity that curates no catalog sees a
+                       no-access notice instead of the console body.
        - Condition inventory -> the reusable catalog for the active scope: a
                        cds-table (Title, Preview, Default?, Actions) with per-row
                        Edit/Remove + an "Add condition" cds-modal whose body is
@@ -56,18 +57,32 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
       </div>
     </header>
 
-    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+    <!-- Shown when the signed-in identity curates no catalog (a non-curating
+         reviewer, applicant, or logged-out): the console body is hidden and this
+         explains why. HQ roles and district leads never see it. -->
+    <cds-inline-notification
+      id="no-access"
+      hidden
+      kind="info"
+      low-contrast
+      hide-close-button
+      title="No catalog to curate"
+      subtitle="Your role doesn't curate special conditions. HQ reviewers and district leads manage catalogs here."
+    ></cds-inline-notification>
+
+    <div id="console-body" class="cds--css-grid cds--css-grid--with-row-gap body">
       <div class="col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
-        <!-- ── Scope bar: who is curating, and whose catalog ────────────────── -->
+        <!-- ── Scope bar: which catalog is being curated ─────────────────────
+             WHO is curating is no longer picked here — it's the signed-in Prototype
+             identity. The client script scopes this Catalog picker to the catalogs
+             that identity may edit (HQ roles → the org-wide catalog + every district;
+             a district lead → the districts they lead) and hides it when there's
+             only one. An identity that curates none sees a no-access notice. -->
         <cds-tile class="scope">
           <div class="scope__row">
-            <cds-dropdown id="acting-as" title-text="Acting as" value="hq">
-              <cds-dropdown-item value="hq">HQ reviewer</cds-dropdown-item>
-              <cds-dropdown-item value="district">District representative</cds-dropdown-item>
-            </cds-dropdown>
-
-            <div id="switcher-wrap" class="scope__switcher" hidden>
-              <cds-dropdown id="district-switcher" title-text="District" value={districtsSorted[0]?.key}>
+            <div id="owner-wrap" class="scope__switcher" hidden>
+              <cds-dropdown id="owner-picker" title-text="Catalog" value="hq">
+                <cds-dropdown-item value="hq">Org-wide catalog</cds-dropdown-item>
                 {districtsSorted.map((o) => (
                   <cds-dropdown-item value={o.key}>{o.name}</cds-dropdown-item>
                 ))}
@@ -96,10 +111,10 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
           <cds-content-switcher-item value="browse">All districts</cds-content-switcher-item>
         </cds-content-switcher>
 
-        <!-- ── My catalog (editable, scoped to who you're acting as) ──────────── -->
+        <!-- ── My catalog (editable, scoped to the active Catalog owner) ──────── -->
         <div id="panel-mine">
           <PermitSection title="Condition inventory">
-            <cds-button slot="aside" id="add-condition" kind="tertiary" size="sm">Add condition</cds-button>
+            <cds-button slot="aside" id="add-condition" kind="tertiary" size="md">Add condition</cds-button>
             <p class="section-hint t-body-01" id="inv-hint">
               Reusable conditions for <strong id="inv-owner">Headquarters</strong>. Reviewers pull these onto
               a permit without retyping. Items marked <strong>Default</strong> attach automatically when a
@@ -196,6 +211,26 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
         <cds-modal-footer-button kind="primary" id="c-save">Save condition</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
+
+    <!-- ── Remove-condition confirmation ──────────────────────────────────── -->
+    <cds-modal id="remove-modal" size="xs" danger>
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Special condition</cds-modal-label>
+        <cds-modal-heading>Remove condition</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: confirmation prose has no cds-* component; a <p> with the
+             Carbon type role is the house pattern for modal body copy. -->
+        <p class="modal-hint t-body-01" id="remove-body">
+          Remove this condition from the catalog? It won’t attach to new permits.
+        </p>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="danger" id="remove-confirm">Remove condition</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
   </main>
 </BaseLayout>
 
@@ -210,19 +245,41 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
     type ConditionInventoryItem,
     type ConditionOwner,
   } from '../data/conditions';
+  // The signed-in Prototype identity drives which catalogs this user may curate
+  // (HQ → org-wide + every district; a district lead OR assistant → their district).
+  import { curatableDistricts } from '../data/district';
+  import { readIdentity } from '../lib/maintenance';
 
   const $ = (id: string) => document.getElementById(id);
   const esc = (s = '') =>
     s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+  // Standard house "remove a row" affordance: a ghost trash icon-button (matches
+  // the application-wizard rosters). Removal is confirmed via a danger modal.
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
 
   // ── Scope ───────────────────────────────────────────────────────────────
-  const actingAs = $('acting-as') as any;
-  const switcherWrap = $('switcher-wrap');
-  const switcher = $('district-switcher') as any;
+  const ownerWrap = $('owner-wrap');
+  const ownerPicker = $('owner-picker') as any;
   const scopeNote = $('scope-note');
+  const consoleBody = $('console-body');
+  const noAccess = $('no-access') as any;
+
+  // The signed-in identity decides which catalogs this user may curate:
+  //  - HQ roles (system admin, HQ technical reviewer) → the org-wide catalog
+  //    plus every district's;
+  //  - a district lead or assistant → only their own district('s);
+  //  - anyone else → none (the console is replaced by a no-access notice).
+  // The org-wide catalog stays read-only for leads/assistants — it's not in their
+  // editable owners, but the "All districts" browse view shows it read-only.
+  const identity = readIdentity();
+  const isHQ = identity === 'admin' || identity === 'hq-technical';
+  const ownedDistrictIds = curatableDistricts(identity).map((d) => d.id);
+  const allowedOwners: ConditionOwner[] = isHQ
+    ? ['hq', ...districtOptions.map((o) => o.key)]
+    : ownedDistrictIds;
 
   const currentOwner = (): ConditionOwner =>
-    actingAs?.value === 'district' ? (switcher?.value || districtOptions[0]?.key) : 'hq';
+    (ownerPicker?.value as ConditionOwner) || allowedOwners[0] || 'hq';
 
   // ── Inventory state (the active owner's catalog) ────────────────────────
   let items: ConditionInventoryItem[] = [];
@@ -276,10 +333,10 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
         edit.setAttribute('kind', 'ghost'); edit.setAttribute('size', 'sm');
         edit.textContent = 'Edit';
         edit.addEventListener('click', () => openModal(i));
-        const rm = document.createElement('cds-button');
-        rm.setAttribute('kind', 'danger-ghost'); rm.setAttribute('size', 'sm');
-        rm.textContent = 'Remove';
-        rm.addEventListener('click', () => { items.splice(i, 1); persist(); renderInventory(); });
+        const rm = document.createElement('cds-icon-button');
+        rm.setAttribute('kind', 'ghost'); rm.setAttribute('size', 'sm'); rm.setAttribute('align', 'left');
+        rm.innerHTML = `${trash}<span slot="tooltip-content">Remove condition</span>`;
+        rm.addEventListener('click', () => openRemoveModal(i));
         wrap.append(edit, rm);
         actionCell.appendChild(wrap);
 
@@ -289,13 +346,56 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
     );
   };
 
-  const applyScope = () => {
-    const isDistrict = actingAs?.value === 'district';
-    if (switcherWrap) switcherWrap.hidden = !isDistrict;
+  // ── Remove-condition confirmation ───────────────────────────────────────
+  // A condition prints on the permit, so removal is consequential: confirm via
+  // a danger modal rather than deleting on the first click.
+  const removeModal = $('remove-modal') as any;
+  let pendingRemove = -1;
+  const openRemoveModal = (index: number) => {
+    pendingRemove = index;
+    if (removeModal) removeModal.open = true;
+  };
+  $('remove-confirm')?.addEventListener('click', () => {
+    if (pendingRemove >= 0) {
+      items.splice(pendingRemove, 1);
+      pendingRemove = -1;
+      persist();
+      renderInventory();
+    }
+    if (removeModal) removeModal.open = false;
+  });
+
+  const applyScope = async () => {
+    if (allowedOwners.length === 0) {
+      if (consoleBody) consoleBody.style.display = 'none';
+      if (noAccess) noAccess.hidden = false;
+      return;
+    }
+    if (consoleBody) consoleBody.style.display = '';
+    if (noAccess) noAccess.hidden = true;
+
+    const allowed = new Set(allowedOwners);
+    if (ownerPicker) {
+      // Wait for the dropdown + items to upgrade before reading/setting `.value`
+      // (an unupgraded item's `.value` is undefined, which would prune everything).
+      await customElements.whenDefined('cds-dropdown');
+      await customElements.whenDefined('cds-dropdown-item');
+      await ownerPicker.updateComplete;
+      // cds-* elements set :host display, so `hidden` won't collapse an item —
+      // toggle inline display, matching on the ATTRIBUTE (always in the SSR HTML)
+      // rather than the `.value` property, which lags element upgrade.
+      Array.from(ownerPicker.querySelectorAll('cds-dropdown-item')).forEach((o: any) => {
+        o.style.display = allowed.has(o.getAttribute('value')) ? '' : 'none';
+      });
+      if (!allowed.has(ownerPicker.value)) ownerPicker.value = allowedOwners[0];
+    }
+    // Hide the picker when there's only one catalog to curate (a single-district lead).
+    if (ownerWrap) ownerWrap.hidden = allowedOwners.length < 2;
+
     if (scopeNote) {
-      scopeNote.textContent = isDistrict
-        ? 'District representatives curate their own catalog, and can browse every other district and copy conditions into it.'
-        : 'HQ reviewers curate the org-wide catalog, and can browse every district catalog.';
+      scopeNote.textContent = currentOwner() === 'hq'
+        ? 'HQ reviewers curate the org-wide catalog that applies to every permit, and can browse every district catalog.'
+        : 'You curate this district’s catalog, and can browse every other district and copy conditions into it.';
     }
     renderCurrent();
   };
@@ -393,6 +493,10 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
 
     const heading = $('condition-modal-heading');
     if (heading) heading.textContent = index >= 0 ? 'Edit condition' : 'Add condition';
+    // The primary action reads as the verb it performs: "Add condition" on a new
+    // one, "Save changes" when editing an existing one.
+    const saveBtn = $('c-save');
+    if (saveBtn) saveBtn.textContent = index >= 0 ? 'Save changes' : 'Add condition';
     const label = $('condition-modal-label');
     if (label) label.textContent = `${ownerLabel(currentOwner())} catalog`;
     if (warnEl) warnEl.hidden = true;
@@ -425,8 +529,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
 
   // ── Wire ─────────────────────────────────────────────────────────────────
   applyScope();
-  actingAs?.addEventListener('cds-dropdown-selected', applyScope);
-  switcher?.addEventListener('cds-dropdown-selected', renderCurrent);
+  ownerPicker?.addEventListener('cds-dropdown-selected', applyScope);
   $('add-condition')?.addEventListener('click', () => openModal(-1));
   $('c-save')?.addEventListener('click', saveCondition);
 
@@ -477,7 +580,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   .scope__row cds-dropdown { min-width: 18rem; }
   .scope__switcher { min-width: 18rem; }
   .scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
-  #switcher-wrap[hidden], #save-notice[hidden], #inv-empty[hidden],
+  #owner-wrap[hidden], #save-notice[hidden], #inv-empty[hidden], #no-access[hidden],
   #browse-empty[hidden], #panel-mine[hidden], #panel-browse[hidden] { display: none; }
   #save-notice { max-width: 48rem; }
 

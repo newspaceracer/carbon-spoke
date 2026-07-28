@@ -4,6 +4,10 @@ These are sibling stories for the **Templates & defaults** admin area, where a
 System Admin manages site-wide configuration self-service. Story 1 establishes
 the area; Stories 2–5 are the sections inside it. Story 2 extends the existing
 DPR65A/DPR65B document-management story to the remaining downloadable forms.
+Story 6 adds the variable affordance to the email editor; Stories 7–8 add rich
+text formatting and distinct variable tokens to the email **message**; Story 9
+standardizes the seeded applicant email copy and reconciles the variable names
+(resolving several open questions raised in Stories 5 and 6).
 
 Notation: the final permit **letter body** template is tracked separately in
 **CSPS-211**; e-signature configuration is out of scope for all of these.
@@ -492,6 +496,269 @@ pipeline, not this editor.
   send — is sending blocked, is the literal bracket text sent, or is the token
   stripped? (The editor warns but does not block saving.)
 - [ ] Should literal square brackets be allowed in prose that is not a variable,
-  and if so, how does the editor distinguish them from a token?
+  and if so, how does the editor distinguish them from a token? (In the message,
+  Story 8 answers this: an inserted variable becomes a distinct token; typed
+  brackets stay prose and trip the unrecognized-token warning. Open for the
+  subject, which stays plain text.)
 - [ ] Should the editor offer a preview that renders the template with sample
   values, so the admin sees the filled-in result before saving?
+
+---
+
+## Story 7 — Format the email message with rich text
+
+**Story Title**
+Let System Admin format the email message with rich text
+
+---
+
+**Description**
+
+As a System Admin,
+I want to format an applicant email's message with rich text — emphasis, lists,
+headings, and links,
+So that the emails applicants receive are readable and structured, not a single
+block of plain text.
+
+Applicant emails are HTML when delivered. This replaces the plain-text message
+field in the Email notifications editor (Story 5) with a formatting editor. The
+subject stays a single-line plain field.
+
+**Roles affected:** System Admin. Downstream, the formatted email is received by
+Researcher, PI, PICOF, and Submitter.
+
+**Out of scope:** Editing the subject line, which stays plain text — see Story 5.
+Which events trigger emails and to whom they are sent — see Story 5. The variable
+affordance (showing and inserting merge fields) — see Story 6; rendering those
+variables as tokens — see Story 8. The final permit letter body — see CSPS-211.
+
+---
+
+**Acceptance Criteria**
+
+**Access & permissions**
+- Only a System Admin can view and use the rich text message editor, within the
+  Email notifications section.
+
+**Happy path**
+- When editing a notification, the message field is a rich text editor with a
+  formatting toolbar.
+- The System Admin can apply bold, italic, strikethrough, and inline code;
+  headings; bulleted and numbered lists; a block quote; a code block; and a link.
+- The editor supports undo and redo of content and formatting changes.
+- On save, the formatted message is stored, and emails sent after the change use
+  the formatted content.
+
+**State & status transitions**
+- Saved formatting applies to emails sent after the change; emails already sent
+  are unaffected.
+
+**UI & field details**
+- The message field is labeled "Message".
+- The toolbar controls carry the system's standard button styling and show a
+  toggled (active) state when their formatting applies to the current selection.
+- A link must start with `https://`, `http://`, or `mailto:`; the editor rejects
+  any other scheme.
+
+**Edge cases & constraints**
+- A notification cannot be saved with an empty message (consistent with Story 5).
+- Existing plain-text template copy opens as formatted text — paragraphs and line
+  breaks are preserved — the first time it is edited in the rich text editor.
+
+---
+
+**Testing notes**
+
+- **Environment note:** All emails in the QA environment route to a shared ESA
+  inbox. Notify the ESA team before testing so the email can be forwarded for
+  verification. Do not test against real applicant email addresses in QA.
+- **Test 1 — Format and send:** As System Admin, edit a notification's message,
+  apply bold and a bulleted list, and save. Trigger the email and confirm it
+  arrives with the formatting applied.
+- **Test 2 — Plain seed opens formatted:** Open a notification that has never
+  been edited. Confirm its seeded plain-text copy displays with its paragraph
+  breaks preserved, ready to format.
+
+---
+
+**Open questions**
+- [ ] Do applicant email clients receive the formatting as HTML, and is a
+  plain-text fallback part sent for clients that do not render HTML?
+- [ ] Should any block-level options (headings, code block) be removed for email,
+  where such formatting renders inconsistently across mail clients?
+
+---
+
+## Story 8 — Render inserted variables as distinct tokens in the message
+
+**Story Title**
+Show email variables as distinct tokens in the message editor
+
+---
+
+**Description**
+
+As a System Admin,
+I want an inserted variable to look like a distinct token in the message, not
+ordinary text,
+So that I can tell at a glance which parts are merge fields the system fills in
+versus words I typed.
+
+This extends the variable affordance (Story 6): when a variable is inserted into
+the rich text message (Story 7), it renders as a non-editable token rather than
+bracketed text that reads like prose.
+
+**Roles affected:** System Admin.
+
+**Out of scope:** The subject field, which stays plain text — a variable inserted
+there remains literal bracketed text (see Story 6). The variable list and the
+insert action itself — see Story 6. The rich text editor — see Story 7. Send-time
+substitution — the email send pipeline.
+
+---
+
+**Acceptance Criteria**
+
+**Access & permissions**
+- Only a System Admin sees the token rendering, within the Email notifications
+  message editor.
+
+**Happy path**
+- Inserting a variable into the message renders it as a visually distinct token
+  showing its exact name (e.g. [Application Title]).
+- A token behaves as a single unit: it is selected and deleted as one piece and
+  cannot be edited character-by-character.
+- When a notification opens, any supported variable already present in its
+  message is shown as a token, not as plain bracketed text.
+
+**State & status transitions**
+- On save, each token is preserved as its exact bracketed name so the send
+  process fills it in; reopening the message shows it as a token again, with no
+  change to the resolved value.
+
+**UI & field details**
+- Tokens are styled distinctly from body text (a filled pill) and stay legible in
+  both light and dark theme zones.
+
+**Edge cases & constraints**
+- A bracketed string the admin types by hand is not a token: it stays plain text
+  and continues to trip the unrecognized-token warning (Story 6). This gives a
+  clear signal — tokens are inserted, plain brackets are typed.
+- Tokens survive save and reload without being escaped or doubled.
+
+---
+
+**Testing notes**
+
+- **Test 1 — Insert shows a token:** Edit a notification, place the cursor in the
+  message, and insert a variable. Confirm it appears as a distinct token, not
+  bracketed text, and that Backspace removes the whole token at once.
+- **Test 2 — Seed variable renders as token:** Open a notification whose seeded
+  message contains a supported variable. Confirm the variable is shown as a token.
+- **Test 3 — Typed brackets stay plain:** Type a bracketed string by hand (e.g.
+  [Made Up]). Confirm it is not a token and the unrecognized-token warning names
+  it.
+
+---
+
+**Open questions**
+- [ ] Should the subject field also render inserted variables as tokens, or is
+  plain bracketed text acceptable for a single-line field?
+- [ ] When a token's name is not in the current email's supported set (e.g. after
+  the supported set changes), should it still render as a token or downgrade to a
+  plain-text warning?
+
+---
+
+## Story 9 — Standardize the applicant email template copy and variables
+
+**Story Title**
+Standardize applicant email subjects, greetings, and variable names
+
+---
+
+**Description**
+
+As a System Admin,
+I want the seeded applicant email templates to be consistent in voice, structure,
+and variable names,
+So that the emails read as one system and every merge field resolves.
+
+This is a copy-consistency pass over the six applicant email templates (Story 5):
+sentence-case subjects, one greeting and one closing, a single wording for the
+"contact us" line, and reconciled variable names.
+
+**Roles affected:** System Admin (edits the copy); downstream Researcher, PI,
+PICOF, and Submitter receive the emails.
+
+**Out of scope:** The verbatim regulated bodies finalized in Jira and captured in
+`SCP_System_Email_Inventory.md` (Section A) — this story standardizes the seeded
+prototype copy, not the regulated source of truth. Which events trigger emails
+and their recipients — see Story 5.
+
+---
+
+**Acceptance Criteria**
+
+**UI & field details**
+- Every email subject uses sentence case and stays within 60 characters:
+  - "Permit application submitted: [Application Title]"
+  - "Your permit application was returned for revisions"
+  - "Your permit application has been rejected"
+  - "Your permit has been approved"
+  - "CA State Parks SCP – annual report due in 15 days"
+  - "CA State Parks SCP – annual report due today"
+
+**Consistency**
+- Every email opens with "Dear [Recipient Name]," and closes with the standard
+  NRD signature block:
+  ```
+  Natural Resources Division
+  California State Parks
+  (916) 653-6725
+  nrd.research@parks.ca.gov
+  ```
+- The contact line reads identically in every template: "If you have any
+  questions, please contact us."
+- The recipient merge field is [Recipient Name] in every template — replacing the
+  earlier mix of [Recipient's Name], [Researcher Name], and [Researcher's Name].
+
+**Variables**
+- The rejected template uses two fields, [Application ID] and [Application Title],
+  rendered "[Application ID] ([Application Title])" — replacing the combined
+  [Application ID (Title)] field.
+- [Permit Title] is an available variable in both annual report reminders and the
+  Permit approved email; the annual reminders render "[Permit Number]
+  ([Permit Title])".
+- Every bracketed token in a template's subject or message is in that template's
+  supported-variable set, so no template shows an unrecognized-token warning at
+  rest.
+
+**Edge cases & constraints**
+- Standardizing the copy does not change which events trigger emails, their
+  recipients, or send-time behavior.
+
+---
+
+**Testing notes**
+
+- **Test 1 — No warning at rest:** Open each of the six emails in the editor.
+  Confirm none shows an unrecognized-token warning before any edit.
+- **Test 2 — Subject casing and length:** Confirm each subject is sentence case
+  and 60 characters or fewer.
+- **Test 3 — Greeting and closing:** Confirm every email opens with
+  "Dear [Recipient Name]," and closes with the NRD signature block.
+
+---
+
+**Open questions**
+- [ ] This story sets the prototype's recipient token to [Recipient Name] and the
+  delimiter to [Bracket Title Case]. Confirm these match the send pipeline's field
+  names (resolves the token-reconciliation open questions in Stories 5 and 6:
+  [Recipient's Name] vs [Recipient Name]; PICOF vs "Person in Charge of Field
+  Work" vs "Fieldwork").
+- [ ] The regulated subjects for Application rejected (CSPS-87) and Permit
+  approved (CSPS-78) are unspecified in Jira; the sentence-case subjects above are
+  prototype placeholders pending the official lines.
+- [ ] Confirm the NRD signature block should close all six emails (Story 5 had it
+  on only some), and fix the (916) 635-6725 → 653-6725 typo noted in CSPS-52.

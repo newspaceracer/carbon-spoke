@@ -1,0 +1,388 @@
+---
+import { withBase } from '../lib/base';
+/* manifest:
+     shell:  PermitNav (cds-header UI Shell).
+     header: identity banner (g100) — "Resource category tags" + crumb.
+     spine:  main.page > .cds--css-grid (single full-width column)
+     sections:
+       - Tag catalog -> the org-wide vocabulary of handling tags reviewers apply
+                        to permits: a cds-table (Tag, Description, Actions) with
+                        per-row Edit/Remove + an "Add tag" cds-modal. Reviewers
+                        pick from this set on a permit's Overview tab without
+                        retyping; curating it here keeps the vocabulary consistent.
+   Everything is prototype-local: adds/edits/removes persist immediately to
+   localStorage, which the permit's Tags picker reads. Mirrors the
+   /special-conditions console, minus the owner/scope split (tags are org-wide).
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitSection from '../components/PermitSection.astro';
+import { tagColors } from '../data/resource-tags';
+
+export const prototype = {
+  title: 'Resource category tags',
+  summary:
+    'The catalog console for resource category tags — the reusable internal ' +
+    'labels reviewers apply to permits for triage and coordination. Add, edit, ' +
+    'or remove tags; the vocabulary here feeds every permit’s Tags picker.',
+  tag: 'Internal tool',
+};
+---
+
+<BaseLayout title="Resource category tags">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <header class="banner cds--g100">
+      <div class="banner__inner">
+        <cds-breadcrumb no-trailing-slash class="banner__crumb">
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link href={withBase('/')}>Home</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+          <cds-breadcrumb-item>
+            <cds-breadcrumb-link aria-current="page">Resource category tags</cds-breadcrumb-link>
+          </cds-breadcrumb-item>
+        </cds-breadcrumb>
+
+        <p class="banner__eyebrow t-label-01">Permit administration</p>
+        <h1 class="banner__name t-heading-05">Resource category tags</h1>
+      </div>
+    </header>
+
+    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+      <div class="col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <!-- Auto-save confirmation. -->
+        <cds-inline-notification
+          id="save-notice"
+          hidden
+          kind="success"
+          low-contrast
+          hide-close-button
+          title="Catalog updated"
+          subtitle="Your changes save automatically and are available on every permit."
+        ></cds-inline-notification>
+
+        <PermitSection title="Tag catalog">
+          <cds-button slot="aside" id="add-tag" kind="tertiary" size="md">Add tag</cds-button>
+          <p class="section-hint t-body-01">
+            Reusable labels for triage and coordination that reviewers apply to a permit on its
+            Overview tab. These are separate from a permit’s classification badges: the badges say
+            what a permit <em>is</em>; tags say how the team is <em>handling</em> it.
+          </p>
+          <!-- carbon-checked: .table-wrap is NOT a table — the table is the stock
+               cds-table below. It is only a horizontal-scroll container so the
+               cds-table overflows gracefully on narrow viewports (same pattern as
+               special-conditions.astro). -->
+          <div class="table-wrap">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Tag</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="tag-tbody"></cds-table-body>
+            </cds-table>
+          </div>
+          <p class="empty-note t-body-01" id="tag-empty" hidden>
+            No tags in the catalog yet. Use <strong>Add tag</strong> to create the first one.
+          </p>
+        </PermitSection>
+      </div>
+    </div>
+
+    <!-- ── Add / edit tag modal ───────────────────────────────────────────── -->
+    <cds-modal id="tag-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Resource category tags</cds-modal-label>
+        <cds-modal-heading id="tag-modal-heading">Add tag</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <cds-inline-notification
+          id="tag-warning"
+          hidden
+          kind="warning"
+          low-contrast
+          hide-close-button
+          title="Name required"
+          subtitle="Give the tag a short, distinct name before saving."
+        ></cds-inline-notification>
+
+        <cds-stack gap="6">
+          <cds-text-input
+            id="t-label"
+            label="Tag name"
+            placeholder="e.g. Needs site visit"
+            maxlength="32"
+          ></cds-text-input>
+
+          <div class="color-row">
+            <cds-dropdown id="t-color" title-text="Color" value="cool-gray">
+              {tagColors.map((c) => (
+                <cds-dropdown-item value={c.value}>{c.label}</cds-dropdown-item>
+              ))}
+            </cds-dropdown>
+
+            <div class="preview">
+              <p class="field-label t-label-01">Preview</p>
+              <cds-tag id="t-preview" type="cool-gray" size="md">Tag name</cds-tag>
+            </div>
+          </div>
+        </cds-stack>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="t-save">Save tag</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+
+    <!-- ── Remove-tag confirmation ────────────────────────────────────────── -->
+    <cds-modal id="remove-modal" size="xs" danger>
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Resource category tag</cds-modal-label>
+        <cds-modal-heading>Remove tag</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: confirmation prose has no cds-* component; a <p> with the
+             Carbon type role is the house pattern for modal body copy. -->
+        <p class="modal-hint t-body-01" id="remove-body">
+          Remove this tag? It won’t be available to classify resources.
+        </p>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="danger" id="remove-confirm">Remove tag</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
+  </main>
+</BaseLayout>
+
+<script>
+  import {
+    loadTags,
+    saveTags,
+    newTagId,
+    isDuplicateLabel,
+    defaultTagColor,
+    type ResourceTag,
+    type TagColor,
+  } from '../data/resource-tags';
+
+  const $ = (id: string) => document.getElementById(id);
+  const esc = (s = '') =>
+    s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+  // Standard house "remove a row" affordance: a ghost trash icon-button, with
+  // removal confirmed via a danger modal.
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
+
+  let tags: ResourceTag[] = [];
+
+  const flashSaved = () => {
+    const n = $('save-notice') as any;
+    if (n) n.hidden = false;
+  };
+
+  const persist = () => {
+    saveTags(tags);
+    flashSaved();
+  };
+
+  const render = () => {
+    tags = loadTags();
+
+    const tbody = $('tag-tbody');
+    const empty = $('tag-empty');
+    if (empty) empty.hidden = tags.length > 0;
+    if (!tbody) return;
+
+    tbody.replaceChildren(
+      ...tags.map((t, i) => {
+        const row = document.createElement('cds-table-row');
+
+        const tagCell = document.createElement('cds-table-cell');
+        // Category tag → cds-tag (classification, not status): the text label
+        // carries the meaning, so color grouping is not a color-alone status
+        // (design §3). Fall back to the default color for any legacy stored row.
+        tagCell.innerHTML = `<cds-tag type="${esc(t.color || 'cool-gray')}" size="sm">${esc(t.label)}</cds-tag>`;
+
+        const actionCell = document.createElement('cds-table-cell');
+        const wrap = document.createElement('div');
+        wrap.className = 'row-actions';
+        const edit = document.createElement('cds-button');
+        edit.setAttribute('kind', 'ghost'); edit.setAttribute('size', 'sm');
+        edit.textContent = 'Edit';
+        edit.addEventListener('click', () => openModal(i));
+        const rm = document.createElement('cds-icon-button');
+        rm.setAttribute('kind', 'ghost'); rm.setAttribute('size', 'sm'); rm.setAttribute('align', 'left');
+        rm.innerHTML = `${trash}<span slot="tooltip-content">Remove ${esc(t.label)}</span>`;
+        rm.addEventListener('click', () => openRemoveModal(i));
+        wrap.append(edit, rm);
+        actionCell.appendChild(wrap);
+
+        row.append(tagCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
+  // ── Remove-tag confirmation ─────────────────────────────────────────────
+  // A tag is shared classification metadata, so removal is confirmed via a
+  // danger modal rather than deleting on the first click.
+  const removeModal = $('remove-modal') as any;
+  let pendingRemove = -1;
+  const openRemoveModal = (index: number) => {
+    pendingRemove = index;
+    if (removeModal) removeModal.open = true;
+  };
+  $('remove-confirm')?.addEventListener('click', () => {
+    if (pendingRemove >= 0) {
+      tags.splice(pendingRemove, 1);
+      pendingRemove = -1;
+      persist();
+      render();
+    }
+    if (removeModal) removeModal.open = false;
+  });
+
+  // ── Add / edit modal ───────────────────────────────────────────────────────
+  const modal = $('tag-modal') as any;
+  const labelEl = () => $('t-label') as any;
+  const colorEl = () => $('t-color') as any;
+  const previewEl = () => $('t-preview') as any;
+  const warnEl = $('tag-warning') as any;
+  let editingIndex = -1;
+
+  // Live preview: mirror the typed name + chosen color into the sample tag.
+  const syncPreview = () => {
+    const p = previewEl();
+    if (!p) return;
+    const label = (labelEl()?.value ?? '').toString().trim();
+    p.textContent = label || 'Tag name';
+    p.setAttribute('type', (colorEl()?.value as string) || defaultTagColor);
+  };
+
+  const openModal = (index: number) => {
+    editingIndex = index;
+    const t = index >= 0 ? tags[index] : null;
+
+    const heading = $('tag-modal-heading');
+    if (heading) heading.textContent = index >= 0 ? 'Edit tag' : 'Add tag';
+    if (warnEl) warnEl.hidden = true;
+
+    if (labelEl()) labelEl().value = t?.label ?? '';
+    if (colorEl()) colorEl().value = t?.color ?? defaultTagColor;
+    syncPreview();
+
+    modal.open = true;
+    // Focus the name field once the modal has painted.
+    requestAnimationFrame(() => labelEl()?.focus?.());
+  };
+
+  const warn = (title: string, subtitle: string) => {
+    if (!warnEl) return;
+    warnEl.title = title;
+    warnEl.subtitle = subtitle;
+    warnEl.hidden = false;
+  };
+
+  const saveTag = () => {
+    const label = (labelEl()?.value ?? '').toString().trim();
+    const color = ((colorEl()?.value as TagColor) || defaultTagColor);
+    if (!label) {
+      warn('Name required', 'Give the tag a short, distinct name before saving.');
+      return;
+    }
+    const ignoreId = editingIndex >= 0 ? tags[editingIndex]?.id : undefined;
+    if (isDuplicateLabel(label, tags, ignoreId)) {
+      warn('Tag already exists', `“${label}” is already in the catalog. Pick a different name.`);
+      return;
+    }
+
+    if (editingIndex >= 0) {
+      tags[editingIndex] = { ...tags[editingIndex], label, color };
+    } else {
+      tags.push({ id: newTagId(), label, color });
+    }
+    persist();
+    render();
+    modal.open = false;
+  };
+
+  // ── Wire ─────────────────────────────────────────────────────────────────
+  render();
+  $('add-tag')?.addEventListener('click', () => openModal(-1));
+  $('t-save')?.addEventListener('click', saveTag);
+  // Keep the preview in sync as the user types a name or picks a color.
+  labelEl()?.addEventListener('input', syncPreview);
+  colorEl()?.addEventListener('cds-dropdown-selected', syncPreview);
+</script>
+
+<style>
+  .page { padding-block: 0 6rem; }
+
+  /* Identity banner — same construction as the other admin screens. */
+  .banner {
+    background: var(--cds-background, #161616);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem);
+  }
+  .banner__inner {
+    max-inline-size: 99rem;
+    margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  .banner__crumb { display: block; margin-bottom: var(--cds-spacing-05, 1rem); }
+  .banner__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+  .banner__name { margin: 0; }
+
+  .body { margin-top: var(--cds-spacing-07, 2rem); }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 2.75rem;
+    min-width: 0;
+  }
+
+  #save-notice[hidden], #tag-empty[hidden] { display: none; }
+  #save-notice { max-width: 48rem; }
+
+  .section-hint {
+    margin: 0 0 1.25rem;
+    max-width: 52rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .empty-note { margin: 1rem 0 0; color: var(--cds-text-secondary, #525252); }
+
+  /* Table wrapper — see carbon-checked note in the markup above. */
+  .table-wrap { overflow-x: auto; }
+  :global(.c-muted) { color: var(--cds-text-secondary, #525252); }
+  :global(.row-actions) { display: flex; gap: 0.25rem; }
+
+  /* Modal color picker + live preview, side by side so the open dropdown menu
+     drops below-left and never covers the preview. */
+  .color-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  #t-color { flex: 0 0 14rem; }
+  .preview { min-width: 0; }
+  .field-label { display: block; margin: 0 0 0.5rem; color: var(--cds-text-secondary, #525252); }
+  /* cds-dropdown's own title sits flush at the top; nudge the Preview label to
+     the same baseline so the two fields line up. */
+  .preview .field-label { margin-top: 0.125rem; }
+
+  /* The modal body clips its content with overflow:auto, which cut off the
+     dropdown menu. This modal's content is short, so let it overflow — the menu
+     then renders freely within the modal's own stacking context (z-index 9000).
+     carbon-checked: token-less structural override of a Carbon part's overflow
+     (no --cds-* token governs it); does not restyle the component's look. */
+  #tag-modal cds-modal-body { overflow: visible; }
+
+  /* Modal warning spacing. */
+  #tag-warning { margin-bottom: 1rem; }
+  #tag-warning[hidden] { display: none; }
+</style>

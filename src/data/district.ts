@@ -124,6 +124,41 @@ export const districtDirectory: DistrictSummary[] = [
 export const districtName = (id: string): string =>
   districtDirectory.find((d) => d.id === id)?.name ?? id;
 
+// ── District edit scope, by role ────────────────────────────────────────────
+// Which districts a signed-in role may ADMINISTER (edit office/members/contacts).
+// HQ roles (system admin, HQ technical reviewer) span the whole agency, so they
+// can edit every district; a district lead is scoped to the districts they lead.
+// Everyone else (assistants, applicants, pending, logged-out) administers none.
+//
+// A lead's led-district set and an assistant's assigned-district set are prototype
+// seed data. The demo lead leads two adjacent North Coast districts so the scoped
+// picker has something to switch between; the demo assistant supports one. (Only
+// North Coast Redwoods is fully populated — see the "Prototype scope" notes.)
+const LEAD_DISTRICT_IDS = ['north-coast-redwoods', 'northern-buttes'] as const;
+const ASSISTANT_DISTRICT_IDS = ['north-coast-redwoods'] as const;
+
+const byIds = (ids: readonly string[]): DistrictSummary[] =>
+  districtDirectory.filter((d) => ids.includes(d.id));
+
+/** The districts a given identity may ADMINISTER — edit office, members, contacts
+ *  (the District administration console). Assistants administer none. */
+export function editableDistricts(identity: string): DistrictSummary[] {
+  if (identity === 'admin' || identity === 'hq-technical') return districtDirectory;
+  if (identity === 'district-lead') return byIds(LEAD_DISTRICT_IDS);
+  return [];
+}
+
+/** The districts whose SPECIAL-CONDITIONS catalog a given identity may curate. Both
+ *  leads and assistants curate their own district's catalog (HQ curates every
+ *  district's, plus the org-wide catalog); this is a broader set than
+ *  editableDistricts because it also includes assistants. */
+export function curatableDistricts(identity: string): DistrictSummary[] {
+  if (identity === 'admin' || identity === 'hq-technical') return districtDirectory;
+  if (identity === 'district-lead') return byIds(LEAD_DISTRICT_IDS);
+  if (identity === 'district-assistant') return byIds(ASSISTANT_DISTRICT_IDS);
+  return [];
+}
+
 export const district = {
   id: 'north-coast-redwoods',
   name: 'North Coast Redwoods District',

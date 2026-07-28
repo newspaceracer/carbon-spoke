@@ -5,9 +5,12 @@ import { withBase } from '../lib/base';
      header: identity banner (g100) — "Manage district" + district name + crumb.
      spine:  main.page > .cds--css-grid (single full-width column)
      sections:
-       - Scope bar  -> who you're acting as (District lead vs HQ system admin) and,
-                       for HQ, a district switcher. The console is ONE screen filtered
-                       by scope: a lead is locked to their district; HQ picks any.
+       - Scope bar  -> a district switcher scoped to the SIGNED-IN Prototype identity
+                       (editableDistricts): HQ roles get every district, a district lead
+                       gets the ones they lead, and it hides when there's only one. WHO
+                       is acting is no longer picked here — it's the identity. An identity
+                       that administers no districts sees a no-access notice instead of
+                       the console body.
        - District information -> office address + phone/email (field-grid form)
        - Members    -> the district's people: a cds-table (name, role, auto-assignment,
                        point-of-contact) with per-row Edit/Remove + an "Add member"
@@ -65,16 +68,28 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       </div>
     </header>
 
-    <div class="cds--css-grid cds--css-grid--with-row-gap body">
+    <!-- Shown when the signed-in identity administers no districts (a non-admin
+         reviewer, applicant, or logged-out): the console body is hidden and this
+         explains why. HQ roles and district leads never see it. -->
+    <cds-inline-notification
+      id="no-access"
+      hidden
+      kind="info"
+      low-contrast
+      hide-close-button
+      title="No districts to administer"
+      subtitle="Your role doesn't administer any districts. HQ reviewers and district leads manage districts here."
+    ></cds-inline-notification>
+
+    <div id="console-body" class="cds--css-grid cds--css-grid--with-row-gap body">
       <div class="col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
-        <!-- ── Scope bar: who is acting, and on which district ──────────────── -->
+        <!-- ── Scope bar: which district is being administered ───────────────
+             WHO is acting is no longer picked here — it's the signed-in Prototype
+             identity. The client script scopes the switcher below to the districts
+             that identity may edit (HQ roles → all; a district lead → the ones they
+             lead) and shows it only when there's more than one to choose. -->
         <cds-tile class="scope">
           <div class="scope__row">
-            <cds-dropdown id="acting-as" title-text="Acting as" value="lead">
-              <cds-dropdown-item value="lead">District lead — {d.name}</cds-dropdown-item>
-              <cds-dropdown-item value="hq">HQ system admin</cds-dropdown-item>
-            </cds-dropdown>
-
             <div id="switcher-wrap" class="scope__switcher" hidden>
               <cds-dropdown id="district-switcher" title-text="District" value={d.id}>
                 {districtsSorted.map((row) => (
@@ -133,7 +148,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
         <!-- ── Members ──────────────────────────────────────────────────────── -->
         <PermitSection title="Members">
-          <cds-button slot="aside" id="add-member" kind="tertiary" size="sm">Add member</cds-button>
+          <cds-button slot="aside" id="add-member" kind="tertiary" size="md">Add member</cds-button>
           <p class="section-hint t-body-01">
             The people assigned to this district. A member's <strong>role</strong> sets how they join a permit's
             analysis team: the <strong>lead</strong> reviewer leads single-district permits (supporting on
@@ -280,11 +295,14 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 </BaseLayout>
 
 <script>
-  import { district, roleMeta, assignableRoles, memberRoles } from '../data/district';
+  import { district, roleMeta, assignableRoles, memberRoles, editableDistricts } from '../data/district';
   import { directory } from '../data/user';
   // Member identity is resolved through resolveUser (seeded directory OR an
   // invited/added account) so a newly invited member isn't treated as unknown.
   import { inviteUser, resolveUser, userStatus } from '../data/requests';
+  // The signed-in Prototype identity drives district edit scope (HQ → all;
+  // district lead → the districts they lead; anyone else → none).
+  import { readIdentity } from '../lib/maintenance';
 
   // ── Prototype-local district record (shared with the /district detail) ────
   // A member REFERENCES a user by id; name/email/phone are resolved from the
@@ -344,6 +362,9 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const $ = (id: string) => document.getElementById(id);
   const esc = (s = '') =>
     s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+  // Standard house "remove a row" affordance: a ghost trash icon-button (removal
+  // is already confirmed via the danger #remove-modal below).
+  const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
   const roleLabel = (v: string) => roleMeta(v).label;
   const roleTag = (v: string) => {
     const meta = roleMeta(v);
@@ -401,9 +422,9 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         edit.setAttribute('kind', 'ghost'); edit.setAttribute('size', 'sm');
         edit.textContent = 'Edit';
         edit.addEventListener('click', () => openMemberModal(i));
-        const rm = document.createElement('cds-button');
-        rm.setAttribute('kind', 'danger-ghost'); rm.setAttribute('size', 'sm');
-        rm.textContent = 'Remove';
+        const rm = document.createElement('cds-icon-button');
+        rm.setAttribute('kind', 'ghost'); rm.setAttribute('size', 'sm'); rm.setAttribute('align', 'left');
+        rm.innerHTML = `${trash}<span slot="tooltip-content">Remove ${esc(user?.name ?? 'member')}</span>`;
         rm.addEventListener('click', () => openRemoveModal(i));
         wrap.append(edit, rm);
         actionCell.appendChild(wrap);
@@ -461,7 +482,12 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     if (mWarn) mWarn.hidden = true;
   };
 
-  const currentScope = (): 'lead' | 'hq' => ((($('acting-as') as any)?.value === 'hq') ? 'hq' : 'lead');
+  // The signed-in identity and the districts it may edit — computed once. HQ roles
+  // act at 'hq' scope (can appoint leads); a district lead acts at 'lead' scope.
+  const identity = readIdentity();
+  const editable = editableDistricts(identity);
+  const currentScope = (): 'lead' | 'hq' =>
+    identity === 'admin' || identity === 'hq-technical' ? 'hq' : 'lead';
 
   // Role options are scoped to the ACTOR: a district lead can only appoint
   // assistants; HQ can set lead or assistant. When editing, the member's current
@@ -724,21 +750,63 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   });
 
   // ── Scope bar ──────────────────────────────────────────────────────────────
-  const actingAs = $('acting-as') as any;
   const switcherWrap = $('switcher-wrap');
   const scopeNote = $('scope-note');
   const switcher = $('district-switcher') as any;
   const switcherNote = $('switcher-note') as any;
+  const consoleBody = $('console-body');
+  const noAccess = $('no-access') as any;
 
-  const applyScope = () => {
-    const hq = actingAs?.value === 'hq';
-    if (switcherWrap) switcherWrap.hidden = !hq;
+  // Scope the console to the signed-in identity:
+  //  - no editable districts → hide the console, show the no-access notice.
+  //  - one → lock to it (no switcher; the note names the district).
+  //  - many → prune the switcher to just those and reveal it.
+  const applyScope = async () => {
+    const hq = currentScope() === 'hq';
+
+    if (editable.length === 0) {
+      if (consoleBody) consoleBody.style.display = 'none';
+      if (noAccess) noAccess.hidden = false;
+      return;
+    }
+    if (consoleBody) consoleBody.style.display = '';
+    if (noAccess) noAccess.hidden = true;
+
+    // Keep only the districts this identity may edit; default to the first.
+    const allowed = new Set(editable.map((r) => r.id));
+    if (switcher) {
+      // Wait for the dropdown + its items to upgrade before reading/setting `.value`
+      // (an unupgraded item's `.value` is undefined, which would prune everything).
+      await customElements.whenDefined('cds-dropdown');
+      await customElements.whenDefined('cds-dropdown-item');
+      await switcher.updateComplete;
+      // cds-* elements set :host display, so the `hidden` attribute won't collapse a
+      // dropdown item — toggle inline display. Match on the ATTRIBUTE (always in the
+      // SSR HTML) rather than the `.value` property, which lags element upgrade.
+      Array.from(switcher.querySelectorAll('cds-dropdown-item')).forEach((o: any) => {
+        o.style.display = allowed.has(o.getAttribute('value')) ? '' : 'none';
+      });
+      if (!allowed.has(switcher.value)) switcher.value = editable[0].id;
+      syncBannerToSwitcher();
+    }
+
+    if (switcherWrap) switcherWrap.hidden = editable.length < 2;
     if (scopeNote) {
       scopeNote.textContent = hq
-        ? 'HQ system admins manage every district. Pick a district to administer it.'
-        : 'A district lead is scoped to their own district — its mini system admin for information, members, and contacts.';
+        ? 'HQ reviewers administer every district. Pick a district to manage it.'
+        : editable.length > 1
+          ? `You lead ${editable.length} districts. Pick the one to manage.`
+          : `You lead ${editable[0].name} — its system admin for information, members, and contacts.`;
     }
-    if (!hq && switcherNote) switcherNote.hidden = true;
+    if (switcherNote) switcherNote.hidden = (switcher?.value ?? district.id) === district.id;
+  };
+
+  const syncBannerToSwitcher = () => {
+    const bannerName = $('banner-name');
+    if (!bannerName || !switcher) return;
+    const found = Array.from(switcher.querySelectorAll('cds-dropdown-item'))
+      .find((o: any) => o.value === switcher.value) as HTMLElement | undefined;
+    bannerName.textContent = found?.textContent?.trim() || district.name;
   };
 
   // ── Wire everything ────────────────────────────────────────────────────────
@@ -746,15 +814,9 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   renderMembers();
   applyScope();
 
-  actingAs?.addEventListener('cds-dropdown-selected', applyScope);
   switcher?.addEventListener('cds-dropdown-selected', () => {
-    const bannerName = $('banner-name');
-    const picked = switcher.value;
-    if (bannerName) {
-      const found = Array.from(switcher.querySelectorAll('cds-dropdown-item')).find((o: any) => o.value === picked) as HTMLElement | undefined;
-      bannerName.textContent = found?.textContent?.trim() || district.name;
-    }
-    if (switcherNote) switcherNote.hidden = picked === district.id;
+    syncBannerToSwitcher();
+    if (switcherNote) switcherNote.hidden = switcher.value === district.id;
   });
 
   roleEl()?.addEventListener('cds-dropdown-selected', updateRoleUI);
@@ -820,7 +882,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   .scope__switcher { min-width: 18rem; }
   .scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
   #switcher-note { margin-top: 1rem; }
-  #switcher-note[hidden], #switcher-wrap[hidden], #save-notice[hidden] { display: none; }
+  #switcher-note[hidden], #switcher-wrap[hidden], #save-notice[hidden], #no-access[hidden] { display: none; }
   #save-notice { max-width: 48rem; }
 
   .section-hint {

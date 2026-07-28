@@ -160,6 +160,16 @@ const icons = {
 
   const ALL = Number(countEl.dataset.total || '0');
 
+  // Carbon's content-switcher focuses its first item during firstUpdated
+  // (selectedIndex defaults to 0 → _selectionDidChange → item.focus()). We then
+  // set `.value` to the remembered scope, which moves the *selected* state but
+  // not focus — leaving a stray ring on the first segment. Nothing should be
+  // focused from a programmatic load, so drop it.
+  function clearStrayScopeFocus() {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active !== document.body && scope.contains(active)) active.blur();
+  }
+
   // Keep the column-manager checkboxes + pin buttons in sync with the grid's
   // actual column state (also fired after applyColumnState / reset).
   function syncColumnManager() {
@@ -205,6 +215,8 @@ const icons = {
       const el = scope as HTMLElement & { value: string; updateComplete?: Promise<unknown> };
       if (el.updateComplete) await el.updateComplete;
       scope.value = bucket;
+      if (el.updateComplete) await el.updateComplete;
+      clearStrayScopeFocus();
     });
 
     // A `?q=` deep-link (e.g. a dashboard click-through) takes precedence over a
@@ -310,14 +322,17 @@ const icons = {
     gap: 1rem;
     flex-wrap: wrap;
   }
-  /* Carbon hard-codes cds-content-switcher to inline-size:100% (it's built to
-     fill its container, with equal-width buttons). Left unbounded in the toolbar
-     it sprawls the whole row, so cap it — max-width is a separate property from
-     inline-size, so it bounds the fill cleanly without a cascade fight. It still
-     shrinks below this on narrow viewports (the toolbar wraps). */
+  /* Carbon hard-codes cds-content-switcher to inline-size:100% with equal-width
+     buttons that FILL the host. Left unbounded it sprawls the row; but a fixed
+     max-width squeezes the equal-width segments below their label width, so the
+     widest segment ("All permits · 960") overflows past the rounded border.
+     Size the host to its content instead — `inline-size: max-content` lets each
+     segment take its natural width — and only cap at the available space so it
+     still shrinks + wraps on narrow viewports. */
   .permits-grid__scope {
     flex: 0 1 auto;
-    max-width: 30rem;
+    inline-size: max-content;
+    max-inline-size: 100%;
   }
   .permits-grid__tools {
     display: flex;

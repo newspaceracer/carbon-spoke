@@ -129,7 +129,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         <!-- ── All users (the account directory) ────────────────────────────── -->
         <PermitSection title="All users">
           <cds-tag slot="aside" type="cool-gray" id="users-count">{directory.length}</cds-tag>
-          <cds-button slot="aside" kind="tertiary" size="sm" id="add-user-btn">
+          <cds-button slot="aside" kind="tertiary" size="md" id="add-user-btn">
             Invite user
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
               <path d="M17 15L17 8 15 8 15 15 8 15 8 17 15 17 15 24 17 24 17 17 24 17 24 15z"></path>
@@ -137,7 +137,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
           </cds-button>
           <p class="section-hint t-body-01">
             Every account, its global role, and whether the person has accepted. Use
-            <strong>Manage</strong> to set a role, or <strong>Invite user</strong> to add one.
+            <strong>Edit</strong> to set a role, or <strong>Invite user</strong> to add one.
             Per-district assignments are edited on the district’s management screen, not here.
           </p>
           <div class="table-wrap">
@@ -265,6 +265,24 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         <cds-modal-footer-button kind="primary" id="au-save">Send invitation</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
+
+    <!-- ── Shared confirmation for consequential actions (deny / revoke) ────── -->
+    <cds-modal id="confirm-modal" size="xs" danger>
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label id="confirm-label">Confirm</cds-modal-label>
+        <cds-modal-heading id="confirm-heading">Are you sure?</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <!-- carbon-checked: confirmation prose has no cds-* component; a <p> with the
+             Carbon type role is the house pattern for modal body copy. -->
+        <p class="modal-hint t-body-01" id="confirm-body"></p>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="danger" id="confirm-action">Confirm</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
   </main>
 </BaseLayout>
 
@@ -294,6 +312,29 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const $ = (id: string) => document.getElementById(id);
   const esc = (s = '') =>
     s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+
+  // ── Confirm consequential actions (deny a role request, revoke an invite) ──
+  // One shared danger modal; each caller supplies the copy + the action to run
+  // once confirmed. Deny/Revoke keep their own verbs (they're not a generic
+  // "remove"), but both now confirm before firing.
+  const confirmModal = $('confirm-modal') as any;
+  let pendingAction: (() => void) | null = null;
+  const askConfirm = (opts: { label: string; heading: string; body: string; confirmLabel: string; action: () => void }) => {
+    const setText = (id: string, v: string) => { const el = $(id); if (el) el.textContent = v; };
+    setText('confirm-label', opts.label);
+    setText('confirm-heading', opts.heading);
+    setText('confirm-body', opts.body);
+    setText('confirm-action', opts.confirmLabel);
+    pendingAction = opts.action;
+    if (confirmModal) confirmModal.open = true;
+  };
+  $('confirm-action')?.addEventListener('click', () => {
+    const run = pendingAction;
+    pendingAction = null;
+    if (confirmModal) confirmModal.open = false;
+    run?.();
+  });
+
   // A User cell: shared initials chip + name/email — one source (src/lib/avatar.ts).
   const userCellHTML = (name: string, email: string) =>
     `<div class="u-id">${avatarHTML(name, 'sm')}` +
@@ -359,7 +400,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         const wrapEl = document.createElement('div');
         wrapEl.className = 'row-actions';
         const approve = document.createElement('cds-button');
-        approve.setAttribute('kind', 'primary'); approve.setAttribute('size', 'sm');
+        approve.setAttribute('kind', 'ghost'); approve.setAttribute('size', 'sm');
         approve.textContent = 'Approve';
         approve.addEventListener('click', () => {
           decideRequest(req.id, 'approved');
@@ -371,9 +412,17 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         deny.setAttribute('kind', 'danger-ghost'); deny.setAttribute('size', 'sm');
         deny.textContent = 'Deny';
         deny.addEventListener('click', () => {
-          decideRequest(req.id, 'denied');
-          renderRequests();
-          flash('Request denied', `${user?.name ?? 'The user'}’s request for ${roleLabel(req.role)} was denied.`);
+          askConfirm({
+            label: 'Role request',
+            heading: 'Deny role request',
+            body: `Deny ${user?.name ?? 'this user'}’s request for ${roleLabel(req.role)}? They keep their current access and can request again.`,
+            confirmLabel: 'Deny request',
+            action: () => {
+              decideRequest(req.id, 'denied');
+              renderRequests();
+              flash('Request denied', `${user?.name ?? 'The user'}’s request for ${roleLabel(req.role)} was denied.`);
+            },
+          });
         });
         wrapEl.append(approve, deny);
         actionCell.appendChild(wrapEl);
@@ -425,7 +474,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         const actionCell = document.createElement('cds-table-cell');
         const manage = document.createElement('cds-button');
         manage.setAttribute('kind', 'ghost'); manage.setAttribute('size', 'sm');
-        manage.textContent = 'Manage';
+        manage.textContent = 'Edit';
         manage.addEventListener('click', () => openUserModal(u.id));
         actionCell.appendChild(manage);
 
@@ -481,10 +530,18 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         revoke.setAttribute('kind', 'danger-ghost'); revoke.setAttribute('size', 'sm');
         revoke.textContent = 'Revoke';
         revoke.addEventListener('click', () => {
-          revokeInvite(inv.id);
-          renderInvites();
-          renderUsers();
-          flash('Invitation revoked', `${inv.name}’s invitation was removed.`);
+          askConfirm({
+            label: 'Pending invitation',
+            heading: 'Revoke invitation',
+            body: `Revoke ${inv.name}’s invitation? The sign-in link in their email will stop working.`,
+            confirmLabel: 'Revoke invitation',
+            action: () => {
+              revokeInvite(inv.id);
+              renderInvites();
+              renderUsers();
+              flash('Invitation revoked', `${inv.name}’s invitation was removed.`);
+            },
+          });
         });
 
         wrapEl.append(resend, revoke);

@@ -108,7 +108,7 @@ export const prototype = {
                       <span data-updated>{formatDocDate(d.updatedAt)}</span>
                     </cds-table-cell>
                     <cds-table-cell>
-                      <cds-button size="sm" kind="tertiary" class="replace-btn" data-doc={d.id} data-code={d.code ?? d.title}>
+                      <cds-button size="sm" kind="ghost" class="replace-btn" data-doc={d.id} data-code={d.code ?? d.title}>
                         Replace
                       </cds-button>
                     </cds-table-cell>
@@ -122,7 +122,7 @@ export const prototype = {
         <!-- ── Letterhead & signatories ───────────────────────────────────── -->
         <div class="settings-block">
           <PermitSection title="Letterhead & signatories">
-            <cds-button slot="aside" size="sm" kind="ghost" id="lh-edit">Edit</cds-button>
+            <cds-button slot="aside" size="md" kind="tertiary" id="lh-edit">Edit</cds-button>
 
             <p class="section-hint t-body-01">
               The agency identity printed on every permit letter, and the classification
@@ -169,7 +169,7 @@ export const prototype = {
         <!-- ── Permit defaults ────────────────────────────────────────────── -->
         <div class="settings-block">
           <PermitSection title="Permit defaults">
-            <cds-button slot="aside" size="sm" kind="ghost" id="pd-edit">Edit</cds-button>
+            <cds-button slot="aside" size="md" kind="tertiary" id="pd-edit">Edit</cds-button>
 
             <p class="section-hint t-body-01">
               The permit-number format and the defaults that seed each new permit. Changing
@@ -218,7 +218,10 @@ export const prototype = {
                 <article class="notif" data-notif={t.id}>
                   <div class="notif__head">
                     <h3 class="notif__name t-heading-compact-01">{t.name}</h3>
-                    <cds-button size="sm" kind="ghost" class="notif-edit" data-notif={t.id}>Edit</cds-button>
+                    <cds-icon-button kind="ghost" size="sm" align="left" class="notif-edit" data-notif={t.id}>
+                      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>
+                      <span slot="tooltip-content">{`Edit ${t.name}`}</span>
+                    </cds-icon-button>
                   </div>
                   <p class="notif__subject t-body-01"><span class="notif__k t-label-01">Subject</span> <span data-notif-subject>{t.subject}</span></p>
                   <p class="notif__body t-body-01" data-notif-body>{t.body}</p>
@@ -276,8 +279,17 @@ export const prototype = {
       </cds-modal-header>
       <cds-modal-body>
         <cds-text-input id="nm-subject" label="Subject"></cds-text-input>
+        <!-- Rich text: email bodies carry formatting (emphasis, lists, links), so
+             the Message field is the reusable sc-rich-text editor (Tiptap in Carbon
+             chrome), not a plain textarea. The label is rendered here since the
+             editor isn't a native field. -->
         <div class="nm-body-wrap">
-          <cds-textarea id="nm-body" label="Message" rows="12"></cds-textarea>
+          <span class="nm-body-label t-label-01" id="nm-body-label">Message</span>
+          <sc-rich-text
+            id="nm-body"
+            aria-label="Message"
+            placeholder="Write the message applicants receive…"
+          ></sc-rich-text>
         </div>
 
         <!-- Available variables: the system fills these in when the email is sent.
@@ -315,6 +327,9 @@ export const prototype = {
 </BaseLayout>
 
 <script>
+  // Registers the <sc-rich-text> custom element (Tiptap in Carbon chrome) used
+  // for the notification Message field.
+  import '../../components/sc-rich-text.ts';
   import { readIdentity } from '../../lib/maintenance';
   import {
     readRegulatedDocs,
@@ -585,21 +600,63 @@ export const prototype = {
     // The field a chip inserts into — whichever the admin last put the caret in.
     let lastFocused: any = bodyInput;
 
+    // The body is now rich text (HTML), but the seeds ship as plain text. Convert
+    // each way at the boundary; anything already starting with a tag is HTML.
+    const isHtml = (s: string) => /^\s*</.test(s);
+    const escHtml = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Wrap any known [variable] in escaped text as a pill span so the seed's
+    // existing tokens render as tokens too (longest first, so nested names win).
+    const pillify = (escaped: string) => {
+      const vars = [...currentVars].sort((a, b) => b.length - a.length);
+      let out = escaped;
+      vars.forEach((v) => {
+        out = out.replace(
+          new RegExp(escRe(v), 'g'),
+          `<span class="var-token" data-var="${v}">${v}</span>`,
+        );
+      });
+      return out;
+    };
+    const toEditorHtml = (body: string) =>
+      isHtml(body)
+        ? body
+        : body
+            .split(/\n{2,}/)
+            .map((block) => `<p>${pillify(block.split('\n').map(escHtml).join('<br>'))}</p>`)
+            .join('');
+    // Flatten body (HTML or plain) to text for the compact card preview.
+    const bodyToText = (body: string) => {
+      if (!isHtml(body)) return body;
+      const div = document.createElement('div');
+      div.innerHTML = body
+        .replace(/<\/(p|li|h[1-6]|blockquote|div)>/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n');
+      return (div.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+    };
+
     const paint = (t: { id: string; subject: string; body: string }) => {
       const card = document.querySelector(`.notif[data-notif="${t.id}"]`);
       if (!card) return;
       card.querySelector('[data-notif-subject]')!.textContent = t.subject;
-      card.querySelector('[data-notif-body]')!.textContent = t.body;
+      card.querySelector('[data-notif-body]')!.textContent = bodyToText(t.body);
     };
     readNotifications().forEach(paint);
 
-    // The editable element lives in the component's shadow root.
+    // The subject's editable element lives in the component's shadow root.
     const inner = (host: any): HTMLInputElement | HTMLTextAreaElement | null =>
       host.shadowRoot?.querySelector('textarea, input') ?? null;
 
     // Insert a token at the caret of the last-focused field (subject or body).
     const insertToken = (token: string) => {
       const host = lastFocused;
+      // The rich-text body inserts variables as visible pill tokens.
+      if (host === bodyInput) {
+        bodyInput.insertVariable(token);
+        validate();
+        return;
+      }
       const el = inner(host);
       if (!el) {
         host.value = (host.value || '') + token;
@@ -655,7 +712,7 @@ export const prototype = {
         currentVars = t.variables || [];
         heading.textContent = `Edit “${t.name}”`;
         subjectInput.value = t.subject;
-        bodyInput.value = t.body;
+        bodyInput.value = toEditorHtml(t.body);
         lastFocused = bodyInput;
 
         // Rebuild the insertable-variable chips for this email.
@@ -663,7 +720,7 @@ export const prototype = {
         currentVars.forEach((v) => {
           const chip = document.createElement('cds-button') as any;
           chip.setAttribute('kind', 'ghost');
-          chip.setAttribute('size', 'sm');
+          chip.setAttribute('size', 'md');
           chip.textContent = v;
           chip.addEventListener('click', () => insertToken(v));
           varsList.appendChild(chip);
@@ -811,6 +868,12 @@ export const prototype = {
   #rm-error[hidden] { display: none; }
   .modal-hint { margin: 0 0 1.5rem; }
   .nm-body-wrap { margin-top: 1.25rem; }
+  /* The editor isn't a native field, so its label is a plain span — match the
+     spacing cds-* fields put between their label and control. */
+  .nm-body-label { display: block; margin-bottom: 0.5rem; }
+  /* Email bodies run long — give the writing surface more room than the
+     component's default before it scrolls. */
+  .nm-body-wrap :global(sc-rich-text .tiptap) { min-height: 12rem; }
 
   /* Insertable-variable helper under the message field. */
   .nm-vars { margin-top: 1.25rem; }

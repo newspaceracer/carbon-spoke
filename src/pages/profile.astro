@@ -146,7 +146,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
           <!-- View-first, like the rest of the app: the record reads read-only
                until you deliberately enter edit mode. Save/Cancel then bound the
                transaction (see .form__actions, hidden until editing). -->
-          <cds-button slot="aside" id="profile-edit" kind="ghost" size="sm">Edit</cds-button>
+          <cds-button slot="aside" id="profile-edit" kind="tertiary" size="md">Edit</cds-button>
           <p class="section-hint t-body-01" id="personal-hint">Update how you appear to applicants and other reviewers across the permitting system.</p>
 
           <!-- Confirmation of a save. Hidden until the form is submitted. -->
@@ -303,7 +303,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
           <p class="access__note t-label-01">
             Your role and district assignments are managed by an administrator.
           </p>
-          <cds-button id="request-role-btn" kind="tertiary" size="sm">Request role change</cds-button>
+          <cds-button id="request-role-btn" kind="tertiary" size="md">Request role change</cds-button>
         </cds-tile>
 
         <!-- Researcher account panel — a public applicant has no internal role or
@@ -326,7 +326,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
             You submit and manage Scientific Research &amp; Collection Permit applications as a
             member of the public.
           </p>
-          <cds-button kind="tertiary" size="sm" href={withBase('/my-permits')}>View my applications</cds-button>
+          <cds-button kind="tertiary" size="md" href={withBase('/my-permits')}>View my applications</cds-button>
         </cds-tile>
       </aside>
     </div>

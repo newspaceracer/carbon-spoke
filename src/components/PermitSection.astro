@@ -16,7 +16,7 @@ const { title, editable = false } = Astro.props;
     <h2 class="sec__title t-heading-03">{title}</h2>
     <div class="sec__aside">
       <slot name="aside" />
-      {editable && <cds-button kind="ghost" size="sm">Make changes</cds-button>}
+      {editable && <cds-button kind="tertiary" size="md">Make changes</cds-button>}
     </div>
   </div>
   <slot />

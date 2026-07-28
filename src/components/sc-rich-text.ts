@@ -14,9 +14,41 @@
 // <sc-rich-text value="<p>..</p>" placeholder="Write a condition…"></sc-rich-text>
 // Exposes a `.value` getter/setter (HTML). Tiptap's schema is the sanitizer:
 // getHTML() only emits nodes/marks StarterKit allows.
-import { Editor } from '@tiptap/core';
+import { Editor, Node } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+
+// An atomic inline "token" — e.g. a mail-merge variable like [Recipient Name].
+// It's non-editable and deletes as one unit, so a reader can tell at a glance
+// it's a filled-in variable and not text they typed. Serializes to
+// `<span class="var-token" data-var="[…]">[…]</span>`, so plain-text detectors
+// (and the notification validator) still see the literal [token] in getHTML().
+const VariableToken = Node.create({
+  name: 'variableToken',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  draggable: false,
+  addAttributes() {
+    return {
+      name: {
+        default: '',
+        parseHTML: (el) => (el as HTMLElement).getAttribute('data-var') || el.textContent || '',
+        renderHTML: (attrs) => ({ 'data-var': attrs.name }),
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-var]' }];
+  },
+  renderHTML({ node, HTMLAttributes }) {
+    return ['span', { ...HTMLAttributes, class: 'var-token' }, node.attrs.name];
+  },
+  renderText({ node }) {
+    return node.attrs.name;
+  },
+});
 
 function injectStyleOnce() {
   if (document.getElementById('sc-rich-text-styles')) return;
@@ -72,6 +104,24 @@ function injectStyleOnce() {
     sc-rich-text .tiptap h2 { font-size: 1.125rem; }
     sc-rich-text .tiptap h3 { font-size: 1rem; }
     sc-rich-text .tiptap a { color: var(--cds-link-primary, #0f62fe); }
+    /* Variable pill: reads as a filled-in token, not typed text. Atomic node,
+       so the whole thing selects/deletes as one unit. */
+    sc-rich-text .tiptap .var-token {
+      display: inline-block;
+      padding: 0 0.375rem;
+      border-radius: 0.75rem;
+      background: var(--cds-tag-background-blue, #d0e2ff);
+      color: var(--cds-tag-color-blue, #0043ce);
+      font-size: 0.875em;
+      font-weight: 500;
+      line-height: 1.4;
+      white-space: nowrap;
+      cursor: default;
+    }
+    sc-rich-text .tiptap .var-token.ProseMirror-selectednode {
+      outline: 2px solid var(--cds-focus, #0f62fe);
+      outline-offset: 1px;
+    }
     sc-rich-text .tiptap code {
       background-color: var(--cds-layer-accent-01, #e0e0e0);
       border-radius: 0.25rem;
@@ -189,6 +239,7 @@ class ScRichText extends HTMLElement {
     this.editor = new Editor({
       element: mount,
       extensions: [
+        VariableToken,
         StarterKit.configure({
           link: {
             openOnClick: false,
@@ -207,6 +258,9 @@ class ScRichText extends HTMLElement {
         },
       },
       onTransaction: () => this.syncToolbar(),
+      // Re-dispatch a bubbling `input` from the host so external code can wire
+      // live validation to the editor the same way it would a native field.
+      onUpdate: () => this.dispatchEvent(new Event('input', { bubbles: true })),
     });
     this.syncToolbar();
   }
@@ -258,6 +312,24 @@ class ScRichText extends HTMLElement {
   }
 
   clear() { this.value = ''; }
+
+  /** Insert literal text at the caret (used to drop template tokens like [Name]). */
+  insert(text: string): void {
+    if (!this.editor || !text) return;
+    // insertContent parses strings as HTML; token text carries no tags, so it
+    // lands as literal characters. focus() first so it goes where the caret was.
+    this.editor.chain().focus().insertContent(text).run();
+  }
+
+  /** Insert a variable as an atomic pill token (visibly distinct from typed text). */
+  insertVariable(name: string): void {
+    if (!this.editor || !name) return;
+    this.editor
+      .chain()
+      .focus()
+      .insertContent([{ type: 'variableToken', attrs: { name } }, { type: 'text', text: ' ' }])
+      .run();
+  }
 }
 
 if (!customElements.get('sc-rich-text')) {

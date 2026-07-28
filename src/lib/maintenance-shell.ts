@@ -104,7 +104,10 @@ function mountIdentitySwitcher(): void {
   if (document.getElementById(SWITCHER_ID)) return;
   const current = readIdentity();
   const options: { value: Identity; label: string }[] = [
-    { value: 'admin', label: 'System Administrator' },
+    { value: 'admin', label: 'HQ system admin' },
+    { value: 'hq-technical', label: 'HQ technical reviewer' },
+    { value: 'district-lead', label: 'District lead technical reviewer' },
+    { value: 'district-assistant', label: 'District assistant technical reviewer' },
     { value: 'user', label: 'Reviewer (non-admin)' },
     { value: 'researcher', label: 'Researcher (applicant)' },
     { value: 'pending', label: 'New user (pending role)' },

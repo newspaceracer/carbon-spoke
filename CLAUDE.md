@@ -90,7 +90,9 @@ npm run preview   # preview the build
 - **Skill** `carbon-first` — the component lookup order + token discipline (load before any UI).
 - **Skill** `design-principles` — how the result looks/behaves: token rules, Carbon
   type scale, status meaning (colored Tag ≠ status → `cds-icon-indicator`), the WC
-  grid, the WCAG 2.2 accessibility contract, icon-name verification, mock-data rules.
+  grid, the WCAG 2.2 accessibility contract, overlay & confirmation patterns (no
+  modal-on-modal), control sizing (button size scale, never omit `size=`),
+  icon-name verification, mock-data rules.
   Distilled from IBM's Carbon guidance reconciled with the house aesthetic.
 - **Skill** `microcopy` — how the WORDS read: the 3 C's (Clarity > Concision >
   Character), front-loading, the four concision mistakes, length targets, and the

@@ -980,7 +980,7 @@ const letterData = {
               <cds-tag type="gray" size="sm">${applied.length}</cds-tag>
             </div>
             <ul class="cond-list">${cards || '<li class="cond cond--empty t-label-01">No conditions applied.</li>'}</ul>
-            <cds-button kind="tertiary" size="sm" data-add-cond="${owner}">Add condition</cds-button>
+            <cds-button kind="tertiary" size="md" data-add-cond="${owner}">Add condition</cds-button>
           </cds-accordion-item>`;
       }).join('')}</cds-accordion>`;
     };
@@ -1354,7 +1354,7 @@ const letterData = {
       // Step context (new comments only) — a jump chip back to where it was written.
       if (typeof c.page === 'number' && data.pages[c.page]) {
         const chip = document.createElement('cds-button') as any;
-        chip.setAttribute('kind', 'ghost'); chip.setAttribute('size', 'sm'); chip.className = 'comment__page';
+        chip.setAttribute('kind', 'ghost'); chip.setAttribute('size', 'md'); chip.className = 'comment__page';
         chip.textContent = `on ${data.pages[c.page].label}`;
         chip.addEventListener('click', () => { goTo(c.page as number); closePanel(); });
         body.append(chip);

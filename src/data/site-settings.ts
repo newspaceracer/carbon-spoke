@@ -85,30 +85,34 @@ export const notificationSeeds: NotificationTemplate[] = [
   {
     id: 'submission-confirmation',
     name: 'Application submission confirmation',
-    variables: ["[Recipient's Name]", '[Application Title]', '[Submission Date]'],
-    subject: 'Permit Application Submission Confirmation: [Application Title]',
-    body: `Dear [Recipient's Name],
+    variables: ['[Recipient Name]', '[Application Title]', '[Submission Date]'],
+    subject: 'Permit application submitted: [Application Title]',
+    body: `Dear [Recipient Name],
 
-We are pleased to inform you that your permit application, [Application Title], was successfully submitted on [Submission Date].
+We are pleased to inform you that your permit application, [Application Title], was submitted on [Submission Date].
 
 You can expect a final decision within 90 days from the submission date. If any additional materials or information are required, you will receive further email notifications like this one to keep you informed.
 
-At this point, no further action is required from you.
+No further action is needed from you right now.
 
 Thank you for your interest in performing research in California State Parks.
 
-Best regards,`,
+Best regards,
+Natural Resources Division
+California State Parks
+(916) 653-6725
+nrd.research@parks.ca.gov`,
   },
   {
     id: 'returned',
     name: 'Application returned to researcher',
     variables: [
-      '[Researcher Name]', '[Application ID]', '[Due Date]',
+      '[Recipient Name]', '[Application ID]', '[Due Date]',
       '[Predefined Reason 1]', '[Predefined Reason 2]', '[Custom text by reviewer]',
       '[Link to Permit Application]',
     ],
-    subject: 'Your Permit Application Has Been Returned for Revisions',
-    body: `Dear [Researcher Name],
+    subject: 'Your permit application was returned for revisions',
+    body: `Dear [Recipient Name],
 
 Your permit application [Application ID] has been returned by the technical reviewer. Please review the required changes and resubmit your application by [Due Date].
 
@@ -117,9 +121,9 @@ Required Changes:
 - [Predefined Reason 2]
 - [Custom text by reviewer]
 
-You can access your application and make the necessary changes by clicking on the following link: [Link to Permit Application].
+Open your application to make the changes: [Link to Permit Application].
 
-Thank you,
+Best regards,
 Natural Resources Division
 California State Parks
 (916) 653-6725
@@ -128,11 +132,11 @@ nrd.research@parks.ca.gov`,
   {
     id: 'rejected',
     name: 'Application rejected',
-    variables: ["[Researcher's Name]", '[Application ID (Title)]', '[Rejection Reason]'],
+    variables: ['[Recipient Name]', '[Application ID]', '[Application Title]', '[Rejection Reason]'],
     subject: 'Your permit application has been rejected',
-    body: `Dear [Researcher's Name],
+    body: `Dear [Recipient Name],
 
-Your research application, [Application ID (Title)], has been reviewed and has been rejected at this stage.
+Your research application, [Application ID] ([Application Title]), has been reviewed and rejected.
 
 The following reason was provided by the reviewer:
 
@@ -140,26 +144,30 @@ The following reason was provided by the reviewer:
 
 Please review the feedback provided and ensure that any future submissions address the concerns outlined.
 
-If you have any questions or require further information, feel free to contact our office.
+If you have any questions, please contact us.
 
 Thank you for your attention to this matter.
 
-Best regards,`,
+Best regards,
+Natural Resources Division
+California State Parks
+(916) 653-6725
+nrd.research@parks.ca.gov`,
   },
   {
     id: 'approved',
     name: 'Permit approved',
-    variables: ['[Application ID]', '[Direct Application URL]'],
+    variables: ['[Recipient Name]', '[Application ID]', '[Permit Title]', '[Direct Application URL]'],
     subject: 'Your permit has been approved',
-    body: `Hello,
+    body: `Dear [Recipient Name],
 
 We are pleased to inform you that your research application, [Application ID], has been approved.
 
-Please proceed with the next steps as outlined in the permit itself. You can review the details of your approved application and any specific conditions by logging into the system and downloading the final approved permit.
+Please proceed with the next steps outlined in the permit. To review the details and any conditions, log in and download your approved permit.
 
-Use the following link to access your application directly: [Direct Application URL]
+Access your application here: [Direct Application URL]
 
-Should you have any questions or need further assistance, please do not hesitate to contact us.
+If you have any questions, please contact us.
 
 Best regards,
 Natural Resources Division
@@ -170,36 +178,44 @@ nrd.research@parks.ca.gov`,
   {
     id: 'annual-report-15',
     name: 'Annual report reminder — 15 days before',
-    variables: ['[Recipient Name]', '[Permit Number]', '[Expiration Date]', '[Link]'],
-    subject: 'CA State Parks SCP - Permit Annual Report Due in 15 days – Action Required',
+    variables: ['[Recipient Name]', '[Permit Number]', '[Permit Title]', '[Expiration Date]', '[Link]'],
+    subject: 'CA State Parks SCP – annual report due in 15 days',
     body: `Dear [Recipient Name],
 
-We are writing to remind you that the annual report for your permit, [Permit Number] (Title), is due on [Expiration Date]. The submission of this report is mandatory in all cases and must be received before a renewal permit can be issued.
+We are writing to remind you that the annual report for your permit, [Permit Number] ([Permit Title]), is due on [Expiration Date]. The submission of this report is mandatory in all cases and must be received before a renewal permit can be issued.
 
-Please ensure that your report is submitted by the due date. You can submit your report by logging into your account and navigating to the permit: [Link] and clicking on the submit annual report button.
+Please submit your report by the due date. Log in, open your permit ([Link]), and select "Submit annual report".
 
-If you have any questions or need assistance, feel free to contact us.
+If you have any questions, please contact us.
 
 Thank you for your prompt attention to this matter.
 
-Best regards,`,
+Best regards,
+Natural Resources Division
+California State Parks
+(916) 653-6725
+nrd.research@parks.ca.gov`,
   },
   {
     id: 'annual-report-day',
     name: 'Annual report reminder — due today',
-    variables: ['[Recipient Name]', '[Permit Number]', '[Expiration Date]', '[Link]'],
-    subject: 'CA State Parks SCP - Permit Annual Report Due Today – Action Required',
+    variables: ['[Recipient Name]', '[Permit Number]', '[Permit Title]', '[Expiration Date]', '[Link]'],
+    subject: 'CA State Parks SCP – annual report due today',
     body: `Dear [Recipient Name],
 
-We are writing to remind you that the annual report for your permit, [Permit Number] (Title), is due today: [Expiration Date]. The submission of this report is mandatory in all cases and must be received before a renewal permit can be issued.
+We are writing to remind you that the annual report for your permit, [Permit Number] ([Permit Title]), is due today: [Expiration Date]. The submission of this report is mandatory in all cases and must be received before a renewal permit can be issued.
 
-Please ensure that your report is submitted by the due date. You can submit your report by logging into your account and navigating to the permit: [Link] and clicking on the submit annual report button.
+Please submit your report by the due date. Log in, open your permit ([Link]), and select "Submit annual report".
 
-If you have any questions or need assistance, feel free to contact us.
+If you have any questions, please contact us.
 
 Thank you for your prompt attention to this matter.
 
-Best regards,`,
+Best regards,
+Natural Resources Division
+California State Parks
+(916) 653-6725
+nrd.research@parks.ca.gov`,
   },
 ];
 

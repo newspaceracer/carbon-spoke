@@ -16,22 +16,33 @@ interface NavLink {
   href: string;
 }
 
+// Primary destinations: the work objects (Permits, My permits) plus the
+// read-only Districts directory (public value — who to contact in a district).
 const primaryNav: NavLink[] = [
   { label: 'Permits', href: '/permits' },
   { label: 'My permits', href: '/my-permits' },
-  { label: 'Resource category tags', href: '#' },
   { label: 'Districts', href: '/districts' },
-  { label: 'Special conditions', href: '/special-conditions' },
-  { label: 'Help', href: '#' },
 ];
 
+// Curation catalogs: reusable data reviewers attach to permits. Curated by HQ
+// AND district leads (not only system admins), so they get their own menu rather
+// than being buried under Admin.
+const catalogs: NavLink[] = [
+  { label: 'Resource category tags', href: '/resource-category-tags' },
+  { label: 'Special conditions', href: '/special-conditions' },
+];
+
+// System administration. "District administration" targets the scoped manage
+// console (/manage-district), which resolves WHICH district via its own scope bar
+// (a lead is locked to theirs; HQ gets a switcher). It's a noun phrase — matching
+// the other entries' grain — that stays distinct from the read-only Districts
+// directory in the primary nav, so it needs no "Manage" verb.
 const adminTools: NavLink[] = [
-  { label: 'Program dashboard', href: '/admin/dashboard' },
-  { label: 'Manage internal users', href: '/users' },
-  { label: 'Manage public users', href: '#' },
-  { label: 'Manage districts & members', href: '/districts' },
+  { label: 'Dashboard', href: '/admin/dashboard' },
+  { label: 'Users', href: '/users' },
+  { label: 'District administration', href: '/manage-district' },
   { label: 'Templates & defaults', href: '/admin/templates' },
-  { label: 'Maintenance mode console', href: '/admin/maintenance-mode' },
+  { label: 'Maintenance mode', href: '/admin/maintenance-mode' },
 ];
 ---
 
@@ -50,7 +61,12 @@ const adminTools: NavLink[] = [
     {primaryNav.map((item) => (
       <cds-header-nav-item href={withBase(item.href)}>{item.label}</cds-header-nav-item>
     ))}
-    <cds-header-menu menu-label="Admin tools" trigger-content="Admin tools">
+    <cds-header-menu menu-label="Catalogs" trigger-content="Catalogs">
+      {catalogs.map((item) => (
+        <cds-header-menu-item href={withBase(item.href)}>{item.label}</cds-header-menu-item>
+      ))}
+    </cds-header-menu>
+    <cds-header-menu menu-label="Admin" trigger-content="Admin">
       {adminTools.map((item) => (
         <cds-header-menu-item href={withBase(item.href)}>{item.label}</cds-header-menu-item>
       ))}
@@ -64,11 +80,17 @@ const adminTools: NavLink[] = [
       {primaryNav.map((item) => (
         <cds-side-nav-link href={withBase(item.href)}>{item.label}</cds-side-nav-link>
       ))}
-      <cds-side-nav-menu title="Admin tools">
+      <cds-side-nav-menu title="Catalogs">
+        {catalogs.map((item) => (
+          <cds-side-nav-menu-item href={withBase(item.href)}>{item.label}</cds-side-nav-menu-item>
+        ))}
+      </cds-side-nav-menu>
+      <cds-side-nav-menu title="Admin">
         {adminTools.map((item) => (
           <cds-side-nav-menu-item href={withBase(item.href)}>{item.label}</cds-side-nav-menu-item>
         ))}
       </cds-side-nav-menu>
+      <cds-side-nav-link href="#">Help</cds-side-nav-link>
     </cds-header-side-nav-items>
   </cds-side-nav>
 
@@ -76,6 +98,13 @@ const adminTools: NavLink[] = [
     <cds-search id="site-search" size="lg" label-text="Search permits" placeholder="Search permits, applicants, sites"></cds-search>
   </div>
 
+  <cds-header-global-action aria-label="Help" tooltip-text="Help" href="#">
+    <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+      <path d="M16,2A14,14,0,1,0,30,16,14,14,0,0,0,16,2Zm0,26A12,12,0,1,1,28,16,12.0134,12.0134,0,0,1,16,28Z"/>
+      <circle cx="16" cy="23.5" r="1.5"/>
+      <path d="M17.5,8H15a4.5045,4.5045,0,0,0-4.5,4.5V13h2v-.5A2.5028,2.5028,0,0,1,15,10h2.5a2.5,2.5,0,0,1,0,5H15v4h2V17h.5a4.5,4.5,0,0,0,0-9Z"/>
+    </svg>
+  </cds-header-global-action>
   <cds-header-global-action aria-label="Profile" tooltip-text="Profile" href={withBase('/profile')}>
     <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
       <path d="M16,4a5,5,0,1,1-5,5,5,5,0,0,1,5-5m0-2a7,7,0,1,0,7,7A7,7,0,0,0,16,2Z"/>
