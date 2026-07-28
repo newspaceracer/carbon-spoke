@@ -26,6 +26,8 @@ import PageHeader from '../../components/PageHeader.astro';
 import PermitSection from '../../components/PermitSection.astro';
 import { withBase } from '../../lib/base';
 import { regulatedDocSeeds, formatDocDate } from '../../data/regulated-docs';
+import { defaultTemplates } from '../../lib/notifications';
+import { directory } from '../../data/user';
 import {
   letterheadSeed,
   permitDefaultsSeed,
@@ -33,6 +35,10 @@ import {
   reportDueCadenceOptions,
   notificationSeeds,
 } from '../../data/site-settings';
+
+// Eligible second signers for multi-district permits (Story 7): any HQ system
+// admin or HQ technical reviewer.
+const hqSigners = directory.filter((u) => u.accountRole === 'admin' || u.accountRole === 'hq-technical');
 
 export const prototype = {
   title: 'Templates & defaults',
@@ -230,8 +236,71 @@ export const prototype = {
             </div>
           </PermitSection>
         </div>
+
+        <!-- ── Default second signer (Story 7, multi-district) ──────────────── -->
+        <div class="settings-block">
+          <PermitSection title="Default second signer">
+            <p class="section-hint t-body-01">
+              The second signature on every <strong>multi-district</strong> permit. The
+              Responsible Agent signs first; this person co-signs to activate. Eligible:
+              any HQ system admin or HQ technical reviewer.
+            </p>
+            <cds-dropdown id="second-signer" title-text="Second signer (multi-district)" label="Select a signer" value="">
+              {hqSigners.map((u) => (<cds-dropdown-item value={u.id}>{u.name} — {u.affiliation}</cds-dropdown-item>))}
+            </cds-dropdown>
+            <cds-inline-notification id="ss-saved" hidden kind="success" low-contrast hide-close-button
+              title="Second signer saved" subtitle="New multi-district permits route their second signature here."></cds-inline-notification>
+          </PermitSection>
+        </div>
+
+        <!-- ── Research permit notifications (Story 16, EM-A…EM-I) ───────────── -->
+        <div class="settings-block">
+          <PermitSection title="Research permit notifications">
+            <p class="section-hint t-body-01">
+              The emails the permit workflow sends. Edit the subject and message; changes
+              apply to emails sent from now on. Regulated researcher-facing emails are
+              always sent — their copy is editable, but the send is not optional.
+            </p>
+            <div class="notif-list" id="em-list">
+              {defaultTemplates.map((t) => (
+                <article class="notif" data-em={t.id}>
+                  <div class="notif__head">
+                    <h3 class="notif__name t-heading-compact-01">{t.id} · {t.name}</h3>
+                    <div class="em-head-end">
+                      {t.regulated && <cds-tag type="warm-gray" size="sm">Regulated · always sent</cds-tag>}
+                      <cds-button kind="ghost" size="sm" class="em-edit" data-em={t.id}>Edit</cds-button>
+                    </div>
+                  </div>
+                  <p class="notif__subject t-body-01"><span class="notif__k t-label-01">Subject</span> <span data-em-subject>{t.subject}</span></p>
+                  <p class="notif__body t-body-01" data-em-body>{t.body}</p>
+                  <p class="notif__meta t-label-01"><strong>Recipients:</strong> {t.recipients} · <strong>Placeholders:</strong> {t.placeholders.map((p) => `[${p}]`).join(', ')}</p>
+                </article>
+              ))}
+            </div>
+          </PermitSection>
+        </div>
       </div>
     </div>
+
+    <!-- Edit research-permit-notification modal (Story 16). -->
+    <cds-modal id="em-modal" size="md">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Research permit notifications</cds-modal-label>
+        <cds-modal-heading id="em-modal-heading">Edit notification</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <cds-stack gap="5">
+          <cds-text-input id="em-subject" label="Subject"></cds-text-input>
+          <cds-textarea id="em-body" label="Message" rows="12"></cds-textarea>
+          <p class="em-modal-ph t-label-01" id="em-ph"></p>
+        </cds-stack>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" id="em-reset">Reset to default</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="em-save">Save changes</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
 
     <!-- Replace-document modal: PDF upload, validated before it can be confirmed. -->
     <cds-modal id="replace-modal" size="sm">
@@ -740,6 +809,71 @@ export const prototype = {
       paint({ id: targetId, subject, body });
       modal.open = false;
       flash('Notification updated. Emails sent from now on use this copy.');
+    });
+  }
+
+  // ── Default second signer (Story 7, multi-district) ─────────────────────────
+  {
+    const ss = document.getElementById('second-signer') as any;
+    const savedNote = document.getElementById('ss-saved') as any;
+    const KEY = 'default-second-signer-multi';
+    if (ss) {
+      const stored = localStorage.getItem(KEY);
+      if (stored) ss.value = stored;
+      ss.addEventListener('cds-dropdown-selected', () => {
+        localStorage.setItem(KEY, ss.value || '');
+        if (savedNote) savedNote.hidden = false;
+      });
+    }
+  }
+
+  // ── Research permit notifications editor (Story 16, EM-A…EM-I) ───────────────
+  {
+    import('../../lib/notifications').then(({ loadTemplates, saveTemplate, resetTemplate }) => {
+      const emModal = document.getElementById('em-modal') as any;
+      const emSubject = document.getElementById('em-subject') as any;
+      const emBody = document.getElementById('em-body') as any;
+      const emHeading = document.getElementById('em-modal-heading');
+      const emPh = document.getElementById('em-ph');
+      let editing = '';
+
+      const repaint = () => {
+        loadTemplates().forEach((t) => {
+          const card = document.querySelector(`.notif[data-em="${t.id}"]`);
+          if (!card) return;
+          (card.querySelector('[data-em-subject]') as HTMLElement).textContent = t.subject;
+          (card.querySelector('[data-em-body]') as HTMLElement).textContent = t.body;
+        });
+      };
+      repaint();
+
+      document.querySelectorAll('.em-edit').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          editing = (btn as HTMLElement).dataset.em || '';
+          const t = loadTemplates().find((x) => x.id === editing);
+          if (!t) return;
+          if (emHeading) emHeading.textContent = `Edit ${t.id} — ${t.name}`;
+          if (emSubject) emSubject.value = t.subject;
+          if (emBody) emBody.value = t.body;
+          if (emPh) emPh.textContent = `Placeholders: ${t.placeholders.map((p) => `[${p}]`).join(', ')}`;
+          emModal.open = true;
+        });
+      });
+
+      document.getElementById('em-save')?.addEventListener('click', () => {
+        if (!editing) return;
+        saveTemplate(editing, { subject: (emSubject?.value ?? '').trim(), body: (emBody?.value ?? '').trim() });
+        repaint();
+        emModal.open = false;
+        flash('Notification updated. Emails sent from now on use this copy.');
+      });
+      document.getElementById('em-reset')?.addEventListener('click', () => {
+        if (!editing) return;
+        resetTemplate(editing);
+        repaint();
+        emModal.open = false;
+        flash('Notification reset to its default copy.');
+      });
     });
   }
 </script>

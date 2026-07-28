@@ -14,36 +14,54 @@ import { withBase } from '../lib/base';
 interface NavLink {
   label: string;
   href: string;
+  /** Space-separated prototype identities allowed to SEE this item. The client
+   *  gate (maintenance-shell `gateNavByRole`) hides it for any other identity;
+   *  route access is enforced separately (maintenance `enforceRoleAccess`).
+   *  Story 3 nav visibility map (permissions-matrix.md §4). */
+  roles: string;
 }
+
+// Role sets for the nav map. INTERNAL = the four reviewer roles + admin; ALL_AUTH
+// adds the researcher; DISTRICT_ADMIN can reach the district-administration console.
+const INTERNAL = 'admin hq-technical district-lead district-assistant';
+const ALL_AUTH = 'admin hq-technical district-lead district-assistant researcher';
+const DISTRICT_ADMIN = 'admin hq-technical district-lead';
+const ADMIN_ONLY = 'admin';
 
 // Primary destinations: the work objects (Permits, My permits) plus the
 // read-only Districts directory (public value — who to contact in a district).
+// Researchers see My permits + Districts, but not the full Permits register.
 const primaryNav: NavLink[] = [
-  { label: 'Permits', href: '/permits' },
-  { label: 'My permits', href: '/my-permits' },
-  { label: 'Districts', href: '/districts' },
+  { label: 'Permits', href: '/permits', roles: INTERNAL },
+  { label: 'My permits', href: '/my-permits', roles: ALL_AUTH },
+  { label: 'Districts', href: '/districts', roles: ALL_AUTH },
 ];
 
 // Curation catalogs: reusable data reviewers attach to permits. Curated by HQ
 // AND district leads (not only system admins), so they get their own menu rather
-// than being buried under Admin.
+// than being buried under Admin. Internal users only — never researchers/public.
 const catalogs: NavLink[] = [
-  { label: 'Resource category tags', href: '/resource-category-tags' },
-  { label: 'Special conditions', href: '/special-conditions' },
+  { label: 'Resource category tags', href: '/resource-category-tags', roles: INTERNAL },
+  { label: 'Special conditions', href: '/special-conditions', roles: INTERNAL },
 ];
 
-// System administration. "District administration" targets the scoped manage
-// console (/manage-district), which resolves WHICH district via its own scope bar
-// (a lead is locked to theirs; HQ gets a switcher). It's a noun phrase — matching
-// the other entries' grain — that stays distinct from the read-only Districts
-// directory in the primary nav, so it needs no "Manage" verb.
+// System administration. The menu is partially filtered: System Admin sees all
+// five; HQ Technical + District Lead see ONLY District administration; District
+// Assistant sees no Admin menu at all. "District administration" targets the scoped
+// manage console (/manage-district), which resolves WHICH district via its own
+// scope bar. It's a noun phrase — matching the other entries' grain — that stays
+// distinct from the read-only Districts directory in the primary nav.
 const adminTools: NavLink[] = [
-  { label: 'Dashboard', href: '/admin/dashboard' },
-  { label: 'Users', href: '/users' },
-  { label: 'District administration', href: '/manage-district' },
-  { label: 'Templates & defaults', href: '/admin/templates' },
-  { label: 'Maintenance mode', href: '/admin/maintenance-mode' },
+  { label: 'Dashboard', href: '/admin/dashboard', roles: ADMIN_ONLY },
+  { label: 'Users', href: '/users', roles: ADMIN_ONLY },
+  { label: 'District administration', href: '/manage-district', roles: DISTRICT_ADMIN },
+  { label: 'Templates & defaults', href: '/admin/templates', roles: ADMIN_ONLY },
+  { label: 'Maintenance mode', href: '/admin/maintenance-mode', roles: ADMIN_ONLY },
 ];
+
+// The Admin menu itself shows to anyone who can reach at least one of its items
+// (i.e. at least District administration) — everyone in DISTRICT_ADMIN.
+const adminMenuRoles = DISTRICT_ADMIN;
 ---
 
 <cds-header aria-label="CA State Parks Scientific Research and Collection Permits">
@@ -59,16 +77,16 @@ const adminTools: NavLink[] = [
 
   <cds-header-nav menu-bar-label="Primary navigation">
     {primaryNav.map((item) => (
-      <cds-header-nav-item href={withBase(item.href)}>{item.label}</cds-header-nav-item>
+      <cds-header-nav-item href={withBase(item.href)} data-roles={item.roles}>{item.label}</cds-header-nav-item>
     ))}
-    <cds-header-menu menu-label="Catalogs" trigger-content="Catalogs">
+    <cds-header-menu menu-label="Catalogs" trigger-content="Catalogs" data-roles={INTERNAL}>
       {catalogs.map((item) => (
-        <cds-header-menu-item href={withBase(item.href)}>{item.label}</cds-header-menu-item>
+        <cds-header-menu-item href={withBase(item.href)} data-roles={item.roles}>{item.label}</cds-header-menu-item>
       ))}
     </cds-header-menu>
-    <cds-header-menu menu-label="Admin" trigger-content="Admin">
+    <cds-header-menu menu-label="Admin" trigger-content="Admin" data-roles={adminMenuRoles}>
       {adminTools.map((item) => (
-        <cds-header-menu-item href={withBase(item.href)}>{item.label}</cds-header-menu-item>
+        <cds-header-menu-item href={withBase(item.href)} data-roles={item.roles}>{item.label}</cds-header-menu-item>
       ))}
     </cds-header-menu>
   </cds-header-nav>
@@ -78,16 +96,16 @@ const adminTools: NavLink[] = [
   <cds-side-nav is-not-persistent aria-label="Primary navigation" collapse-mode="responsive">
     <cds-header-side-nav-items>
       {primaryNav.map((item) => (
-        <cds-side-nav-link href={withBase(item.href)}>{item.label}</cds-side-nav-link>
+        <cds-side-nav-link href={withBase(item.href)} data-roles={item.roles}>{item.label}</cds-side-nav-link>
       ))}
-      <cds-side-nav-menu title="Catalogs">
+      <cds-side-nav-menu title="Catalogs" data-roles={INTERNAL}>
         {catalogs.map((item) => (
-          <cds-side-nav-menu-item href={withBase(item.href)}>{item.label}</cds-side-nav-menu-item>
+          <cds-side-nav-menu-item href={withBase(item.href)} data-roles={item.roles}>{item.label}</cds-side-nav-menu-item>
         ))}
       </cds-side-nav-menu>
-      <cds-side-nav-menu title="Admin">
+      <cds-side-nav-menu title="Admin" data-roles={adminMenuRoles}>
         {adminTools.map((item) => (
-          <cds-side-nav-menu-item href={withBase(item.href)}>{item.label}</cds-side-nav-menu-item>
+          <cds-side-nav-menu-item href={withBase(item.href)} data-roles={item.roles}>{item.label}</cds-side-nav-menu-item>
         ))}
       </cds-side-nav-menu>
       <cds-side-nav-link href="#">Help</cds-side-nav-link>

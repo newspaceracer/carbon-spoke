@@ -1,0 +1,103 @@
+---
+// Site footer — AGPL license notice + attribution. The SCP Web App source is
+// released under the GNU Affero GPL v3, which requires that we tell every user
+// the software is free, point them at the license, and — because it's a
+// network-served app (AGPL §13) — offer them the corresponding source. This
+// footer discharges that.
+//
+// Carbon ships no `cds-footer` web component, so this is a tier-2 composition:
+// a <footer> landmark whose links are stock cds-link, with layout-only CSS
+// driven by --cds-* tokens (color/border/type from the token layer).
+// carbon-checked: no cds-* footer/shell-footer component exists in @carbon/web-components; composing cds-link is the sanctioned path
+
+const AGPL_URL = 'https://www.gnu.org/licenses/agpl-3.0.en.html';
+const SOURCE_URL = 'https://github.com/newspaceracer/carbon-spoke';
+
+// Standard California state web-template footer links. Statutory pages
+// (Conditions of Use, Privacy, Accessibility) point at the statewide ca.gov
+// versions state agencies share; the agency + contact links point at parks.
+// Confirm the exact official URLs before shipping to prod.
+const stateLinks = [
+  { label: 'California State Parks', href: 'https://www.parks.ca.gov' },
+  { label: 'Conditions of Use', href: 'https://www.ca.gov/use/' },
+  { label: 'Privacy Policy', href: 'https://www.ca.gov/privacy-policy/' },
+  { label: 'Accessibility', href: 'https://www.ca.gov/accessibility/' },
+  { label: 'Contact', href: 'https://www.parks.ca.gov/contactus' },
+];
+
+const year = new Date().getFullYear();
+// Build-time stamp — when this bundle was compiled. `new Date()` runs on the
+// server during `astro build`, so it captures the build moment, not the visit.
+const compiledAt = new Date()
+  .toISOString()
+  .replace('T', ' ')
+  .replace(/\..+$/, ' UTC');
+---
+
+<footer class="app-footer">
+  <p class="app-footer__notice">
+    The SCP Web App is an official California State Parks system, developed by
+    Environmental Science Associates (ESA). This program is free software; you can
+    redistribute it and/or modify it under the terms of the <cds-link href={AGPL_URL}
+    target="_blank" rel="license noopener">GNU Affero General Public License</cds-link>
+    as published by the Free Software Foundation.
+    Source code is available on <cds-link href={SOURCE_URL} target="_blank" rel="noopener">GitHub</cds-link>.
+  </p>
+  <nav class="app-footer__links" aria-label="California state resources">
+    {stateLinks.map((item) => (
+      <cds-link href={item.href} target="_blank" rel="noopener">{item.label}</cds-link>
+    ))}
+  </nav>
+  <p class="app-footer__legal">
+    Copyright © {year} Environmental Science Associates (ESA). Code last compiled {compiledAt}.
+  </p>
+</footer>
+
+<style>
+  /* Reskin through tokens: type comes from Carbon's body-compact-01 set (14px),
+     which is also cds-link's default size — so inline and standalone links match
+     the surrounding text exactly. There is no single --cds-body-compact-01
+     shorthand token; Carbon exposes the type set as discrete pieces. */
+  .app-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1.5rem 2rem;
+    margin-top: 3rem;
+    border-top: 1px solid var(--cds-border-subtle);
+    background: var(--cds-background);
+    color: var(--cds-text-secondary);
+    font-size: var(--cds-body-compact-01-font-size, 0.875rem);
+    font-weight: var(--cds-body-compact-01-font-weight, 400);
+    line-height: var(--cds-body-compact-01-line-height, 1.28572);
+    letter-spacing: var(--cds-body-compact-01-letter-spacing, 0.16px);
+  }
+
+  /* Carbon's reset sets `p { font-size: body-02 (16px) }` directly, which beats
+     the 14px the footer passes down by inheritance — leaving paragraphs at 16px
+     while cds-link's inner <a> stays 14px (links look smaller). A class-scoped
+     rule outranks the bare `p` selector and restores the footer's own type. */
+  .app-footer p {
+    font: inherit;
+    margin: 0;
+  }
+
+  .app-footer__notice {
+    max-width: 60rem;
+  }
+
+  /* Keep inline links flowing with the sentence instead of sitting as
+     inline-flex boxes, so they wrap and baseline-align like normal text. */
+  .app-footer__notice cds-link {
+    display: inline;
+  }
+
+  /* State-resource links: an even, wrapping row with generous column spacing. */
+  .app-footer__links {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 1.5rem;
+    row-gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+</style>

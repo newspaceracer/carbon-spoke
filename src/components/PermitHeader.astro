@@ -101,7 +101,7 @@ const reviewAllDone = reviewTotal > 0 && reviewDone === reviewTotal;
 const teamStorageKey = `permit-team-${id}`;
 ---
 
-<header class="banner cds--g100" id="permit-banner" data-permit-id={id} data-status={status.label} data-letter-url={withBase('/final-letter')} data-context={context} data-permit-type={permitType}>
+<header class="banner cds--g100" id="permit-banner" data-permit-id={id} data-permit-name={name} data-status={status.label} data-letter-url={withBase('/final-letter')} data-context={context} data-permit-type={permitType}>
   <div class="banner__inner">
   <div class="banner__crumb"><slot name="breadcrumb" /></div>
   <div class="banner__main">
@@ -143,8 +143,8 @@ const teamStorageKey = `permit-team-${id}`;
              started     → Open review — primary enters the wizard; the decision
                            actions stay in the menu, and the approval itself is
                            the wizard's Send step. -->
-      <cds-button data-when="Under review" data-phase="not-started" class="permit-start-review" size="md">Start review</cds-button>
-      <cds-combo-button data-when="Under review" data-phase="started" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+      <cds-button data-when="Waiting for review" class="permit-start-review" size="md">Start review</cds-button>
+      <cds-combo-button data-when="Under review" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
         <cds-menu>
           <cds-menu-item label="Request changes"></cds-menu-item>
           {!finalize && <cds-menu-item label="Download"></cds-menu-item>}
@@ -153,6 +153,7 @@ const teamStorageKey = `permit-team-${id}`;
         </cds-menu>
       </cds-combo-button>
       <cds-button data-when="Out for signature" class="permit-action-sign" size="md" hidden>Sign permit</cds-button>
+      <cds-button data-when="Waiting for annual report" class="permit-hold-override" size="md" hidden>Override hold — issue permit</cds-button>
       <cds-button data-when="Active" class="permit-action-amend" size="md" href={amendHref} hidden>Request amendment</cds-button>
     </div>
   </div>
@@ -204,8 +205,8 @@ const teamStorageKey = `permit-team-${id}`;
     <cds-icon-indicator class="permit-status-indicator" size="16" kind={status.kind} label={status.label}></cds-icon-indicator>
     <span class="compactbar__window t-body-01">{requestedWindow.start} – {requestedWindow.end}</span>
     <div class="compactbar__spacer"></div>
-    <cds-button data-when="Under review" data-phase="not-started" class="permit-start-review" size="md">Start review</cds-button>
-    <cds-combo-button data-when="Under review" data-phase="started" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+    <cds-button data-when="Waiting for review" class="permit-start-review" size="md">Start review</cds-button>
+    <cds-combo-button data-when="Under review" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
       <cds-menu>
         <cds-menu-item label="Request changes"></cds-menu-item>
         {!finalize && <cds-menu-item label="Download"></cds-menu-item>}
@@ -214,6 +215,7 @@ const teamStorageKey = `permit-team-${id}`;
       </cds-menu>
     </cds-combo-button>
     <cds-button data-when="Out for signature" class="permit-action-sign" size="md" hidden>Sign permit</cds-button>
+      <cds-button data-when="Waiting for annual report" class="permit-hold-override" size="md" hidden>Override hold — issue permit</cds-button>
     <cds-button data-when="Active" class="permit-action-amend" size="md" href={amendHref} hidden>Request amendment</cds-button>
   </div>
 </div>
@@ -373,6 +375,9 @@ const teamStorageKey = `permit-team-${id}`;
 )}
 
 <script>
+  import { readIdentity } from '../lib/maintenance';
+  import { readPermitRole, sectionAccessor } from '../lib/permissions';
+  import { sendEmail } from '../lib/notifications';
   // ── Workflow state machine (prototype-local) ──
   // The permit moves through a small set of statuses; each has a cds-icon-indicator
   // `kind` (kept in sync with data/permits.ts) and its own action set. The current
@@ -391,9 +396,18 @@ const teamStorageKey = `permit-team-${id}`;
   const seededStatus = banner?.dataset.status ?? 'Under review';
   const statusKey = `permit-status-${permitId}`;
 
+  // Decision/sign actions are permit-role gated (Story 9.3): Approve / Request
+  // changes / Reject and the review-decision entry are RA-or-Admin only; Sign is
+  // for the applicable signer only; Start review is RA-or-Admin (Story 5 refines).
+  const gateIdentity = readIdentity();
+  const gatePermitType = banner?.dataset.permitType;
+  const startAllowed = gateIdentity === 'admin' || readPermitRole(permitId) === 'responsible';
+
   const STATUS_KIND: Record<string, string> = {
+    'Waiting for review': 'not-started',
     'Under review': 'in-progress',
     'Out for signature': 'pending',
+    'Waiting for annual report': 'caution-minor',
     'Active': 'succeeded',
     'Changes requested': 'caution-minor',
     'Rejected': 'failed',
@@ -423,6 +437,25 @@ const teamStorageKey = `permit-team-${id}`;
       if (show && el.dataset.phase) show = el.dataset.phase === (started ? 'started' : 'not-started');
       el.hidden = !show;
     });
+
+    // Permit-role gate (Story 9.3), applied over the status/phase visibility: hide
+    // any action the active identity's permit-role can't perform in this status.
+    const a = sectionAccessor(gateIdentity, permitId, gatePermitType, status);
+    const canDecide = a('approve') === 'update'; // RA or Admin
+    const canSign = a('sign') === 'update';       // applicable signer only
+    document.querySelectorAll<HTMLElement>('.permit-open-review').forEach((el) => {
+      if (!canDecide) el.hidden = true;
+    });
+    document.querySelectorAll<HTMLElement>('.permit-action-sign').forEach((el) => {
+      if (!canSign) el.hidden = true;
+    });
+    document.querySelectorAll<HTMLElement>('.permit-start-review').forEach((el) => {
+      if (!startAllowed) el.hidden = true;
+    });
+    // Hold override (Story 13) is RA/Admin only.
+    document.querySelectorAll<HTMLElement>('.permit-hold-override').forEach((el) => {
+      if (!startAllowed) el.hidden = true;
+    });
   };
 
   const setStatus = (status: string) => {
@@ -431,6 +464,43 @@ const teamStorageKey = `permit-team-${id}`;
     window.dispatchEvent(
       new CustomEvent('permit-status-changed', { detail: { status } }),
     );
+  };
+
+  // ── Simulated emails + two-signature activation (Stories 6, 13) ─────────────
+  const projectTitle = banner?.dataset.permitName ?? '';
+  const emailVars = () => ({ 'Permit #': permitId, 'Project title': projectTitle, 'Status': currentStatus() });
+  const sigKey = `permit-signatures-${permitId}`;
+  const holdFlagKey = `permit-renewal-hold-${permitId}`; // set = renewal w/ missing prior annual report
+  const readSigs = () => { try { return JSON.parse(localStorage.getItem(sigKey) || '{}'); } catch { return {}; } };
+  const writeSigs = (s: any) => localStorage.setItem(sigKey, JSON.stringify(s));
+  const stamp = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // When the permit reaches Out for signature, the RA's first signature is complete
+  // and the second signer is notified via (simulated) DocuSign — EM-A.
+  const reconcileSignatures = (status: string) => {
+    if (status !== 'Out for signature') return;
+    const s = readSigs();
+    if (!s.first) {
+      s.first = { by: 'Responsible Agent', at: stamp() };
+      writeSigs(s);
+      sendEmail('EM-A', emailVars());
+    }
+  };
+
+  // The second signature (Sign permit) activates — unless a renewal's prior annual
+  // report is missing, which holds it (Waiting for annual report) and notifies via
+  // EM-H (Story 13).
+  const applySecondSignature = () => {
+    const s = readSigs();
+    s.second = { by: 'Second signer', at: stamp() };
+    writeSigs(s);
+    if (localStorage.getItem(holdFlagKey) === '1') {
+      setStatus('Waiting for annual report');
+      sendEmail('EM-H', emailVars());
+    } else {
+      setStatus('Active');
+      sendEmail('EM-C', emailVars());
+    }
   };
 
   // Combo-button fires onClick for its primary button AND for menu-item picks;
@@ -443,16 +513,18 @@ const teamStorageKey = `permit-team-${id}`;
   const letterUrl = banner?.dataset.letterUrl;
   const inFinalize = banner?.dataset.context === 'finalize';
 
-  // Start review — records that this reviewer has begun (who + when). That's the
-  // gate: it unlocks the application body on the detail page and the review
-  // wizard. Any trigger tagged .permit-start-review fires it — the header /
-  // compact-bar actions AND the big button on the gated detail body (same doc).
+  // Start review (Story 5) — the Waiting for review → Under review transition. Only
+  // the Responsible Agent (or Admin) can start; records who + when in the flag, sets
+  // the status, then drops the reviewer into the review wizard (final-letter).
   const startReview = () => {
-    if (!permitId) return;
+    if (!permitId || !startAllowed) return;
     if (!localStorage.getItem(reviewStartedKey)) {
       const at = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       localStorage.setItem(reviewStartedKey, JSON.stringify({ by: 'You', at }));
     }
+    // The transition: Waiting for review → Under review (persisted so the detail
+    // body unseals and the started-phase actions show on return).
+    if (permitId) localStorage.setItem(statusKey, 'Under review');
     // Starting drops the reviewer straight into the review wizard (final-letter);
     // the flag is now set, so the wizard's guard admits them. Coming back to the
     // permit later shows the unlocked detail with an "Open review" action.
@@ -489,19 +561,32 @@ const teamStorageKey = `permit-team-${id}`;
       if (permitId) localStorage.setItem(`permit-amendment-${permitId}`, `${permitId}-A`);
     });
   });
+  // Override the annual-report hold → issue the permit (Story 13). RA/Admin only
+  // (gated in paintStatus); clears the hold flag and sends the issued email.
+  document.querySelectorAll('.permit-hold-override').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      localStorage.removeItem(holdFlagKey);
+      setStatus('Active');
+      sendEmail('EM-C', emailVars());
+    });
+  });
 
-  document
-    .getElementById('sign-confirm')
-    ?.addEventListener('click', () => setStatus('Active'));
-  document
-    .getElementById('request-confirm')
-    ?.addEventListener('click', () => setStatus('Changes requested'));
-  document
-    .getElementById('reject-confirm')
-    ?.addEventListener('click', () => setStatus('Rejected'));
+  // Sign = the SECOND signature → activation (or hold). Decisions notify the
+  // researcher (regulated EM-D / EM-E).
+  document.getElementById('sign-confirm')?.addEventListener('click', applySecondSignature);
+  document.getElementById('request-confirm')?.addEventListener('click', () => {
+    setStatus('Changes requested');
+    sendEmail('EM-D', emailVars());
+  });
+  document.getElementById('reject-confirm')?.addEventListener('click', () => {
+    setStatus('Rejected');
+    sendEmail('EM-E', emailVars());
+  });
 
-  // Reflect the persisted (or seeded) status on load.
+  // Reflect the persisted (or seeded) status on load, and reconcile the first
+  // signature if the permit is already Out for signature.
   paintStatus(currentStatus());
+  reconcileSignatures(currentStatus());
 
   // ── Compact bar reveal ──
   // Show the compact bar once the full header has scrolled out of view. This is

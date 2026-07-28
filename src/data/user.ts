@@ -87,7 +87,7 @@ export const accountRoleOptions: { value: string; label: string; scoped: boolean
   { value: 'district-assistant', label: 'District assistant technical reviewer', scoped: true, description: 'Supports district review; contributes analysis without final sign-off.' },
   { value: 'district-lead', label: 'District lead technical reviewer', scoped: true, description: 'Leads technical review for a district and signs off on district decisions.' },
   { value: 'hq-technical', label: 'HQ technical reviewer', scoped: false, description: 'Reviews permits statewide from headquarters, across all districts.' },
-  { value: 'admin', label: 'Admin', scoped: false, description: 'Manages users, districts, and system settings in addition to review.' },
+  { value: 'admin', label: 'System Admin', scoped: false, description: 'Manages users, districts, and system settings in addition to review.' },
 ];
 
 /** Look up an account role's metadata (label / district-scoped / description). */
@@ -139,7 +139,7 @@ export const requestableRoles: { value: string; label: string; description: stri
   },
   {
     value: 'admin',
-    label: 'Admin',
+    label: 'System Admin',
     description: 'Manages users, districts, and system settings in addition to review.',
   },
 ];
@@ -154,6 +154,12 @@ export const requestableRoles: { value: string; label: string; description: stri
 // edits — distinct from a per-district membership role). All INVENTED (house rules).
 export interface DirectoryUser {
   id: string;
+  /** Given name — the editable first half of the account name. */
+  firstName: string;
+  /** Family name — the editable second half of the account name. */
+  lastName: string;
+  /** Full display name — DERIVED from firstName + lastName (see the seed below).
+   *  Kept so the many `.name` consumers (rosters, permit rows) don't change. */
   name: string;
   email: string;
   phone: string;
@@ -170,18 +176,21 @@ export interface DirectoryUser {
   expertise?: string[];
 }
 
-export const directory: DirectoryUser[] = [
-  { id: 'j-okafor', name: 'Jomo Okafor', email: 'j.okafor@parks.ca.gov', phone: '(707) 555-0148', accountRole: 'district-lead', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['marine-aquatic', 'plant'] },
-  { id: 'k-whitfield', name: 'Karen Whitfield', email: 'k.whitfield@parks.ca.gov', phone: '(707) 555-0101', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['animal'] },
-  { id: 'm-santos', name: 'M. Santos', email: 'm.santos@parks.ca.gov', phone: '(707) 555-0119', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['freshwater-aquatic'] },
-  { id: 'd-cho', name: 'Daniel Cho', email: 'd.cho@parks.ca.gov', phone: '(707) 555-0134', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['plant'] },
-  { id: 't-herrera', name: 'Tomás Herrera', email: 't.herrera@parks.ca.gov', phone: '(707) 555-0152', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['wildfire'] },
-  { id: 'a-moreno', name: 'Alicia Moreno', email: 'a.moreno@parks.ca.gov', phone: '(707) 555-0146', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: [] },
-  { id: 'l-tran', name: 'Linda Tran', email: 'l.tran@parks.ca.gov', phone: '(707) 555-0160', accountRole: 'hq-technical', affiliation: 'Statewide Permitting Office', expertise: ['water'] },
-  { id: 'r-okoye', name: 'Raymond Okoye', email: 'r.okoye@parks.ca.gov', phone: '(707) 555-0171', accountRole: 'hq-technical', affiliation: 'Office of Scientific Review', expertise: ['geologic', 'paleontological'] },
-  { id: 'j-park', name: 'Julia Park', email: 'j.park@parks.ca.gov', phone: '(707) 555-0182', accountRole: 'hq-technical', affiliation: 'Natural Resources Division', expertise: ['air'] },
-  { id: 'b-ramirez', name: 'Ben Ramirez', email: 'b.ramirez@parks.ca.gov', phone: '(707) 555-0193', accountRole: 'admin', affiliation: 'Statewide Permitting Office', expertise: [] },
-];
+// `name` is derived once from firstName + lastName so the two never drift — the
+// name is stored as its two editable parts (the admin edits first + last), and
+// the full name every roster/permit row reads is composed from them.
+export const directory: DirectoryUser[] = ([
+  { id: 'j-okafor', firstName: 'Jomo', lastName: 'Okafor', email: 'j.okafor@parks.ca.gov', phone: '(707) 555-0148', accountRole: 'district-lead', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['marine-aquatic', 'plant'] },
+  { id: 'k-whitfield', firstName: 'Karen', lastName: 'Whitfield', email: 'k.whitfield@parks.ca.gov', phone: '(707) 555-0101', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['animal'] },
+  { id: 'm-santos', firstName: 'Marisol', lastName: 'Santos', email: 'm.santos@parks.ca.gov', phone: '(707) 555-0119', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['freshwater-aquatic'] },
+  { id: 'd-cho', firstName: 'Daniel', lastName: 'Cho', email: 'd.cho@parks.ca.gov', phone: '(707) 555-0134', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['plant'] },
+  { id: 't-herrera', firstName: 'Tomás', lastName: 'Herrera', email: 't.herrera@parks.ca.gov', phone: '(707) 555-0152', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: ['wildfire'] },
+  { id: 'a-moreno', firstName: 'Alicia', lastName: 'Moreno', email: 'a.moreno@parks.ca.gov', phone: '(707) 555-0146', accountRole: 'district-assistant', district: 'north-coast-redwoods', affiliation: 'North Coast Redwoods District', expertise: [] },
+  { id: 'l-tran', firstName: 'Linda', lastName: 'Tran', email: 'l.tran@parks.ca.gov', phone: '(707) 555-0160', accountRole: 'hq-technical', affiliation: 'Statewide Permitting Office', expertise: ['water'] },
+  { id: 'r-okoye', firstName: 'Raymond', lastName: 'Okoye', email: 'r.okoye@parks.ca.gov', phone: '(707) 555-0171', accountRole: 'hq-technical', affiliation: 'Office of Scientific Review', expertise: ['geologic', 'paleontological'] },
+  { id: 'j-park', firstName: 'Julia', lastName: 'Park', email: 'j.park@parks.ca.gov', phone: '(707) 555-0182', accountRole: 'hq-technical', affiliation: 'Natural Resources Division', expertise: ['air'] },
+  { id: 'b-ramirez', firstName: 'Ben', lastName: 'Ramirez', email: 'b.ramirez@parks.ca.gov', phone: '(707) 555-0193', accountRole: 'admin', affiliation: 'Statewide Permitting Office', expertise: [] },
+] as Omit<DirectoryUser, 'name'>[]).map((u) => ({ ...u, name: `${u.firstName} ${u.lastName}`.trim() }));
 
 /** Resolve a directory user by id. */
 export const findUser = (id: string): DirectoryUser | undefined =>
@@ -198,22 +207,44 @@ export const findUser = (id: string): DirectoryUser | undefined =>
 // All INVENTED, domain-credible, deterministic (house no-real-data rule).
 export interface PublicUser {
   id: string;
+  firstName: string;
+  lastName: string;
+  /** Full display name — DERIVED from firstName + lastName (see the seed below). */
   name: string;
   email: string;
+  /** Contact phone — the account holder manages this themselves; the admin
+   *  console shows it read-only and never in the grid. */
   phone: string;
-  /** The institution the applicant conducts research for. */
-  organization: string;
+  /** A public account holds exactly one of two states — `publicRoleOptions`. */
+  role: string;
+  /** Epoch ms the account was last active — shown as a relative "last seen". */
+  lastSeen: number;
 }
 
-export const publicDirectory: PublicUser[] = [
-  { id: 'applicant', name: 'Renata Halvorsen', email: 'r.halvorsen@cascadiamarine.org', phone: '(415) 555-0173', organization: 'Cascadia Marine Research Institute' },
-  { id: 'pub-aranda', name: 'Miguel Aranda', email: 'm.aranda@cascadiamarine.org', phone: '(415) 555-0188', organization: 'Cascadia Marine Research Institute' },
-  { id: 'pub-deshmukh', name: 'Priya Deshmukh', email: 'p.deshmukh@cascadiamarine.org', phone: '(415) 555-0191', organization: 'Cascadia Marine Research Institute' },
-  { id: 'pub-boone', name: 'Gregory Boone', email: 'g.boone@bodegamarine.org', phone: '(707) 555-0206', organization: 'Bodega Marine Laboratory' },
-  { id: 'pub-underhill', name: 'Sadie Underhill', email: 's.underhill@westernmonarch.org', phone: '(831) 555-0142', organization: 'Western Monarch Watch' },
-  { id: 'pub-nakamura', name: 'Theo Nakamura', email: 't.nakamura@pointblue.org', phone: '(415) 555-0159', organization: 'Point Blue Conservation Science' },
-  { id: 'pub-okonkwo', name: 'Adaeze Okonkwo', email: 'a.okonkwo@calacademy.org', phone: '(415) 555-0167', organization: 'California Academy of Sciences' },
+// The two — and only two — states a public account can hold. Admin-editable in
+// the /users console; overlaid in requests.ts (setPublicRole).
+export const publicRoleOptions: { value: string; label: string }[] = [
+  { value: 'public-user', label: 'Public user' },
+  { value: 'inactive', label: 'Inactive' },
 ];
+
+/** Display label for a public account role (falls back to the raw value). */
+export const publicRoleLabel = (value: string) =>
+  publicRoleOptions.find((r) => r.value === value)?.label ?? value;
+
+// `lastSeen` timestamps are fixed (deterministic) — a spread of recent-to-stale
+// activity so the "Last seen" column reads credibly. The inactive account (Okonkwo)
+// is the stalest. `name` is derived from firstName + lastName, like the internal
+// directory, so the two halves never drift.
+export const publicDirectory: PublicUser[] = ([
+  { id: 'applicant', firstName: 'Renata', lastName: 'Halvorsen', email: 'r.halvorsen@cascadiamarine.org', phone: '(415) 555-0173', role: 'public-user', lastSeen: 1_785_250_000_000 },
+  { id: 'pub-aranda', firstName: 'Miguel', lastName: 'Aranda', email: 'm.aranda@cascadiamarine.org', phone: '(415) 555-0188', role: 'public-user', lastSeen: 1_785_180_000_000 },
+  { id: 'pub-deshmukh', firstName: 'Priya', lastName: 'Deshmukh', email: 'p.deshmukh@cascadiamarine.org', phone: '(415) 555-0191', role: 'public-user', lastSeen: 1_784_700_000_000 },
+  { id: 'pub-boone', firstName: 'Gregory', lastName: 'Boone', email: 'g.boone@bodegamarine.org', phone: '(707) 555-0206', role: 'public-user', lastSeen: 1_783_400_000_000 },
+  { id: 'pub-underhill', firstName: 'Sadie', lastName: 'Underhill', email: 's.underhill@westernmonarch.org', phone: '(831) 555-0142', role: 'public-user', lastSeen: 1_781_000_000_000 },
+  { id: 'pub-nakamura', firstName: 'Theo', lastName: 'Nakamura', email: 't.nakamura@pointblue.org', phone: '(415) 555-0159', role: 'public-user', lastSeen: 1_785_240_000_000 },
+  { id: 'pub-okonkwo', firstName: 'Adaeze', lastName: 'Okonkwo', email: 'a.okonkwo@calacademy.org', phone: '(415) 555-0167', role: 'inactive', lastSeen: 1_762_000_000_000 },
+] as Omit<PublicUser, 'name'>[]).map((u) => ({ ...u, name: `${u.firstName} ${u.lastName}`.trim() }));
 
 // ── Prototype identity → the person acting ──────────────────────────────────
 // readIdentity() yields a ROLE; the app also needs the concrete person behind that

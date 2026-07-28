@@ -156,6 +156,15 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             requested park matches their auto-assignment. Members marked a <strong>point of contact</strong> appear
             on the district's detail screen.
           </p>
+          <!-- Deactivation-request confirmation. -->
+          <cds-inline-notification
+            id="member-notice"
+            hidden
+            kind="success"
+            low-contrast
+            title=""
+            subtitle=""
+          ></cds-inline-notification>
           <div class="table-wrap">
             <cds-table>
               <cds-table-head>
@@ -170,6 +179,19 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
               <cds-table-body id="members-tbody"></cds-table-body>
             </cds-table>
           </div>
+        </PermitSection>
+
+        <!-- ── Default signer (Story 7, single-district) ──────────────────────── -->
+        <PermitSection title="Default signer">
+          <p class="section-hint t-body-01">
+            The second signature on this district's <strong>single-district</strong> permits.
+            The Responsible Agent signs first; this person co-signs to activate. Enter a
+            district member's email or an external person's — they're notified to sign via
+            DocuSign and need no account.
+          </p>
+          <cds-text-input id="default-signer" type="email" label="Default signer email" placeholder="name@parks.ca.gov"></cds-text-input>
+          <cds-inline-notification id="ds-saved" style="display:none" kind="success" low-contrast hide-close-button
+            title="Default signer saved" subtitle="New single-district permits in this district route their second signature here."></cds-inline-notification>
         </PermitSection>
 
         <div class="form__actions">
@@ -291,15 +313,41 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         <cds-modal-footer-button kind="danger" id="remove-confirm">Remove member</cds-modal-footer-button>
       </cds-modal-footer>
     </cds-modal>
+
+    <!-- ── Request-deactivation modal (district lead → admin) ──────────────── -->
+    <cds-modal id="deact-modal" size="sm">
+      <cds-modal-header>
+        <cds-modal-close-button></cds-modal-close-button>
+        <cds-modal-label>Account deactivation</cds-modal-label>
+        <cds-modal-heading id="deact-heading">Request account deactivation</cds-modal-heading>
+      </cds-modal-header>
+      <cds-modal-body>
+        <p class="modal-hint t-body-01" id="deact-body">
+          An admin reviews and completes account deactivations. Send a request and they’ll be notified.
+        </p>
+        <cds-textarea id="deact-reason" label="Reason (optional)" placeholder="e.g. Left the agency on Jun 30; no longer needs access." rows="3"></cds-textarea>
+      </cds-modal-body>
+      <cds-modal-footer>
+        <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+        <cds-modal-footer-button kind="primary" id="deact-confirm">Send request</cds-modal-footer-button>
+      </cds-modal-footer>
+    </cds-modal>
   </main>
 </BaseLayout>
 
 <script>
   import { district, roleMeta, assignableRoles, memberRoles, editableDistricts } from '../data/district';
-  import { directory } from '../data/user';
+  import { directory, activeUser } from '../data/user';
   // Member identity is resolved through resolveUser (seeded directory OR an
   // invited/added account) so a newly invited member isn't treated as unknown.
-  import { inviteUser, resolveUser, userStatus } from '../data/requests';
+  import {
+    inviteUser,
+    resolveUser,
+    userStatus,
+    accountStatusOf,
+    submitDeactivation,
+    pendingDeactivationForUser,
+  } from '../data/requests';
   // The signed-in Prototype identity drives district edit scope (HQ → all;
   // district lead → the districts they lead; anyone else → none).
   import { readIdentity } from '../lib/maintenance';
@@ -422,11 +470,37 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         edit.setAttribute('kind', 'ghost'); edit.setAttribute('size', 'sm');
         edit.textContent = 'Edit';
         edit.addEventListener('click', () => openMemberModal(i));
-        const rm = document.createElement('cds-icon-button');
-        rm.setAttribute('kind', 'ghost'); rm.setAttribute('size', 'sm'); rm.setAttribute('align', 'left');
-        rm.innerHTML = `${trash}<span slot="tooltip-content">Remove ${esc(user?.name ?? 'member')}</span>`;
-        rm.addEventListener('click', () => openRemoveModal(i));
-        wrap.append(edit, rm);
+
+        // The two lifecycle actions live in an overflow menu (Carbon's pattern for
+        // multiple row actions), keeping Edit as the one inline affordance:
+        //  - Remove from district  → district-scoped, done in place (confirmed).
+        //  - Request account deactivation → account-global, so it goes to an admin.
+        // Deactivation is guarded: already-inactive or already-requested accounts
+        // show a disabled item explaining the current state.
+        const deactState = accountStatusOf(m.userId) === 'inactive'
+          ? 'inactive'
+          : (pendingDeactivationForUser(m.userId) ? 'pending' : 'none');
+        const deactLabel = deactState === 'inactive'
+          ? 'Account already inactive'
+          : deactState === 'pending'
+            ? 'Deactivation requested'
+            : 'Request account deactivation';
+        const menu = document.createElement('cds-overflow-menu');
+        menu.setAttribute('size', 'sm');
+        menu.setAttribute('menu-label', `More actions for ${user?.name ?? 'member'}`);
+        menu.innerHTML =
+          `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">` +
+          `<circle cx="16" cy="8" r="2"/><circle cx="16" cy="16" r="2"/><circle cx="16" cy="24" r="2"/></svg>` +
+          `<span slot="tooltip-content">More actions</span>` +
+          `<cds-overflow-menu-body>` +
+          `<cds-overflow-menu-item data-act="remove">Remove from district</cds-overflow-menu-item>` +
+          `<cds-overflow-menu-item data-act="deactivate"${deactState !== 'none' ? ' disabled' : ''}${deactState === 'inactive' ? ' danger' : ''}>${deactLabel}</cds-overflow-menu-item>` +
+          `</cds-overflow-menu-body>`;
+        menu.querySelector('[data-act="remove"]')?.addEventListener('click', () => openRemoveModal(i));
+        if (deactState === 'none') {
+          menu.querySelector('[data-act="deactivate"]')?.addEventListener('click', () => openDeactivateModal(i));
+        }
+        wrap.append(edit, menu);
         actionCell.appendChild(wrap);
 
         row.append(nameCell, roleCell, aaCell, pocCell, actionCell);
@@ -738,6 +812,57 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     if (removeModal) removeModal.open = false;
   });
 
+  // ── Request account deactivation (district lead → admin) ───────────────────
+  // Removing a member is district-scoped and done here; deactivating their
+  // ACCOUNT is admin-held, so the lead only requests it. The request goes to the
+  // /users admin inbox; approving it flips the account to inactive.
+  const deactModal = $('deact-modal') as any;
+  const deactReason = $('deact-reason') as any;
+  let pendingDeact = -1;
+
+  const memberNotice = $('member-notice') as any;
+  const flashMember = (title: string, subtitle: string) => {
+    if (!memberNotice) return;
+    memberNotice.title = title;
+    memberNotice.subtitle = subtitle;
+    memberNotice.hidden = false;
+    memberNotice.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
+  const openDeactivateModal = (index: number) => {
+    pendingDeact = index;
+    const m = state.members[index];
+    const who = resolveUser(m?.userId)?.name ?? 'this member';
+    const body = $('deact-body');
+    if (body) {
+      body.textContent =
+        `Ask an admin to deactivate ${who}’s account? It keeps its role and history but can ` +
+        `no longer sign in. This is separate from removing them from the district.`;
+    }
+    if (deactReason) deactReason.value = '';
+    if (deactModal) deactModal.open = true;
+  };
+
+  $('deact-confirm')?.addEventListener('click', () => {
+    if (pendingDeact < 0) return;
+    const m = state.members[pendingDeact];
+    const who = resolveUser(m?.userId)?.name ?? 'The member';
+    const me = activeUser(readIdentity());
+    submitDeactivation({
+      userId: m.userId,
+      requestedBy: me?.id ?? 'unknown',
+      districtId: district.id,
+      reason: (deactReason?.value ?? '').trim(),
+    });
+    pendingDeact = -1;
+    if (deactModal) deactModal.open = false;
+    renderMembers(); // the row's overflow item now reads "Deactivation requested"
+    flashMember(
+      'Deactivation requested',
+      `An admin was asked to deactivate ${who}’s account. Their district membership is unchanged until you remove it.`,
+    );
+  });
+
   // ── Collect + persist (single "Save changes") ──────────────────────────────
   const collect = (): State => ({
     office: {
@@ -882,7 +1007,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   .scope__switcher { min-width: 18rem; }
   .scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
   #switcher-note { margin-top: 1rem; }
-  #switcher-note[hidden], #switcher-wrap[hidden], #save-notice[hidden], #no-access[hidden] { display: none; }
+  #switcher-note[hidden], #switcher-wrap[hidden], #save-notice[hidden], #no-access[hidden], #member-notice[hidden] { display: none; }
+  #member-notice { margin-bottom: 1rem; max-width: 48rem; }
   #save-notice { max-width: 48rem; }
 
   .section-hint {

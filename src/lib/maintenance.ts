@@ -205,3 +205,58 @@ export function enforcePending(): boolean {
   location.replace(withBase(ROUTES.pending));
   return true;
 }
+
+// ── Role-based page access (Story 3) ─────────────────────────────────────────
+// Hiding a nav item isn't enough — a hidden page must also be unreachable by URL
+// (permissions-matrix.md §4). This guard mirrors the nav visibility map: it runs on
+// every page (from BaseLayout) and redirects an identity that lacks access.
+//
+// A route NOT listed in ROUTE_ACCESS is open to every AUTHENTICATED user
+// (researcher included); `anon` is separately limited to PUBLIC_ALLOWED. `pending`
+// is owned by enforcePending and passes through here untouched.
+const INTERNAL_ROLES: Identity[] = ['admin', 'hq-technical', 'district-lead', 'district-assistant'];
+const DISTRICT_ADMIN_ROLES: Identity[] = ['admin', 'hq-technical', 'district-lead'];
+const ADMIN_ROLES: Identity[] = ['admin'];
+
+const ROUTE_ACCESS: { route: string; roles: Identity[] }[] = [
+  { route: '/permits', roles: INTERNAL_ROLES },
+  { route: '/resource-category-tags', roles: INTERNAL_ROLES },
+  { route: '/special-conditions', roles: INTERNAL_ROLES },
+  { route: '/manage-district', roles: DISTRICT_ADMIN_ROLES },
+  { route: '/district', roles: INTERNAL_ROLES }, // district detail is an internal directory
+  { route: '/admin/dashboard', roles: ADMIN_ROLES },
+  { route: '/users', roles: ADMIN_ROLES },
+  { route: '/admin/templates', roles: ADMIN_ROLES },
+  { route: '/admin/maintenance-mode', roles: ADMIN_ROLES },
+];
+
+// Pages an unauthenticated (anon) visitor may reach: the public registry, the
+// applicant entry points, and the auth/landing pages. The prototype directory ('/')
+// is a dev landing, kept open so a redirect target always exists.
+const PUBLIC_ALLOWED = [
+  '/', ROUTES.login, ROUTES.signup, ROUTES.notice, '/landing', '/apply', '/search',
+  // The permit detail admits anon for the public view of Active/Expired permits
+  // (Story 12); the page itself redirects public viewers away from other statuses.
+  '/permit',
+];
+
+/** Redirect the active identity away from a page its role can't reach. Returns
+ *  true if it redirected (so callers can stop initializing the page). */
+export function enforceRoleAccess(at = routePath()): boolean {
+  const id = readIdentity();
+  if (id === 'pending') return false; // enforcePending owns the roleless case
+
+  if (id === 'anon') {
+    if (PUBLIC_ALLOWED.some((r) => isRoute(r, at))) return false;
+    location.replace(withBase(ROUTES.login));
+    return true;
+  }
+
+  // Authenticated: block only the routes this role isn't listed for.
+  const rule = ROUTE_ACCESS.find((r) => isRoute(r.route, at));
+  if (rule && !rule.roles.includes(id)) {
+    location.replace(withBase('/'));
+    return true;
+  }
+  return false;
+}

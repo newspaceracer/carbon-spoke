@@ -3,6 +3,7 @@
 // theme-zone classes) and registers the cds-* web components client-side.
 import '../styles/theme.css';
 import AppHeader from '../components/AppHeader.astro';
+import AppFooter from '../components/AppFooter.astro';
 
 interface Props {
   title?: string;
@@ -42,6 +43,7 @@ const { title = 'Carbon Spoke' } = Astro.props;
          it gets the generic AppHeader. This guarantees exactly one top bar. -->
     {Astro.slots.has('nav') ? <slot name="nav" /> : <AppHeader />}
     <slot />
+    <AppFooter />
 
     <!-- Registers every cds-* custom element used in the app. Astro bundles
          this and it runs in the browser, where the components upgrade.
@@ -52,10 +54,11 @@ const { title = 'Carbon Spoke' } = Astro.props;
          register the components and paint the maintenance-aware shell treatments
          (banner, collapsed nav, logout, dev identity switcher). -->
     <script>
-      import { enforceMaintenance, enforcePending } from '../lib/maintenance';
+      import { enforceMaintenance, enforcePending, enforceRoleAccess } from '../lib/maintenance';
       // Maintenance takes precedence (site down for everyone), then the pending-role
-      // guard (a roleless user can't reach internal pages). Either may redirect.
-      if (!enforceMaintenance() && !enforcePending()) {
+      // guard (a roleless user can't reach internal pages), then role-based page
+      // access (a page this identity's role can't reach). Any of them may redirect.
+      if (!enforceMaintenance() && !enforcePending() && !enforceRoleAccess()) {
         import('../carbon.ts');
         import('../lib/maintenance-shell').then((m) => m.decorateShell());
       }

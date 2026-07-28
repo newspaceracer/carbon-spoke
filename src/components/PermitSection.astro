@@ -1,14 +1,16 @@
 ---
-// A titled section within a permit tab: a heading with a hairline rule and an
-// optional "Make changes" action, then content in the slot. Good for editorial
+// A titled section within a permit tab: a heading with a hairline rule, an optional
+// `aside` slot for real actions, then content in the slot. Good for editorial
 // blocks flowing in whitespace; when a section reads better as a card, compose a
 // cds-tile (with its own title) inside the slot or in place of this section.
+//
+// Story 15: the old per-section "Make changes" ghost button is gone — reviewers
+// edit live in the review wizard, gated by the IR permission matrix (Story 9), so
+// a dead per-section edit stub no longer fits the model.
 interface Props {
   title: string;
-  /** Show the "Make changes" ghost action. */
-  editable?: boolean;
 }
-const { title, editable = false } = Astro.props;
+const { title } = Astro.props;
 ---
 
 <section class="sec">
@@ -16,7 +18,6 @@ const { title, editable = false } = Astro.props;
     <h2 class="sec__title t-heading-03">{title}</h2>
     <div class="sec__aside">
       <slot name="aside" />
-      {editable && <cds-button kind="tertiary" size="md">Make changes</cds-button>}
     </div>
   </div>
   <slot />

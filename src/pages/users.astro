@@ -20,7 +20,7 @@ import { withBase } from '../lib/base';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitSection from '../components/PermitSection.astro';
-import { directory, publicDirectory, accountRoleOptions, expertiseOptions } from '../data/user';
+import { directory, publicDirectory, accountRoleOptions, expertiseOptions, publicRoleOptions } from '../data/user';
 import { districtDirectory } from '../data/district';
 
 export const prototype = {
@@ -97,6 +97,34 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
           </div>
         </PermitSection>
 
+        <!-- ── Account deactivation requests (district lead → admin) ─────────── -->
+        <PermitSection title="Account deactivation requests">
+          <cds-tag slot="aside" type="cool-gray" id="deact-count">0</cds-tag>
+          <p class="section-hint t-body-01">
+            Deactivations district leads requested when a member left. Approving
+            <strong>deactivates the account</strong> — it keeps its role and history but can no
+            longer sign in. Denying closes the request and leaves the account active.
+          </p>
+
+          <!-- carbon-checked: empty-state copy is prose, not a control — a <p> with a
+               Carbon type role is the house pattern (see the requests inbox above). -->
+          <p id="deact-empty" class="empty t-body-01" hidden>No account deactivation requests.</p>
+
+          <div class="table-wrap" id="deact-wrap">
+            <cds-table>
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>User</cds-table-header-cell>
+                  <cds-table-header-cell>Requested by</cds-table-header-cell>
+                  <cds-table-header-cell>Reason</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="deact-tbody"></cds-table-body>
+            </cds-table>
+          </div>
+        </PermitSection>
+
         <!-- ── Pending invitations (invited, not yet accepted) ──────────────── -->
         <PermitSection title="Pending invitations">
           <cds-tag slot="aside" type="cool-gray" id="invites-count">0</cds-tag>
@@ -157,17 +185,18 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         <PermitSection title="Public users">
           <cds-tag slot="aside" type="cool-gray" id="public-count">{publicDirectory.length}</cds-tag>
           <p class="section-hint t-body-01">
-            Members of the public who apply for permits — researchers and their institutions. They
-            carry no agency role. Use <strong>Edit</strong> to correct a name or contact details;
-            their email verifies the account at sign-in and can’t be changed.
+            Members of the public who apply for permits. A public account is either
+            <strong>Public user</strong> or <strong>Inactive</strong>. Use <strong>Edit</strong> to
+            correct a name or change the account state; their email verifies the account at sign-in
+            and their phone is managed by the account holder — neither is edited here.
           </p>
           <div class="table-wrap">
             <cds-table>
               <cds-table-head>
                 <cds-table-header-row>
                   <cds-table-header-cell>User</cds-table-header-cell>
-                  <cds-table-header-cell>Organization</cds-table-header-cell>
-                  <cds-table-header-cell>Phone</cds-table-header-cell>
+                  <cds-table-header-cell>Account role</cds-table-header-cell>
+                  <cds-table-header-cell>Last seen</cds-table-header-cell>
                   <cds-table-header-cell>Actions</cds-table-header-cell>
                 </cds-table-header-row>
               </cds-table-head>
@@ -188,9 +217,20 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       </cds-modal-header>
       <cds-modal-body>
         <div class="modal-grid">
-          <!-- Editable identity — name + phone. -->
-          <cds-text-input id="u-name" label="Full name" placeholder="e.g. Jordan Rivera"></cds-text-input>
+          <!-- Editable identity — first + last name. -->
+          <div class="name-row">
+            <cds-text-input id="u-first" label="First name" placeholder="e.g. Jordan"></cds-text-input>
+            <cds-text-input id="u-last" label="Last name" placeholder="e.g. Rivera"></cds-text-input>
+          </div>
+
+          <!-- Phone — editable for internal staff; read-only for public users,
+               who manage their own phone number. -->
           <cds-text-input id="u-phone" label="Phone" placeholder="(916) 555-0100"></cds-text-input>
+          <div class="readonly-field" id="u-phone-ro-wrap" hidden>
+            <p class="rf-label t-label-01">Phone</p>
+            <p class="rf-value t-body-01" id="u-phone-ro"></p>
+            <p class="rf-note t-label-01">Managed by the account holder — can’t be changed here.</p>
+          </div>
 
           <!-- Email is read-only: it verifies the account at sign-in, so it can't
                be changed here. A labeled value block, not a disabled input. -->
@@ -200,14 +240,25 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             <p class="rf-note t-label-01">Verified at sign-in — can’t be changed here.</p>
           </div>
 
-          <!-- Organization — read-only context, shown for public users only. -->
-          <div class="readonly-field" id="u-org-wrap" hidden>
-            <p class="rf-label t-label-01">Organization</p>
-            <p class="rf-value t-body-01" id="u-org"></p>
+          <!-- Account state — public accounts only: Public user or Inactive. -->
+          <div id="u-public-role-section" hidden>
+            <cds-dropdown id="u-public-role" title-text="Account role" autoalign>
+              {publicRoleOptions.map((r) => (
+                <cds-dropdown-item value={r.value}>{r.label}</cds-dropdown-item>
+              ))}
+            </cds-dropdown>
           </div>
 
           <!-- Role & access — internal accounts only (public users carry no role). -->
           <div id="u-role-section">
+            <!-- Account status — active or deactivated. Deactivating keeps the
+                 role/history but revokes sign-in; this is where an admin acts on a
+                 district lead's deactivation request, or reactivates a returner. -->
+            <cds-dropdown id="u-status" title-text="Account status" autoalign>
+              <cds-dropdown-item value="active">Active</cds-dropdown-item>
+              <cds-dropdown-item value="inactive">Inactive</cds-dropdown-item>
+            </cds-dropdown>
+
             <!-- autoalign: Floating UI positions the open menu so it escapes the
                  modal's scroll container instead of being clipped/faded at the
                  bottom (Carbon drops the modal's mask fade when a dropdown auto-aligns). -->
@@ -318,7 +369,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 </BaseLayout>
 
 <script>
-  import { accountRoleOptions, accountRoleMeta, expertiseLabel } from '../data/user';
+  import { accountRoleOptions, accountRoleMeta, expertiseLabel, publicRoleLabel } from '../data/user';
   import {
     pendingRequests,
     decideRequest,
@@ -333,6 +384,11 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     setContact,
     listUsers,
     listPublicUsers,
+    setPublicRole,
+    accountStatusOf,
+    setAccountStatus,
+    pendingDeactivations,
+    decideDeactivation,
     resolveUser,
     inviteUser,
     userStatus,
@@ -340,6 +396,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     resendInvite,
     revokeInvite,
   } from '../data/requests';
+  import { districtName } from '../data/district';
   import { avatarHTML } from '../lib/avatar';
 
   const $ = (id: string) => document.getElementById(id);
@@ -374,11 +431,15 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     `<span class="u-idtext"><span class="u-name">${esc(name)}</span><span class="u-sub">${esc(email)}</span></span></div>`;
 
   // Account status is STATE, not a category — an icon-indicator (icon + label),
-  // never a colored tag: pending until the invite is accepted, then active.
-  const statusCellHTML = (userId: string) =>
-    userStatus(userId) === 'invited'
+  // never a colored tag. Deactivated wins over the invite state: a deactivated
+  // account reads "Inactive"; otherwise pending until accepted, then active.
+  const statusCellHTML = (userId: string) => {
+    if (accountStatusOf(userId) === 'inactive')
+      return '<cds-icon-indicator size="16" kind="undefined" label="Inactive"></cds-icon-indicator>';
+    return userStatus(userId) === 'invited'
       ? '<cds-icon-indicator size="16" kind="pending" label="Invited"></cds-icon-indicator>'
       : '<cds-icon-indicator size="16" kind="succeeded" label="Active"></cds-icon-indicator>';
+  };
 
   // A quiet relative age for the invited timestamp ("Just now", "3 hr ago").
   const timeAgo = (ms: number) => {
@@ -466,6 +527,75 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     );
   };
 
+  // ── Account deactivation inbox ───────────────────────────────────────────────
+  const renderDeactivations = () => {
+    const tbody = $('deact-tbody');
+    const empty = $('deact-empty');
+    const wrap = $('deact-wrap');
+    if (!tbody) return;
+
+    const rows = pendingDeactivations();
+    const count = $('deact-count');
+    if (count) count.textContent = String(rows.length);
+    if (empty) empty.hidden = rows.length > 0;
+    if (wrap) wrap.hidden = rows.length === 0;
+
+    tbody.replaceChildren(
+      ...rows.map((req) => {
+        const user = resolveUser(req.userId);
+        const by = resolveUser(req.requestedBy);
+        const row = document.createElement('cds-table-row');
+
+        const userCell = document.createElement('cds-table-cell');
+        userCell.innerHTML = userCellHTML(user?.name ?? '(unknown user)', user?.email ?? '');
+
+        // Who raised it: the lead's name, and the district it was raised from.
+        const byCell = document.createElement('cds-table-cell');
+        const where = req.districtId ? districtName(req.districtId) : '';
+        byCell.innerHTML =
+          `<span class="u-name">${esc(by?.name ?? '(unknown)')}</span>` +
+          (where ? `<span class="u-sub">${esc(where)}</span>` : '');
+
+        const reasonCell = document.createElement('cds-table-cell');
+        reasonCell.innerHTML = `<span class="u-reason">${esc(req.reason || '—')}</span>`;
+
+        const actionCell = document.createElement('cds-table-cell');
+        const wrapEl = document.createElement('div');
+        wrapEl.className = 'row-actions';
+        const approve = document.createElement('cds-button');
+        approve.setAttribute('kind', 'ghost'); approve.setAttribute('size', 'sm');
+        approve.textContent = 'Deactivate';
+        approve.addEventListener('click', () => {
+          decideDeactivation(req.id, 'approved');
+          renderDeactivations();
+          renderUsers();
+          flash('Account deactivated', `${user?.name ?? 'The account'} can no longer sign in. Their role and history are kept.`);
+        });
+        const deny = document.createElement('cds-button');
+        deny.setAttribute('kind', 'danger-ghost'); deny.setAttribute('size', 'sm');
+        deny.textContent = 'Deny';
+        deny.addEventListener('click', () => {
+          askConfirm({
+            label: 'Deactivation request',
+            heading: 'Deny deactivation request',
+            body: `Deny the request to deactivate ${user?.name ?? 'this account'}? The account stays active.`,
+            confirmLabel: 'Deny request',
+            action: () => {
+              decideDeactivation(req.id, 'denied');
+              renderDeactivations();
+              flash('Request denied', `The request to deactivate ${user?.name ?? 'the account'} was denied.`);
+            },
+          });
+        });
+        wrapEl.append(approve, deny);
+        actionCell.appendChild(wrapEl);
+
+        row.append(userCell, byCell, reasonCell, actionCell);
+        return row;
+      }),
+    );
+  };
+
   // ── User directory ──────────────────────────────────────────────────────────
   // Expertise cell: one quiet chip per area, or an em dash when none.
   const expertiseCellHTML = (values: string[]) =>
@@ -532,11 +662,16 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         const userCell = document.createElement('cds-table-cell');
         userCell.innerHTML = userCellHTML(u.name, u.email);
 
-        const orgCell = document.createElement('cds-table-cell');
-        orgCell.textContent = u.organization;
+        // Account state — 'Inactive' is a STATE, so it reads as an icon-indicator;
+        // an active account is the plain "Public user" role label.
+        const roleCell = document.createElement('cds-table-cell');
+        roleCell.innerHTML =
+          u.role === 'inactive'
+            ? '<cds-icon-indicator size="16" kind="undefined" label="Inactive"></cds-icon-indicator>'
+            : `<span class="u-name">${esc(publicRoleLabel(u.role))}</span>`;
 
-        const phoneCell = document.createElement('cds-table-cell');
-        phoneCell.textContent = u.phone || '—';
+        const seenCell = document.createElement('cds-table-cell');
+        seenCell.textContent = timeAgo(u.lastSeen);
 
         const actionCell = document.createElement('cds-table-cell');
         const edit = document.createElement('cds-button');
@@ -545,7 +680,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
         edit.addEventListener('click', () => openUserModal(u.id, 'public'));
         actionCell.appendChild(edit);
 
-        row.append(userCell, orgCell, phoneCell, actionCell);
+        row.append(userCell, roleCell, seenCell, actionCell);
         return row;
       }),
     );
@@ -622,11 +757,15 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
   // ── Edit-user modal ───────────────────────────────────────────────────────────
   const modal = $('user-modal') as any;
-  const nameEl = $('u-name') as any;
+  const firstEl = $('u-first') as any;
+  const lastEl = $('u-last') as any;
   const phoneEl = $('u-phone') as any;
+  const phoneRoWrap = $('u-phone-ro-wrap');
+  const phoneRoEl = $('u-phone-ro');
   const roleSection = $('u-role-section');
-  const orgWrap = $('u-org-wrap');
-  const orgEl = $('u-org');
+  const statusEl = $('u-status') as any;
+  const publicRoleSection = $('u-public-role-section');
+  const publicRoleEl = $('u-public-role') as any;
   const roleEl = $('u-role') as any;
   const roleDesc = $('u-role-desc');
   const districtWrap = $('u-district-wrap');
@@ -662,17 +801,30 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     editingUserId = userId;
     editingKind = kind;
     const u = resolveUser(userId);
-    if (nameEl) { nameEl.value = u?.name ?? ''; nameEl.invalid = false; }
-    if (phoneEl) phoneEl.value = u?.phone ?? '';
+    if (firstEl) { firstEl.value = u?.firstName ?? ''; firstEl.invalid = false; }
+    if (lastEl) { lastEl.value = u?.lastName ?? ''; lastEl.invalid = false; }
     if ($('u-email')) $('u-email')!.textContent = u?.email ?? '';
 
-    // Role/expertise apply to internal accounts only; public users carry none.
-    if (roleSection) roleSection.hidden = kind !== 'internal';
-    if (orgWrap) orgWrap.hidden = kind !== 'public';
-    if (kind === 'public') {
+    const isPublic = kind === 'public';
+    // Phone is editable for internal staff; read-only (self-service) for public.
+    // cds-text-input sets :host display, so `hidden` won't collapse it — toggle
+    // inline display (see the Carbon [hidden] host-display gotcha).
+    if (phoneEl) {
+      phoneEl.style.display = isPublic ? 'none' : '';
+      if (!isPublic) phoneEl.value = u?.phone ?? '';
+    }
+    if (phoneRoWrap) phoneRoWrap.hidden = !isPublic;
+    if (isPublic && phoneRoEl) phoneRoEl.textContent = u?.phone || '—';
+
+    // Role section: internal → agency role/expertise; public → the two-state role.
+    if (roleSection) roleSection.hidden = isPublic;
+    if (publicRoleSection) publicRoleSection.hidden = !isPublic;
+
+    if (isPublic) {
       const pub = listPublicUsers().find((p) => p.id === userId);
-      if (orgEl) orgEl.textContent = pub?.organization ?? '';
+      if (publicRoleEl) publicRoleEl.value = pub?.role || 'public-user';
     } else {
+      if (statusEl) statusEl.value = accountStatusOf(userId);
       const { role, district } = accountRoleOf(userId);
       if (roleEl) roleEl.value = role || accountRoleOptions[0].value;
       if (districtEl) districtEl.value = district || 'north-coast-redwoods';
@@ -688,49 +840,52 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   $('u-save')?.addEventListener('click', () => {
     if (!editingUserId) return;
 
-    // Name is required — an account can't lose its display name. Phone is optional.
-    const name = (nameEl?.value || '').trim();
-    const phone = (phoneEl?.value || '').trim();
-    if (!name) {
-      if (nameEl) { nameEl.invalid = true; nameEl.invalidText = 'Enter a name.'; }
+    // First + last name are required — an account can't lose its display name.
+    const first = (firstEl?.value || '').trim();
+    const last = (lastEl?.value || '').trim();
+    const name = [first, last].filter(Boolean).join(' ');
+    let ok = true;
+    if (!first) { if (firstEl) { firstEl.invalid = true; firstEl.invalidText = 'Enter a first name.'; } ok = false; }
+    if (!last) { if (lastEl) { lastEl.invalid = true; lastEl.invalidText = 'Enter a last name.'; } ok = false; }
+    if (!ok) return;
+
+    if (editingKind === 'public') {
+      // Public accounts: name is admin-editable; phone/email are not; the account
+      // state is the two-value role. Contact writes name only (no phone).
+      const role = publicRoleEl?.value || 'public-user';
+      setContact(editingUserId, { firstName: first, lastName: last });
+      setPublicRole(editingUserId, role);
+      modal.open = false;
+      renderPublicUsers();
+      flash('User updated', `${name}’s details were saved.`);
       return;
     }
 
-    // Internal accounts also carry a role (+ HQ expertise); validate before saving.
-    let value = '';
-    let district: string | undefined;
-    let expertise: string[] = [];
-    if (editingKind === 'internal') {
-      value = roleEl?.value || '';
-      if (!value) return;
-      district = isScoped(value) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
-      // Expertise is an HQ-only attribute — non-HQ roles carry none.
-      expertise = value === HQ ? (expertiseEl?.value || '').split(',').filter(Boolean) : [];
-      if (value === HQ && expertise.length === 0) {
-        if (expertiseHint) {
-          expertiseHint.textContent = 'HQ technical reviewers need at least one area of expertise.';
-          expertiseHint.setAttribute('data-error', '');
-        }
-        return;
+    // Internal accounts also carry a role (+ HQ expertise) and an editable phone.
+    const phone = (phoneEl?.value || '').trim();
+    const value = roleEl?.value || '';
+    if (!value) return;
+    const district = isScoped(value) ? (districtEl?.value || 'north-coast-redwoods') : undefined;
+    // Expertise is an HQ-only attribute — non-HQ roles carry none.
+    const expertise = value === HQ ? (expertiseEl?.value || '').split(',').filter(Boolean) : [];
+    if (value === HQ && expertise.length === 0) {
+      if (expertiseHint) {
+        expertiseHint.textContent = 'HQ technical reviewers need at least one area of expertise.';
+        expertiseHint.setAttribute('data-error', '');
       }
+      return;
     }
 
-    // Contact edits apply to every account; role/expertise only to internal ones.
-    setContact(editingUserId, { name, phone });
-    if (editingKind === 'internal') {
-      setAccountRole(editingUserId, value, district);
-      setExpertise(editingUserId, expertise);
-    }
+    setContact(editingUserId, { firstName: first, lastName: last, phone });
+    setAccountRole(editingUserId, value, district);
+    setExpertise(editingUserId, expertise);
+    if (statusEl) setAccountStatus(editingUserId, statusEl.value === 'inactive' ? 'inactive' : 'active');
 
     modal.open = false;
-    if (editingKind === 'internal') {
-      renderUsers();
-      renderRequests(); // current-role / name column may reference this user
-      flash('User updated', `${name} is now ${roleDisplay(value, district)}.`);
-    } else {
-      renderPublicUsers();
-      flash('User updated', `${name}’s details were saved.`);
-    }
+    renderUsers();
+    renderRequests(); // current-role / name column may reference this user
+    const statusNote = statusEl?.value === 'inactive' ? ' Account is deactivated.' : '';
+    flash('User updated', `${name} is now ${roleDisplay(value, district)}.${statusNote}`);
   });
 
   // ── Add-user modal ──────────────────────────────────────────────────────────
@@ -812,6 +967,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
   // ── Init ──────────────────────────────────────────────────────────────────────
   renderRequests();
+  renderDeactivations();
   renderInvites();
   renderUsers();
   renderPublicUsers();
@@ -853,7 +1009,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     padding: 1.5rem 0;
     color: var(--cds-text-secondary, #525252);
   }
-  .empty[hidden], #requests-wrap[hidden], #invites-wrap[hidden], #admin-notice[hidden] { display: none; }
+  .empty[hidden], #requests-wrap[hidden], #deact-wrap[hidden], #invites-wrap[hidden], #admin-notice[hidden] { display: none; }
   #admin-notice { margin-bottom: 1.25rem; max-width: 52rem; }
 
   /* Tables — client-rendered cells use global classes. */
@@ -882,20 +1038,19 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   /* First + last name share a row, stacking on narrow widths. */
   .name-row { display: flex; gap: 1rem; flex-wrap: wrap; }
   .name-row > * { flex: 1 1 10rem; min-width: 0; }
-  .identity {
-    padding: 1rem;
+  /* Read-only account fields (email, organization) — a labeled value block, not a
+     disabled input, so it reads as fixed rather than temporarily unavailable. */
+  .readonly-field {
+    padding: 0.75rem 1rem;
     background: var(--cds-layer-01, #f4f4f4);
-    border-left: 3px solid var(--cds-border-interactive, #0f62fe);
   }
-  .identity__name { margin: 0; color: var(--cds-text-primary, #161616); }
-  .identity__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem 1rem;
-    margin: 0.25rem 0 0;
-    color: var(--cds-text-secondary, #525252);
-  }
-  .identity__note { margin: 0.5rem 0 0; color: var(--cds-text-secondary, #525252); }
+  .readonly-field[hidden] { display: none; }
+  .rf-label { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .rf-value { margin: 0.125rem 0 0; color: var(--cds-text-primary, #161616); }
+  .rf-note { margin: 0.375rem 0 0; color: var(--cds-text-secondary, #525252); }
+  /* Role/expertise group — hidden entirely for public accounts. */
+  #u-role-section { display: flex; flex-direction: column; gap: 1.25rem; }
+  #u-role-section[hidden] { display: none; }
   .modal-desc { margin: 0; color: var(--cds-text-secondary, #525252); }
   /* Expertise helper text; turns error-red when the HQ rule is unmet. */
   .modal-hint { margin: 0.375rem 0 0; color: var(--cds-text-secondary, #525252); }

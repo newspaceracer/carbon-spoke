@@ -94,6 +94,14 @@ const appliedTags = permit.overview.tagOptions.filter((t) => permit.overview.tag
 const tagStorageKey = `permit-tags-${permit.id}`;
 
 const t = permit.researchTeam;
+
+// Story 11 — researcher record scoping. A Researcher may reach this permit only if
+// they are its submitter, principal investigator, or field lead (PICOF). These are
+// the owner identifiers the client matches the active researcher identity against.
+const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
+  .flatMap((c) => [c?.name, c?.email])
+  .filter(Boolean)
+  .map((s) => (s as string).toLowerCase());
 ---
 
 <BaseLayout title={`${permit.id} — ${permit.name}`}>
@@ -107,6 +115,19 @@ const t = permit.researchTeam;
     <script is:inline define:vars={{ rsKey: `permit-review-started-${permit.id}` }}>
       try { if (localStorage.getItem(rsKey)) document.documentElement.classList.add('review-started'); } catch (e) {}
     </script>
+    <script type="application/json" id="permit-owners" set:html={JSON.stringify(ownerIdentifiers)}></script>
+
+    <!-- Public view banner (Story 12) — revealed by the client for a public viewer
+         of an Active/Expired permit; the record shows summary fields only, no PII. -->
+    <cds-inline-notification
+      id="public-view-banner"
+      style="display:none"
+      kind="info"
+      low-contrast
+      hide-close-button
+      title="Public view"
+      subtitle="This is the public summary of an issued research permit. Personal details and internal review information are not shown."
+    ></cds-inline-notification>
     <cds-stack gap="6">
       <PermitHeader
         id={permit.id}
@@ -314,6 +335,20 @@ const t = permit.researchTeam;
                 </cds-modal-footer>
               </cds-modal>
 
+              <!-- Supporting review (Story 10). An informational action shown only
+                   to a Supporting Agent during Under review — it records their review
+                   without gating the Responsible Agent's decision. Hidden for everyone
+                   else (client-gated by the IR matrix: supporting-review). -->
+              <div id="supporting-review-section" hidden>
+                <PermitSection title="Supporting review">
+                  <p class="section-hint t-body-01" id="sr-hint">Record your supporting review. This is informational — it doesn't hold up the Responsible Agent's decision.</p>
+                  <div class="sr-row">
+                    <cds-tag id="sr-status-tag" type="cool-gray" size="md">Not started</cds-tag>
+                    <cds-button id="sr-action" kind="tertiary" size="md" type="button">Start supporting review</cds-button>
+                  </div>
+                </PermitSection>
+              </div>
+
               <PermitSection title="Comments">
                 <!-- Composer: stock cds-textarea + cds-button. New comments are
                      authored by the signed-in reviewer and persisted client-side. -->
@@ -392,7 +427,7 @@ const t = permit.researchTeam;
           <!-- ── Study areas ──────────────────────────────────────────── -->
           <div class="panel cds--css-grid" data-panel="study-areas" role="tabpanel" aria-labelledby="tab-study-areas" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Authorized parks" editable>
+              <PermitSection title="Authorized parks">
                 <p class="section-hint t-body-01">Parks where research and collection are authorized, grouped by administering district and its research coordinator.</p>
                 <cds-structured-list>
                   <cds-structured-list-head>
@@ -435,6 +470,26 @@ const t = permit.researchTeam;
                       <p class="site__note t-body-01">{s.note}</p>
                     </cds-tile>
                   ))}
+                </div>
+              </PermitSection>
+
+              <!-- Dates & CEQA (Story 14). CEQA is a simple Yes / N/A determination
+                   the Responsible Agent records during review; the requested window
+                   is read-only application data. The whole CEQA control is gated by
+                   the IR matrix (dates-ceqa: update if RA, read if assigned). -->
+              <PermitSection title="Dates & CEQA">
+                <dl class="fact-pair">
+                  <div>
+                    <dt class="fact__label t-label-01">Requested window</dt>
+                    <dd class="fact__value t-body-01">{permit.activeWindow.start} – {permit.activeWindow.end}</dd>
+                  </div>
+                </dl>
+                <div id="ceqa-block">
+                  <cds-radio-button-group id="ceqa-group" name="ceqa" legend-text="CEQA determination" orientation="horizontal">
+                    <cds-radio-button label-text="Yes" value="yes"></cds-radio-button>
+                    <cds-radio-button label-text="N/A" value="na"></cds-radio-button>
+                  </cds-radio-button-group>
+                  <p class="section-hint t-body-01" id="ceqa-hint">Record whether CEQA review applies to this permit.</p>
                 </div>
               </PermitSection>
             </div>
@@ -483,7 +538,7 @@ const t = permit.researchTeam;
           <!-- ── Project information ──────────────────────────────────── -->
           <div class="panel cds--css-grid" data-panel="project-information" role="tabpanel" aria-labelledby="tab-project-information" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Project details" editable>
+              <PermitSection title="Project details">
                 <FactGrid rows={permit.projectInfo.details} tiles />
                 <h3 class="subhead t-heading-01">Project purpose</h3>
                 <p class="lede t-body-02">{permit.projectInfo.purpose}</p>
@@ -491,7 +546,7 @@ const t = permit.researchTeam;
                 <p class="lede t-body-02">{permit.projectInfo.benefits}</p>
               </PermitSection>
 
-              <PermitSection title="Research team" editable>
+              <PermitSection title="Research team">
                 <div class="contact-grid">
                   <ContactCard role="Organization" contact={t.organization} />
                   <ContactCard role="Principal investigator" contact={t.principalInvestigator} />
@@ -534,13 +589,13 @@ const t = permit.researchTeam;
           <div class="panel cds--css-grid" data-panel="data-collection" role="tabpanel" aria-labelledby="tab-data-collection" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
               {permit.dataCollection.involvesCollection && (
-                <PermitSection title="Collection & curation" editable>
+                <PermitSection title="Collection & curation">
                   <FactGrid rows={permit.dataCollection.collection} min="20rem" tiles />
                 </PermitSection>
               )}
 
               {permit.dataCollection.involvesLaboratory && (
-                <PermitSection title="Laboratory & analysis" editable>
+                <PermitSection title="Laboratory & analysis">
                   <FactGrid rows={permit.dataCollection.laboratory} min="20rem" tiles />
                 </PermitSection>
               )}
@@ -573,7 +628,7 @@ const t = permit.researchTeam;
           <!-- ── Additional documentation ─────────────────────────────── -->
           <div class="panel cds--css-grid" data-panel="additional-documentation" role="tabpanel" aria-labelledby="tab-additional-documentation" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Compliance" editable>
+              <PermitSection title="Compliance">
                 <FactGrid rows={permit.additionalDocs.facts} min="20rem" tiles />
               </PermitSection>
 
@@ -777,6 +832,58 @@ const t = permit.researchTeam;
   import { withBase } from '../lib/base';
   import { readIdentity } from '../lib/maintenance';
   import { activeUser } from '../data/user';
+  import { sectionAccessor } from '../lib/permissions';
+
+  // IR permission context (Stories 9.1–9.5): resolve each section's access from
+  // the active identity × permit-role × status × type. The banner carries the id,
+  // type, and seeded status; the live status is the persisted lifecycle value.
+  const permitBanner = document.getElementById('permit-banner');
+  const thePermitId = permitBanner?.dataset.permitId || '';
+  const liveStatus = () =>
+    localStorage.getItem(`permit-status-${thePermitId}`) || permitBanner?.dataset.status || 'Under review';
+  const acc = sectionAccessor(readIdentity(), thePermitId, permitBanner?.dataset.permitType, liveStatus());
+
+  // ── Viewer class: internal reviewer · researcher owner · public (Stories 11–12) ─
+  const hideSec = (sel: string) =>
+    (document.querySelector(sel)?.closest('.sec') as HTMLElement | null)?.style.setProperty('display', 'none');
+  const hideInternalReview = () => {
+    document.documentElement.classList.add('review-started'); // show the body, skip the reviewer gate
+    (document.getElementById('review-gate') as HTMLElement | null)?.style.setProperty('display', 'none');
+    hideSec('#permit-tag-select');   // Tags
+    hideSec('#team-roster');         // Analysis team
+    hideSec('#comment-composer');    // Comments / internal notes
+    (document.getElementById('supporting-review-section') as HTMLElement | null)?.style.setProperty('display', 'none');
+    (document.getElementById('tab-special-conditions') as HTMLElement | null)?.style.setProperty('display', 'none');
+    (document.querySelector('[data-panel="special-conditions"]') as HTMLElement | null)?.setAttribute('hidden', '');
+  };
+  {
+    const who = readIdentity();
+    const statusLabel = liveStatus();
+    const isInternal = who === 'admin' || who === 'hq-technical' || who === 'district-lead' || who === 'district-assistant';
+    const isPublicStatus = statusLabel === 'Active' || statusLabel === 'Expired';
+    if (!isInternal) {
+      let owners: string[] = [];
+      try { owners = JSON.parse(document.getElementById('permit-owners')?.textContent || '[]'); } catch {}
+      const me = activeUser(who);
+      const ownsIt = who === 'researcher' && !!me && owners.includes(me.name.toLowerCase());
+
+      if (ownsIt && statusLabel !== 'Withdrawn') {
+        // Story 11 — the owner reads their submitted application; IR is hidden (§6).
+        hideInternalReview();
+      } else if (isPublicStatus) {
+        // Story 12 — public view of an Active/Expired permit: summary only, no PII,
+        // no Internal Review. Available to anon and any authenticated non-owner.
+        hideInternalReview();
+        hideSec('.contact-grid');        // Research team (PI / field lead names — PII)
+        const pub = document.getElementById('public-view-banner') as HTMLElement | null;
+        if (pub) pub.style.display = '';
+      } else {
+        // Not the owner and not a public status → no access.
+        location.replace(withBase(who === 'anon' ? '/search' : '/my-permits'));
+      }
+    }
+  }
+
   // cds-tabs renders only the tab strip; panel visibility is the app's job.
   const tabsEl = document.getElementById('permit-tabs') as any;
   const panels = Array.from(document.querySelectorAll<HTMLElement>('.panel'));
@@ -804,6 +911,12 @@ const t = permit.researchTeam;
   const commentSubmit = document.getElementById('comment-submit');
   const thread = document.getElementById('comment-thread');
   const commentTemplate = document.getElementById('comment-template') as HTMLTemplateElement | null;
+
+  // Internal Notes (Story 9.5): any reviewer with access may add notes; a
+  // read-only status (or a non-reviewer) hides the composer but still shows the
+  // thread. The composer sits inside the notes section, which is CA for researchers.
+  const notesUpdatable = acc('internal-notes') === 'update';
+  if (composer && !notesUpdatable) composer.style.display = 'none';
 
   if (composer && commentInput && commentSubmit && thread && commentTemplate) {
     // The comment author is the person behind the active prototype identity, not a
@@ -871,13 +984,16 @@ const t = permit.researchTeam;
       commentInput.focus();
     };
 
-    commentSubmit.addEventListener('click', addComment);
-    commentInput.addEventListener('keydown', (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        addComment();
-      }
-    });
+    // Wire the composer only when the active identity may add notes (Story 9.5).
+    if (notesUpdatable) {
+      commentSubmit.addEventListener('click', addComment);
+      commentInput.addEventListener('keydown', (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          addComment();
+        }
+      });
+    }
   }
 
   // ── Analysis team: add / remove valid existing users (prototype-local) ──
@@ -892,6 +1008,12 @@ const t = permit.researchTeam;
   const teamAddConfirm = document.getElementById('team-add-confirm');
   const rowTemplate = document.getElementById('roster-row-template') as HTMLTemplateElement | null;
   const directoryEl = document.getElementById('user-directory');
+
+  // Agent assignment (Story 9.2): the roster is Update-if-Responsible-Agent (or
+  // Admin) during Under review; everyone else sees it read-only. When not editable,
+  // hide the "Add to team" trigger and every remove button.
+  const teamEditable = acc('supporting-agents') === 'update';
+  if (!teamEditable && teamAddOpen) (teamAddOpen as HTMLElement).style.display = 'none';
 
   if (roster && teamAddSelect && teamAddOpen && teamAddModal && teamAddConfirm && rowTemplate && directoryEl) {
     interface DirUser { id: string; name: string; role: string; detail: string; email: string; }
@@ -951,8 +1073,11 @@ const t = permit.researchTeam;
     };
 
     const wireRemove = (row: HTMLElement) => {
-      const btn = row.querySelector('[data-remove]');
-      btn?.addEventListener('click', () => removeMember(row.dataset.userId!, row));
+      const btn = row.querySelector('[data-remove]') as HTMLElement | null;
+      if (!btn) return;
+      // Read-only roster: show no remove affordance (Story 9.2).
+      if (!teamEditable) { btn.style.display = 'none'; return; }
+      btn.addEventListener('click', () => removeMember(row.dataset.userId!, row));
     };
 
     const buildRow = (u: DirUser): HTMLElement => {
@@ -1014,6 +1139,12 @@ const t = permit.researchTeam;
   const tagRow = document.getElementById('permit-tag-row');
   const tagEmpty = document.getElementById('permit-tag-empty');
 
+  // Tags (Story 9.2): updatable by any reviewer with access; read-only otherwise
+  // (a read-only status, or a non-reviewer). When not editable, hide the picker and
+  // render the applied tags as plain, non-dismissible tags.
+  const tagsEditable = acc('tags') === 'update';
+  if (tagSelect && !tagsEditable) (tagSelect as HTMLElement).style.display = 'none';
+
   if (tagSelect && tagRow && tagEmpty) {
     const storageKey = (tagRow as HTMLElement).dataset.storageKey || 'permit-tags';
     // Canonical order = the option order, so the applied row is stable.
@@ -1033,12 +1164,15 @@ const t = permit.researchTeam;
     const save = (tags: string[]) => localStorage.setItem(storageKey, JSON.stringify(tags));
 
     const buildTag = (label: string): HTMLElement => {
-      const tag = document.createElement('cds-dismissible-tag');
+      // Editable → a dismissible tag; read-only → a plain, non-removable tag.
+      const tag = document.createElement(tagsEditable ? 'cds-dismissible-tag' : 'cds-tag');
       tag.setAttribute('type', 'cool-gray');
       tag.setAttribute('size', 'md');
       tag.setAttribute('text', label);
       (tag as HTMLElement).dataset.tag = label;
-      tag.addEventListener('cds-dismissible-tag-closed', () => setTags(applied.filter((t) => t !== label)));
+      if (tagsEditable) {
+        tag.addEventListener('cds-dismissible-tag-closed', () => setTags(applied.filter((t) => t !== label)));
+      }
       return tag;
     };
 
@@ -1059,11 +1193,72 @@ const t = permit.researchTeam;
     };
 
     // A user check/uncheck: the component has already updated its own `value`.
-    tagSelect.addEventListener('cds-multi-select-selected', () => {
-      setTags((tagSelect.value || '').split(',').filter(Boolean));
-    });
+    if (tagsEditable) {
+      tagSelect.addEventListener('cds-multi-select-selected', () => {
+        setTags((tagSelect.value || '').split(',').filter(Boolean));
+      });
+    }
 
     setTags(applied); // apply stored state over the seed on load
+  }
+
+  // ── Dates & CEQA (Story 14): a Yes / N-A determination, gated by the IR matrix ──
+  // dates-ceqa resolves to update (RA/Admin), read (assigned, disabled), or hidden
+  // (unassigned district / non-reviewer). Persisted per permit; unset by default.
+  const ceqaGroup = document.getElementById('ceqa-group') as any;
+  const ceqaBlock = document.getElementById('ceqa-block') as HTMLElement | null;
+  if (ceqaGroup && ceqaBlock) {
+    const ceqaAccess = acc('dates-ceqa');
+    if (ceqaAccess === 'hidden' || ceqaAccess === 'cannot-access') {
+      ceqaBlock.style.display = 'none';
+    } else {
+      const ceqaKey = `permit-ceqa-${thePermitId}`;
+      const stored = localStorage.getItem(ceqaKey);
+      if (stored === 'yes' || stored === 'na') ceqaGroup.value = stored;
+      const editable = ceqaAccess === 'update';
+      if (!editable) {
+        ceqaGroup.setAttribute('disabled', '');
+        const hint = document.getElementById('ceqa-hint');
+        if (hint) hint.textContent = 'CEQA determination is set by the Responsible Agent during review.';
+      } else {
+        ceqaGroup.addEventListener('cds-radio-button-group-changed', (e: Event) => {
+          const v = (e as CustomEvent).detail?.value ?? ceqaGroup.value;
+          if (v === 'yes' || v === 'na') localStorage.setItem(ceqaKey, v);
+        });
+      }
+    }
+  }
+
+  // ── Supporting review (Story 10): SA-only, informational ────────────────────
+  // Shown only when the resolver grants it (Supporting Agent, Under review). It
+  // records the SA's review state (per identity, per permit) but never gates the RA.
+  const srSection = document.getElementById('supporting-review-section') as HTMLElement | null;
+  if (srSection && acc('supporting-review') === 'update') {
+    srSection.hidden = false;
+    const srTag = document.getElementById('sr-status-tag') as any;
+    const srAction = document.getElementById('sr-action') as any;
+    const srKey = `permit-supporting-review-${thePermitId}-${readIdentity()}`;
+    type SRState = 'none' | 'in-progress' | 'complete';
+    const readSR = (): SRState => {
+      const v = localStorage.getItem(srKey);
+      return v === 'in-progress' || v === 'complete' ? v : 'none';
+    };
+    const renderSR = () => {
+      const s = readSR();
+      const map = {
+        none: { tag: 'Not started', type: 'cool-gray', action: 'Start supporting review', next: 'in-progress' },
+        'in-progress': { tag: 'In progress', type: 'blue', action: 'Complete supporting review', next: 'complete' },
+        complete: { tag: 'Complete', type: 'green', action: 'Reopen review', next: 'in-progress' },
+      }[s];
+      if (srTag) { srTag.textContent = map.tag; srTag.setAttribute('type', map.type); }
+      if (srAction) srAction.textContent = map.action;
+      return map.next as SRState;
+    };
+    let next = renderSR();
+    srAction?.addEventListener('click', () => {
+      localStorage.setItem(srKey, next);
+      next = renderSR();
+    });
   }
 
 </script>
@@ -1078,6 +1273,7 @@ const t = permit.researchTeam;
   import { readIdentity } from '../lib/maintenance';
   import { activeUser } from '../data/user';
   import { curatableDistricts } from '../data/district';
+  import { sectionAccessor } from '../lib/permissions';
   import {
     districtKey,
     ownerLabel,
@@ -1114,11 +1310,14 @@ const t = permit.researchTeam;
   const FROZEN_STATUSES = ['Out for signature', 'Active'];
   let locked = FROZEN_STATUSES.includes(localStorage.getItem(permitStatusKey(permitId)) ?? '');
 
-  // Editable scope is derived from the active identity, not a self-selected "Acting
-  // as" control (Story 1). HQ roles curate the org-wide (hq) block plus every
-  // district block on this permit; a district lead/assistant curates only their own
-  // district('s) that appear on this permit; everyone else is read-only. Status
-  // still freezes everything (`locked`); full permit-role gating arrives in Story 9.4.
+  // TWO gates combine on Special conditions:
+  //  1) WHICH block (identity's district scope, Story 1): HQ roles curate the
+  //     org-wide (hq) block plus every district block on this permit; a district
+  //     lead/assistant curates only their own district('s) on this permit.
+  //  2) WHETHER editable at all (permit-role × status, Story 9.4): the resolver
+  //     makes conditions updatable only by the Responsible/Supporting Agent (or
+  //     Admin) during Under review / Returned — read once signing or later. HQ and
+  //     District SC share the same rule, so one resolve covers both.
   const isHQ = identity === 'admin' || identity === 'hq-technical';
   const curatableKeys = new Set(curatableDistricts(identity).map((d) => d.id));
   const editableOwners = new Set<ConditionOwner>();
@@ -1128,7 +1327,13 @@ const t = permit.researchTeam;
   } else {
     districts.forEach((d) => { if (curatableKeys.has(d.key)) editableOwners.add(d.key); });
   }
-  const canEdit = (owner: ConditionOwner) => !locked && editableOwners.has(owner);
+  const scBanner = document.getElementById('permit-banner');
+  const scAcc = sectionAccessor(
+    identity, permitId, scBanner?.dataset.permitType,
+    localStorage.getItem(permitStatusKey(permitId)) || scBanner?.dataset.status,
+  );
+  const condUpdatable = scAcc('district-conditions') === 'update';
+  const canEdit = (owner: ConditionOwner) => !locked && condUpdatable && editableOwners.has(owner);
 
   const persist = () => savePermitConditions(permitId, conditions);
 
@@ -1294,11 +1499,15 @@ const t = permit.researchTeam;
     const note = $('sc-scope-note');
     if (note) {
       const editableDistrictNames = districts.filter((d) => editableOwners.has(d.key)).map((d) => d.name);
-      note.textContent = isHQ
-        ? "You curate the headquarters conditions and every district's conditions on this permit."
-        : editableDistrictNames.length
-          ? `You curate special conditions for ${oxford(editableDistrictNames)} on this permit.`
-          : "You can view these special conditions but can't edit them in your role.";
+      // No permit-role to edit conditions in this status → read-only, whatever the
+      // district scope (Story 9.4). Otherwise describe the district scope (Story 1).
+      note.textContent = !condUpdatable
+        ? "You can view these special conditions but can't edit them in your current role."
+        : isHQ
+          ? "You curate the headquarters conditions and every district's conditions on this permit."
+          : editableDistrictNames.length
+            ? `You curate special conditions for ${oxford(editableDistrictNames)} on this permit.`
+            : "You can view these special conditions but can't edit them in your role.";
     }
     render();
   };

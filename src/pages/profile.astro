@@ -213,24 +213,37 @@ const notificationPrefs = notificationSeeds.map((s) => ({
              decisions, reports). Shown for the admin/reviewer identities. -->
         <div data-persona="staff">
           <PermitSection title="Notification preferences">
-            <p class="section-hint t-body-01">Choose which permit activity you're notified about. All notifications are sent by email to <span class="prefs__email">{u.email}</span>.</p>
+            <p class="section-hint t-body-01">Choose which optional notifications you receive by email at <span class="prefs__email">{u.email}</span>. Required regulated messages are always sent.</p>
 
-            <div class="prefs notification-prefs" data-storage-key="profile-notifications-staff">
-              {u.notifications.map((n) => (
-                <div class="prefs__row">
-                  <div class="prefs__info">
-                    <p class="prefs__label t-heading-compact-01">{n.label}</p>
-                    <p class="prefs__desc t-body-01">{n.description}</p>
-                  </div>
-                  <cds-toggle
-                    class="prefs__toggle"
-                    data-key={n.key}
-                    label-text={`Email me: ${n.label}`}
-                    hide-label
-                    toggled={n.enabled || undefined}
-                  ></cds-toggle>
+            <div class="prefs" id="staff-notif-prefs">
+              <div class="prefs__row">
+                <div class="prefs__info">
+                  <p class="prefs__label t-heading-compact-01">Assignment changes</p>
+                  <p class="prefs__desc t-body-01">When you're assigned or unassigned as a Responsible Agent.</p>
                 </div>
-              ))}
+                <cds-toggle id="pref-assignment" class="prefs__toggle" label-text="Email me: assignment changes" hide-label></cds-toggle>
+              </div>
+              <div class="prefs__row">
+                <div class="prefs__info">
+                  <p class="prefs__label t-heading-compact-01">Signature requests</p>
+                  <p class="prefs__desc t-body-01">When a permit is ready for your signature as the second signer.</p>
+                </div>
+                <cds-toggle id="pref-signature" class="prefs__toggle" label-text="Email me: signature requests" hide-label></cds-toggle>
+              </div>
+              <div class="prefs__row">
+                <div class="prefs__info">
+                  <p class="prefs__label t-heading-compact-01">Status changes</p>
+                  <p class="prefs__desc t-body-01">When a permit you review changes status.</p>
+                </div>
+                <cds-toggle id="pref-status" class="prefs__toggle" label-text="Email me: status changes" hide-label></cds-toggle>
+              </div>
+              <div class="prefs__row prefs__row--locked">
+                <div class="prefs__info">
+                  <p class="prefs__label t-heading-compact-01">Application decisions &amp; updates</p>
+                  <p class="prefs__desc t-body-01">Issued, returned, rejected, and hold notices. Required — always sent.</p>
+                </div>
+                <cds-tag type="warm-gray" size="md">Always on</cds-tag>
+              </div>
             </div>
           </PermitSection>
         </div>
@@ -659,6 +672,28 @@ const notificationPrefs = notificationSeeds.map((s) => ({
     };
     prefs.addEventListener('cds-toggle-changed', persist);
   });
+
+  // ── Staff optional-notification preferences (Story 17) ───────────────────────
+  // The three opt-out toggles map to specific emails via the notifications module
+  // (assignment → EM-F/G, signature → EM-A, status → EM-I). Regulated decisions
+  // (EM-C/D/E/H) have no toggle — always sent.
+  {
+    const box = document.getElementById('staff-notif-prefs');
+    if (box) {
+      import('../lib/notifications').then(({ loadPrefs, savePrefs }) => {
+        const prefs = loadPrefs();
+        const map: Record<string, 'assignment' | 'signature' | 'status'> = {
+          'pref-assignment': 'assignment', 'pref-signature': 'signature', 'pref-status': 'status',
+        };
+        Object.entries(map).forEach(([id, key]) => {
+          const t = document.getElementById(id) as any;
+          if (!t) return;
+          t.toggled = prefs[key] !== false;
+          t.addEventListener('cds-toggle-changed', () => savePrefs({ [key]: !!t.toggled }));
+        });
+      });
+    }
+  }
 
   // ── Align every switch to one vertical column ────────────────────────────
   // cds-toggle renders the label-text as a VISIBLE span to the left of the switch,

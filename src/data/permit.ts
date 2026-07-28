@@ -73,7 +73,7 @@ export const permit = {
   id: '26-635-017',
   name: 'Diversity of coralline algae in northern California and their reproductive systems',
   // State, not a category — rendered as cds-icon-indicator (icon + label).
-  status: { label: 'Under review', kind: 'in-progress' },
+  status: { label: 'Waiting for review', kind: 'not-started' },
   category: 'Marine Aquatic Resources',
   // Dates the applicant REQUESTED. Display strings drive the at-a-glance stat;
   // the ISO pair prefills the approval modal's confirmation date-range picker.
@@ -180,10 +180,12 @@ export const permit = {
     // coordinator, submitting on the PI's behalf (the common academic routing).
     // Distinct from the PI so the analyst knows who to reach on submission questions.
     submitter: {
-      name: 'Daniel Okonkwo',
-      phone: '(707) 555-0198',
-      email: 'sponsored-programs@humboldt.edu',
-      address: '1 Harpst St, Arcata, CA 95521',
+      // The applicant persona (see data/application.ts) — so the Researcher identity
+      // owns this permit as its submitter and Story 11's scoping has a positive path.
+      name: 'Renata Halvorsen',
+      phone: '(415) 555-0173',
+      email: 'r.halvorsen@cascadiamarine.org',
+      address: '18 Nautilus Court, Mill Valley, CA 94941',
     } as Contact,
     principalInvestigator: {
       name: 'Dr. Alena Reyes',

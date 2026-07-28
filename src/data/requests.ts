@@ -381,15 +381,18 @@ export const revokeInvite = (userId: string): void => {
 };
 
 // ── Contact overlay (admin-editable name + phone) ────────────────────────────
-// An admin can correct a user's NAME and PHONE from the /users console — but
-// NEVER their email, which is the identity verified at sign-in. Like the role /
-// expertise overlays, this is a small userId → override map layered over the
-// seeded identity, so an edit propagates everywhere resolveUser is read (the
-// console tables, district rosters, permit rows). Email is intentionally absent.
+// An admin can correct a user's NAME (first + last) and PHONE from the /users
+// console — but NEVER their email, which is the identity verified at sign-in.
+// (A public user's phone is self-service, so the console only writes phone for
+// internal accounts — but the overlay itself is neutral about who it's for.)
+// Like the role / expertise overlays, this is a small userId → override map
+// layered over the seeded identity, so an edit propagates everywhere resolveUser
+// is read (the console tables, district rosters, permit rows).
 const CONTACT_KEY = 'admin-user-contact';
 
 interface ContactOverride {
-  name?: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
 }
 
@@ -402,31 +405,63 @@ const loadContactOverlay = (): Record<string, ContactOverride> => {
   }
 };
 
-/** Set (admin action) a user's editable contact fields — name and/or phone.
- *  Email is not editable here (it verifies the account at sign-in). */
-export const setContact = (userId: string, contact: { name?: string; phone?: string }): void => {
+/** Set (admin action) a user's editable contact fields — first/last name and/or
+ *  phone. Email is not editable here (it verifies the account at sign-in). */
+export const setContact = (
+  userId: string,
+  contact: { firstName?: string; lastName?: string; phone?: string },
+): void => {
   const overlay = loadContactOverlay();
   overlay[userId] = { ...overlay[userId], ...contact };
   localStorage.setItem(CONTACT_KEY, JSON.stringify(overlay));
 };
 
-/** Apply any admin contact override (name / phone) over a base identity. */
-const withContact = <T extends { id: string; name: string; phone: string }>(base: T): T => {
-  const c = loadContactOverlay()[base.id];
-  return c ? { ...base, name: c.name ?? base.name, phone: c.phone ?? base.phone } : base;
+/** A resolved identity — the two editable name parts plus the composed full name. */
+export interface ResolvedUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+/** Split a legacy single `name` into first + last (first token vs the rest). */
+const splitName = (name: string): { firstName: string; lastName: string } => {
+  const parts = (name || '').trim().split(/\s+/);
+  return parts.length <= 1
+    ? { firstName: parts[0] ?? '', lastName: '' }
+    : { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+};
+
+/** Apply any admin contact override (name parts / phone) over a base identity,
+ *  recomposing the full name from the resulting first + last. */
+const withContact = (base: { id: string; firstName: string; lastName: string; email: string; phone: string }): ResolvedUser => {
+  const c = loadContactOverlay()[base.id] ?? {};
+  const firstName = c.firstName ?? base.firstName;
+  const lastName = c.lastName ?? base.lastName;
+  return {
+    id: base.id,
+    firstName,
+    lastName,
+    name: `${firstName} ${lastName}`.trim(),
+    email: base.email,
+    phone: c.phone ?? base.phone,
+  };
 };
 
 /** Resolve any user's identity — seeded staff directory, PUBLIC directory, OR an
  *  added user — with any admin contact override applied. */
-export const resolveUser = (
-  userId: string,
-): { id: string; name: string; email: string; phone: string } | undefined => {
+export const resolveUser = (userId: string): ResolvedUser | undefined => {
   const seed = directory.find((u) => u.id === userId);
-  if (seed) return withContact({ id: seed.id, name: seed.name, email: seed.email, phone: seed.phone });
+  if (seed) return withContact(seed);
   const pub = publicDirectory.find((u) => u.id === userId);
-  if (pub) return withContact({ id: pub.id, name: pub.name, email: pub.email, phone: pub.phone });
+  if (pub) return withContact(pub);
   const added = addedUsers().find((u) => u.id === userId);
-  if (added) return withContact({ id: added.id, name: added.name, email: added.email, phone: added.phone });
+  if (added) {
+    const { firstName, lastName } = splitName(added.name);
+    return withContact({ id: added.id, firstName, lastName, email: added.email, phone: added.phone });
+  }
   return undefined;
 };
 
@@ -440,16 +475,153 @@ export const listUsers = (): { id: string; name: string; email: string }[] =>
   });
 
 /** Every PUBLIC user the console lists — the applicant/researcher directory,
- *  with contact overrides applied. These carry no agency role; `organization`
- *  is their institution, shown for context. */
+ *  with contact overrides applied. `role` is the account state (public-user /
+ *  inactive); `lastSeen` is the epoch ms of last activity. */
 export const listPublicUsers = (): {
   id: string;
   name: string;
   email: string;
-  phone: string;
-  organization: string;
+  role: string;
+  lastSeen: number;
 }[] =>
   publicDirectory.map((u) => {
     const r = resolveUser(u.id)!;
-    return { id: r.id, name: r.name, email: r.email, phone: r.phone, organization: u.organization };
+    return { id: r.id, name: r.name, email: r.email, role: publicRoleOf(u.id), lastSeen: u.lastSeen };
   });
+
+// ── Public account role overlay (public-user / inactive) ─────────────────────
+// A public account holds one of exactly two states. The seeded default lives in
+// publicDirectory; an admin's change is layered here, same as the other overlays.
+const PUBLIC_ROLE_KEY = 'admin-public-role';
+
+const loadPublicRoleOverlay = (): Record<string, string> => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PUBLIC_ROLE_KEY) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+};
+
+/** A public user's current account state (overlay over the seeded default). */
+export const publicRoleOf = (userId: string): string =>
+  loadPublicRoleOverlay()[userId] ?? publicDirectory.find((u) => u.id === userId)?.role ?? 'public-user';
+
+/** Set (admin action) a public user's account state — 'public-user' or 'inactive'. */
+export const setPublicRole = (userId: string, role: string): void => {
+  const overlay = loadPublicRoleOverlay();
+  overlay[userId] = role;
+  localStorage.setItem(PUBLIC_ROLE_KEY, JSON.stringify(overlay));
+};
+
+// ── Account status overlay (active / inactive) ───────────────────────────────
+// An INTERNAL account can be DEACTIVATED — it keeps its role and history but
+// loses access (can't sign in). This is distinct from the reviewer role: a
+// deactivated district lead is still a district lead, just switched off. Setting
+// it is an admin action (approving a deactivation request, or directly in the
+// /users console). Default is active; the overlay records only the exceptions.
+const ACCOUNT_STATUS_KEY = 'admin-account-status';
+
+export type AccountStatus = 'active' | 'inactive';
+
+const loadAccountStatusOverlay = (): Record<string, AccountStatus> => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ACCOUNT_STATUS_KEY) || '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+};
+
+/** Whether an internal account is active or deactivated (default active). */
+export const accountStatusOf = (userId: string): AccountStatus =>
+  loadAccountStatusOverlay()[userId] === 'inactive' ? 'inactive' : 'active';
+
+/** Set (admin action) an internal account's active/inactive status. */
+export const setAccountStatus = (userId: string, status: AccountStatus): void => {
+  const overlay = loadAccountStatusOverlay();
+  if (status === 'active') delete overlay[userId];
+  else overlay[userId] = 'inactive';
+  localStorage.setItem(ACCOUNT_STATUS_KEY, JSON.stringify(overlay));
+};
+
+// ── Account deactivation requests (district lead → admin) ────────────────────
+// A district lead can't deactivate an account themselves — account lifecycle is
+// admin-held, and deactivation is GLOBAL (it revokes access everywhere, beyond a
+// single district's scope). So when a member leaves, the lead REMOVES them from
+// the district (that's district-scoped, done in place) and separately REQUESTS
+// deactivation of their account. The request lands in the admin inbox on /users;
+// approving it flips the account to inactive. Same request/approve shape as the
+// role-change RoleRequest.
+export interface DeactivationRequest {
+  id: string;
+  /** The account to deactivate (resolve via resolveUser). */
+  userId: string;
+  /** Who asked — the requesting lead's user id (resolve via resolveUser). */
+  requestedBy: string;
+  /** District the request was raised from, for admin context. */
+  districtId?: string;
+  reason: string;
+  status: RequestStatus;
+  requestedAt: number;
+  decidedAt?: number;
+}
+
+const DEACTIVATION_KEY = 'admin-deactivation-requests';
+
+const loadDeactivations = (): DeactivationRequest[] => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DEACTIVATION_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveDeactivations = (list: DeactivationRequest[]) =>
+  localStorage.setItem(DEACTIVATION_KEY, JSON.stringify(list));
+
+/** The open deactivation inbox — newest first. */
+export const pendingDeactivations = (): DeactivationRequest[] =>
+  loadDeactivations()
+    .filter((r) => r.status === 'pending')
+    .sort((a, b) => b.requestedAt - a.requestedAt);
+
+/** A user's open deactivation request, if any (one pending at a time). */
+export const pendingDeactivationForUser = (userId: string): DeactivationRequest | undefined =>
+  loadDeactivations().find((r) => r.userId === userId && r.status === 'pending');
+
+/** Submit a deactivation request, replacing any existing pending one for the
+ *  same user. Callers guard against requesting an already-inactive account. */
+export const submitDeactivation = (input: {
+  userId: string;
+  requestedBy: string;
+  districtId?: string;
+  reason: string;
+}): DeactivationRequest => {
+  const list = loadDeactivations().filter((r) => !(r.userId === input.userId && r.status === 'pending'));
+  const req: DeactivationRequest = {
+    id: `deact-${input.userId}-${Date.now()}`,
+    userId: input.userId,
+    requestedBy: input.requestedBy,
+    ...(input.districtId ? { districtId: input.districtId } : {}),
+    reason: input.reason,
+    status: 'pending',
+    requestedAt: Date.now(),
+  };
+  list.push(req);
+  saveDeactivations(list);
+  return req;
+};
+
+/** Resolve a deactivation request. Approving deactivates the account; denying
+ *  just closes the request. */
+export const decideDeactivation = (id: string, decision: 'approved' | 'denied'): void => {
+  const list = loadDeactivations();
+  const req = list.find((r) => r.id === id);
+  if (!req) return;
+  req.status = decision;
+  req.decidedAt = Date.now();
+  saveDeactivations(list);
+  if (decision === 'approved') setAccountStatus(req.userId, 'inactive');
+};

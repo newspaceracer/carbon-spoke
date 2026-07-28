@@ -79,6 +79,22 @@ function collapseNav(id: Identity): void {
   }
 }
 
+// ── Role-based nav visibility (Story 3) ─────────────────────────────────────
+// In the normal live state, hide the nav items the active identity may not see,
+// per the visibility map (permissions-matrix.md §4). Each gated element carries a
+// `data-roles` list (PermitNav); an item without one is shown to everyone. Route
+// access is enforced separately (maintenance `enforceRoleAccess`) so a hidden item
+// is also unreachable by URL. Uses inline display because cds-* set :host display,
+// which outranks [hidden].
+function gateNavByRole(id: Identity): void {
+  const header = document.querySelector('cds-header');
+  if (!header) return;
+  header.querySelectorAll<HTMLElement>('[data-roles]').forEach((el) => {
+    const roles = (el.getAttribute('data-roles') || '').split(/\s+/).filter(Boolean);
+    el.style.display = roles.includes(id) ? '' : 'none';
+  });
+}
+
 // ── Pending-role nav strip ────────────────────────────────────────────────
 // A roleless (pending) user can't reach any reviewer/admin page, so the browsing
 // nav + search + profile are hidden — only the product name and Log out remain.
@@ -114,7 +130,7 @@ function mountIdentitySwitcher(): void {
   if (document.getElementById(SWITCHER_ID)) return;
   const current = readIdentity();
   const options: { value: Identity; label: string }[] = [
-    { value: 'admin', label: 'HQ system admin' },
+    { value: 'admin', label: 'System admin' },
     { value: 'hq-technical', label: 'HQ technical reviewer' },
     { value: 'district-lead', label: 'District lead technical reviewer' },
     { value: 'district-assistant', label: 'District assistant technical reviewer' },
@@ -219,6 +235,10 @@ const PERMIT_STATE_PREFIXES = [
   'permit-conditions-',      // applied special conditions (wizard draft)
   'permit-comments-',        // reviewer comment thread — reverts to seed when cleared
   'demo-permit-role-',       // the per-permit permit-role testing hat (Story 2)
+  'permit-ceqa-',            // CEQA Yes/N-A determination (Story 14)
+  'permit-supporting-review-', // SA supporting-review state (Story 10)
+  'permit-signatures-',      // two-signature progress (Story 6)
+  'permit-hold-',            // annual-report hold + override (Story 13)
 ];
 
 function permitStateKeys(): string[] {
@@ -243,7 +263,7 @@ function mountPermitReset(): void {
   // carbon-checked: dev-only affordance; the control is a stock cds-button.
   wrap.innerHTML = `
     <p class="demo-identity__label t-label-01">Testing</p>
-    <cds-button kind="danger--tertiary" size="sm">Reset to Under review</cds-button>`;
+    <cds-button kind="danger--tertiary" size="sm">Reset to Waiting for review</cds-button>`;
   panel.appendChild(wrap);
 
   wrap.querySelector('cds-button')?.addEventListener('click', () => {
@@ -273,6 +293,9 @@ export function decorateShell(): void {
     } else if (isPending()) {
       // Site live, but this user has no role yet — strip the nav to essentials.
       collapsePendingNav();
+    } else {
+      // Normal live state: hide the nav items this identity may not see (§4).
+      gateNavByRole(readIdentity());
     }
   };
   if (document.readyState === 'loading') {
