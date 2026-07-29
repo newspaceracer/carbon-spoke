@@ -1,0 +1,534 @@
+---
+/* Permit review — layout studies (design exploration, NOT a shipping screen).
+
+   These are alternative arrangements of the SAME review wizard the app already
+   ships (final-letter.astro), so they reuse its chrome verbatim: PermitNav + the
+   PermitHeader identity banner, the cds-progress-indicator step track, the
+   page-head, the col-main / col-rail step grid, the raised .rail working panel,
+   the wiz-actions footer, and the fixed comments FAB + slide-over drawer. Only the
+   ARRANGEMENT differs between versions — a cds-tabs strip switches them.
+
+   The reviewer's three jobs frame every version: COMPARE the application against
+   the study proposal (a PDF), CONDITION (curate the special conditions), and TALK
+   (the reviewer comment thread). Version D is the existing wizard, extended with a
+   "Review application" and an "Add conditions" step in front of Finalize / Send.
+
+   carbon-checked: every control is a stock cds-* component; the page CSS is copied
+   from final-letter.astro's wizard chrome (page-head / wiz-track / step / rail /
+   wiz-actions / comments FAB + drawer) — layout/positioning only, no reinvented
+   primitive. */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PermitHeader from '../components/PermitHeader.astro';
+import ReviewAppSummary from '../components/ReviewAppSummary.astro';
+import ProposalDocViewer from '../components/ProposalDocViewer.astro';
+import { permit } from '../data/permit';
+import { userDirectory } from '../data/user';
+import { withBase } from '../lib/base';
+
+export const prototype = {
+  title: 'Review wizard — layout studies',
+  summary:
+    'Four arrangements of the existing review wizard (same chrome), organized around ' +
+    "the reviewer's three jobs: compare against the study proposal, set special " +
+    'conditions, and talk to other reviewers.',
+  tag: 'Design study',
+};
+
+// ── PermitHeader props — mirror final-letter.astro so the studies carry the exact
+// same identity banner as the real wizard. ──────────────────────────────────────
+const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight);
+const involvementTags = [
+  ...(permit.dataCollection.involvesCollection ? [{ label: 'Specimen collection', type: 'blue' }] : []),
+  ...(permit.dataCollection.involvesLaboratory ? [{ label: 'Laboratory work', type: 'blue' }] : []),
+];
+const headerInfoTags = [...permit.infoTags, ...involvementTags];
+const headerStats = [
+  { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
+  { label: 'Submitted', value: 'Jul 9, 2026' },
+  { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
+];
+
+// ── Shared mock content ─────────────────────────────────────────────────────────
+// The study proposal, rendered by the PDF viewer as the document it is.
+const proposal = [
+  { id: 'objectives', title: 'Objectives & hypotheses', excerpt: 'Characterize coralline algal diversity across northern California rocky intertidal and test whether reproductive phenology tracks a latitudinal gradient.' },
+  { id: 'methods', title: 'Study procedures & methods', excerpt: 'Timed subtidal and intertidal surveys at paired high- and low-impact sites; voucher fronds collected by hand and pressed for herbarium accession.' },
+  { id: 'rationale', title: 'Collection rationale', excerpt: 'Destructive sampling is held to the minimum needed for morphological and reproductive determination. The 50-frond Corallina vancouveriensis allotment supports the reproductive case study.' },
+  { id: 'data', title: 'Data & data products', excerpt: 'Occurrence records deposited to GBIF; vouchers accessioned at the Cal Poly Humboldt herbarium; DNA barcodes submitted to GenBank.' },
+  { id: 'budget', title: 'Budget & literature', excerpt: 'Fully covered by an NSF systematics award; no state funds requested. 38 references cited.' },
+];
+const proposalDoc = {
+  href: '/docs/coralline-diversity-proposal.pdf',
+  filename: 'Coralline Diversity & Reproductive Systems Proposal.pdf',
+  size: '313 KB',
+  pages: 4,
+  docTitle: permit.name,
+};
+
+// Special conditions in play — HQ defaults + one conditional + district defaults.
+const conditions = [
+  { scope: 'Headquarters', label: 'Carry the permit in the field at all times', kind: 'Auto' },
+  { scope: 'Headquarters', label: 'Curation & specimen disposition', kind: 'Auto' },
+  { scope: 'Headquarters', label: 'Western Snowy Plover protection', kind: 'Conditional' },
+  { scope: 'North Coast Redwoods', label: 'Stay outside the False Klamath Cove marine reserve', kind: 'Auto' },
+  { scope: 'Mendocino', label: 'Harbor seal haul-out setback (50 m)', kind: 'Auto' },
+];
+
+// The application fields, section by section, for the section-anchored version —
+// each paired with the proposal section a reviewer checks it against.
+const sections = [
+  { field: 'Project title', value: permit.name, compareId: 'objectives', comments: 2 },
+  { field: 'Category', value: permit.category, compareId: 'methods', comments: 0 },
+  { field: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}`, compareId: 'objectives', comments: 1 },
+  { field: 'Study areas', value: '4 parks across North Coast Redwoods & Mendocino districts', compareId: 'methods', comments: 3 },
+  { field: 'Authorized collection', value: '19 coralline taxa · Corallina vancouveriensis ×50 fronds', compareId: 'rationale', comments: 1 },
+];
+
+// Reviewer comment thread — the same conversation shown on the permit detail.
+const comments = permit.overview.comments;
+const initials = (name: string) => name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+
+// The four layout concepts (tab strip).
+const versions = [
+  { id: 'stepped', label: 'D · Stepped pipeline', best: 'A guided four-step pipeline — the existing wizard, with a Review-application and an Add-conditions step in front of Finalize and Send.' },
+  { id: 'compare', label: 'A · Compare-first', best: 'The proposal and the record side by side is the whole job; conditions and comments are summoned from the toolbar when needed.' },
+  { id: 'workspace', label: 'B · Three-column', best: 'Proposal, record, and a working rail all visible at once — nothing hidden, for reviewers who bounce between the three jobs.' },
+  { id: 'sections', label: 'C · Section-anchored', best: 'Comparison and discussion attach to the specific finding — each application field carries its own proposal compare and comment count.' },
+];
+
+const trash =
+  '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>';
+const cancelHref = withBase('/final-letter');
+---
+
+<BaseLayout title="Review wizard — layout studies">
+  <PermitNav slot="nav" />
+
+  <main class="page">
+    <PermitHeader
+      id={permit.id}
+      name={permit.name}
+      organization={permit.researchTeam.organization.name}
+      status={permit.status}
+      infoTags={headerInfoTags}
+      flagTags={permit.flagTags}
+      stats={headerStats}
+      requestedWindow={permit.activeWindow}
+      analysisTeam={permit.overview.analysisTeam}
+      directory={userDirectory}
+      context="finalize"
+    >
+      <cds-breadcrumb slot="breadcrumb" no-trailing-slash>
+        <cds-breadcrumb-item><cds-breadcrumb-link href={withBase('/permits')}>Permits</cds-breadcrumb-link></cds-breadcrumb-item>
+        <cds-breadcrumb-item><cds-breadcrumb-link href={withBase('/permit')}>{permit.id}</cds-breadcrumb-link></cds-breadcrumb-item>
+        <cds-breadcrumb-item><cds-breadcrumb-link aria-current="page">Layout studies</cds-breadcrumb-link></cds-breadcrumb-item>
+      </cds-breadcrumb>
+    </PermitHeader>
+
+    <!-- Design-study intro + the version switcher. -->
+    <section class="intro cds--css-grid">
+      <div class="intro__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+        <p class="intro__eyebrow t-label-01">Design study · not a shipping screen</p>
+        <h2 class="intro__title t-heading-04">Review wizard — layout options</h2>
+        <p class="intro__lede t-body-02">
+          Four arrangements of this same review wizard, framed by the reviewer's three jobs —
+          <strong>compare</strong> the application against the study proposal, <strong>set the special conditions</strong>,
+          and <strong>talk</strong> to the other reviewers. Same chrome; different arrangement. Pick one to preview.
+        </p>
+        <cds-tabs id="version-tabs" value="stepped">
+          {versions.map((v) => <cds-tab id={`vt-${v.id}`} value={v.id}>{v.label}</cds-tab>)}
+        </cds-tabs>
+      </div>
+    </section>
+
+    <!-- ═══════════════ D · Stepped pipeline (the existing wizard, extended) ══ -->
+    <div class="version" data-version="stepped">
+      <nav class="wiz-track cds--css-grid" aria-label="Review steps">
+        <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <cds-progress-indicator space-equally>
+            <cds-progress-step state="current" label="Review application" secondary-label="Against the study proposal"></cds-progress-step>
+            <cds-progress-step label="Add conditions" secondary-label="With the application in context"></cds-progress-step>
+            <cds-progress-step label="Finalize letter" secondary-label="Confirm what prints"></cds-progress-step>
+            <cds-progress-step label="Review & send" secondary-label="The full package"></cds-progress-step>
+          </cds-progress-indicator>
+        </div>
+      </nav>
+
+      <div class="page-head cds--css-grid">
+        <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <p class="page-head__eyebrow t-label-01">Step 1 of 4</p>
+          <h2 class="page-head__title t-heading-04">Review application</h2>
+          <p class="page-head__sub t-body-02">Read the application against the study proposal, then continue to set the conditions.</p>
+        </header>
+      </div>
+
+      <section class="step cds--css-grid cds--css-grid--with-row-gap">
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
+          <ReviewAppSummary />
+        </div>
+        <aside class="col-rail cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6" aria-label="Study proposal">
+          <div class="side-sticky">
+            <p class="preview__label t-label-01">Study proposal (PDF) — read against the record</p>
+            <ProposalDocViewer {...proposalDoc} />
+          </div>
+        </aside>
+      </section>
+
+      <footer class="wiz-actions cds--css-grid">
+        <div class="wiz-actions__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
+          <cds-button kind="secondary" size="lg" disabled>Back</cds-button>
+          <cds-button kind="ghost" size="lg" href={cancelHref}>Cancel</cds-button>
+          <div class="wiz-actions__spacer"></div>
+          <cds-button kind="primary" size="lg">Save and continue</cds-button>
+        </div>
+      </footer>
+
+      <div class="handoff cds--css-grid">
+        <p class="handoff__note cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16 t-label-01">
+          Next: <strong>Add conditions</strong> (the record stays in context) → <strong>Finalize letter</strong> → <strong>Review &amp; send</strong> — the last two are the existing wizard at <cds-link href={cancelHref}>final-letter</cds-link>.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ A · Compare-first ═══════════════════════════════════ -->
+    <div class="version" data-version="compare" hidden>
+      <div class="page-head cds--css-grid">
+        <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <p class="page-head__eyebrow t-label-01">Layout A</p>
+          <h2 class="page-head__title t-heading-04">Compare-first</h2>
+          <p class="page-head__sub t-body-02">{versions[1].best}</p>
+        </header>
+      </div>
+
+      <div class="toolbar cds--css-grid">
+        <div class="toolbar__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <cds-search size="md" placeholder="Jump to a section of the proposal…" label-text="Jump to a section"></cds-search>
+          <div class="toolbar__actions">
+            <cds-button kind="tertiary" size="md">Special conditions · {conditions.length}</cds-button>
+            <cds-button class="js-open-comments" kind="tertiary" size="md">Comments · {comments.length}</cds-button>
+          </div>
+        </div>
+      </div>
+
+      <section class="step cds--css-grid cds--css-grid--with-row-gap">
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+          <p class="preview__label t-label-01">Study proposal (PDF)</p>
+          <ProposalDocViewer {...proposalDoc} />
+        </div>
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+          <p class="preview__label t-label-01">Application record</p>
+          <ReviewAppSummary />
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══════════════ B · Three-column workspace ══════════════════════════ -->
+    <div class="version" data-version="workspace" hidden>
+      <div class="page-head cds--css-grid">
+        <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <p class="page-head__eyebrow t-label-01">Layout B</p>
+          <h2 class="page-head__title t-heading-04">Three-column workspace</h2>
+          <p class="page-head__sub t-body-02">{versions[2].best}</p>
+        </header>
+      </div>
+
+      <section class="step cds--css-grid cds--css-grid--with-row-gap">
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5">
+          <p class="preview__label t-label-01">Study proposal (PDF)</p>
+          <ProposalDocViewer {...proposalDoc} compact />
+        </div>
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6">
+          <p class="preview__label t-label-01">Application record</p>
+          <ReviewAppSummary compact />
+        </div>
+        <aside class="col-rail cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5" aria-label="Working panel">
+          <div class="rail" data-tab-scope>
+            <cds-tabs value="conditions" data-panels>
+              <cds-tab value="conditions">Conditions · {conditions.length}</cds-tab>
+              <cds-tab value="comments">Comments · {comments.length}</cds-tab>
+            </cds-tabs>
+
+            <div class="rail-panel" data-tabpanel="conditions">
+              <div class="rail__tools"><cds-button kind="tertiary" size="md">Add condition</cds-button></div>
+              <cds-contained-list label="Attached to this permit" kind="on-page">
+                {conditions.map((c) => (
+                  <cds-contained-list-item>
+                    <div class="cond">
+                      <div class="cond__body">
+                        <p class="cond__scope t-label-01">{c.scope}</p>
+                        <p class="cond__label t-body-01">{c.label}</p>
+                      </div>
+                      <div class="cond__meta">
+                        <cds-tag size="sm" type={c.kind === 'Conditional' ? 'teal' : 'cool-gray'}>{c.kind}</cds-tag>
+                        <cds-icon-button kind="ghost" size="sm" align="left" set:html={`${trash}<span slot="tooltip-content">Remove ${c.label}</span>`}></cds-icon-button>
+                      </div>
+                    </div>
+                  </cds-contained-list-item>
+                ))}
+              </cds-contained-list>
+            </div>
+
+            <div class="rail-panel" data-tabpanel="comments" hidden>
+              <ul class="rail-thread">
+                {comments.map((c) => (
+                  <li class="comment">
+                    <span class="comment__avatar" aria-hidden="true">{initials(c.author)}</span>
+                    <div class="comment__body">
+                      <p class="comment__meta t-label-01"><span class="comment__author">{c.author}</span> · {c.time}</p>
+                      <p class="comment__text t-body-01">{c.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <cds-textarea label="Add a comment" placeholder="Note something for the team…" rows="3"></cds-textarea>
+              <div class="rail__send"><cds-button kind="primary" size="md">Add comment</cds-button></div>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </div>
+
+    <!-- ═══════════════ C · Section-anchored ═════════════════════════════════ -->
+    <div class="version" data-version="sections" hidden>
+      <div class="page-head cds--css-grid">
+        <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <p class="page-head__eyebrow t-label-01">Layout C</p>
+          <h2 class="page-head__title t-heading-04">Section-anchored</h2>
+          <p class="page-head__sub t-body-02">{versions[3].best}</p>
+        </header>
+      </div>
+
+      <section class="step cds--css-grid cds--css-grid--with-row-gap">
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
+          <div class="secs">
+            {sections.map((s) => {
+              const p = proposal.find((x) => x.id === s.compareId) ?? proposal[0];
+              return (
+                <article class="sec-card">
+                  <div class="sec-card__head">
+                    <div>
+                      <p class="sec-card__field t-label-01">{s.field}</p>
+                      <p class="sec-card__value t-body-02">{s.value}</p>
+                    </div>
+                    <cds-button class="js-open-comments" kind="ghost" size="sm">{s.comments} comment{s.comments === 1 ? '' : 's'}</cds-button>
+                  </div>
+                  <cds-accordion>
+                    <cds-accordion-item title={`Compare with the proposal · ${p.title}`}>
+                      <blockquote class="pdf-quote t-body-01">{p.excerpt}</blockquote>
+                      <cds-link href={withBase(proposalDoc.href)} target="_blank" rel="noopener">Open “{p.title}” in the proposal PDF ↗</cds-link>
+                    </cds-accordion-item>
+                  </cds-accordion>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+        <aside class="col-rail cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6" aria-label="Special conditions">
+          <div class="rail">
+            <h3 class="rail__title t-heading-03">Special conditions</h3>
+            <p class="rail__sub t-label-01">Standard conditions from headquarters and each district attach automatically. Add the conditional ones from the catalog, or remove any that don't apply.</p>
+            <div class="rail__tools"><cds-button kind="tertiary" size="md">Add condition</cds-button></div>
+            <cds-contained-list label="Attached to this permit" kind="on-page">
+              {conditions.map((c) => (
+                <cds-contained-list-item>
+                  <div class="cond">
+                    <div class="cond__body">
+                      <p class="cond__scope t-label-01">{c.scope}</p>
+                      <p class="cond__label t-body-01">{c.label}</p>
+                    </div>
+                    <div class="cond__meta">
+                      <cds-tag size="sm" type={c.kind === 'Conditional' ? 'teal' : 'cool-gray'}>{c.kind}</cds-tag>
+                      <cds-icon-button kind="ghost" size="sm" align="left" set:html={`${trash}<span slot="tooltip-content">Remove ${c.label}</span>`}></cds-icon-button>
+                    </div>
+                  </div>
+                </cds-contained-list-item>
+              ))}
+            </cds-contained-list>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <!-- Persistent comments trigger — the SAME fixed FAB as the real wizard. -->
+  <div class="comments-fab">
+    <cds-button class="js-open-comments" kind="ghost" size="md">
+      Comments
+      <span class="comments-count">{comments.length}</span>
+    </cds-button>
+  </div>
+
+  <!-- Comments thread — the SAME slide-over drawer as the real wizard. -->
+  <aside id="comments-panel" class="drawer" aria-label="Comments" aria-hidden="true">
+    <div class="drawer__head">
+      <h2 class="drawer__title t-heading-03">Comments</h2>
+      <cds-icon-button id="comments-close" kind="ghost" size="sm" align="left">
+        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.4141 16 24 9.4141 22.5859 8 16 14.5859 9.4143 8 8 9.4141 14.5859 16 8 22.5859 9.4143 24 16 17.4141 22.5859 24 24 22.5859 17.4141 16z"/></svg>
+        <span slot="tooltip-content">Close comments</span>
+      </cds-icon-button>
+    </div>
+    <p class="comments-note t-label-01">Shared with the permit's review thread. Newest first.</p>
+    <ul class="comments-thread">
+      {comments.map((c) => (
+        <li class="comment">
+          <span class="comment__avatar" aria-hidden="true">{initials(c.author)}</span>
+          <div class="comment__body">
+            <p class="comment__meta t-label-01"><span class="comment__author">{c.author}</span> · {c.time}</p>
+            <p class="comment__text t-body-01">{c.text}</p>
+          </div>
+        </li>
+      ))}
+    </ul>
+    <div class="comments-composer">
+      <cds-textarea label="Add a comment" placeholder="Note something for the team…" rows="3"></cds-textarea>
+      <cds-button kind="primary" size="md">Add comment</cds-button>
+    </div>
+  </aside>
+
+  <script>
+    // Version switcher — cds-tabs renders only the strip; toggling the matching
+    // .version panel (plain <div>, so `hidden` collapses it) is the page's job.
+    const vtabs = document.getElementById('version-tabs') as any;
+    const versions = Array.from(document.querySelectorAll<HTMLElement>('.version'));
+    const ids = versions.map((p) => p.dataset.version);
+    const show = (v: string) => versions.forEach((p) => { p.hidden = p.dataset.version !== v; });
+    vtabs?.addEventListener('cds-tabs-selected', () => { show(vtabs.value); history.replaceState(null, '', `#${vtabs.value}`); });
+
+    const wanted = location.hash.replace('#', '');
+    const initial = ids.includes(wanted) ? wanted : (vtabs?.value || 'stepped');
+    customElements.whenDefined('cds-tabs').then(async () => {
+      if (vtabs) { await (vtabs.updateComplete ?? Promise.resolve()); vtabs.value = initial; }
+      show(initial);
+    });
+    show(initial);
+
+    // Nested rail switcher (version B) — read the attribute pre-upgrade so the
+    // panel isn't blank before cds-tabs upgrades, then re-sync on upgrade.
+    document.querySelectorAll<HTMLElement>('[data-tab-scope]').forEach((scope) => {
+      const tabs = scope.querySelector('cds-tabs[data-panels]') as any;
+      if (!tabs) return;
+      const panels = Array.from(scope.querySelectorAll<HTMLElement>('[data-tabpanel]'));
+      const current = () => tabs.value || tabs.getAttribute('value');
+      const sync = () => panels.forEach((p) => { p.hidden = p.dataset.tabpanel !== current(); });
+      tabs.addEventListener('cds-tabs-selected', sync);
+      customElements.whenDefined('cds-tabs').then(sync);
+      sync();
+    });
+
+    // Comments drawer open/close — same behavior as the real wizard.
+    const panel = document.getElementById('comments-panel');
+    const openComments = () => { panel?.classList.add('drawer--open'); panel?.setAttribute('aria-hidden', 'false'); };
+    const closeComments = () => { panel?.classList.remove('drawer--open'); panel?.setAttribute('aria-hidden', 'true'); };
+    document.querySelectorAll('.js-open-comments').forEach((b) => b.addEventListener('click', openComments));
+    document.getElementById('comments-close')?.addEventListener('click', closeComments);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeComments(); });
+  </script>
+
+  <style>
+    /* ── Wizard chrome, copied from final-letter.astro so the studies are native ── */
+    .page { padding-block: 0 var(--cds-spacing-10, 4rem); }
+
+    .intro { margin-top: var(--cds-spacing-07, 2rem); }
+    .intro__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); text-transform: uppercase; }
+    .intro__title { margin: 0 0 var(--cds-spacing-03, 0.5rem); }
+    .intro__lede { margin: 0 0 var(--cds-spacing-06, 1.5rem); max-width: 52rem; color: var(--cds-text-secondary, #525252); }
+
+    /* Toggled version panels — attribute selector out-specifies any element reset. */
+    .version[hidden] { display: none; }
+
+    .wiz-track { margin-top: var(--cds-spacing-07, 2rem); }
+
+    .page-head { margin-top: var(--cds-spacing-07, 2rem); }
+    .page-head__inner { max-width: 52rem; padding-bottom: var(--cds-spacing-05, 1rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .page-head__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); text-transform: uppercase; }
+    .page-head__title { margin: 0; }
+    .page-head__sub { margin: 0.25rem 0 0; color: var(--cds-text-secondary, #525252); }
+
+    .step { margin-top: var(--cds-spacing-07, 2rem); }
+    .col-main, .col-rail { min-width: 0; }
+
+    /* Proposal viewer sits like the letter preview — sticky beside the record. */
+    .preview__label { display: block; margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
+    @media (min-width: 66.01rem) { .side-sticky { position: sticky; top: 4rem; align-self: start; } }
+
+    /* Conditions / working rail — the raised working panel from the real wizard. */
+    .rail { background: var(--cds-layer-01, #f4f4f4); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); padding: var(--cds-spacing-06, 1.5rem); }
+    @media (min-width: 66.01rem) { .rail { position: sticky; top: 4rem; max-height: calc(100vh - 5rem); overflow-y: auto; } }
+    .rail__title { margin: 0 0 var(--cds-spacing-03, 0.5rem); }
+    .rail__sub { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
+    .rail__tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); margin: 0 0 var(--cds-spacing-05, 1rem); }
+    .rail__send { display: flex; justify-content: flex-end; margin-top: var(--cds-spacing-04, 0.75rem); }
+    .rail-panel { padding-top: var(--cds-spacing-05, 1rem); }
+    .rail-panel[hidden] { display: none; }
+
+    /* Condition row inside a contained-list item. */
+    .cond { display: flex; gap: 0.75rem; align-items: flex-start; justify-content: space-between; inline-size: 100%; }
+    .cond__body { min-inline-size: 0; }
+    .cond__scope { margin: 0 0 0.125rem; color: var(--cds-text-secondary, #525252); text-transform: uppercase; }
+    .cond__label { margin: 0; }
+    .cond__meta { display: flex; gap: 0.25rem; align-items: center; flex-shrink: 0; }
+
+    /* Toolbar (version A). */
+    .toolbar { margin-top: var(--cds-spacing-07, 2rem); }
+    .toolbar__inner { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
+    .toolbar cds-search { max-inline-size: 26rem; flex: 1 1 18rem; }
+    .toolbar__actions { display: flex; gap: 0.5rem; }
+
+    /* Section-anchored cards (version C). */
+    .secs { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
+    .sec-card { border: 1px solid var(--cds-border-subtle-01, #e0e0e0); background: var(--cds-layer-01, #f4f4f4); padding: var(--cds-spacing-05, 1rem) var(--cds-spacing-06, 1.5rem); }
+    .sec-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: var(--cds-spacing-04, 0.75rem); }
+    .sec-card__field { margin: 0 0 0.125rem; color: var(--cds-text-secondary, #525252); text-transform: uppercase; }
+    .sec-card__value { margin: 0; }
+    .pdf-quote { margin: 0 0 0.75rem; padding-inline-start: 0.75rem; border-inline-start: 2px solid var(--cds-border-strong-01, #8d8d8d); color: var(--cds-text-secondary, #525252); }
+
+    /* Actions footer — the real wizard's footer. */
+    .wiz-actions { margin-top: var(--cds-spacing-08, 2.5rem); }
+    .wiz-actions__inner { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); padding-top: var(--cds-spacing-05, 1rem); border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .wiz-actions__spacer { flex: 1 1 auto; }
+
+    .handoff { margin-top: var(--cds-spacing-05, 1rem); }
+    .handoff__note { margin: 0; color: var(--cds-text-secondary, #525252); }
+
+    /* Fixed comments FAB — carbon-checked: positioning host for a stock cds-button
+       (no Carbon floating-action container), copied from final-letter.astro. */
+    .comments-fab {
+      position: fixed; right: var(--cds-spacing-05, 1rem); bottom: var(--cds-spacing-05, 1rem);
+      z-index: 8000; background: var(--cds-layer-01, #f4f4f4);
+      border: 1px solid var(--cds-border-subtle-01, #e0e0e0); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    .comments-count {
+      display: inline-grid; place-items: center; min-width: 1.25rem; height: 1.25rem;
+      margin-inline-start: var(--cds-spacing-03, 0.5rem); padding: 0 0.375rem;
+      border-radius: 0.75rem; background: var(--cds-background-inverse, #393939);
+      color: var(--cds-text-inverse, #fff); font-size: 0.75rem; line-height: 1;
+    }
+
+    /* Slide-over drawer — carbon-checked: bespoke positioning shell (controls are
+       stock cds-*), copied from final-letter.astro. */
+    .drawer {
+      position: fixed; top: 0; right: 0; z-index: 8500;
+      inline-size: min(28rem, 100%); block-size: 100vh;
+      display: flex; flex-direction: column;
+      background: var(--cds-layer-01, #f4f4f4);
+      border-inline-start: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
+      transform: translateX(100%); transition: transform 0.2s ease;
+    }
+    .drawer--open { transform: none; }
+    @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+    .drawer__head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem); padding: var(--cds-spacing-05, 1rem) var(--cds-spacing-05, 1rem) var(--cds-spacing-04, 0.75rem); }
+    .drawer__title { margin: 0; }
+    .comments-note { flex: none; margin: 0; padding: 0 var(--cds-spacing-05, 1rem) var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
+    .comments-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0 var(--cds-spacing-05, 1rem) var(--cds-spacing-05, 1rem); display: grid; gap: var(--cds-spacing-05, 1rem); align-content: start; }
+    .rail-thread { list-style: none; margin: 0 0 var(--cds-spacing-05, 1rem); padding: 0; display: grid; gap: var(--cds-spacing-05, 1rem); }
+    .comment { display: grid; grid-template-columns: auto 1fr; gap: var(--cds-spacing-04, 0.75rem); align-items: start; }
+    .comment__avatar { inline-size: 2rem; block-size: 2rem; border-radius: 50%; display: grid; place-items: center; font-size: 0.75rem; font-weight: 600; background: var(--cds-layer-accent-01, #e0e0e0); color: var(--cds-text-primary, #161616); }
+    .comment__body { min-width: 0; }
+    .comment__meta { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+    .comment__author { font-weight: 600; color: var(--cds-text-primary, #161616); }
+    .comment__text { margin: 0; }
+    .comments-composer { flex: none; display: grid; gap: var(--cds-spacing-04, 0.75rem); justify-items: start; padding: var(--cds-spacing-05, 1rem); border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); background: var(--cds-layer-01, #f4f4f4); }
+  </style>
+</BaseLayout>

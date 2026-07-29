@@ -112,8 +112,17 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
          paint, so a permit already in review shows its detail immediately and
          never flashes the gate. localStorage isn't available at SSR, so this
          reconciles it client-side ahead of the deferred module scripts. -->
-    <script is:inline define:vars={{ rsKey: `permit-review-started-${permit.id}` }}>
-      try { if (localStorage.getItem(rsKey)) document.documentElement.classList.add('review-started'); } catch (e) {}
+    <script is:inline define:vars={{ rsKey: `permit-review-started-${permit.id}`, stKey: `permit-status-${permit.id}`, seedStatus: permit.status.label }}>
+      try {
+        // The "Start review" gate belongs ONLY to "Waiting for review". Reveal the
+        // body when the review-started flag is set OR the permit is already past
+        // Waiting for review — so status and the gate can never disagree (a permit
+        // that is Under review must never show the "Start the review" prompt).
+        var status = localStorage.getItem(stKey) || seedStatus;
+        if (localStorage.getItem(rsKey) || (status && status !== 'Waiting for review')) {
+          document.documentElement.classList.add('review-started');
+        }
+      } catch (e) {}
     </script>
     <script type="application/json" id="permit-owners" set:html={JSON.stringify(ownerIdentifiers)}></script>
 
@@ -139,6 +148,8 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
         stats={stats}
         requestedWindow={permit.activeWindow}
         permitType={permitType}
+        analysisTeam={permit.overview.analysisTeam}
+        directory={userDirectory}
       >
         <cds-breadcrumb slot="breadcrumb" no-trailing-slash>
           <cds-breadcrumb-item>

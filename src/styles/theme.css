@@ -118,6 +118,12 @@ body {
 cds-modal::part(dialog) {
   max-inline-size: 48rem;
 }
+/* Exception: the Analysis review modal (a size="lg" dialog) carries a progress
+   bar + a wide reviewer roster, not a form — the 48rem form cap makes it cramped.
+   Let its lg width breathe up to a wider bound. */
+cds-modal[id="analysis-team-modal"]::part(dialog) {
+  max-inline-size: 64rem;
+}
 
 /* Identity chip (Avatar) — ONE home for the round initials/glyph chip used by the
    <Avatar> component AND client-rendered chips (see src/lib/avatar.ts). Defined

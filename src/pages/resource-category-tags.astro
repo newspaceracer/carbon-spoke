@@ -51,16 +51,6 @@ export const prototype = {
 
     <div class="cds--css-grid cds--css-grid--with-row-gap body">
       <div class="col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
-        <!-- Auto-save confirmation. -->
-        <cds-inline-notification
-          id="save-notice"
-          hidden
-          kind="success"
-          low-contrast
-          hide-close-button
-          title="Catalog updated"
-          subtitle="Your changes save automatically and are available on every permit."
-        ></cds-inline-notification>
 
         <PermitSection title="Tag catalog">
           <cds-button slot="aside" id="add-tag" kind="tertiary" size="md">Add tag</cds-button>
@@ -169,6 +159,7 @@ export const prototype = {
     type ResourceTag,
     type TagColor,
   } from '../data/resource-tags';
+  import { showToast } from '../lib/toast';
 
   const $ = (id: string) => document.getElementById(id);
   const esc = (s = '') =>
@@ -179,10 +170,7 @@ export const prototype = {
 
   let tags: ResourceTag[] = [];
 
-  const flashSaved = () => {
-    const n = $('save-notice') as any;
-    if (n) n.hidden = false;
-  };
+  const flashSaved = () => showToast('Catalog updated', 'Saved automatically and available on every permit.');
 
   const persist = () => {
     saveTags(tags);
@@ -345,8 +333,7 @@ export const prototype = {
     min-width: 0;
   }
 
-  #save-notice[hidden], #tag-empty[hidden] { display: none; }
-  #save-notice { max-width: 48rem; }
+  #tag-empty[hidden] { display: none; }
 
   .section-hint {
     margin: 0 0 1.25rem;

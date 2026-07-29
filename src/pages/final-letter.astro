@@ -465,16 +465,6 @@ const letterData = {
       <cds-modal-heading id="cond-modal-heading">Add condition</cds-modal-heading>
     </cds-modal-header>
     <cds-modal-body has-scrolling-content>
-      <cds-inline-notification
-        id="cond-modal-warning"
-        hidden
-        kind="warning"
-        low-contrast
-        hide-close-button
-        title="Add a condition first"
-        subtitle="Select at least one saved condition, or switch to Write manually."
-      ></cds-inline-notification>
-
       <cds-stack gap="6">
         <!-- Add mode only: pull a saved condition from the catalog, or write a
              new one. Same switcher as the Add-member and permit condition modals —
@@ -1118,7 +1108,6 @@ const letterData = {
     const pickEl = () => $('cond-pick') as any;
     const bodyModalEl = () => $('cond-body') as any;
     const saveCatalogEl = () => $('cond-save-catalog') as any;
-    const warnEl = $('cond-modal-warning') as any;
     const ownerLabelEl = $('cond-modal-owner');
     const headingEl = $('cond-modal-heading');
     let modalOwner: ConditionOwner = 'hq';
@@ -1133,7 +1122,6 @@ const letterData = {
       const man = $('cond-manual');
       if (cat) cat.hidden = mode !== 'catalog';
       if (man) man.hidden = mode !== 'manual';
-      if (warnEl) warnEl.hidden = true;
     };
 
     // A short plain-text preview identifies a catalog item in the picker.
@@ -1157,7 +1145,6 @@ const letterData = {
       const c = editing ? state.conditions.find((x) => x.id === id) ?? null : null;
       if (headingEl) headingEl.textContent = editing ? 'Edit condition' : 'Add condition';
       if (ownerLabelEl) ownerLabelEl.textContent = ownerLabel(owner);
-      if (warnEl) warnEl.hidden = true;
 
       const modeWrap = $('cond-mode-wrap');
       const catalogBlock = $('cond-catalog');
@@ -1226,15 +1213,7 @@ const letterData = {
           saveInventory(modalOwner, inv);
         }
       }
-      if (!additions.length) {
-        if (warnEl) {
-          warnEl.subtitle = currentMode() === 'catalog'
-            ? 'Select at least one saved condition, or switch to Write manually.'
-            : 'Write the condition text before adding it.';
-          warnEl.hidden = false;
-        }
-        return;
-      }
+      if (!additions.length) return;
       state.conditions = [...state.conditions, ...additions];
       persistConditions();
       if (condModal) condModal.open = false;

@@ -248,8 +248,6 @@ export const prototype = {
             <cds-dropdown id="second-signer" title-text="Second signer (multi-district)" label="Select a signer" value="">
               {hqSigners.map((u) => (<cds-dropdown-item value={u.id}>{u.name} — {u.affiliation}</cds-dropdown-item>))}
             </cds-dropdown>
-            <cds-inline-notification id="ss-saved" hidden kind="success" low-contrast hide-close-button
-              title="Second signer saved" subtitle="New multi-district permits route their second signature here."></cds-inline-notification>
           </PermitSection>
         </div>
 
@@ -400,6 +398,7 @@ export const prototype = {
   // for the notification Message field.
   import '../../components/sc-rich-text.ts';
   import { readIdentity } from '../../lib/maintenance';
+  import { showToast } from '../../lib/toast';
   import {
     readRegulatedDocs,
     replaceRegulatedDoc,
@@ -815,14 +814,13 @@ export const prototype = {
   // ── Default second signer (Story 7, multi-district) ─────────────────────────
   {
     const ss = document.getElementById('second-signer') as any;
-    const savedNote = document.getElementById('ss-saved') as any;
     const KEY = 'default-second-signer-multi';
     if (ss) {
       const stored = localStorage.getItem(KEY);
       if (stored) ss.value = stored;
       ss.addEventListener('cds-dropdown-selected', () => {
         localStorage.setItem(KEY, ss.value || '');
-        if (savedNote) savedNote.hidden = false;
+        showToast('Second signer saved', 'New multi-district permits route their second signature here.');
       });
     }
   }

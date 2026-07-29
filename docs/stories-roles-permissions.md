@@ -393,8 +393,10 @@ Reviewer, Second Signer (may be a Public/external person by email)
   (`/admin/templates`); the selectable pool is any HQ admin or HQ Technical
   Reviewer. Only roles with Templates & Defaults access can set it (System Admin).
 - The **single-district** second signer is configured per district on **District
-  management** as that district's default signer; the selectable pool is any
-  district member, or an external person entered by email (no account required).
+  management** as that district's default signer, set through a **"Set default
+  signer"** modal; the selectable pool is any existing account (chosen from a
+  searchable user picker) or an external person entered by name + email (no account
+  required).
 
 **State & status transitions**
 - No permit status changes result from configuration; the value is consumed by the
@@ -402,8 +404,14 @@ Reviewer, Second Signer (may be a Public/external person by email)
 
 **UI & field details**
 - Templates & Defaults gains a "Default second signer" setting (multi-district).
-- District management gains a per-district "Default signer" field accepting a
-  district member or a free-text email address.
+- District management gains a per-district **Default signer** section with a
+  **"Set default signer"** / **"Change default signer"** action that opens a modal
+  offering two paths (matching the Add-user pattern): **Existing user** (searchable
+  picker) or **External person** (name + email). The chosen signer shows as a
+  read-only card with a **Remove** action; the section reads **"No default signer
+  set."** when empty.
+- The default signer saves immediately when confirmed in the modal (it is not
+  governed by the district-information "Save changes" button).
 
 **Edge cases & constraints**
 - An external single-district second signer has no account and is identified and

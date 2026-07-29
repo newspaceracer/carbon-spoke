@@ -59,15 +59,6 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
     <div class="cds--css-grid cds--css-grid--with-row-gap body">
       <div class="col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
-        <!-- Action confirmation. -->
-        <cds-inline-notification
-          id="admin-notice"
-          hidden
-          kind="success"
-          low-contrast
-          title=""
-          subtitle=""
-        ></cds-inline-notification>
 
         <!-- ── Role change requests (the inbox) ─────────────────────────────── -->
         <PermitSection title="Role change requests">
@@ -398,6 +389,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   } from '../data/requests';
   import { districtName } from '../data/district';
   import { avatarHTML } from '../lib/avatar';
+  import { showToast } from '../lib/toast';
 
   const $ = (id: string) => document.getElementById(id);
   const esc = (s = '') =>
@@ -453,14 +445,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     return `${day} day${day === 1 ? '' : 's'} ago`;
   };
 
-  const notice = $('admin-notice') as any;
-  const flash = (title: string, subtitle: string) => {
-    if (!notice) return;
-    notice.title = title;
-    notice.subtitle = subtitle;
-    notice.hidden = false;
-    notice.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  };
+  // Action confirmations use the shared app-wide toast (src/lib/toast.ts).
+  const flash = (title: string, subtitle: string) => showToast(title, subtitle);
 
   // ── Requests inbox ──────────────────────────────────────────────────────────
   const renderRequests = () => {
@@ -1009,8 +995,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     padding: 1.5rem 0;
     color: var(--cds-text-secondary, #525252);
   }
-  .empty[hidden], #requests-wrap[hidden], #deact-wrap[hidden], #invites-wrap[hidden], #admin-notice[hidden] { display: none; }
-  #admin-notice { margin-bottom: 1.25rem; max-width: 52rem; }
+  .empty[hidden], #requests-wrap[hidden], #deact-wrap[hidden], #invites-wrap[hidden] { display: none; }
 
   /* Tables — client-rendered cells use global classes. */
   .table-wrap { overflow-x: auto; }

@@ -149,15 +149,6 @@ const notificationPrefs = notificationSeeds.map((s) => ({
           <cds-button slot="aside" id="profile-edit" kind="tertiary" size="md">Edit</cds-button>
           <p class="section-hint t-body-01" id="personal-hint">Update how you appear to applicants and other reviewers across the permitting system.</p>
 
-          <!-- Confirmation of a save. Hidden until the form is submitted. -->
-          <cds-inline-notification
-            id="save-notice"
-            hidden
-            kind="success"
-            low-contrast
-            title="Changes saved"
-            subtitle="Your profile has been updated."
-          ></cds-inline-notification>
 
           <form id="profile-form" class="form" data-storage-key="profile-personal">
             <div class="field-grid">
@@ -407,6 +398,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
   import { wirePhoneField, formatDisplay } from '../lib/phone';
   import { pendingForUser, submitRequest, accountRoleDisplay, roleDisplay } from '../data/requests';
   import { readIdentity } from '../lib/maintenance';
+  import { showToast } from '../lib/toast';
   import { applicant, applicantOrg } from '../data/application';
 
   // ── Persona: staff (admin/reviewer) vs researcher (public applicant) ─────
@@ -474,7 +466,6 @@ const notificationPrefs = notificationSeeds.map((s) => ({
   const resetBtn = document.getElementById('profile-reset');
   const editBtn = document.getElementById('profile-edit');
   const actions = document.getElementById('form-actions');
-  const notice = document.getElementById('save-notice') as any;
 
   // Identity scalars: name / title / (division|organization) / email. The fourth
   // key varies by persona. Phone + mailing address are locale-sensitive widgets
@@ -512,7 +503,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
   // + an E.164 phone + a generic address.
   type Personal = Record<string, any> & { phone: string; address: Address };
 
-  if (form && saveBtn && resetBtn && editBtn && actions && notice) {
+  if (form && saveBtn && resetBtn && editBtn && actions) {
     const storageKey = persona.storageKey;
 
     const readStored = (): Partial<Personal> => {
@@ -600,7 +591,6 @@ const notificationPrefs = notificationSeeds.map((s) => ({
     setEditable(false);
 
     editBtn.addEventListener('click', () => {
-      notice.hidden = true;
       setEditable(true);
       fieldEl('firstName')?.focus();
     });
@@ -610,8 +600,7 @@ const notificationPrefs = notificationSeeds.map((s) => ({
       localStorage.setItem(storageKey, JSON.stringify(values));
       syncBanner(values);
       setEditable(false);
-      notice.hidden = false;
-      notice.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      showToast('Changes saved', 'Your profile has been updated.');
     });
 
     // Cancel discards this edit session — revert the fields to the last saved
@@ -620,7 +609,6 @@ const notificationPrefs = notificationSeeds.map((s) => ({
     resetBtn.addEventListener('click', () => {
       setFields(savedValues());
       setEditable(false);
-      notice.hidden = true;
     });
   }
 
@@ -874,8 +862,6 @@ const notificationPrefs = notificationSeeds.map((s) => ({
      section (like permit.astro's col-11 main) so the fields, notification and
      action footer line up with the section header's full-width rule; only prose
      (.section-hint) is measured for readability. */
-  #save-notice { margin-bottom: 1.25rem; }
-  #save-notice[hidden] { display: none; }
   .field-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -180,6 +180,9 @@ const WORKFLOW_ACTIONS = new Set<IRSection>([
 ]);
 // District reviewers may READ these only when assigned (RA/SA); HQ/Admin read any.
 const SCOPED_READ = new Set<IRSection>(['dates-ceqa', 'sign']);
+// Final (terminal) statuses — the permit is closed. The Responsible Agent can no
+// longer edit the analysis-team roster here (System Admin still can, as super-user).
+const FINAL_STATUSES = new Set<PermitStatus>(['expired', 'rejected', 'withdrawn']);
 
 /**
  * Resolve the Access verdict for one IR section. Layered: non-reviewer → CA;
@@ -209,6 +212,11 @@ export function resolveIR(ctx: ResolveContext): Access {
   // ── §5.1 global status gates ───────────────────────────────────────────────
   // Draft is the applicant's — no reviewer can access the IR.
   if (status === 'draft') return 'cannot-access';
+  // System Admin super-user carve-out: the analysis-team roster is editable in
+  // EVERY status once the permit exists (post-Draft), including the terminal
+  // freeze below — admin owns team composition regardless of workflow state. The
+  // Responsible Agent's non-final editing is handled in the core cell.
+  if (section === 'supporting-agents' && isAdmin) return 'update';
   // Withdrawn: district reviewers can't access; HQ/Admin read only.
   if (status === 'withdrawn') return isDistrict ? 'cannot-access' : 'read';
   // Rejected: terminal — content is read-only; decision/action sections are gone.
@@ -280,8 +288,10 @@ function coreCell(section: IRSection, status: PermitStatus, f: CellFlags): Acces
       return status === 'under-review' ? upd(f.raU) : 'read';
 
     case 'supporting-agents':
-      // U if RA in Under review AND Active; read otherwise.
-      return status === 'under-review' || status === 'active' ? upd(f.raU) : 'read';
+      // Analysis-team roster. The Responsible Agent may edit in any NON-final
+      // status; read-only once the permit is final (Expired/Rejected/Withdrawn).
+      // System Admin's always-editable rule is handled upstream in resolveIR.
+      return FINAL_STATUSES.has(status) ? 'read' : upd(f.isRA);
 
     case 'tags':
       // Read in Waiting for review; update (any reviewer with access) thereafter.

@@ -1,0 +1,114 @@
+---
+// A read-only, script-free rendering of the application AS THE REVIEWER READS IT —
+// the same PermitSection + review-list + contact-grid vocabulary as
+// ApplicationReview.astro / the permit detail page, but without the editable
+// controls (so it needs no page script). Used by the review-layout studies so the
+// "application record" pane looks native to the review wizard.
+//
+// carbon-checked: the specimen list is a stock cds-table (data-table); `.ro-table`
+// is only a `display:block` sizing modifier on that component — the identical
+// helper ApplicationReview.astro uses — not a hand-rolled table primitive.
+import PermitSection from './PermitSection.astro';
+import ContactCard from './ContactCard.astro';
+import { permit } from '../data/permit';
+
+interface Props {
+  /** Trim to the essentials for a narrow column. */
+  compact?: boolean;
+}
+const { compact = false } = Astro.props;
+
+const t = permit.researchTeam;
+const pj = permit.projectInfo;
+const sa = permit.studyAreas;
+const dc = permit.dataCollection;
+const org = t.organization;
+const pi = t.principalInvestigator;
+const submitter = t.submitter;
+const fieldLead = t.fieldLead;
+
+const specimenRows = compact ? dc.specimens.slice(0, 5) : dc.specimens;
+const specimenMore = dc.specimens.length - specimenRows.length;
+---
+
+<div class="app-sum">
+  <PermitSection title="Research team">
+    <div class="contact-grid">
+      <ContactCard role="Organization" contact={org} />
+      <ContactCard role="Principal investigator" contact={pi} />
+      {!compact && <ContactCard role="Submitter" contact={submitter} />}
+      {!compact && <ContactCard role="Person in direct charge of field work" contact={fieldLead} />}
+    </div>
+  </PermitSection>
+
+  <PermitSection title="Project information">
+    <dl class="review">
+      <div class="review__row"><dt class="review__label t-label-01">Project title</dt><dd class="review__value t-body-01">{permit.name}</dd></div>
+      <div class="review__row"><dt class="review__label t-label-01">Category</dt><dd class="review__value t-body-01">{permit.category}</dd></div>
+      <div class="review__row"><dt class="review__label t-label-01">Requested window</dt><dd class="review__value t-body-01">{permit.activeWindow.start} – {permit.activeWindow.end}</dd></div>
+    </dl>
+    {!compact && (
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Project purpose</p>
+        <p class="narrative__body t-body-01">{pj.purpose}</p>
+      </div>
+    )}
+  </PermitSection>
+
+  <PermitSection title="Study areas">
+    <dl class="review">
+      {sa.districts.map((d) => (
+        <div class="review__row">
+          <dt class="review__label t-label-01">{d.name}</dt>
+          <dd class="review__value t-body-01">{d.parks.join(', ') || '—'}</dd>
+        </div>
+      ))}
+    </dl>
+  </PermitSection>
+
+  <PermitSection title="Authorized collection">
+    <cds-table class="ro-table">
+      <cds-table-head>
+        <cds-table-header-row>
+          <cds-table-header-cell>Species</cds-table-header-cell>
+          <cds-table-header-cell>Quantity</cds-table-header-cell>
+          <cds-table-header-cell>Portion</cds-table-header-cell>
+          <cds-table-header-cell>Condition</cds-table-header-cell>
+        </cds-table-header-row>
+      </cds-table-head>
+      <cds-table-body>
+        {specimenRows.map((s) => (
+          <cds-table-row>
+            <cds-table-cell><em>{s.species}</em></cds-table-cell>
+            <cds-table-cell>{s.quantity}</cds-table-cell>
+            <cds-table-cell>{s.portion}</cds-table-cell>
+            <cds-table-cell>{s.condition}</cds-table-cell>
+          </cds-table-row>
+        ))}
+      </cds-table-body>
+    </cds-table>
+    {specimenMore > 0 && <p class="sub-note t-label-01">+ {specimenMore} more taxa</p>}
+  </PermitSection>
+</div>
+
+<style>
+  /* Reuses ApplicationReview's read-only vocabulary — layout only, tokens for
+     type/color. */
+  .app-sum { display: flex; flex-direction: column; gap: 2.5rem; }
+  .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+
+  .review { margin: 0; }
+  .review__row { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: 0.5rem 1.5rem; padding: 0.625rem 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+  .review__row:first-child { border-top: 0; padding-top: 0; }
+  .review__label { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .review__value { margin: 0; color: var(--cds-text-primary, #161616); overflow-wrap: anywhere; }
+  @media (max-width: 42rem) { .review__row { grid-template-columns: 1fr; gap: 0.125rem; } }
+
+  .narrative { max-width: 46rem; margin-top: 1.25rem; }
+  .narrative__label { margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
+  .narrative__body { margin: 0; color: var(--cds-text-primary, #161616); line-height: 1.6; }
+
+  /* carbon-checked: display modifier on a stock cds-table (see head comment). */
+  .ro-table { display: block; }
+  .sub-note { margin: 0.5rem 0 0; color: var(--cds-text-secondary, #525252); }
+</style>

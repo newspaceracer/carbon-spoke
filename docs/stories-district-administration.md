@@ -1,10 +1,12 @@
 # District Administration — Jira Stories
 
-Two stories covering who can administer a district and the rule that every
-district must always have review coverage.
+Three stories covering who can administer a district, the rule that every
+district must always have review coverage, and how changes on the console are
+saved.
 
 - **Story 1** — Scope District administration access to the user's role
 - **Story 2** — Require a Technical Reviewer on every district
+- **Story 3** — Save district changes with scoped, instant-apply persistence
 
 The Technical Reviewer roles referenced below are the product's specific
 Technical Reviewer sub-roles: **HQ Technical Reviewer** (statewide, across all
@@ -207,3 +209,91 @@ to the console — see Story 1.
   Lead Technical Reviewer be assigned as part of creation?
 - [ ] Should a System Admin be notified when a district drops below one Technical
   Reviewer? If so, what is the email body copy?
+
+---
+
+## Story 3 — Save district changes with scoped, instant-apply persistence
+
+**Story Title**
+Save district changes with scoped, instant-apply persistence
+
+---
+
+**Description**
+
+As a district administrator,
+I want member and default-signer changes to save the moment I confirm them, and the
+district-information form to have its own explicit save,
+So that it's always clear what has been saved and I never lose a change I already
+confirmed.
+
+The console holds three editable areas that save differently: **members** and the
+**default signer** are committed the instant their modal (or removal) is confirmed;
+the **district information** form is edited freely and committed by an explicit
+**Save changes** button scoped to that form only.
+
+**Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
+Reviewer (whoever can administer the district).
+
+**Out of scope:** Who may administer a district and the role-scoped member rules —
+see Story 1. The rule that a district must keep a Technical Reviewer — see Story 2.
+The default-signer picker itself — see `stories-roles-permissions.md` Story 7.
+
+---
+
+**Acceptance Criteria**
+
+**Happy path — instant-apply areas**
+- Adding, editing, or removing a member saves immediately when the member modal (or
+  the remove confirmation) is confirmed — no separate save step is required.
+- Setting, changing, or removing the default signer saves immediately when its modal
+  (or the Remove action) is confirmed.
+- Each of these confirmations shows a success message (see Notifications).
+
+**Happy path — district-information form**
+- The **Save changes** button governs only the District-information form (office
+  address, phone, email).
+- **Save changes** is **disabled until a field in that form changes**, and returns
+  to disabled after a successful save.
+- Saving shows a success message and persists the office details.
+
+**UI & field details**
+- The **Save changes** and **Cancel** actions sit directly beneath the
+  District-information fields (aligned to the field column), not at the far edge of
+  the page or below unrelated sections.
+- The scope tile appears only when there is more than one district to switch
+  between; there is no standing explanatory help text about which districts a role
+  may edit.
+
+**Notifications**
+- Every successful action (member added / updated / removed, default signer saved /
+  removed, district information saved) confirms with a **transient success toast**
+  (top-right, auto-dismissing, announced politely to assistive tech), consistent
+  with success confirmations elsewhere in the app.
+
+**Edge cases & constraints**
+- Because members and the default signer are already persisted, navigating away
+  (Cancel / leaving the page) without pressing Save changes does not discard them;
+  it only discards unsaved edits to the District-information fields.
+- **Cancel** returns to the district detail screen.
+
+---
+
+**Testing notes**
+
+- **Test 1 — Instant-apply members:** Add a member, then reload the page without
+  pressing Save changes. Confirm the member is still present.
+- **Test 2 — Dirty-tracked save:** Load the console and confirm **Save changes** is
+  disabled. Edit a district-information field and confirm it enables; save and
+  confirm it disables again.
+- **Test 3 — Scope isolation:** Edit a district-information field but do not save;
+  add a member (which saves). Reload and confirm the member persisted while the
+  unsaved field edit did not.
+
+---
+
+**Open questions**
+- [ ] Should **Cancel** also discard in-progress (unsaved) district-information field
+  edits explicitly, or simply navigate away?
+- [ ] Should there be any unsaved-changes warning when leaving with pending
+  district-information edits?

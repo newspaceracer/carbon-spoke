@@ -94,16 +94,6 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
           </p>
         </cds-tile>
 
-        <!-- Auto-save confirmation. -->
-        <cds-inline-notification
-          id="save-notice"
-          hidden
-          kind="success"
-          low-contrast
-          hide-close-button
-          title="Inventory updated"
-          subtitle="Your changes save automatically and are available on every permit."
-        ></cds-inline-notification>
 
         <!-- View toggle: edit your own catalog, or browse everyone's. -->
         <cds-content-switcher id="sc-view">
@@ -249,6 +239,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   // (HQ → org-wide + every district; a district lead OR assistant → their district).
   import { curatableDistricts } from '../data/district';
   import { readIdentity } from '../lib/maintenance';
+  import { showToast } from '../lib/toast';
 
   const $ = (id: string) => document.getElementById(id);
   const esc = (s = '') =>
@@ -288,10 +279,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   // A condition IS its text, so its body is its identity (used for dedup).
   const sig = (it: { body: string }) => it.body;
 
-  const flashSaved = () => {
-    const n = $('save-notice') as any;
-    if (n) n.hidden = false;
-  };
+  const flashSaved = () => showToast('Inventory updated', 'Saved automatically and available on every permit.');
 
   const persist = () => {
     saveInventory(currentOwner(), items);
@@ -580,9 +568,8 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   .scope__row cds-dropdown { min-width: 18rem; }
   .scope__switcher { min-width: 18rem; }
   .scope__note { margin: 1rem 0 0; max-width: 48rem; color: var(--cds-text-secondary, #525252); }
-  #owner-wrap[hidden], #save-notice[hidden], #inv-empty[hidden], #no-access[hidden],
+  #owner-wrap[hidden], #inv-empty[hidden], #no-access[hidden],
   #browse-empty[hidden], #panel-mine[hidden], #panel-browse[hidden] { display: none; }
-  #save-notice { max-width: 48rem; }
 
   /* View toggle + cross-district browse controls. */
   #sc-view { max-width: 24rem; }

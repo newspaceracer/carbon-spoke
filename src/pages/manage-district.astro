@@ -372,9 +372,6 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
       </cds-modal-footer>
     </cds-modal>
 
-    <!-- Toast host — Carbon toasts float top-right, stacked, and auto-dismiss.
-         Fixed, so it lives outside the grid flow (overlay layer). -->
-    <div id="toast-host" class="toast-host"></div>
   </main>
 </BaseLayout>
 
@@ -394,6 +391,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   // The signed-in Prototype identity drives district edit scope (HQ → all;
   // district lead → the districts they lead; anyone else → none).
   import { readIdentity } from '../lib/maintenance';
+  import { showToast } from '../lib/toast';
 
   // ── Prototype-local district record (shared with the /district detail) ────
   // A member REFERENCES a user by id; name/email/phone are resolved from the
@@ -481,29 +479,8 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   const esc = (s = '') =>
     s.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
 
-  // Transient confirmations use a Carbon TOAST — floats top-right, auto-dismisses,
-  // stacks — the Carbon standard for time-based feedback (not a bar pinned to the
-  // top of the page). Each toast removes itself on close or after its timeout.
-  const toastHost = $('toast-host');
-  const toast = (title: string, subtitle = '', kind: 'success' | 'info' | 'warning' = 'success') => {
-    if (!toastHost) return;
-    const t = document.createElement('cds-toast-notification');
-    t.setAttribute('kind', kind);
-    // Carbon defaults a notification to role="alert" (assertive) — right for a
-    // warning, too aggressive for a routine confirmation. Set it explicitly BEFORE
-    // append so Carbon's "only if unset" default doesn't override: a success/info
-    // toast announces politely (role="status" → aria-live polite); a warning stays
-    // assertive. (Set before connectedCallback so the value sticks.)
-    t.setAttribute('role', kind === 'warning' ? 'alert' : 'status');
-    t.setAttribute('low-contrast', '');
-    t.setAttribute('title', title);
-    if (subtitle) t.setAttribute('subtitle', subtitle);
-    t.setAttribute('timeout', '6000'); // auto-dismiss
-    toastHost.appendChild(t);
-    t.addEventListener('cds-notification-closed', () => t.remove());
-    // Backstop cleanup in case the close event is missed.
-    window.setTimeout(() => t.remove(), 6600);
-  };
+  // Transient confirmations use the shared app-wide toast (src/lib/toast.ts).
+  const toast = (title: string, subtitle = '') => showToast(title, subtitle);
   // Standard house "remove a row" affordance: a ghost trash icon-button (removal
   // is already confirmed via the danger #remove-modal below).
   const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
@@ -1229,23 +1206,6 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
   .scope__switcher { min-width: 18rem; }
   #switcher-note { margin-top: 1rem; }
   #switcher-note[hidden], #switcher-wrap[hidden], #no-access[hidden] { display: none; }
-
-  /* Toast host — Carbon toasts float in the top-right corner, stack downward,
-     and auto-dismiss (the transient pattern), not a bar pinned to the top of the
-     content. Fixed → outside grid flow. */
-  .toast-host {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 9000;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    inline-size: min(24rem, calc(100vw - 2rem));
-    pointer-events: none;
-  }
-  .toast-host cds-toast-notification { pointer-events: auto; }
-  @media (max-width: 30rem) { .toast-host { left: 1rem; right: 1rem; inline-size: auto; } }
 
   /* Default-signer display. */
   .empty { margin: 0; padding: 0.5rem 0; color: var(--cds-text-secondary, #525252); }
