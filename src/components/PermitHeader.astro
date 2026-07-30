@@ -12,18 +12,19 @@ interface Stat {
   value: string;
 }
 
-/** One reviewer on the analysis team. A `status` other than "Pending review"
- *  (i.e. a timestamp) means their analysis is complete. `addedAt` is when they
- *  joined the permit; `lastEditedAt` is their latest activity while still
- *  pending (absent = nothing since they were added). */
+/** One reviewer on the analysis team. `reviewStatus` tracks them through their
+ *  own review workflow — 'not-started' (assigned, not opened), 'pending' (started,
+ *  in progress), 'complete' (finished). The Lead analyst is the exception: their
+ *  status is DERIVED from the permit (Complete only once it's Out for signature),
+ *  not this field. `when` is the date that state was reached. */
+type ReviewStatus = 'not-started' | 'pending' | 'complete';
 interface TeamMember {
   id: string;
   role: string;
   name: string;
   detail: string;
-  status: string;
-  addedAt?: string;
-  lastEditedAt?: string;
+  reviewStatus: ReviewStatus;
+  when?: string;
   highlight?: boolean;
 }
 
@@ -76,30 +77,32 @@ const reviewLabel = finalize ? 'Approve permit' : 'Open review';
 const amendHref = withBase(`/apply?amend=${id}`);
 
 // ── Analysis-review metric (only when analysisTeam is supplied) ──
-// "Done" = a member whose status is a timestamp, not the "Pending review"
-// sentinel. Completion drives the header meter + the modal summary.
-const isDone = (m: TeamMember) => m.status !== 'Pending review';
-// The stacked status cell: a state label + a date/time line below it. Done →
-// the completion timestamp. Pending → last activity, or when they were added if
-// there's been none.
-const reviewMeta = (m: TeamMember) => {
-  const done = isDone(m);
-  return {
-    done,
-    statusLabel: done ? 'Analysis complete' : 'Pending review',
-    when: done
-      ? m.status
-      : m.lastEditedAt
-        ? `Last edited ${m.lastEditedAt}`
-        : `Added ${m.addedAt ?? '—'}`,
-  };
+// The three reviewer states, each with its icon-indicator kind + label + the verb
+// that prefixes the date line ("Completed Jul 5", "Started …", "Added …"). Status
+// is meaning, not colour alone — the indicator renders its own text label.
+const STATE_META: Record<ReviewStatus, { kind: string; label: string; verb: string }> = {
+  'not-started': { kind: 'not-started', label: 'Not started', verb: 'Added' },
+  'pending':     { kind: 'in-progress', label: 'Pending',     verb: 'Started' },
+  'complete':    { kind: 'succeeded',   label: 'Complete',    verb: 'Completed' },
+};
+const isLead = (m: TeamMember) => m.highlight === true || m.role === 'Lead analyst';
+// The Lead analyst reads Complete only once the permit has left review (Out for
+// signature and beyond) — their sign-off IS the end of the analysis. Before that
+// they're actively reviewing (Pending). Everyone else carries their own status.
+const leadComplete = ['Out for signature', 'Waiting for annual report', 'Active'].includes(status.label);
+const memberStatus = (m: TeamMember): ReviewStatus =>
+  isLead(m) ? (leadComplete ? 'complete' : 'pending') : m.reviewStatus;
+// The date/time line under the status. The lead's is phrased as a sign-off, not a
+// generic verb; everyone else gets "<verb> <date>".
+const reviewWhen = (m: TeamMember): string => {
+  if (isLead(m)) return leadComplete ? 'Signed off' : 'Reviewing';
+  const st = memberStatus(m);
+  return m.when ? `${STATE_META[st].verb} ${m.when}` : STATE_META[st].label;
 };
 // The progress bar measures REVIEW UNITS, not people: each involved district is
 // one unit, and every HQ reviewer collapses into a single "Headquarters" unit. A
-// unit is complete once AT LEAST ONE of its members has finished. The lead analyst
-// (the responsible agent, tracked separately by the workflow steps) is excluded —
-// their sign-off doesn't move this bar.
-const isLead = (m: TeamMember) => m.highlight === true || m.role === 'Lead analyst';
+// unit is complete once AT LEAST ONE of its members is Complete. The lead analyst
+// (the responsible agent) is excluded — their sign-off doesn't move this bar.
 const unitOf = (m: TeamMember): string | null => {
   if (isLead(m)) return null;                     // excluded from the bar
   if (m.role === 'District reviewer') return m.detail; // detail = district name
@@ -109,7 +112,7 @@ const unitDone = new Map<string, boolean>();
 (analysisTeam ?? []).forEach((m) => {
   const u = unitOf(m);
   if (!u) return;
-  unitDone.set(u, (unitDone.get(u) ?? false) || isDone(m));
+  unitDone.set(u, (unitDone.get(u) ?? false) || memberStatus(m) === 'complete');
 });
 const reviewTotal = unitDone.size;
 const reviewDone = [...unitDone.values()].filter(Boolean).length;
@@ -382,49 +385,61 @@ const rosterSections = [
 
         <!-- Reviewer roster — GROUPED by review unit to match the bar: the lead
              analyst first, then one section per unit (Headquarters, then each
-             district). A unit heading carries its Reviewed/Pending state (done once
-             ≥1 member finishes). Members are added inline above (staged until Save);
-             removal is managed on the permit Overview. Completion shows via an
-             icon-indicator (not colour alone). -->
+             district). A unit heading rolls up its members' state (Reviewed once
+             ≥1 is Complete, else In progress / Not started). Each row shows the
+             person, their email (with a copy control) under the name, and their
+             review state. When the team is editable, members can be added inline
+             above (staged until Save) and removed here (a trash toggle, also staged
+             until Save). Status shows via an icon-indicator (not colour alone). -->
         <div class="review-roster" id="review-roster" data-team-key={teamStorageKey}>
           {rosterSections.map((sec) => {
-            const secDone = sec.counts && (unitDone.get(sec.key) ?? false);
+            const sts = sec.members.map(memberStatus);
+            const secKind = !sec.counts ? '' : sts.includes('complete') ? 'succeeded' : sts.includes('pending') ? 'in-progress' : 'not-started';
+            const secLabel = !sec.counts ? '' : sts.includes('complete') ? 'Reviewed' : sts.includes('pending') ? 'In progress' : 'Not started';
             return (
             <section class="unit-group" data-unit-group={sec.counts ? sec.key : ''}>
               <div class="unit-group__head">
                 <h4 class="unit-group__title t-heading-compact-01">{sec.label}</h4>
                 {sec.counts && (
-                  <cds-icon-indicator class="unit-group__ind" size="16" kind={secDone ? 'succeeded' : 'pending'} label={secDone ? 'Reviewed' : 'Pending review'}></cds-icon-indicator>
+                  <cds-icon-indicator class="unit-group__ind" size="16" kind={secKind} label={secLabel}></cds-icon-indicator>
                 )}
               </div>
               <ul class="unit-members">
                 {sec.members.map((m) => {
-                  const meta = reviewMeta(m);
+                  const st = memberStatus(m);
+                  const email = directory.find((u) => u.id === m.id)?.email ?? '';
                   return (
-                  <li class="review-row" data-user-id={m.id} data-seed data-done={String(meta.done)} data-unit={unitOf(m) ?? ''} data-email={directory.find((u) => u.id === m.id)?.email ?? ''}>
+                  <li class="review-row" data-user-id={m.id} data-seed data-status={st} data-unit={unitOf(m) ?? ''} data-email={email} data-lead={m.highlight ? 'true' : 'false'}>
                     <Avatar name={m.name} size="md" />
                     <div class="review-row__id">
                       <p class="review-row__name t-body-01">{m.name}{m.highlight ? <span class="review-row__lead t-label-01"> · Lead</span> : null}</p>
-                      <p class="review-row__role t-label-01">{m.role} — {m.detail}</p>
+                      <p class="review-row__role t-label-01">{m.role}</p>
+                      {email && (
+                        <p class="review-row__email t-label-01">
+                          <span class="review-row__email-addr">{email}</span>
+                          <cds-icon-button class="review-row__copy" kind="ghost" size="sm" align="bottom" data-copy-email>
+                            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
+                              <path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/>
+                              <path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/>
+                            </svg>
+                            <span slot="tooltip-content">Copy email</span>
+                          </cds-icon-button>
+                        </p>
+                      )}
                     </div>
                     <div class="review-row__status">
-                      <span class="review-row__state">
-                        <cds-icon-indicator
-                          class="review-row__ind"
-                          size="16"
-                          kind={meta.done ? 'succeeded' : 'pending'}
-                          label={meta.statusLabel}
-                        ></cds-icon-indicator>
-                      </span>
-                      <span class="review-row__when t-label-01">{meta.when}</span>
+                      <cds-icon-indicator class="review-row__ind" size="16" kind={STATE_META[st].kind} label={STATE_META[st].label}></cds-icon-indicator>
+                      <span class="review-row__when t-label-01">{reviewWhen(m)}</span>
                     </div>
-                    <cds-icon-button class="review-row__copy" kind="ghost" size="sm" align="left" data-copy-email>
-                      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
-                        <path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/>
-                        <path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/>
-                      </svg>
-                      <span slot="tooltip-content">Copy email</span>
-                    </cds-icon-button>
+                    {!m.highlight && (
+                      <cds-icon-button class="review-row__remove" kind="ghost" size="sm" align="left" data-remove>
+                        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
+                          <path d="M12 12H14V24H12zM18 12H20V24H18z"/>
+                          <path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/>
+                        </svg>
+                        <span slot="tooltip-content">Remove</span>
+                      </cds-icon-button>
+                    )}
                   </li>
                   );
                 })}
@@ -446,38 +461,37 @@ const rosterSections = [
     </cds-modal-footer>
   </cds-modal>
 
-  <!-- Row template — clones a roster row for reviewers added on the Overview and
-       replayed here from localStorage (view-only: no remove control). -->
+  <!-- Row template — clones a roster row for reviewers added inline (staged) or
+       replayed from localStorage. Same shape as a seed row: email + copy under the
+       name, status, and the remove toggle (shown only when the team is editable). -->
   <template id="review-row-template">
-    <li class="review-row" data-done="false">
+    <li class="review-row" data-status="not-started">
       <span class="avatar avatar--md" aria-hidden="true"></span>
       <div class="review-row__id">
         <p class="review-row__name t-body-01"></p>
         <p class="review-row__role t-label-01"></p>
+        <p class="review-row__email t-label-01">
+          <span class="review-row__email-addr"></span>
+          <cds-icon-button class="review-row__copy" kind="ghost" size="sm" align="bottom" data-copy-email>
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/>
+              <path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/>
+            </svg>
+            <span slot="tooltip-content">Copy email</span>
+          </cds-icon-button>
+        </p>
       </div>
       <div class="review-row__status">
-        <span class="review-row__state">
-          <cds-icon-indicator class="review-row__ind" size="16" kind="pending" label="Pending review"></cds-icon-indicator>
-        </span>
+        <cds-icon-indicator class="review-row__ind" size="16" kind="not-started" label="Not started"></cds-icon-indicator>
         <span class="review-row__when t-label-01"></span>
       </div>
-      <div class="review-row__actions">
-        <cds-icon-button class="review-row__copy" kind="ghost" size="sm" align="left" data-copy-email>
-          <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
-            <path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/>
-            <path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/>
-          </svg>
-          <span slot="tooltip-content">Copy email</span>
-        </cds-icon-button>
-        <!-- Undo a not-yet-saved add. Only shown for staged rows (CSS), so it never
-             offers to remove a committed member (that's the Overview's job). -->
-        <cds-icon-button class="review-row__remove" kind="ghost" size="sm" align="left" data-remove-staged>
-          <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
-            <path d="M24 9.4L22.6 8 16 14.6 9.4 8 8 9.4 14.6 16 8 22.6 9.4 24 16 17.4 22.6 24 24 22.6 17.4 16 24 9.4z"/>
-          </svg>
-          <span slot="tooltip-content">Remove</span>
-        </cds-icon-button>
-      </div>
+      <cds-icon-button class="review-row__remove" kind="ghost" size="sm" align="left" data-remove>
+        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
+          <path d="M12 12H14V24H12zM18 12H20V24H18z"/>
+          <path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/>
+        </svg>
+        <span slot="tooltip-content">Remove</span>
+      </cds-icon-button>
     </li>
   </template>
 
@@ -487,7 +501,7 @@ const rosterSections = [
     <section class="unit-group" data-unit-group="">
       <div class="unit-group__head">
         <h4 class="unit-group__title t-heading-compact-01"></h4>
-        <cds-icon-indicator class="unit-group__ind" size="16" kind="pending" label="Pending review"></cds-icon-indicator>
+        <cds-icon-indicator class="unit-group__ind" size="16" kind="not-started" label="Not started"></cds-icon-indicator>
       </div>
       <ul class="unit-members"></ul>
     </section>
@@ -759,8 +773,8 @@ const rosterSections = [
 
     // Team editing is gated exactly like the Overview roster: the 'supporting-agents'
     // section is Update only for the Responsible Agent (or Admin) during Under review.
-    // Editable → the modal manages the team (show the picker, label it "Manage"); not
-    // editable → it's a read-only view (hide the picker, keep the "View team" labels).
+    // Editable → the modal manages the team (show the picker + per-row remove, label
+    // it "Manage"); not editable → a read-only view (no picker/remove, "View team").
     const banner = document.getElementById('permit-banner');
     const permitId = banner?.dataset.permitId ?? '';
     const permitType = banner?.dataset.permitType as any;
@@ -773,13 +787,14 @@ const rosterSections = [
     if (teamEditable) {
       if (ctaText) ctaText.textContent = 'Manage team';
       if (titleEl) titleEl.textContent = 'Manage analysis team';
+      (roster as HTMLElement).dataset.editable = 'true'; // CSS reveals the row remove toggles
     } else if (addWrap) {
       addWrap.style.display = 'none'; // view-only — no picker; labels stay "View team"
     }
 
     // The modal shows the analysis team + review progress, and (when editable) adds
-    // members inline (staged until Save); removal is on the permit Overview. Both
-    // write the same `permit-team-${id}` localStorage this replays on load.
+    // members inline and removes them — both STAGED until Save. Saving writes the same
+    // `permit-team-${id}` localStorage the Overview uses, and this replays on load.
     const teamKey = (roster as HTMLElement).dataset.teamKey || 'permit-team';
     const tpl = document.getElementById('review-row-template') as HTMLTemplateElement;
     const groupTpl = document.getElementById('unit-group-template') as HTMLTemplateElement;
@@ -801,15 +816,19 @@ const rosterSections = [
       Array.from(roster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!);
     const rows = () => Array.from(roster.querySelectorAll<HTMLElement>('.review-row'));
 
+    // A row staged for removal is excluded from every rollup — it reflects the state
+    // the roster will be in once Save commits.
+    const liveRows = () => rows().filter((r) => r.dataset.stagedRemove !== 'true');
+
     // Recompute the two meters from the roster by REVIEW UNIT, not by person: group
     // rows by their data-unit (rows with no unit — the lead analyst — are excluded),
-    // and a unit is done once at least one of its members is done.
+    // and a unit is complete once at least one of its members' data-status is 'complete'.
     const recompute = () => {
       const unitDone = new Map<string, boolean>();
-      rows().forEach((r) => {
+      liveRows().forEach((r) => {
         const u = r.dataset.unit;
         if (!u) return;
-        unitDone.set(u, (unitDone.get(u) ?? false) || r.dataset.done === 'true');
+        unitDone.set(u, (unitDone.get(u) ?? false) || r.dataset.status === 'complete');
       });
       const total = unitDone.size;
       const done = [...unitDone.values()].filter(Boolean).length;
@@ -820,16 +839,19 @@ const rosterSections = [
         bar.helperText = `${done} of ${total} reviews complete`;
         bar.status = allDone ? 'finished' : 'active';
       });
-      // Repaint each unit section's heading state (Reviewed once ≥1 done); drop a
-      // section that has been emptied (its last member removed on the Overview).
+      // Roll each unit heading up from its live members: Reviewed once ≥1 is Complete,
+      // else In progress if any is Pending, else Not started. Drop a section with no
+      // live members left (its last member removed / staged for removal).
       roster.querySelectorAll<HTMLElement>('.unit-group[data-unit-group]').forEach((sec) => {
         if (!sec.dataset.unitGroup) return; // the lead section has no unit key
-        const memberRows = sec.querySelectorAll<HTMLElement>('.review-row');
-        if (memberRows.length === 0) { sec.remove(); return; }
-        const secDone = Array.from(memberRows).some((r) => r.dataset.done === 'true');
+        const live = Array.from(sec.querySelectorAll<HTMLElement>('.review-row')).filter((r) => r.dataset.stagedRemove !== 'true');
+        if (sec.querySelectorAll('.review-row').length === 0) { sec.remove(); return; }
+        const kind = live.some((r) => r.dataset.status === 'complete') ? 'succeeded'
+          : live.some((r) => r.dataset.status === 'pending') ? 'in-progress' : 'not-started';
+        const label = kind === 'succeeded' ? 'Reviewed' : kind === 'in-progress' ? 'In progress' : 'Not started';
         const ind = sec.querySelector('.unit-group__ind');
-        ind?.setAttribute('kind', secDone ? 'succeeded' : 'pending');
-        ind?.setAttribute('label', secDone ? 'Reviewed' : 'Pending review');
+        ind?.setAttribute('kind', kind);
+        ind?.setAttribute('label', label);
       });
     };
 
@@ -843,7 +865,9 @@ const rosterSections = [
       const nameEl = li.querySelector('.review-row__name');
       if (nameEl) nameEl.textContent = u.name;
       const roleEl = li.querySelector('.review-row__role');
-      if (roleEl) roleEl.textContent = `${u.role} — ${u.detail}`;
+      if (roleEl) roleEl.textContent = u.role;
+      const addrEl = li.querySelector('.review-row__email-addr');
+      if (addrEl) addrEl.textContent = u.email || '';
       const whenEl = li.querySelector('.review-row__when');
       if (whenEl) whenEl.textContent = `Added ${today}`;
       return li;
@@ -877,11 +901,12 @@ const rosterSections = [
     // the roster). Each row carries the address on data-email — seed rows from the
     // directory, added rows from the picker.
     const rowEmail = (row: HTMLElement) => (row.dataset.email || '').trim();
-    // A copy control with no address to copy is pointless — hide it for that row.
+    // The email line (address + copy control) is pointless with no address — hide the
+    // whole line for a row that has none (cloned template rows always carry the line).
     const syncCopyButtons = () => {
       rows().forEach((row) => {
-        const btn = row.querySelector<HTMLElement>('[data-copy-email]');
-        if (btn) btn.style.display = rowEmail(row) ? '' : 'none';
+        const line = row.querySelector<HTMLElement>('.review-row__email');
+        if (line) line.style.display = rowEmail(row) ? '' : 'none';
       });
     };
     syncCopyButtons();
@@ -919,7 +944,8 @@ const rosterSections = [
     const emailAllBtn = document.getElementById('email-all-team') as HTMLElement | null;
     const saveBtn = document.getElementById('team-save-btn') as HTMLElement | null;
     const doneBtn = document.getElementById('team-done-btn') as HTMLElement | null;
-    let staged: DirUser[] = [];
+    let staged: DirUser[] = [];              // not-yet-saved adds
+    const stagedRemovals = new Set<string>(); // ids of committed rows staged for removal
 
     // Footer swap — clean shows [Email all | Done], dirty shows [Cancel | Save
     // changes]. Toggled by inline display because cds-* ignore the `hidden` attribute.
@@ -929,10 +955,16 @@ const rosterSections = [
       if (emailAllBtn) emailAllBtn.style.display = dirty ? 'none' : '';
       if (doneBtn) doneBtn.style.display = dirty ? 'none' : '';
     };
+    // Any pending add OR removal makes the session dirty (needs Save/Cancel).
+    const refreshFooter = () => setDirty(staged.length > 0 || stagedRemovals.size > 0);
 
+    // Cancel / close → throw away the whole edit session: drop staged adds and un-mark
+    // any rows staged for removal, returning the roster to its saved state.
     const discardStaged = () => {
       roster.querySelectorAll('[data-staged]').forEach((r) => r.remove());
       staged = [];
+      stagedRemovals.forEach((id) => unmarkRemoval(id));
+      stagedRemovals.clear();
       recompute();
       syncCopyButtons();
       setDirty(false);
@@ -957,7 +989,7 @@ const rosterSections = [
       staged.push(u);
       recompute();
       syncCopyButtons();
-      setDirty(true);
+      refreshFooter();
     };
 
     // SELECTING a user stages them — no separate Add button. cds-combo-box-selected
@@ -969,45 +1001,116 @@ const rosterSections = [
       if (addSelect) addSelect.value = '';
     });
 
-    // Remove (×) on a staged row — undo a not-yet-saved add (shown only on staged
-    // rows). Committed members aren't removable here; that stays on the Overview.
+    // ── Remove a member (staged until Save) ─────────────────────────────────
+    // Mark/unmark a committed row for removal: strike it, note "Will be removed", and
+    // flip the trash tooltip to Undo. Recompute treats staged-remove rows as gone, so
+    // the bar + unit rollups preview the saved state; nothing persists until Save.
+    const markRemoval = (row: HTMLElement) => {
+      row.dataset.stagedRemove = 'true';
+      const when = row.querySelector('.review-row__when');
+      if (when) { (row as any)._whenBefore = when.textContent; when.textContent = 'Will be removed'; }
+      const tip = row.querySelector('.review-row__remove [slot="tooltip-content"]');
+      if (tip) tip.textContent = 'Undo remove';
+    };
+    const unmarkRemoval = (id: string) => {
+      const row = roster.querySelector<HTMLElement>(`.review-row[data-user-id="${CSS.escape(id)}"]`);
+      if (!row) return;
+      delete row.dataset.stagedRemove;
+      const when = row.querySelector('.review-row__when');
+      if (when && (row as any)._whenBefore != null) when.textContent = (row as any)._whenBefore;
+      const tip = row.querySelector('.review-row__remove [slot="tooltip-content"]');
+      if (tip) tip.textContent = 'Remove';
+    };
+
+    // One remove control per non-lead row. A STAGED add is discarded outright (it was
+    // never saved); a COMMITTED member is toggled into/out of the staged-removal set.
     roster.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest?.('[data-remove-staged]');
+      const btn = (e.target as HTMLElement).closest?.('[data-remove]');
       if (!btn) return;
       const row = btn.closest<HTMLElement>('.review-row');
-      if (!row || row.dataset.staged !== 'true') return;
-      staged = staged.filter((u) => u.id !== row.dataset.userId);
-      row.remove();
-      recompute();          // prunes a unit section left empty
+      if (!row) return;
+      const id = row.dataset.userId || '';
+      if (row.dataset.staged === 'true') {
+        staged = staged.filter((u) => u.id !== id);
+        row.remove();
+      } else if (stagedRemovals.has(id)) {
+        stagedRemovals.delete(id);
+        unmarkRemoval(id);
+      } else {
+        stagedRemovals.add(id);
+        markRemoval(row);
+      }
+      recompute();          // prunes a unit section left empty; previews the bar
       syncCopyButtons();
-      setDirty(staged.length > 0);
+      refreshFooter();
     });
 
-    // Save — commit staged rows to the shared team edits (survives reload, shows on
-    // the Overview too), clear their staged marker, remove them from the picker.
+    // Save — commit the whole edit session to the shared team edits (survives reload,
+    // shows on the Overview too). Adds append to added[]; removals either drop out of
+    // added[] (if they were an earlier add) or go onto removed[] (a seed member).
     saveBtn?.addEventListener('click', () => {
-      if (!staged.length) { modal.open = false; return; }
+      const addCount = staged.length;
+      const remCount = stagedRemovals.size;
+      if (!addCount && !remCount) { modal.open = false; return; }
       const cur = loadTeam();
+
+      // Commit adds: append (dedup), drop the staged marker, remove from the picker.
       staged.forEach((u) => { if (!cur.added.some((a) => a.id === u.id)) cur.added.push(u); });
-      localStorage.setItem(teamKey, JSON.stringify(cur));
       roster.querySelectorAll<HTMLElement>('[data-staged]').forEach((r) => {
         r.removeAttribute('data-staged');
         const whenEl = r.querySelector('.review-row__when');
         if (whenEl) whenEl.textContent = `Added ${today}`;
       });
       staged.forEach((u) => addSelect?.querySelector(`cds-combo-box-item[value="${CSS.escape(u.id)}"]`)?.remove());
-      const count = staged.length;
+
+      // Commit removals: a previously-added member simply leaves added[]; a seed member
+      // is recorded on removed[]. The row leaves the roster either way.
+      stagedRemovals.forEach((id) => {
+        if (cur.added.some((a) => a.id === id)) cur.added = cur.added.filter((a) => a.id !== id);
+        else if (!cur.removed.includes(id)) cur.removed.push(id);
+        roster.querySelector<HTMLElement>(`.review-row[data-user-id="${CSS.escape(id)}"]`)?.remove();
+      });
+
+      localStorage.setItem(teamKey, JSON.stringify(cur));
       staged = [];
+      stagedRemovals.clear();
+      recompute();      // prunes any now-empty unit section, refreshes the meters
+      syncCopyButtons();
       setDirty(false);
       modal.open = false;
-      showToast(count === 1 ? 'Member added' : `${count} members added`,
-        count === 1 ? 'The analysis team was updated.' : 'The analysis team was updated.');
+
+      const parts: string[] = [];
+      if (addCount) parts.push(addCount === 1 ? '1 member added' : `${addCount} members added`);
+      if (remCount) parts.push(remCount === 1 ? '1 member removed' : `${remCount} members removed`);
+      showToast('Analysis team updated', parts.join(' · '));
     });
 
-    // Cancel / X / click-away all close the modal natively; drop any staged rows so
-    // the roster returns to its saved state.
-    modal.addEventListener('cds-modal-closed', () => { if (staged.length) discardStaged(); });
+    // Cancel / X / click-away all close the modal natively; drop the edit session
+    // (staged adds AND removals) so the roster returns to its saved state.
+    modal.addEventListener('cds-modal-closed', () => {
+      if (staged.length || stagedRemovals.size) discardStaged();
+    });
     setDirty(false);
+
+    // The Lead analyst reads Complete only once the permit is Out for signature (their
+    // sign-off ends the analysis). The workflow script broadcasts permit-status-changed
+    // on every transition; repaint the lead row(s) live so the modal stays truthful
+    // without a reload. Non-lead rows are driven by their own reviewStatus, untouched.
+    const paintLead = (status: string) => {
+      const complete = ['Out for signature', 'Waiting for annual report', 'Active'].includes(status);
+      roster.querySelectorAll<HTMLElement>('.review-row[data-lead="true"]').forEach((row) => {
+        row.dataset.status = complete ? 'complete' : 'pending';
+        const ind = row.querySelector('.review-row__ind');
+        ind?.setAttribute('kind', complete ? 'succeeded' : 'in-progress');
+        ind?.setAttribute('label', complete ? 'Complete' : 'Pending');
+        const when = row.querySelector('.review-row__when');
+        if (when) when.textContent = complete ? 'Signed off' : 'Reviewing';
+      });
+    };
+    window.addEventListener('permit-status-changed', (e) => {
+      paintLead((e as CustomEvent).detail?.status ?? statusNow());
+    });
+    paintLead(statusNow()); // reflect the persisted status on load (SSR can't see it)
   }
 </script>
 
@@ -1217,24 +1320,6 @@ const rosterSections = [
   .team-add cds-combo-box {
     display: block;
   }
-  /* Trailing per-row actions (copy email; remove on staged rows only). */
-  .review-row__actions {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02, 0.25rem);
-  }
-  /* The Remove (×) undo is only for a not-yet-saved add — hidden otherwise so it
-     never offers to remove a committed member. */
-  .review-row__remove {
-    display: none;
-  }
-  .review-row[data-staged] .review-row__remove {
-    display: inline-flex;
-  }
-  /* A staged (unsaved) row reads as provisional until Save. */
-  .review-row[data-staged] .review-row__when {
-    color: var(--cds-text-error, #da1e28);
-  }
   .review-roster {
     margin: 0;
     padding: 0;
@@ -1259,9 +1344,9 @@ const rosterSections = [
     margin: 0;
     color: var(--cds-text-primary, #161616);
   }
-  /* The unit's roll-up state — Reviewed once ≥1 member has finished (matches the
-     bar). The icon-indicator renders its own label ("Reviewed" / "Pending review"),
-     so it's icon + text, not colour alone. */
+  /* The unit's roll-up state — Reviewed once ≥1 member is Complete, else In progress
+     / Not started. The icon-indicator renders its own label, so it's icon + text,
+     not colour alone. */
   .unit-group__ind {
     white-space: nowrap;
   }
@@ -1272,24 +1357,33 @@ const rosterSections = [
     display: flex;
     flex-direction: column;
   }
+  /* Named grid areas keep the four cells (identity / status / remove) in lockstep
+     across rows so their edges align, and let the layout re-flow cleanly on a narrow
+     modal without per-child reordering. The status track is FIXED so its left edge
+     lands on the same vertical line in every row. */
   .review-row {
     display: grid;
-    /* The status track is a FIXED width so its left edge lands on the same
-       vertical line in every row — a content-sized (auto) track would differ
-       row to row, since each row is its own grid. Long strings wrap inside it
-       rather than shifting the start point. */
-    grid-template-columns: auto minmax(0, 1fr) 15rem auto;
+    grid-template-columns: auto minmax(0, 1fr) 11rem auto;
+    grid-template-areas: "avatar id status remove";
     align-items: center;
     gap: var(--cds-spacing-05, 1rem);
     padding: var(--cds-spacing-05, 1rem) 0;
     border-block-end: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   }
+  .review-row > .avatar { grid-area: avatar; }
+  .review-row__id { grid-area: id; }
+  .review-row__status { grid-area: status; }
+  .review-row__remove { grid-area: remove; }
   /* The last row in a unit sits flush — the section gap does the separating. */
   .unit-members .review-row:last-child {
     border-block-end: none;
   }
+  /* Identity block: name, role, then the email line under it. */
   .review-row__id {
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
   }
   .review-row__name {
     margin: 0;
@@ -1299,11 +1393,30 @@ const rosterSections = [
     color: var(--cds-text-secondary, #525252);
   }
   .review-row__role {
-    margin: 0.125rem 0 0;
+    margin: 0;
     color: var(--cds-text-secondary, #525252);
   }
-  /* Status is its own column: the state (indicator + label) over the date/time,
-     both hugging the column's left edge so they share a start line. */
+  /* Email sits under the name with an inline copy control (this is where the copy
+     affordance lives now). The address truncates; the button never shrinks. */
+  .review-row__email {
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02, 0.25rem);
+    min-width: 0;
+    color: var(--cds-text-secondary, #525252);
+  }
+  .review-row__email-addr {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .review-row__copy {
+    flex: 0 0 auto;
+  }
+  /* Status column: the state (indicator + label) over the date/time line, both
+     hugging the column's left edge so they share a start line. */
   .review-row__status {
     display: flex;
     flex-direction: column;
@@ -1311,27 +1424,51 @@ const rosterSections = [
     gap: 0.125rem;
     min-width: 0;
   }
-  .review-row__state {
-    display: inline-flex;
-    align-items: center;
+  .review-row__ind {
     white-space: nowrap;
   }
-  /* The date/time sits UNDER the status text, not under the icon — indent it by
-     the icon (16px) + the indicator's icon↔label gap (0.5rem) so it lines up
-     with where "Analysis complete" / "Pending review" begins. */
+  /* The date/time sits UNDER the status text, not under the icon — indent it by the
+     icon (16px) + the indicator's icon↔label gap (0.5rem) so it lines up with where
+     "Complete" / "Pending" / "Not started" begins. */
   .review-row__when {
     padding-inline-start: calc(16px + var(--cds-spacing-03, 0.5rem));
     text-align: left;
     color: var(--cds-text-secondary, #525252);
   }
+  /* Remove toggle — present only when the team is editable (JS sets data-editable on
+     the roster). Hidden entirely on a read-only view. */
+  .review-row__remove {
+    display: none;
+  }
+  .review-roster[data-editable="true"] .review-row__remove {
+    display: inline-flex;
+  }
+  /* A staged (unsaved) add reads as provisional until Save. */
+  .review-row[data-staged] .review-row__when {
+    color: var(--cds-text-error, #da1e28);
+  }
+  /* A row staged for removal is struck through + dimmed until Save; its date line
+     becomes the "Will be removed" note (not struck, so it stays legible). */
+  .review-row[data-staged-remove] {
+    opacity: 0.6;
+  }
+  .review-row[data-staged-remove] .review-row__name,
+  .review-row[data-staged-remove] .review-row__email-addr {
+    text-decoration: line-through;
+  }
+  .review-row[data-staged-remove] .review-row__when {
+    color: var(--cds-text-error, #da1e28);
+    text-decoration: none;
+  }
   @media (max-width: 42rem) {
-    /* Stack the status under the name on narrow modals. */
+    /* Stack the status under the identity on a narrow modal; the remove toggle spans
+       both rows on the right, the avatar both rows on the left. */
     .review-row {
       grid-template-columns: auto minmax(0, 1fr) auto;
-      row-gap: var(--cds-spacing-04, 0.75rem);
-    }
-    .review-row__status {
-      grid-column: 2 / -1;
+      grid-template-areas:
+        "avatar id     remove"
+        "avatar status remove";
+      row-gap: var(--cds-spacing-03, 0.5rem);
     }
   }
 

@@ -1,0 +1,138 @@
+---
+// DocumentViewer — the uploaded documents shown the way a reviewer actually reads
+// them: an EMBEDDED PDF with a document PICKER. A thin file bar carries a
+// cds-dropdown of every document uploaded to the permit (the study proposal is the
+// default) plus the file's size/pages and an Open link; below it, the browser's
+// native PDF viewer renders the selected document. Picking a different document
+// swaps the embed in place. Used by the review-layout studies so the "compare
+// against the documents" job reads the actual files side-by-side with the record.
+//
+// carbon-checked: Carbon ships no PDF/document viewer component, so the document is
+// a stock <iframe> pointing at the real PDF (public/docs/...); the only chrome is a
+// stock cds-dropdown (the picker) and a stock cds-link (Open). Not a reinvented UI
+// control.
+import { withBase } from '../lib/base';
+
+interface DocItem {
+  href: string;
+  /** File name shown in the picker. */
+  filename: string;
+  /** Human size label (e.g. "313 KB"). */
+  size: string;
+  /** Page count. */
+  pages: number;
+  /** Optional document type/category (unused by the embed, accepted for parity). */
+  type?: string;
+}
+interface Props {
+  /** Every document uploaded to the permit; the first (or `defaultHref`) is shown. */
+  documents: DocItem[];
+  /** Accessible title context for the embedded document (the permit name). */
+  docTitle: string;
+  /** Narrow-column treatment (shorter frame). */
+  compact?: boolean;
+  /** Which document to show first; defaults to the first in `documents`. */
+  defaultHref?: string;
+}
+const { documents, docTitle, compact = false, defaultHref } = Astro.props;
+
+const initial = documents.find((d) => d.href === defaultHref) ?? documents[0];
+// #view=FitH fits the page to the frame width; the native viewer supplies scroll,
+// zoom, and page navigation.
+const initialSrc = `${withBase(initial.href)}#view=FitH`;
+---
+
+<div class:list={['pdfv', compact && 'pdfv--compact']}>
+  <div class="pdfv__bar">
+    <div class="pdfv__id">
+      <svg class="pdfv__glyph" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" fill="currentColor" aria-hidden="true">
+        <path d="M20 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V8zm-1 2.4L23.6 9H19zM8 28V4h9v6h6v18z"/>
+        <path d="M10 14h12v2H10zm0 5h12v2H10zm0 5h8v2h-8z"/>
+      </svg>
+      <div class="pdfv__idtext">
+        <cds-dropdown class="pdfv__select" size="sm" value={initial.href} title-text="Viewing document">
+          {documents.map((d) => (
+            <cds-dropdown-item
+              value={d.href}
+              data-src={`${withBase(d.href)}#view=FitH`}
+              data-open={withBase(d.href)}
+              data-size={d.size}
+              data-pages={String(d.pages)}
+            >{d.filename}</cds-dropdown-item>
+          ))}
+        </cds-dropdown>
+        <p class="pdfv__meta t-label-01">PDF · <span class="pdfv__size">{initial.size}</span> · <span class="pdfv__pages">{initial.pages}</span> pages</p>
+      </div>
+    </div>
+    <cds-link class="pdfv__open" href={withBase(initial.href)} target="_blank" rel="noopener">Open ↗</cds-link>
+  </div>
+
+  <iframe class="pdfv__frame" src={initialSrc} title={`${initial.filename} — ${docTitle} (PDF)`} loading="lazy"></iframe>
+</div>
+
+<script>
+  // Document switcher — swap the embedded PDF (and its size/pages/Open link) when a
+  // different document is picked. Each viewer instance is wired independently, since
+  // several can render on one page (the hidden layout versions). The per-item
+  // base-prefixed URLs are precomputed server-side into data- attributes, so the
+  // client just reads them.
+  document.querySelectorAll<HTMLElement>('.pdfv').forEach((v) => {
+    const sel = v.querySelector('.pdfv__select') as any;
+    const frame = v.querySelector('.pdfv__frame') as HTMLIFrameElement | null;
+    const open = v.querySelector('.pdfv__open');
+    const sizeEl = v.querySelector('.pdfv__size');
+    const pagesEl = v.querySelector('.pdfv__pages');
+    if (!sel || !frame) return;
+    sel.addEventListener('cds-dropdown-selected', (e: any) => {
+      const item = e.detail?.item as HTMLElement | undefined;
+      if (!item) return;
+      const { src, open: openHref, size, pages } = item.dataset;
+      if (src) frame.src = src;
+      if (open && openHref) open.setAttribute('href', openHref);
+      if (sizeEl && size) sizeEl.textContent = size;
+      if (pagesEl && pages) pagesEl.textContent = pages;
+      frame.title = `${item.textContent?.trim() ?? 'Document'} (PDF)`;
+    });
+  });
+</script>
+
+<style>
+  /* Viewer shell — layout + a token-backed surface. */
+  .pdfv {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    border: 1px solid var(--cds-border-subtle-01);
+    background: var(--cds-layer-01);
+  }
+  .pdfv__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.625rem 0.75rem;
+    border-block-end: 1px solid var(--cds-border-subtle-01);
+    background: var(--cds-layer-01);
+  }
+  .pdfv__id { display: flex; align-items: center; gap: 0.625rem; min-inline-size: 0; }
+  .pdfv__glyph { color: var(--cds-text-secondary); flex-shrink: 0; }
+  .pdfv__idtext { min-inline-size: 0; }
+  /* The picker replaces the static filename line; cap its width so long names
+     truncate inside the dropdown instead of stretching the bar. */
+  .pdfv__select { min-inline-size: 14rem; max-inline-size: 24rem; }
+  .pdfv--compact .pdfv__select { min-inline-size: 10rem; max-inline-size: 16rem; }
+  .pdfv__meta { margin: 0.25rem 0 0; color: var(--cds-text-secondary); }
+  .pdfv__open { flex-shrink: 0; }
+
+  /* The embedded PDF — the browser's native viewer fills the frame. Height is
+     viewport-relative so the document gets real reading room on any screen. */
+  .pdfv__frame {
+    inline-size: 100%;
+    block-size: 80vh;
+    min-block-size: 30rem;
+    border: 0;
+    display: block;
+    background: var(--cds-layer-02);
+  }
+  .pdfv--compact .pdfv__frame { block-size: 72vh; }
+</style>

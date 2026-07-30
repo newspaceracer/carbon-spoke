@@ -125,6 +125,26 @@ cds-modal[id="analysis-team-modal"]::part(dialog) {
   max-inline-size: 64rem;
 }
 
+/* ---- MODAL DROPDOWN CLIPPING (recurring Carbon gotcha) -------------------
+   cds-dropdown / cds-combo-box / cds-multi-select render their open option menu
+   INLINE inside the component (no portal in @carbon/web-components 2.x). When
+   that control sits in a `cds-modal-body` — which Carbon gives `overflow: auto`
+   so long forms scroll — the menu is clipped at the body's edge (options near
+   the bottom of the modal get cut off). The `::part(dialog)` container itself is
+   `overflow: visible`, so relaxing the BODY's overflow lets the menu escape and
+   show in full; nothing above it re-clips.
+   Scope with :has() to ONLY the modal bodies that contain a listbox control, so
+   tall text/checkbox modals keep their internal scroll. This is the standing fix
+   for "dropdown options cut off in a modal" — it covers every modal at once, so
+   individual modals need no per-instance workaround. (:has() is supported in all
+   evergreen browsers; older engines simply fall back to the clipped default.) */
+cds-modal-body:has(cds-dropdown),
+cds-modal-body:has(cds-combo-box),
+cds-modal-body:has(cds-multi-select),
+cds-modal-body:has(cds-date-picker) {
+  overflow: visible;
+}
+
 /* Identity chip (Avatar) — ONE home for the round initials/glyph chip used by the
    <Avatar> component AND client-rendered chips (see src/lib/avatar.ts). Defined
    globally so chips created at runtime (JS-built table rows / cards) are styled

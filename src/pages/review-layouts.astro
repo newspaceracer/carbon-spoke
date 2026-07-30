@@ -21,7 +21,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
 import ReviewAppSummary from '../components/ReviewAppSummary.astro';
-import ProposalDocViewer from '../components/ProposalDocViewer.astro';
+import DocumentViewer from '../components/DocumentViewer.astro';
 import { permit } from '../data/permit';
 import { userDirectory } from '../data/user';
 import { withBase } from '../lib/base';
@@ -66,6 +66,16 @@ const proposalDoc = {
   docTitle: permit.name,
 };
 
+// Every document uploaded to the permit — the document viewer's picker. The study
+// proposal (first in the list) is the default shown.
+const documents = permit.additionalDocs.files.map((f) => ({
+  href: f.href,
+  filename: f.name,
+  size: f.size,
+  pages: f.pages,
+  type: f.type,
+}));
+
 // Special conditions in play — HQ defaults + one conditional + district defaults.
 const conditions = [
   { scope: 'Headquarters', label: 'Carry the permit in the field at all times', kind: 'Auto' },
@@ -74,6 +84,15 @@ const conditions = [
   { scope: 'North Coast Redwoods', label: 'Stay outside the False Klamath Cove marine reserve', kind: 'Auto' },
   { scope: 'Mendocino', label: 'Harbor seal haul-out setback (50 m)', kind: 'Auto' },
 ];
+// Saved-condition catalog + scopes for the Add-condition modal (the app's dual-path
+// catalog/manual pattern). Mock vocabulary for the study.
+const conditionCatalog = [
+  'Report collected specimens within 30 days of permit expiration',
+  'No collection within 100 m of a pinniped haul-out',
+  'Notify the district office 48 hours before each field visit',
+  'Deposit voucher specimens at an accredited herbarium',
+];
+const conditionScopes = ['Headquarters', 'North Coast Redwoods', 'Mendocino'];
 
 // The application fields, section by section, for the section-anchored version —
 // each paired with the proposal section a reviewer checks it against.
@@ -89,13 +108,29 @@ const sections = [
 const comments = permit.overview.comments;
 const initials = (name: string) => name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
-// The four layout concepts (tab strip).
+// Analysis team for the B2 docked panel — the roster, plus the directory users who
+// aren't on it yet (the "Add member" modal's picker). Review status shows as an
+// icon-indicator (status is meaning, not colour alone).
+const team = permit.overview.analysisTeam;
+const teamIds = new Set(team.map((m) => m.id));
+const eligibleMembers = userDirectory.filter((u) => !teamIds.has(u.id));
+const TEAM_STATE: Record<string, { kind: string; label: string }> = {
+  'not-started': { kind: 'not-started', label: 'Not started' },
+  'pending': { kind: 'in-progress', label: 'Pending' },
+  'complete': { kind: 'succeeded', label: 'Complete' },
+};
+
+// The layout concepts (tab strip). `bestOf` looks the copy up by id so the panels
+// don't depend on array position.
 const versions = [
   { id: 'stepped', label: 'D · Stepped pipeline', best: 'A guided four-step pipeline — the existing wizard, with a Review-application and an Add-conditions step in front of Finalize and Send.' },
   { id: 'compare', label: 'A · Compare-first', best: 'The proposal and the record side by side is the whole job; conditions and comments are summoned from the toolbar when needed.' },
   { id: 'workspace', label: 'B · Three-column', best: 'Proposal, record, and a working rail all visible at once — nothing hidden, for reviewers who bounce between the three jobs.' },
+  { id: 'stacked', label: 'B2 · Full-width panel', best: 'Like the three-column workspace, but the conditions and comments panel docks full-width beneath the two documents — the proposal and record get the full width up top, and the working panel gets room to breathe below.' },
   { id: 'sections', label: 'C · Section-anchored', best: 'Comparison and discussion attach to the specific finding — each application field carries its own proposal compare and comment count.' },
+  { id: 'vtabs', label: 'E · Vertical tabs', best: 'The application record fills one half; the other half is a vertical tab set — Document viewer, Special conditions, and Comments — so the record stays in view while the reviewer flips the second panel between the three jobs.' },
 ];
+const bestOf = (id: string) => versions.find((v) => v.id === id)?.best ?? '';
 
 const trash =
   '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>';
@@ -164,13 +199,13 @@ const cancelHref = withBase('/final-letter');
       </div>
 
       <section class="step cds--css-grid cds--css-grid--with-row-gap">
-        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
           <ReviewAppSummary />
         </div>
-        <aside class="col-rail cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6" aria-label="Study proposal">
+        <aside class="col-rail cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8" aria-label="Document viewer">
           <div class="side-sticky">
-            <p class="preview__label t-label-01">Study proposal (PDF) — read against the record</p>
-            <ProposalDocViewer {...proposalDoc} />
+            <p class="preview__label t-label-01">Document viewer — read against the record</p>
+            <DocumentViewer documents={documents} docTitle={permit.name} />
           </div>
         </aside>
       </section>
@@ -197,7 +232,7 @@ const cancelHref = withBase('/final-letter');
         <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
           <p class="page-head__eyebrow t-label-01">Layout A</p>
           <h2 class="page-head__title t-heading-04">Compare-first</h2>
-          <p class="page-head__sub t-body-02">{versions[1].best}</p>
+          <p class="page-head__sub t-body-02">{bestOf('compare')}</p>
         </header>
       </div>
 
@@ -213,8 +248,8 @@ const cancelHref = withBase('/final-letter');
 
       <section class="step cds--css-grid cds--css-grid--with-row-gap">
         <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
-          <p class="preview__label t-label-01">Study proposal (PDF)</p>
-          <ProposalDocViewer {...proposalDoc} />
+          <p class="preview__label t-label-01">Document viewer</p>
+          <DocumentViewer documents={documents} docTitle={permit.name} />
         </div>
         <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
           <p class="preview__label t-label-01">Application record</p>
@@ -229,14 +264,14 @@ const cancelHref = withBase('/final-letter');
         <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
           <p class="page-head__eyebrow t-label-01">Layout B</p>
           <h2 class="page-head__title t-heading-04">Three-column workspace</h2>
-          <p class="page-head__sub t-body-02">{versions[2].best}</p>
+          <p class="page-head__sub t-body-02">{bestOf('workspace')}</p>
         </header>
       </div>
 
       <section class="step cds--css-grid cds--css-grid--with-row-gap">
         <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5">
-          <p class="preview__label t-label-01">Study proposal (PDF)</p>
-          <ProposalDocViewer {...proposalDoc} compact />
+          <p class="preview__label t-label-01">Document viewer</p>
+          <DocumentViewer documents={documents} docTitle={permit.name} compact />
         </div>
         <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6">
           <p class="preview__label t-label-01">Application record</p>
@@ -289,13 +324,146 @@ const cancelHref = withBase('/final-letter');
       </section>
     </div>
 
+    <!-- ═══════════════ B2 · Two-pane + full-width working panel ═════════════ -->
+    <div class="version" data-version="stacked" hidden>
+      <!-- Same step track as the stepped pipeline — sticky to the top of the page so
+           the reviewer keeps their place in the flow while scrolling the record. -->
+      <nav class="wiz-track cds--css-grid" aria-label="Review steps">
+        <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <cds-progress-indicator space-equally>
+            <cds-progress-step state="current" label="Review application" secondary-label="Against the study proposal"></cds-progress-step>
+            <cds-progress-step label="Add conditions" secondary-label="With the application in context"></cds-progress-step>
+            <cds-progress-step label="Finalize letter" secondary-label="Confirm what prints"></cds-progress-step>
+            <cds-progress-step label="Review & send" secondary-label="The full package"></cds-progress-step>
+          </cds-progress-indicator>
+        </div>
+      </nav>
+
+      <div class="page-head cds--css-grid">
+        <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <h2 class="page-head__title t-heading-04">Review application</h2>
+        </header>
+      </div>
+
+      <!-- Top: the two documents, side by side, full width. Both stand the SAME
+           height — the PDF frame at 80vh and the record filling its column to match,
+           scrolling within — so they read as an even pair. -->
+      <section class="step cds--css-grid cds--css-grid--with-row-gap">
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+          <h3 class="pane-title t-heading-03">Application record</h3>
+          <ReviewAppSummary scroll />
+        </div>
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+          <h3 class="pane-title t-heading-03">Document viewer</h3>
+          <DocumentViewer documents={documents} docTitle={permit.name} />
+        </div>
+      </section>
+
+      <!-- Below: the conditions / comments working panel, docked full width. -->
+      <section class="dock-wrap cds--css-grid" data-tab-scope>
+        <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <div class="dock">
+            <cds-tabs value="conditions" data-panels>
+              <cds-tab id="cond-tab" value="conditions">Conditions · {conditions.length}</cds-tab>
+              <cds-tab value="comments">Comments · {comments.length}</cds-tab>
+              <cds-tab id="team-tab" value="team">Analysis team · {team.length}</cds-tab>
+            </cds-tabs>
+
+            <!-- Special conditions — the SAME cds-contained-list pattern as the other
+                 layouts (B/C/E), capped to a readable width in the wide dock. "Add
+                 condition" opens the app's dual-path (catalog / manual) modal. -->
+            <div class="rail-panel" data-tabpanel="conditions">
+              <div class="dock-list">
+                <div class="rail__tools"><cds-button class="js-open-add-cond" kind="tertiary" size="md">Add condition</cds-button></div>
+                <cds-contained-list id="cond-list" label="Attached to this permit" kind="on-page">
+                  {conditions.map((c) => (
+                    <cds-contained-list-item>
+                      <div class="cond">
+                        <div class="cond__body">
+                          <p class="cond__scope t-label-01">{c.scope}</p>
+                          <p class="cond__label t-body-01">{c.label}</p>
+                        </div>
+                        <div class="cond__meta">
+                          <cds-tag size="sm" type={c.kind === 'Conditional' ? 'teal' : 'cool-gray'}>{c.kind}</cds-tag>
+                          <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond set:html={`${trash}<span slot="tooltip-content">Remove ${c.label}</span>`}></cds-icon-button>
+                        </div>
+                      </div>
+                    </cds-contained-list-item>
+                  ))}
+                </cds-contained-list>
+              </div>
+            </div>
+
+            <!-- Composer first (add before you scroll the thread), then the thread —
+                 both capped to the same readable width. -->
+            <div class="rail-panel" data-tabpanel="comments" hidden>
+              <div class="dock-composer">
+                <!-- Typing "@" opens a picker of existing users; choosing one inserts
+                     the mention. On post, mentioned users get a (simulated) email. The
+                     suggestion menu is a token-styled list — carbon-checked: Carbon
+                     ships no @-mention typeahead; it composes over the stock textarea. -->
+                <div class="mention-field">
+                  <cds-textarea id="dock-comment-input" label="Add a comment" placeholder="Note something for the team… type @ to mention someone" rows="2"></cds-textarea>
+                  <ul class="mention-menu" id="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
+                </div>
+                <cds-button class="js-post-comment" kind="primary" size="md">Add comment</cds-button>
+              </div>
+              <ul class="dock-thread" id="dock-thread">
+                {comments.map((c) => (
+                  <li class="comment">
+                    <span class="comment__avatar" aria-hidden="true">{initials(c.author)}</span>
+                    <div class="comment__body">
+                      <p class="comment__meta t-label-01"><span class="comment__author">{c.author}</span> · {c.time}</p>
+                      <p class="comment__text t-body-01">{c.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <!-- Analysis team — the SAME roster pattern used elsewhere (a
+                 cds-contained-list of members: name, role · unit, review status,
+                 remove). "Add member" opens a base-page modal (button-first pattern):
+                 pick a directory user, confirm, and the row lands here. The lead
+                 can't be removed. Capped to a readable width in the wide dock. -->
+            <div class="rail-panel" data-tabpanel="team" hidden>
+              <div class="dock-list">
+                <div class="rail__tools">
+                  <cds-button class="js-email-team" kind="ghost" size="md">Email all</cds-button>
+                  <cds-button class="js-open-add-member" kind="tertiary" size="md">Add member</cds-button>
+                </div>
+                <cds-contained-list id="team-list" label="Assigned to this permit" kind="on-page">
+                  {team.map((m) => (
+                    <cds-contained-list-item data-user-id={m.id} data-email={userDirectory.find((u) => u.id === m.id)?.email ?? ''}>
+                      <div class="cond">
+                        <div class="cond__body">
+                          <p class="cond__label t-body-01">{m.name}{m.highlight ? <span class="member__lead t-label-01"> · Lead</span> : null}</p>
+                          <p class="member__role t-label-01">{m.role} · {m.detail}</p>
+                        </div>
+                        <div class="cond__meta">
+                          <cds-icon-indicator size="16" kind={TEAM_STATE[m.reviewStatus].kind} label={TEAM_STATE[m.reviewStatus].label}></cds-icon-indicator>
+                          {!m.highlight && (
+                            <cds-icon-button kind="ghost" size="sm" align="left" data-remove-member set:html={`${trash}<span slot="tooltip-content">Remove ${m.name}</span>`}></cds-icon-button>
+                          )}
+                        </div>
+                      </div>
+                    </cds-contained-list-item>
+                  ))}
+                </cds-contained-list>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <!-- ═══════════════ C · Section-anchored ═════════════════════════════════ -->
     <div class="version" data-version="sections" hidden>
       <div class="page-head cds--css-grid">
         <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
           <p class="page-head__eyebrow t-label-01">Layout C</p>
           <h2 class="page-head__title t-heading-04">Section-anchored</h2>
-          <p class="page-head__sub t-body-02">{versions[3].best}</p>
+          <p class="page-head__sub t-body-02">{bestOf('sections')}</p>
         </header>
       </div>
 
@@ -349,6 +517,81 @@ const cancelHref = withBase('/final-letter');
         </aside>
       </section>
     </div>
+
+    <!-- ═══════════════ E · Form + vertical tabs ═════════════════════════════ -->
+    <div class="version" data-version="vtabs" hidden>
+      <div class="page-head cds--css-grid">
+        <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <p class="page-head__eyebrow t-label-01">Layout E</p>
+          <h2 class="page-head__title t-heading-04">Form + vertical tabs</h2>
+          <p class="page-head__sub t-body-02">{bestOf('vtabs')}</p>
+        </header>
+      </div>
+
+      <section class="step cds--css-grid cds--css-grid--with-row-gap">
+        <!-- Left (wider): a vertical tab set switching the three jobs in place —
+             the narrow rail + a roomy content panel for the PDF. -->
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
+          <!-- Carbon's vertical-tabs wrapper: the tab rail slots into `tabs`, each
+               panel into `panel`. My script toggles the panels' `hidden` on select. -->
+          <cds-tabs-vertical class="vtabs" data-tab-scope>
+            <cds-tabs slot="tabs" value="proposal" data-panels>
+              <cds-tab value="proposal">Document viewer</cds-tab>
+              <cds-tab value="conditions">Special conditions</cds-tab>
+              <cds-tab value="comments">Comments</cds-tab>
+            </cds-tabs>
+
+            <div slot="panel" data-tabpanel="proposal">
+              <DocumentViewer documents={documents} docTitle={permit.name} />
+            </div>
+
+            <div slot="panel" data-tabpanel="conditions" class="vtabs__pad" hidden>
+              <div class="vtabs__tools"><cds-button kind="tertiary" size="md">Add condition</cds-button></div>
+              <cds-contained-list label="Attached to this permit" kind="on-page">
+                {conditions.map((c) => (
+                  <cds-contained-list-item>
+                    <div class="cond">
+                      <div class="cond__body">
+                        <p class="cond__scope t-label-01">{c.scope}</p>
+                        <p class="cond__label t-body-01">{c.label}</p>
+                      </div>
+                      <div class="cond__meta">
+                        <cds-tag size="sm" type={c.kind === 'Conditional' ? 'teal' : 'cool-gray'}>{c.kind}</cds-tag>
+                        <cds-icon-button kind="ghost" size="sm" align="left" set:html={`${trash}<span slot="tooltip-content">Remove ${c.label}</span>`}></cds-icon-button>
+                      </div>
+                    </div>
+                  </cds-contained-list-item>
+                ))}
+              </cds-contained-list>
+            </div>
+
+            <div slot="panel" data-tabpanel="comments" class="vtabs__pad" hidden>
+              <ul class="vtabs__thread">
+                {comments.map((c) => (
+                  <li class="comment">
+                    <span class="comment__avatar" aria-hidden="true">{initials(c.author)}</span>
+                    <div class="comment__body">
+                      <p class="comment__meta t-label-01"><span class="comment__author">{c.author}</span> · {c.time}</p>
+                      <p class="comment__text t-body-01">{c.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <cds-textarea label="Add a comment" placeholder="Note something for the team…" rows="3"></cds-textarea>
+              <div class="vtabs__send"><cds-button kind="primary" size="md">Add comment</cds-button></div>
+            </div>
+          </cds-tabs-vertical>
+        </div>
+
+        <!-- Right (narrower): the application record (the form) as a fixed,
+             viewport-locked scroll pane so it stays level with the tab panel
+             instead of towering over it. -->
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6">
+          <p class="preview__label t-label-01">Application record</p>
+          <ReviewAppSummary scroll />
+        </div>
+      </section>
+    </div>
   </main>
 
   <!-- Persistent comments trigger — the SAME fixed FAB as the real wizard. -->
@@ -386,7 +629,139 @@ const cancelHref = withBase('/final-letter');
     </div>
   </aside>
 
+  <!-- Add-member modal — the SAME button-first pattern as the permit Overview's
+       "Add to team" modal (a base-page sm modal: pick a directory user, "Add to team"
+       commits). The picker lists only users not already on the team. Lives at page
+       level so it overlays regardless of which version panel is showing. -->
+  <cds-modal id="add-member-modal" size="sm">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Analysis team</cds-modal-label>
+      <cds-modal-heading>Add to team</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <cds-combo-box
+        id="add-member-select"
+        title-text="Reviewer"
+        label="Search the user directory…"
+        helper-text="Only users not already on the analysis team appear here."
+      >
+        {eligibleMembers.map((u) => (
+          <cds-combo-box-item value={u.id} data-name={u.name} data-role={u.role} data-detail={u.detail} data-email={u.email}>{u.name} — {u.detail}</cds-combo-box-item>
+        ))}
+      </cds-combo-box>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="add-member-confirm">Add to team</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Row template for a member added via the modal — same contained-list-item shape
+       as the seeded rows; a new reviewer starts at "Not started". -->
+  <template id="team-row-template">
+    <cds-contained-list-item data-user-id="">
+      <div class="cond">
+        <div class="cond__body">
+          <p class="cond__label t-body-01 member__name"></p>
+          <p class="member__role t-label-01"></p>
+        </div>
+        <div class="cond__meta">
+          <cds-icon-indicator size="16" kind="not-started" label="Not started"></cds-icon-indicator>
+          <cds-icon-button kind="ghost" size="sm" align="left" data-remove-member>
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
+            <span slot="tooltip-content">Remove</span>
+          </cds-icon-button>
+        </div>
+      </div>
+    </cds-contained-list-item>
+  </template>
+
+  <!-- Add-condition modal — the SAME dual-path pattern as the real wizard's condition
+       modal (final-letter / permit): a cds-content-switcher toggles "From catalog"
+       (attach a saved condition) vs "Write manually" (type a new one), one path at a
+       time. Scope picks which owner it attaches to. -->
+  <cds-modal id="cond-modal" size="md">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Special conditions</cds-modal-label>
+      <cds-modal-heading>Add condition</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body has-scrolling-content>
+      <cds-stack gap="6">
+        <cds-dropdown id="cond-scope" title-text="Scope" value="Headquarters" label="Choose a scope">
+          {conditionScopes.map((s) => (
+            <cds-dropdown-item value={s}>{s}</cds-dropdown-item>
+          ))}
+        </cds-dropdown>
+
+        <!-- One path at a time, not both stacked (same switcher as the app). -->
+        <div>
+          <p class="cond-mode-label t-label-01">Pull a saved condition, or write a new one.</p>
+          <cds-content-switcher id="cond-mode" value="catalog">
+            <cds-content-switcher-item value="catalog" selected>From catalog</cds-content-switcher-item>
+            <cds-content-switcher-item value="manual">Write manually</cds-content-switcher-item>
+          </cds-content-switcher>
+        </div>
+
+        <div id="cond-catalog">
+          <cds-dropdown id="cond-pick" title-text="Saved conditions" label="Select a saved condition">
+            {conditionCatalog.map((c) => (
+              <cds-dropdown-item value={c}>{c}</cds-dropdown-item>
+            ))}
+          </cds-dropdown>
+        </div>
+
+        <div id="cond-manual" hidden>
+          <cds-textarea id="cond-body" label="Condition text" placeholder="The exact wording that will print on the permit…" rows="3"></cds-textarea>
+        </div>
+      </cds-stack>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="cond-modal-save">Add condition</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Row template for a condition added via the modal — same contained-list-item
+       shape as the seeded rows. A manually-written one is tagged "Custom". -->
+  <template id="cond-row-template">
+    <cds-contained-list-item>
+      <div class="cond">
+        <div class="cond__body">
+          <p class="cond__scope t-label-01"></p>
+          <p class="cond__label t-body-01"></p>
+        </div>
+        <div class="cond__meta">
+          <cds-tag size="sm" type="cool-gray"></cds-tag>
+          <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond>
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
+            <span slot="tooltip-content">Remove</span>
+          </cds-icon-button>
+        </div>
+      </div>
+    </cds-contained-list-item>
+  </template>
+
+  <!-- Comment row template — cloned for a posted comment (author "You"), so the new
+       row carries Astro's scoped-style attributes. Mentions render as .mention tokens
+       built in JS (never innerHTML of user text). -->
+  <template id="comment-row-template">
+    <li class="comment">
+      <span class="comment__avatar" aria-hidden="true">You</span>
+      <div class="comment__body">
+        <p class="comment__meta t-label-01"><span class="comment__author">You</span> · Just now</p>
+        <p class="comment__text t-body-01"></p>
+      </div>
+    </li>
+  </template>
+
+  <!-- The user directory the @-mention picker draws from (id / name / detail / email). -->
+  <script type="application/json" id="mention-directory" set:html={JSON.stringify(userDirectory.map((u) => ({ id: u.id, name: u.name, detail: u.detail, email: u.email })))}></script>
+
   <script>
+    import { showToast } from '../lib/toast';
+
     // Version switcher — cds-tabs renders only the strip; toggling the matching
     // .version panel (plain <div>, so `hidden` collapses it) is the page's job.
     const vtabs = document.getElementById('version-tabs') as any;
@@ -423,6 +798,264 @@ const cancelHref = withBase('/final-letter');
     document.querySelectorAll('.js-open-comments').forEach((b) => b.addEventListener('click', openComments));
     document.getElementById('comments-close')?.addEventListener('click', closeComments);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeComments(); });
+
+    // ── B2 · Add a member to the analysis team (button-first modal) ────────────
+    // "Add member" opens the base-page modal; confirming appends the picked user to
+    // the team table, bumps the tab count, and drops them from the picker so they
+    // can't be added twice. Remove takes a row back out (never the lead). It's a
+    // design study, so this is in-DOM only — no persistence.
+    const addModal = document.getElementById('add-member-modal') as any;
+    const addSelect = document.getElementById('add-member-select') as any;
+    const teamList = document.getElementById('team-list');
+    const teamTab = document.getElementById('team-tab');
+    const teamRowTpl = document.getElementById('team-row-template') as HTMLTemplateElement | null;
+
+    const syncTeamCount = () => {
+      if (teamTab && teamList) teamTab.textContent = `Analysis team · ${teamList.querySelectorAll('cds-contained-list-item').length}`;
+    };
+
+    document.querySelectorAll('.js-open-add-member').forEach((b) =>
+      b.addEventListener('click', () => { if (addModal) addModal.open = true; }));
+
+    document.getElementById('add-member-confirm')?.addEventListener('click', () => {
+      const id: string = addSelect?.value || '';
+      if (!id || !teamList || !teamRowTpl) { if (addModal) addModal.open = false; return; }
+      const opt = addSelect.querySelector(`cds-combo-box-item[value="${CSS.escape(id)}"]`) as HTMLElement | null;
+      const item = teamRowTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      item.dataset.userId = id;
+      item.dataset.email = opt?.dataset.email || '';
+      const nameEl = item.querySelector('.member__name');
+      if (nameEl) nameEl.textContent = opt?.dataset.name || id;
+      const roleEl = item.querySelector('.member__role');
+      if (roleEl) roleEl.textContent = `${opt?.dataset.role || 'Supporting analyst'} · ${opt?.dataset.detail || '—'}`;
+      teamList.appendChild(item);
+      opt?.remove();          // a user already on the team drops out of the picker
+      addSelect.value = '';
+      addModal.open = false;
+      syncTeamCount();
+    });
+
+    // Remove a member (delegated) — the lead has no remove control, so it never fires.
+    teamList?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest?.('[data-remove-member]');
+      if (!btn) return;
+      btn.closest('cds-contained-list-item')?.remove();
+      syncTeamCount();
+    });
+
+    // Email all — one message to every current team member with an address on file
+    // (deduped), same behavior as the analysis-team modal's "Email all".
+    document.querySelectorAll('.js-email-team').forEach((b) => b.addEventListener('click', () => {
+      const emails = [...new Set(Array.from(teamList?.querySelectorAll<HTMLElement>('cds-contained-list-item[data-email]') ?? [])
+        .map((r) => (r.dataset.email || '').trim()).filter(Boolean))];
+      if (emails.length) window.location.href = `mailto:${emails.join(',')}`;
+    }));
+
+    // ── B2 · Add a special condition (dual-path catalog/manual modal) ──────────
+    // "Add condition" opens the modal; the content-switcher toggles the catalog picker
+    // vs the manual textarea; saving appends a row to the conditions list and bumps
+    // the tab count. In-DOM only (design study).
+    const condModal = document.getElementById('cond-modal') as any;
+    const condMode = document.getElementById('cond-mode') as any;
+    const condCatalog = document.getElementById('cond-catalog');
+    const condManual = document.getElementById('cond-manual');
+    const condScope = document.getElementById('cond-scope') as any;
+    const condPick = document.getElementById('cond-pick') as any;
+    const condBody = document.getElementById('cond-body') as any;
+    const condList = document.getElementById('cond-list');
+    const condTab = document.getElementById('cond-tab');
+    const condRowTpl = document.getElementById('cond-row-template') as HTMLTemplateElement | null;
+
+    const syncCondCount = () => {
+      if (condTab && condList) condTab.textContent = `Conditions · ${condList.querySelectorAll('cds-contained-list-item').length}`;
+    };
+
+    // Toggle the two paths on the switcher (cds-* ignore [hidden] on hosts, but these
+    // are plain <div> wrappers, so the attribute collapses them fine).
+    const applyCondMode = () => {
+      const manual = (condMode?.value || 'catalog') === 'manual';
+      if (condCatalog) condCatalog.hidden = manual;
+      if (condManual) condManual.hidden = !manual;
+    };
+    condMode?.addEventListener('cds-content-switcher-selected', applyCondMode);
+
+    document.querySelectorAll('.js-open-add-cond').forEach((b) =>
+      b.addEventListener('click', () => { if (condModal) { applyCondMode(); condModal.open = true; } }));
+
+    document.getElementById('cond-modal-save')?.addEventListener('click', () => {
+      if (!condList || !condRowTpl) { if (condModal) condModal.open = false; return; }
+      const manual = (condMode?.value || 'catalog') === 'manual';
+      const scope = condScope?.value || 'Headquarters';
+      const label = manual ? (condBody?.value || '').trim() : (condPick?.value || '');
+      if (!label) { if (condModal) condModal.open = false; return; }
+      const item = condRowTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      const scopeEl = item.querySelector('.cond__scope');
+      if (scopeEl) scopeEl.textContent = scope;
+      const labelEl = item.querySelector('.cond__label');
+      if (labelEl) labelEl.textContent = label;
+      const tag = item.querySelector('cds-tag');
+      if (tag) { tag.textContent = manual ? 'Custom' : 'Catalog'; tag.setAttribute('type', manual ? 'purple' : 'cool-gray'); }
+      condList.appendChild(item);
+      if (condBody) condBody.value = '';
+      condModal.open = false;
+      syncCondCount();
+    });
+
+    // Remove a condition (delegated).
+    condList?.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest?.('[data-remove-cond]');
+      if (!btn) return;
+      btn.closest('cds-contained-list-item')?.remove();
+      syncCondCount();
+    });
+
+    // ── B2 · @-mention existing users in a comment ────────────────────────────
+    // Typing "@" opens a picker of directory users; choosing one inserts "@Name ".
+    // Posting renders the mentions as tokens and sends each mentioned user a
+    // (simulated) email. Design study → the email is a toast, not a real send.
+    interface Dir { id: string; name: string; detail: string; email: string; }
+    let directory: Dir[] = [];
+    try { directory = JSON.parse(document.getElementById('mention-directory')?.textContent || '[]'); } catch { directory = []; }
+
+    const cdsInput = document.getElementById('dock-comment-input') as any;
+    const menu = document.getElementById('mention-menu');
+    const thread = document.getElementById('dock-thread');
+    const commentTpl = document.getElementById('comment-row-template') as HTMLTemplateElement | null;
+
+    if (cdsInput && menu && thread && commentTpl) {
+      customElements.whenDefined('cds-textarea').then(async () => {
+        await (cdsInput.updateComplete ?? Promise.resolve());
+        const ta = cdsInput.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null;
+        if (!ta) return;
+
+        const picked = new Map<string, Dir>();   // name → user inserted via the picker
+        let items: Dir[] = [];
+        let active = -1;
+
+        // The in-progress "@token" ending at the caret: from the last "@" that starts
+        // a word, no newline, and not already closed by a trailing space.
+        const queryAtCaret = () => {
+          const caret = ta.selectionStart ?? ta.value.length;
+          const upto = ta.value.slice(0, caret);
+          const at = upto.lastIndexOf('@');
+          if (at === -1) return null;
+          if (at !== 0 && !/\s/.test(upto[at - 1])) return null;   // avoid emails (a@b)
+          const q = upto.slice(at + 1);
+          if (/\n/.test(q) || /\s$/.test(q) || q.length > 30) return null;
+          return { at, caret, q };
+        };
+
+        const hideMenu = () => { menu.hidden = true; menu.innerHTML = ''; active = -1; };
+
+        const renderMenu = (matches: Dir[]) => {
+          items = matches;
+          menu.innerHTML = '';
+          matches.forEach((u, i) => {
+            const li = document.createElement('li');
+            li.className = 'mention-menu__item';
+            li.setAttribute('role', 'option');
+            li.dataset.idx = String(i);
+            li.innerHTML = `<span class="mention-menu__name">${u.name}</span><span class="mention-menu__detail">${u.detail}</span>`;
+            menu.appendChild(li);
+          });
+          active = matches.length ? 0 : -1;
+          paintActive();
+          menu.hidden = matches.length === 0;
+        };
+
+        const paintActive = () => {
+          Array.from(menu.children).forEach((li, i) =>
+            (li as HTMLElement).classList.toggle('is-active', i === active));
+        };
+
+        const refresh = () => {
+          const ctx = queryAtCaret();
+          if (!ctx) { hideMenu(); return; }
+          const q = ctx.q.toLowerCase();
+          const matches = directory.filter((u) => u.name.toLowerCase().includes(q)).slice(0, 6);
+          renderMenu(matches);
+        };
+
+        // Insert the chosen user's mention, replacing the in-progress @token.
+        const choose = (u: Dir) => {
+          const ctx = queryAtCaret();
+          if (!ctx) return;
+          const before = ta.value.slice(0, ctx.at);
+          const after = ta.value.slice(ctx.caret);
+          const insert = `@${u.name} `;
+          ta.value = before + insert + after;
+          const pos = (before + insert).length;
+          ta.setSelectionRange(pos, pos);
+          cdsInput.value = ta.value;
+          picked.set(u.name, u);
+          hideMenu();
+          ta.focus();
+        };
+
+        ta.addEventListener('input', refresh);
+        ta.addEventListener('keyup', (e) => { if (['ArrowLeft','ArrowRight','Home','End'].includes((e as KeyboardEvent).key)) refresh(); });
+        ta.addEventListener('keydown', (e) => {
+          const k = (e as KeyboardEvent).key;
+          if (menu.hidden) return;
+          if (k === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); paintActive(); }
+          else if (k === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); paintActive(); }
+          else if (k === 'Enter' && active >= 0) { e.preventDefault(); choose(items[active]); }
+          else if (k === 'Escape') { e.preventDefault(); hideMenu(); }
+        });
+        // mousedown (not click) so the pick beats the textarea blur.
+        menu.addEventListener('mousedown', (e) => {
+          const li = (e.target as HTMLElement).closest('.mention-menu__item') as HTMLElement | null;
+          if (!li) return;
+          e.preventDefault();
+          const u = items[Number(li.dataset.idx)];
+          if (u) choose(u);
+        });
+        document.addEventListener('click', (e) => {
+          if (!(e.target as HTMLElement).closest('.mention-field')) hideMenu();
+        });
+
+        // Render comment text with mentioned names as .mention tokens (build DOM, never
+        // innerHTML the user's text).
+        const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const renderText = (text: string, names: string[]): DocumentFragment => {
+          const frag = document.createDocumentFragment();
+          if (!names.length) { frag.appendChild(document.createTextNode(text)); return frag; }
+          const re = new RegExp('@(' + names.slice().sort((a, b) => b.length - a.length).map(escapeRe).join('|') + ')', 'g');
+          let last = 0, m: RegExpExecArray | null;
+          while ((m = re.exec(text))) {
+            if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+            const span = document.createElement('span');
+            span.className = 'mention';
+            span.textContent = '@' + m[1];
+            frag.appendChild(span);
+            last = m.index + m[0].length;
+          }
+          if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+          return frag;
+        };
+
+        const post = () => {
+          const text = (ta.value || '').trim();
+          if (!text) return;
+          // Which picked mentions actually survive in the text?
+          const mentioned = [...picked.values()].filter((u) => text.includes(`@${u.name}`));
+          const row = commentTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+          const textEl = row.querySelector('.comment__text')!;
+          textEl.textContent = '';
+          textEl.appendChild(renderText(text, mentioned.map((u) => u.name)));
+          thread.prepend(row);   // newest first
+          // Simulated notification email to each mentioned user.
+          if (mentioned.length) {
+            showToast('Comment posted',
+              `Emailed ${mentioned.map((u) => u.name).join(', ')} about your mention.`);
+          } else {
+            showToast('Comment posted');
+          }
+          ta.value = ''; cdsInput.value = ''; picked.clear(); hideMenu();
+        };
+        document.querySelectorAll('.js-post-comment').forEach((b) => b.addEventListener('click', post));
+      });
+    }
   </script>
 
   <style>
@@ -461,6 +1094,103 @@ const cancelHref = withBase('/final-letter');
     .rail__send { display: flex; justify-content: flex-end; margin-top: var(--cds-spacing-04, 0.75rem); }
     .rail-panel { padding-top: var(--cds-spacing-05, 1rem); }
     .rail-panel[hidden] { display: none; }
+    /* Generic tab-panel collapse (author rule beats the element reset). */
+    [data-tabpanel][hidden] { display: none; }
+
+    /* B2: the step progress indicator pins as the reviewer scrolls, so the flow
+       stays in view. It sticks at 6rem — clear of the fixed UI-Shell header (3rem)
+       and PermitHeader's fixed compact bar (3rem) that pin above it; z-index sits
+       just under the compact bar (95). A background + rule keep the page content
+       from showing through the pinned bar. */
+    [data-version="stacked"] .wiz-track {
+      position: sticky;
+      top: calc(var(--cds-spacing-09, 3rem) * 2); /* 6rem — UI-Shell header + compact bar */
+      z-index: 90;
+      padding-block: var(--cds-spacing-05, 1rem);
+      background: var(--cds-background, #f4f4f4);
+      border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    }
+
+    /* B2 pane headers — a proper title above each pane. */
+    .pane-title { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-primary, #161616); }
+
+    /* B2: pin BOTH panes to the SAME explicit height (60vh) so the grid row can't
+       grow and neither column stretches to leave white space. The document viewer
+       becomes a fixed 60vh box (its PDF frame flexes to fill under the file bar); the
+       record is a fixed 60vh box that scrolls its sections within. This keeps the row
+       constant whether the record is expanded or collapsed, so it can no longer push
+       the viewer taller (the white-space-under-the-viewer bug), and leaves the working
+       panel below peeking into the viewport.
+       `:global` is REQUIRED: .pdfv / .app-sum--scroll are rendered by child components
+       (DocumentViewer / ReviewAppSummary), which carry a different Astro scope id — a
+       plain scoped selector here silently fails to match them. */
+    [data-version="stacked"] .step :global(.pdfv) { block-size: 60vh; }
+    [data-version="stacked"] .step :global(.pdfv__frame) { flex: 1 1 auto; block-size: auto; min-block-size: 0; }
+    [data-version="stacked"] .step :global(.app-sum--scroll) { block-size: 60vh; max-block-size: 60vh; }
+
+    /* Full-width docked working panel (version B2). */
+    .dock-wrap { margin-top: var(--cds-spacing-07, 2rem); }
+    .dock { background: var(--cds-layer-01, #f4f4f4); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); padding: var(--cds-spacing-06, 1.5rem); }
+    /* Conditions + team use the same cds-contained-list pattern as the other layouts;
+       cap them to a readable width so rows don't stretch across the full-width dock. */
+    .dock-list { max-inline-size: 60rem; }
+    .member__role { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); }
+    .member__lead { color: var(--cds-text-secondary, #525252); }
+    /* Comments read top-to-bottom as a thread, not a multi-column card grid; cap the
+       width so lines stay readable in the full-width dock. */
+    .dock-thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); max-inline-size: 48rem; }
+    /* Composer sits above the thread and matches its width (not the full dock). */
+    .dock-composer { display: flex; gap: var(--cds-spacing-05, 1rem); align-items: flex-end; max-inline-size: 48rem; margin-block-end: var(--cds-spacing-06, 1.5rem); }
+    .dock-composer cds-textarea { display: block; }
+    .mention-field { position: relative; flex: 1 1 auto; min-width: 0; }
+    @media (max-width: 42rem) { .dock-composer { flex-direction: column; align-items: stretch; } }
+
+    /* @-mention picker — a token-styled suggestion menu anchored under the composer.
+       carbon-checked: Carbon ships no @-mention typeahead; this composes over the
+       stock cds-textarea, styled entirely with --cds-* tokens. */
+    .mention-menu {
+      position: absolute; inset-inline: 0; top: calc(100% + 0.25rem); z-index: 100;
+      margin: 0; padding: 0; list-style: none; max-block-size: 14rem; overflow-y: auto;
+      background: var(--cds-layer-02, #fff); border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+    .mention-menu[hidden] { display: none; }
+    /* Menu items and posted mention tokens are BUILT IN JS, so they carry no Astro
+       scoped-style attribute — their rules must be :global to match (same reason the
+       .avatar chip lives globally). */
+    :global(.mention-menu__item) {
+      display: flex; flex-direction: column; gap: 0.0625rem; cursor: pointer;
+      padding: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem);
+      border-block-end: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    }
+    :global(.mention-menu__item:last-child) { border-block-end: none; }
+    :global(.mention-menu__item.is-active),
+    :global(.mention-menu__item:hover) { background: var(--cds-layer-hover-02, #e8e8e8); }
+    :global(.mention-menu__name) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; }
+    :global(.mention-menu__detail) { color: var(--cds-text-secondary, #525252); font-size: 0.75rem; }
+    /* A posted mention token. */
+    :global(.mention) { color: var(--cds-link-primary, #0f62fe); font-weight: 600; }
+
+    /* Vertical-tabs half (version E) — cds-tabs-vertical lays out the rail + panel
+       (it sets .cds--css-grid itself at ≥md, so DON'T set display on .vtabs or it
+       overrides that grid). Carbon spans the tab rail across the first 4 of 16
+       columns; shrink those columns so the rail is a slim strip and the panel
+       (cols 5→end) takes the rest. */
+    @media (min-width: 42.01rem) {
+      .vtabs.cds--css-grid {
+        grid-template-columns: repeat(4, minmax(0, 2.5rem)) repeat(12, minmax(0, 1fr));
+        /* This is a NESTED grid, so drop the page-level side margin + width cap
+           that .cds--css-grid applies (it left a gap to the left of the rail). */
+        padding-inline: 0;
+        max-inline-size: none;
+      }
+    }
+    /* Inset the conditions/comments panels so their content isn't flush to the
+       container edges (the proposal panel stays full-bleed so the PDF fills). */
+    .vtabs__pad { padding: var(--cds-spacing-06, 1.5rem); }
+    .vtabs__tools { display: flex; justify-content: flex-end; margin-bottom: var(--cds-spacing-04, 0.75rem); }
+    .vtabs__thread { list-style: none; margin: 0 0 var(--cds-spacing-05, 1rem); padding: 0; display: grid; gap: var(--cds-spacing-05, 1rem); }
+    .vtabs__send { display: flex; justify-content: flex-end; margin-top: var(--cds-spacing-04, 0.75rem); }
 
     /* Condition row inside a contained-list item. */
     .cond { display: flex; gap: 0.75rem; align-items: flex-start; justify-content: space-between; inline-size: 100%; }

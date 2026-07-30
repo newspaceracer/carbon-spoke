@@ -93,18 +93,22 @@ export const permit = {
   // ── Overview tab ─────────────────────────────────────────────────────────
   overview: {
     // Internal review team assigned to analyze the application (invented).
-    // Internal reviewers. `status` is a sign-off timestamp once reviewed, else
-    // "Pending review". `highlight` marks the current reviewer (you). `addedAt`
-    // is when the reviewer joined the permit; `lastEditedAt` is their most recent
-    // activity while still pending (absent = no activity since being added).
-    // `id` keys each row to the shared user directory (src/data/user.ts) so the
-    // "add reviewer" control can offer only users not already on the team.
+    // `reviewStatus` tracks each reviewer through their own workflow:
+    //   'not-started' — assigned, hasn't opened their review yet
+    //   'pending'     — started their review (clicked Start review), in progress
+    //   'complete'    — finished (a Supporting analyst clicked Complete review; the
+    //                   Lead analyst only reads Complete once the permit is Out for
+    //                   signature — derived from permit status, not stored here).
+    // `when` is the date that state was reached (added / started / completed).
+    // `highlight` marks the Lead analyst (the current reviewer, you). `id` keys each
+    // row to the shared user directory (src/data/user.ts) so the "add reviewer"
+    // control can offer only users not already on the team.
     analysisTeam: [
-      { id: 'okafor', role: 'Lead analyst', name: 'J. Okafor', detail: 'Natural Resources Division', status: 'Jul 2, 2026 11:59 AM', addedAt: 'Jun 28, 2026', highlight: true },
-      { id: 'santos', role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', status: 'Pending review', addedAt: 'Jun 28, 2026', lastEditedAt: 'Jul 6, 2026 2:14 PM' },
-      { id: 'cheng', role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', status: 'Pending review', addedAt: 'Jul 1, 2026' },
-      { id: 'delgado', role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', status: 'Jul 5, 2026 8:45 AM', addedAt: 'Jun 29, 2026' },
-      { id: 'reyna', role: 'District reviewer', name: 'S. Reyna', detail: 'Mendocino District', status: 'Pending review', addedAt: 'Jun 30, 2026' },
+      { id: 'okafor', role: 'Lead analyst', name: 'J. Okafor', detail: 'Natural Resources Division', reviewStatus: 'pending', when: 'Jun 28, 2026', highlight: true },
+      { id: 'santos', role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', reviewStatus: 'not-started', when: 'Jun 28, 2026' },
+      { id: 'cheng', role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', reviewStatus: 'pending', when: 'Jul 6, 2026' },
+      { id: 'delgado', role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', reviewStatus: 'complete', when: 'Jul 5, 2026' },
+      { id: 'reyna', role: 'District reviewer', name: 'S. Reyna', detail: 'Mendocino District', reviewStatus: 'pending', when: 'Jun 30, 2026' },
     ],
 
     // Reviewer-applied handling tags. `tagOptions` is the curated vocabulary an
@@ -361,13 +365,13 @@ export const permit = {
       { key: 'Activities beyond simple use (aircraft/drones, diving, trapping, etc.)', value: 'No', boolean: true },
     ] as MetaRow[],
     files: [
-      { name: 'Coralline Diversity & Reproductive Systems Proposal.pdf', type: 'Study Proposal', size: '322.36 KB', by: 'A. Reyes', date: 'Jul 8, 2026', href: proposalHref },
-      { name: 'CV_Jun2025.pdf', type: 'Principal Investigator Resume', size: '200.08 KB', by: 'A. Reyes', date: 'Jun 3, 2025', href: '/docs/cv-jun-2025.pdf' },
-      { name: 'False Klamath Cove Study Area Map.pdf', type: 'Study Area Supporting Documentation', size: '2.62 MB', by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/false-klamath-cove-study-area-map.pdf' },
-      { name: 'Additional-Permit-Details.pdf', type: 'Additional Permit Supporting Documentation', size: '157.61 KB', by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/additional-permit-details.pdf' },
-      { name: 'Liability-Waiver-Addendum-DPR65B.pdf', type: 'Optional Liability Waiver Addendum (DPR65B)', size: '292.25 KB', by: 'A. Reyes', date: 'Jul 14, 2026', href: '/docs/liability-waiver-addendum-dpr65b.pdf' },
-      { name: 'standard_conditions_agreement-signed.pdf', type: 'Standard Conditions Agreement Form', size: '178.64 KB', by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/standard-conditions-agreement-signed.pdf' },
-      { name: 'waiver_and_indemnity_agreement-signed.pdf', type: 'Waiver and Indemnity Agreement Form', size: '200.07 KB', by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/waiver-and-indemnity-agreement-signed.pdf' },
+      { name: 'Coralline Diversity & Reproductive Systems Proposal.pdf', type: 'Study Proposal', size: '313 KB', pages: 4, by: 'A. Reyes', date: 'Jul 8, 2026', href: proposalHref },
+      { name: 'CV_Jun2025.pdf', type: 'Principal Investigator Resume', size: '118.05 KB', pages: 2, by: 'A. Reyes', date: 'Jun 3, 2025', href: '/docs/cv-jun-2025.pdf' },
+      { name: 'False Klamath Cove Study Area Map.pdf', type: 'Study Area Supporting Documentation', size: '132.45 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/false-klamath-cove-study-area-map.pdf' },
+      { name: 'Additional-Permit-Details.pdf', type: 'Additional Permit Supporting Documentation', size: '103.65 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/additional-permit-details.pdf' },
+      { name: 'Liability-Waiver-Addendum-DPR65B.pdf', type: 'Optional Liability Waiver Addendum (DPR65B)', size: '90.99 KB', pages: 1, by: 'A. Reyes', date: 'Jul 14, 2026', href: '/docs/liability-waiver-addendum-dpr65b.pdf' },
+      { name: 'standard_conditions_agreement-signed.pdf', type: 'Standard Conditions Agreement Form', size: '100.59 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/standard-conditions-agreement-signed.pdf' },
+      { name: 'waiver_and_indemnity_agreement-signed.pdf', type: 'Waiver and Indemnity Agreement Form', size: '94.66 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/waiver-and-indemnity-agreement-signed.pdf' },
     ],
   },
 

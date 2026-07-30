@@ -1,101 +1,345 @@
 ---
 // A read-only, script-free rendering of the application AS THE REVIEWER READS IT —
-// the same PermitSection + review-list + contact-grid vocabulary as
-// ApplicationReview.astro / the permit detail page, but without the editable
-// controls (so it needs no page script). Used by the review-layout studies so the
-// "application record" pane looks native to the review wizard.
+// full parity with ApplicationReview.astro (the finalize wizard's Step 1), minus
+// the editable controls and the script-populated rosters. Every section the real
+// review shows is rendered here from static data/permit values, so the
+// review-layout studies present the ENTIRE application record, not a trimmed
+// summary. Editable fields (project title, category, study-area parks, specimens)
+// are shown as their current values; the intro/edit notification is omitted
+// because these studies are about layout, not editing.
 //
-// carbon-checked: the specimen list is a stock cds-table (data-table); `.ro-table`
-// is only a `display:block` sizing modifier on that component — the identical
-// helper ApplicationReview.astro uses — not a hand-rolled table primitive.
-import PermitSection from './PermitSection.astro';
+// Each top-level section is a stock cds-accordion-item so a reviewer can collapse
+// the parts they don't need and keep the ones they're working through in view —
+// all open by default, so the whole record still shows on load.
+//
+// `compact` only tightens layout density for a narrow column — it never drops
+// sections or items (the whole record is always present).
+//
+// carbon-checked: the participant/specimen/parks lists are stock cds-table
+// (data-table); `.ro-table` is only a `display:block` sizing modifier on that
+// component — the identical helper ApplicationReview.astro uses — not a hand-rolled
+// table primitive. Collapsible sections are stock cds-accordion / cds-accordion-item.
 import ContactCard from './ContactCard.astro';
+import FactGrid from './FactGrid.astro';
 import { permit } from '../data/permit';
 
 interface Props {
-  /** Trim to the essentials for a narrow column. */
+  /** Tighten layout density for a narrow column. Never drops content. */
   compact?: boolean;
+  /** Cap the record to a fixed, viewport-locked height and scroll WITHIN it, so a
+   *  companion column (the PDF, a tab panel) stays in view instead of the record
+   *  growing the whole page. Height matches the PDF viewer (80vh / 72vh compact). */
+  scroll?: boolean;
 }
-const { compact = false } = Astro.props;
+const { compact = false, scroll = false } = Astro.props;
 
 const t = permit.researchTeam;
 const pj = permit.projectInfo;
 const sa = permit.studyAreas;
 const dc = permit.dataCollection;
+const ad = permit.additionalDocs;
 const org = t.organization;
 const pi = t.principalInvestigator;
 const submitter = t.submitter;
 const fieldLead = t.fieldLead;
 
-const specimenRows = compact ? dc.specimens.slice(0, 5) : dc.specimens;
-const specimenMore = dc.specimens.length - specimenRows.length;
+// Study-area parks flattened to a Park/District roster (the read-only equivalent
+// of the wizard's script-populated selected-parks table).
+const studyAreaParks = sa.districts.flatMap((d) => d.parks.map((name) => ({ name, district: d.name })));
+
+const fileGlyph =
+  'M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z';
 ---
 
-<div class="app-sum">
-  <PermitSection title="Research team">
-    <div class="contact-grid">
-      <ContactCard role="Organization" contact={org} />
-      <ContactCard role="Principal investigator" contact={pi} />
-      {!compact && <ContactCard role="Submitter" contact={submitter} />}
-      {!compact && <ContactCard role="Person in direct charge of field work" contact={fieldLead} />}
+<div class:list={['app-sum', compact && 'app-sum--compact', scroll && 'app-sum--scroll']}>
+  <div class="app-acc-tools">
+    <cds-button class="js-acc-expand" kind="ghost" size="sm">Expand all</cds-button>
+    <cds-button class="js-acc-collapse" kind="ghost" size="sm">Collapse all</cds-button>
+  </div>
+  <div class="app-acc-body">
+  <cds-accordion class="app-acc" size="lg">
+  <!-- ── Research team ────────────────────────────────────────────────────── -->
+  <cds-accordion-item title="Research team" open>
+    <div class="subblock">
+      <div class="contact-grid">
+        <ContactCard role="Organization" contact={org} />
+        <ContactCard role="Submitter" contact={submitter} />
+        <ContactCard role="Principal investigator" contact={pi} />
+        <ContactCard role="Person in direct charge of field work" contact={fieldLead} />
+      </div>
     </div>
-  </PermitSection>
 
-  <PermitSection title="Project information">
-    <dl class="review">
-      <div class="review__row"><dt class="review__label t-label-01">Project title</dt><dd class="review__value t-body-01">{permit.name}</dd></div>
-      <div class="review__row"><dt class="review__label t-label-01">Category</dt><dd class="review__value t-body-01">{permit.category}</dd></div>
-      <div class="review__row"><dt class="review__label t-label-01">Requested window</dt><dd class="review__value t-body-01">{permit.activeWindow.start} – {permit.activeWindow.end}</dd></div>
-    </dl>
-    {!compact && (
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Additional participants</h3>
+      {t.participants.length ? (
+        <cds-table class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Name</cds-table-header-cell>
+              <cds-table-header-cell>Contact</cds-table-header-cell>
+              <cds-table-header-cell>Comments</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body>
+            {t.participants.map((p) => (
+              <cds-table-row>
+                <cds-table-cell>
+                  <span class="stack__primary t-body-01">{p.name}</span>
+                  {p.title && <span class="stack__secondary t-label-01">{p.title}</span>}
+                </cds-table-cell>
+                <cds-table-cell>
+                  <span class="stack__primary t-body-01">{p.email}</span>
+                  {p.phone && <span class="stack__secondary t-label-01">{p.phone}</span>}
+                </cds-table-cell>
+                <cds-table-cell>{p.comments || '—'}</cds-table-cell>
+              </cds-table-row>
+            ))}
+          </cds-table-body>
+        </cds-table>
+      ) : (
+        <p class="sub-note t-body-01">No additional participants added.</p>
+      )}
+    </div>
+
+    <div class="subblock">
+      <dl class="review">
+        <div class="review__row">
+          <dt class="review__label t-label-01">All personnel employed or insured by the institution</dt>
+          <dd class="review__value t-body-01">{t.personnelInsured ? 'Yes' : 'No'}</dd>
+        </div>
+      </dl>
+    </div>
+  </cds-accordion-item>
+
+  <!-- ── Project information ──────────────────────────────────────────────── -->
+  <cds-accordion-item title="Project information" open>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Project</h3>
+      <dl class="review">
+        <div class="review__row"><dt class="review__label t-label-01">Project title</dt><dd class="review__value t-body-01">{permit.name}</dd></div>
+        <div class="review__row"><dt class="review__label t-label-01">Category</dt><dd class="review__value t-body-01">{permit.category}</dd></div>
+      </dl>
+    </div>
+
+    <div class="subblock">
       <div class="narrative">
         <p class="narrative__label t-label-01">Project purpose</p>
         <p class="narrative__body t-body-01">{pj.purpose}</p>
       </div>
-    )}
-  </PermitSection>
+      <div class="narrative">
+        <p class="narrative__label t-label-01">Anticipated benefits to the California State Park System</p>
+        <p class="narrative__body t-body-01">{pj.benefits}</p>
+      </div>
+    </div>
 
-  <PermitSection title="Study areas">
-    <dl class="review">
-      {sa.districts.map((d) => (
-        <div class="review__row">
-          <dt class="review__label t-label-01">{d.name}</dt>
-          <dd class="review__value t-body-01">{d.parks.join(', ') || '—'}</dd>
-        </div>
-      ))}
-    </dl>
-  </PermitSection>
-
-  <PermitSection title="Authorized collection">
-    <cds-table class="ro-table">
-      <cds-table-head>
-        <cds-table-header-row>
-          <cds-table-header-cell>Species</cds-table-header-cell>
-          <cds-table-header-cell>Quantity</cds-table-header-cell>
-          <cds-table-header-cell>Portion</cds-table-header-cell>
-          <cds-table-header-cell>Condition</cds-table-header-cell>
-        </cds-table-header-row>
-      </cds-table-head>
-      <cds-table-body>
-        {specimenRows.map((s) => (
-          <cds-table-row>
-            <cds-table-cell><em>{s.species}</em></cds-table-cell>
-            <cds-table-cell>{s.quantity}</cds-table-cell>
-            <cds-table-cell>{s.portion}</cds-table-cell>
-            <cds-table-cell>{s.condition}</cds-table-cell>
-          </cds-table-row>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Requested dates</h3>
+      <dl class="review">
+        {pj.details.filter((r) => r.key !== 'Project category').map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.key}</dt>
+            <dd class="review__value t-body-01">
+              {r.entries ? r.entries.map((e) => e.value).join(' – ') : r.value}
+            </dd>
+          </div>
         ))}
-      </cds-table-body>
-    </cds-table>
-    {specimenMore > 0 && <p class="sub-note t-label-01">+ {specimenMore} more taxa</p>}
-  </PermitSection>
+      </dl>
+    </div>
+
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Field investigation occurrences</h3>
+      {pj.fieldOccurrences.length ? (
+        <cds-table class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Occurrence</cds-table-header-cell>
+              <cds-table-header-cell>Date</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body>
+            {pj.fieldOccurrences.map((o, i) => (
+              <cds-table-row>
+                <cds-table-cell>Occurrence {i + 1}</cds-table-cell>
+                <cds-table-cell>{o}</cds-table-cell>
+              </cds-table-row>
+            ))}
+          </cds-table-body>
+        </cds-table>
+      ) : (
+        <p class="sub-note t-body-01">No field investigation occurrences added.</p>
+      )}
+    </div>
+  </cds-accordion-item>
+
+  <!-- ── Study areas ──────────────────────────────────────────────────────── -->
+  <cds-accordion-item title="Study areas" open>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Study area parks</h3>
+      {studyAreaParks.length ? (
+        <cds-table class="ro-table">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Park</cds-table-header-cell>
+              <cds-table-header-cell>District</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body>
+            {studyAreaParks.map((p) => (
+              <cds-table-row>
+                <cds-table-cell>{p.name}</cds-table-cell>
+                <cds-table-cell>{p.district}</cds-table-cell>
+              </cds-table-row>
+            ))}
+          </cds-table-body>
+        </cds-table>
+      ) : (
+        <p class="sub-note t-body-01">No parks selected yet.</p>
+      )}
+    </div>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Collection sites</h3>
+      <dl class="review">
+        {sa.sites.map((s) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{s.name}</dt>
+            <dd class="review__value t-body-01">{s.coords} — {s.note}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </cds-accordion-item>
+
+  <!-- ── Data collection ──────────────────────────────────────────────────── -->
+  <cds-accordion-item title="Data collection" open>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Specimens</h3>
+      <p class="sub-note t-body-01">The taxa and quantities authorized for collection. This list prints on the permit as the authorized collection.</p>
+      <cds-table class="ro-table">
+        <cds-table-head>
+          <cds-table-header-row>
+            <cds-table-header-cell>Species</cds-table-header-cell>
+            <cds-table-header-cell>Quantity</cds-table-header-cell>
+            <cds-table-header-cell>Portion</cds-table-header-cell>
+            <cds-table-header-cell>Condition</cds-table-header-cell>
+          </cds-table-header-row>
+        </cds-table-head>
+        <cds-table-body>
+          {dc.specimens.map((s) => (
+            <cds-table-row>
+              <cds-table-cell><em>{s.species}</em></cds-table-cell>
+              <cds-table-cell>{s.quantity}</cds-table-cell>
+              <cds-table-cell>{s.portion}</cds-table-cell>
+              <cds-table-cell>{s.condition}</cds-table-cell>
+            </cds-table-row>
+          ))}
+        </cds-table-body>
+      </cds-table>
+    </div>
+
+    {dc.involvesCollection && (
+      <div class="subblock">
+        <h3 class="sub-head t-heading-02">Collection &amp; curation</h3>
+        <FactGrid rows={dc.collection} min="20rem" tiles />
+      </div>
+    )}
+
+    {dc.involvesLaboratory && (
+      <div class="subblock">
+        <h3 class="sub-head t-heading-02">Laboratory &amp; analysis</h3>
+        <FactGrid rows={dc.laboratory} min="20rem" tiles />
+      </div>
+    )}
+  </cds-accordion-item>
+
+  <!-- ── Additional documents ─────────────────────────────────────────────── -->
+  <cds-accordion-item title="Additional documents" open>
+    <div class="subblock">
+      <dl class="review">
+        {ad.facts.map((r) => (
+          <div class="review__row">
+            <dt class="review__label t-label-01">{r.key}</dt>
+            <dd class="review__value t-body-01">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+    <div class="subblock">
+      <h3 class="sub-head t-heading-02">Submitted files</h3>
+      <ul class="docs">
+        {ad.files.map((f) => (
+          <li class="doc">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d={fileGlyph}></path></svg>
+            <span class="t-body-01">{f.name}</span>
+            <span class="doc__type t-label-01">{f.type}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </cds-accordion-item>
+  </cds-accordion>
+  </div>
 </div>
+
+<script>
+  // Expand all / Collapse all — set `open` on every section within each record
+  // instance. Several records can render on one page (the hidden layout versions),
+  // so wire each `.app-sum` independently. Runs after the elements upgrade, so the
+  // click handlers set the accordion-item state directly.
+  document.querySelectorAll('.app-sum').forEach((sum) => {
+    const items = Array.from(sum.querySelectorAll('cds-accordion-item'));
+    if (!items.length) return;
+    const setAll = (open: boolean) => items.forEach((it) => {
+      (it as any).open = open;
+      it.toggleAttribute('open', open);
+    });
+    sum.querySelector('.js-acc-expand')?.addEventListener('click', () => setAll(true));
+    sum.querySelector('.js-acc-collapse')?.addEventListener('click', () => setAll(false));
+  });
+</script>
 
 <style>
   /* Reuses ApplicationReview's read-only vocabulary — layout only, tokens for
      type/color. */
-  .app-sum { display: flex; flex-direction: column; gap: 2.5rem; }
+  .app-sum { display: flex; flex-direction: column; }
+
+  /* Expand all / Collapse all — a quiet toolbar above the sections. */
+  .app-acc-tools { display: flex; justify-content: flex-end; gap: var(--cds-spacing-02, 0.25rem); margin-bottom: var(--cds-spacing-03, 0.5rem); }
+
+  /* Viewport-capped scroll region — the record grows with its content up to the PDF
+     viewer's 80vh, then the SECTIONS scroll within (`.app-acc-body`), so a companion
+     column stays in view instead of the record growing the page. No frame or inset: it
+     fills its column the same way the PDF viewer fills its own, so the two share a
+     height with no box around it. NB: `max-block-size` (not a fixed height) so a
+     collapsed record shrinks to its content, and NO `overscroll-behavior:contain` —
+     both would otherwise trap the wheel and stop the page scrolling. */
+  .app-sum--scroll { max-block-size: 80vh; }
+  .app-sum--scroll.app-sum--compact { max-block-size: 72vh; }
+  /* Only the sections scroll — the Expand/Collapse toolbar stays pinned above them
+     (it's outside this overflow box), so it's always reachable. */
+  .app-sum--scroll .app-acc-tools { flex: 0 0 auto; }
+  .app-sum--scroll .app-acc-body { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; }
+
+  /* Sticky section headers — each open section's header (stock cds-accordion-item's
+     part="expando") pins to the top of its scroll context (the record's own scroll
+     pane when `scroll`, otherwise the page) so the reviewer always knows which
+     section they're reading as they scroll a long record. A background keeps the
+     content from showing through the pinned header. */
+  .app-acc cds-accordion-item::part(expando) {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--cds-background, #ffffff);
+  }
+
+  .subblock + .subblock { margin-top: 2rem; }
+  .app-sum--compact .subblock + .subblock { margin-top: 1.5rem; }
+  .sub-head { margin: 0 0 0.75rem; color: var(--cds-text-primary, #161616); }
+  .sub-note { margin: 0 0 0.75rem; color: var(--cds-text-secondary, #525252); }
+  .sub-note:last-child { margin-bottom: 0; }
+
   .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+  /* Narrow column: single-column contact cards so nothing is squeezed. */
+  .app-sum--compact .contact-grid { grid-template-columns: 1fr; }
 
   .review { margin: 0; }
   .review__row { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: 0.5rem 1.5rem; padding: 0.625rem 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
@@ -103,12 +347,23 @@ const specimenMore = dc.specimens.length - specimenRows.length;
   .review__label { margin: 0; color: var(--cds-text-secondary, #525252); }
   .review__value { margin: 0; color: var(--cds-text-primary, #161616); overflow-wrap: anywhere; }
   @media (max-width: 42rem) { .review__row { grid-template-columns: 1fr; gap: 0.125rem; } }
+  /* In a narrow column the label/value stack rather than fight for width. */
+  .app-sum--compact .review__row { grid-template-columns: 1fr; gap: 0.125rem; }
 
-  .narrative { max-width: 46rem; margin-top: 1.25rem; }
+  .narrative { max-width: 46rem; }
+  .narrative + .narrative { margin-top: 1.5rem; }
   .narrative__label { margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
   .narrative__body { margin: 0; color: var(--cds-text-primary, #161616); line-height: 1.6; }
 
+  /* Stacked table cell — a primary line with a secondary line beneath. */
+  .stack__primary { display: block; color: var(--cds-text-primary, #161616); }
+  .stack__secondary { display: block; margin-top: 0.125rem; color: var(--cds-text-secondary, #525252); }
+
+  .docs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+  .doc { display: flex; align-items: center; gap: 0.5rem; color: var(--cds-text-primary, #161616); }
+  .doc svg { flex: 0 0 auto; color: var(--cds-icon-secondary, #525252); }
+  .doc__type { color: var(--cds-text-secondary, #525252); margin-inline-start: auto; text-align: end; }
+
   /* carbon-checked: display modifier on a stock cds-table (see head comment). */
   .ro-table { display: block; }
-  .sub-note { margin: 0.5rem 0 0; color: var(--cds-text-secondary, #525252); }
 </style>
