@@ -107,8 +107,9 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
             <cds-button slot="aside" id="add-condition" kind="tertiary" size="md">Add condition</cds-button>
             <p class="section-hint t-body-01" id="inv-hint">
               Reusable conditions for <strong id="inv-owner">Headquarters</strong>. Reviewers pull these onto
-              a permit without retyping. Items marked <strong>Default</strong> attach automatically when a
-              permit enters review.
+              a permit without retyping. <strong>Every permit</strong> items attach on submission;
+              <strong>Scoped</strong> items attach only to permits matching their park units, activities,
+              species, region, or associated permit; <strong>Manual</strong> items you pull in as needed.
             </p>
             <!-- carbon-checked: .table-wrap is NOT a table — the table is the stock
                  cds-table below. It is only a horizontal-scroll container so the
@@ -170,7 +171,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
     </div>
 
     <!-- ── Add / edit condition modal ─────────────────────────────────────── -->
-    <cds-modal id="condition-modal" size="md">
+    <cds-modal id="condition-modal" size="md" has-scrolling-content>
       <cds-modal-header>
         <cds-modal-close-button></cds-modal-close-button>
         <cds-modal-label id="condition-modal-label">Headquarters catalog</cds-modal-label>
@@ -193,7 +194,88 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
             <sc-rich-text id="c-body" placeholder="Write the condition. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
           </div>
 
-          <cds-checkbox id="c-default" label-text="Default — attach to every applicable permit on submission"></cds-checkbox>
+          <div class="autoapply">
+            <cds-radio-button-group
+              id="c-apply"
+              name="auto-apply"
+              orientation="vertical"
+              label-text="Auto-apply"
+            >
+              <cds-radio-button id="c-apply-all" value="all" label-text="Every applicable permit"></cds-radio-button>
+              <cds-radio-button id="c-apply-match" value="match" label-text="When the permit matches (park, activity, species, region, or permit)"></cds-radio-button>
+              <cds-radio-button id="c-apply-manual" value="manual" label-text="Manual only — reviewers add it when needed"></cds-radio-button>
+            </cds-radio-button-group>
+
+            <div id="c-match-panel" class="match-panel" hidden>
+              <div class="match-field">
+                <cds-multi-select
+                  id="c-scope"
+                  filterable
+                  selection-feedback="fixed"
+                  title-text="Park units"
+                  label="Search park units…"
+                  autoalign
+                ></cds-multi-select>
+                <div id="c-scope-chips" class="chip-roster" hidden></div>
+              </div>
+              <div class="match-field">
+                <cds-multi-select
+                  id="c-acts"
+                  filterable
+                  selection-feedback="fixed"
+                  title-text="Field activities"
+                  label="Search activities…"
+                  autoalign
+                ></cds-multi-select>
+                <div id="c-acts-chips" class="chip-roster" hidden></div>
+              </div>
+              <div class="match-field">
+                <cds-multi-select
+                  id="c-species"
+                  filterable
+                  selection-feedback="fixed"
+                  title-text="Sensitive species present"
+                  label="Search species…"
+                  autoalign
+                ></cds-multi-select>
+                <div id="c-species-chips" class="chip-roster" hidden></div>
+              </div>
+              <div class="match-field">
+                <cds-multi-select
+                  id="c-regions"
+                  filterable
+                  selection-feedback="fixed"
+                  title-text="Region"
+                  label="Search regions…"
+                  autoalign
+                ></cds-multi-select>
+                <div id="c-regions-chips" class="chip-roster" hidden></div>
+              </div>
+              <div class="match-field">
+                <cds-multi-select
+                  id="c-agencies"
+                  filterable
+                  selection-feedback="fixed"
+                  title-text="Associated agency permit"
+                  label="Search permits…"
+                  autoalign
+                ></cds-multi-select>
+                <div id="c-agencies-chips" class="chip-roster" hidden></div>
+              </div>
+              <p class="modal-hint t-label-01">
+                Attaches automatically to any permit that matches <strong>any one</strong> of these — a selected park, activity, species present, region, or associated permit.
+              </p>
+              <cds-inline-notification
+                id="c-match-warning"
+                hidden
+                kind="warning"
+                low-contrast
+                hide-close-button
+                title="Choose at least one match"
+                subtitle="Pick a park, activity, species, region, or permit — or switch to Manual only."
+              ></cds-inline-notification>
+            </div>
+          </div>
         </cds-stack>
       </cds-modal-body>
       <cds-modal-footer>
@@ -232,9 +314,16 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
     loadInventory,
     saveInventory,
     newConditionId,
+    parksForOwner,
+    parkLabel,
     type ConditionInventoryItem,
     type ConditionOwner,
   } from '../data/conditions';
+  import { activities as ACTIVITIES, activityLabel } from '../data/activities';
+  import {
+    sensitiveSpecies as SPECIES, regions as REGIONS, associatedPermits as AGENCIES,
+    speciesLabel, regionLabel, agencyLabel,
+  } from '../data/scope';
   // The signed-in Prototype identity drives which catalogs this user may curate
   // (HQ → org-wide + every district; a district lead OR assistant → their district).
   import { curatableDistricts } from '../data/district';
@@ -247,6 +336,25 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   // Standard house "remove a row" affordance: a ghost trash icon-button (matches
   // the application-wizard rosters). Removal is confirmed via a danger modal.
   const trash = `<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>`;
+
+  // The "Applies" cell reflects the auto-apply mode: Every permit (broad),
+  // Scoped (narrow — the matching parks and/or activities), or Manual. "Every
+  // permit" wins when isDefault is set.
+  const appliesCellHTML = (it: ConditionInventoryItem): string => {
+    if (it.isDefault) return `<cds-tag type="cool-gray" size="sm">Every permit</cds-tag>`;
+    const names = [
+      ...(it.parkUnits ?? []).filter(Boolean).map(parkLabel),
+      ...(it.activities ?? []).filter(Boolean).map(activityLabel),
+      ...(it.sensitiveSpecies ?? []).filter(Boolean).map(speciesLabel),
+      ...(it.regions ?? []).filter(Boolean).map(regionLabel),
+      ...(it.associatedPermits ?? []).filter(Boolean).map(agencyLabel),
+    ];
+    if (names.length) {
+      return `<cds-tag type="blue" size="sm">Scoped</cds-tag>` +
+        `<span class="c-scope-parks">${names.map((n) => esc(n)).join(', ')}</span>`;
+    }
+    return `<span class="c-muted">Manual</span>`;
+  };
 
   // ── Scope ───────────────────────────────────────────────────────────────
   const ownerWrap = $('owner-wrap');
@@ -310,9 +418,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
         prevCell.appendChild(bodyEl);
 
         const defCell = document.createElement('cds-table-cell');
-        defCell.innerHTML = it.isDefault
-          ? `<cds-tag type="cool-gray" size="sm">Default</cds-tag>`
-          : `<span class="c-muted">As needed</span>`;
+        defCell.innerHTML = appliesCellHTML(it);
 
         const actionCell = document.createElement('cds-table-cell');
         const wrap = document.createElement('div');
@@ -420,9 +526,7 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
         bodyCell.appendChild(b);
 
         const defCell = document.createElement('cds-table-cell');
-        defCell.innerHTML = it.isDefault
-          ? `<cds-tag type="cool-gray" size="sm">Default</cds-tag>`
-          : `<span class="c-muted">As needed</span>`;
+        defCell.innerHTML = appliesCellHTML(it);
 
         const actionCell = document.createElement('cds-table-cell');
         if (o === owner) {
@@ -469,13 +573,98 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   };
 
   // ── Add / edit modal ─────────────────────────────────────────────────────
+  // Auto-apply is ONE control (a radio): 'all' (every applicable permit — the old
+  // Default), 'match' (scoped — attach on a park-unit OR activity match), or
+  // 'manual' (reviewers pull it in). 'match' reveals two pickers, each mirrored by
+  // a chip roster so the chosen names read at rest (a bare multi-select only shows
+  // a count).
   const modal = $('condition-modal') as any;
   const bodyEl = () => $('c-body') as any;
-  const defaultEl = () => $('c-default') as any;
+  const applyGroup = () => $('c-apply') as any;
+  const matchPanel = $('c-match-panel');
+  const matchWarn = $('c-match-warning') as any;
   const warnEl = $('condition-warning') as any;
   let editingIndex = -1;
 
-  const openModal = (index: number) => {
+  const applyMode = (): 'all' | 'match' | 'manual' =>
+    (applyGroup()?.value as 'all' | 'match' | 'manual') || 'manual';
+
+  // The five match dimensions, in display order. `field` is the condition property
+  // the picker reads/writes; parks are owner-scoped, the rest are global taxonomies.
+  const PICKERS: {
+    id: string; chips: string; field: keyof ConditionInventoryItem;
+    label: (v: string) => string; opts: () => { id: string; label: string }[];
+  }[] = [
+    { id: 'c-scope', chips: 'c-scope-chips', field: 'parkUnits', label: parkLabel,
+      opts: () => parksForOwner(currentOwner()).map((p) => ({ id: p.id, label: p.name })) },
+    { id: 'c-acts', chips: 'c-acts-chips', field: 'activities', label: activityLabel,
+      opts: () => ACTIVITIES.map((a) => ({ id: a.id, label: a.label })) },
+    { id: 'c-species', chips: 'c-species-chips', field: 'sensitiveSpecies', label: speciesLabel,
+      opts: () => SPECIES.map((s) => ({ id: s.id, label: s.label })) },
+    { id: 'c-regions', chips: 'c-regions-chips', field: 'regions', label: regionLabel,
+      opts: () => REGIONS.map((r) => ({ id: r.id, label: r.label })) },
+    { id: 'c-agencies', chips: 'c-agencies-chips', field: 'associatedPermits', label: agencyLabel,
+      opts: () => AGENCIES.map((a) => ({ id: a.id, label: a.label })) },
+  ];
+
+  // Render the selected values of a multi-select as a read-only chip roster.
+  const renderChips = (el: HTMLElement | null, values: string[], labelOf: (v: string) => string) => {
+    if (!el) return;
+    el.hidden = values.length === 0;
+    el.innerHTML = values.map((v) => `<cds-tag type="blue" size="sm">${esc(labelOf(v))}</cds-tag>`).join('');
+  };
+  const selectedOf = (el: any): string[] => ((el?.value ?? '') as string).split(',').filter(Boolean);
+  const refreshChips = () => {
+    for (const p of PICKERS) renderChips($(p.chips), selectedOf($(p.id)), p.label);
+  };
+
+  // Populate a multi-select from options, then reflect the saved selection.
+  // MUST run while the element is on-screen: a filterable cds-multi-select
+  // populated inside a display:none container renders BLANK option labels — so we
+  // only fill the pickers once the match panel is actually shown (fillPickers).
+  const fill = async (el: any, opts: { id: string; label: string }[], selected: string[]) => {
+    if (!el) return;
+    await customElements.whenDefined('cds-multi-select');
+    el.replaceChildren(
+      ...opts.map((o) => {
+        const item = document.createElement('cds-multi-select-item');
+        item.setAttribute('value', o.id);
+        item.textContent = o.label;
+        return item;
+      }),
+    );
+    await el.updateComplete?.catch?.(() => {});
+    // Setting the comma-joined value reconciles the checkboxes (users.astro pattern).
+    el.value = selected.filter((id) => opts.some((o) => o.id === id)).join(',');
+    // The .value setter reconciles on the NEXT render — await it so callers (the
+    // chip roster) read the committed selection, not the stale prior value.
+    await el.updateComplete?.catch?.(() => {});
+  };
+
+  // The item's saved scope per picker, held so pickers fill the moment the match
+  // panel is first shown on-screen (see fill()).
+  let saved: Record<string, string[]> = {};
+  let pickersFilled = false;
+  const fillPickers = async () => {
+    for (const p of PICKERS) {
+      const el = $(p.id);
+      const cur = selectedOf(el);
+      await fill(el, p.opts(), cur.length ? cur : (saved[p.id] ?? []));
+    }
+    pickersFilled = true;
+    refreshChips();
+  };
+
+  // Show the match pickers only in 'match' mode, and fill them the FIRST time the
+  // panel is shown (while it is on-screen — see fill()).
+  const syncApplyMode = async () => {
+    const match = applyMode() === 'match';
+    if (matchPanel) matchPanel.hidden = !match;
+    if (matchWarn) matchWarn.hidden = true;
+    if (match && !pickersFilled) await fillPickers();
+  };
+
+  const openModal = async (index: number) => {
     editingIndex = index;
     const it = index >= 0 ? items[index] : null;
 
@@ -490,10 +679,22 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
     if (warnEl) warnEl.hidden = true;
 
     if (bodyEl()) bodyEl().value = it?.body ?? '';
-    const d = defaultEl();
-    if (d) d.checked = !!it?.isDefault;
 
+    // Hold each dimension's saved scope; derive the auto-apply mode from the item.
+    saved = {};
+    let anyScope = false;
+    for (const p of PICKERS) {
+      const vals = ((it?.[p.field] as string[] | undefined) ?? []).filter(Boolean);
+      saved[p.id] = vals;
+      if (vals.length) anyScope = true;
+    }
+    const mode = it?.isDefault ? 'all' : anyScope ? 'match' : 'manual';
+    if (applyGroup()) applyGroup().value = mode;
+    pickersFilled = false;
+
+    // Open FIRST (so the pickers are on-screen when filled), then reveal + fill.
     modal.open = true;
+    await syncApplyMode();
   };
 
   const saveCondition = () => {
@@ -502,13 +703,28 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
       if (warnEl) warnEl.hidden = false;
       return;
     }
+    const mode = applyMode();
+    const isDefault = mode === 'all';
+    // Each dimension's selection (empty unless in match mode).
+    const get = (id: string) => (mode === 'match' ? selectedOf($(id)) : []);
+    const parkUnits = get('c-scope');
+    const activities = get('c-acts');
+    const sensitiveSpecies = get('c-species');
+    const regions = get('c-regions');
+    const associatedPermits = get('c-agencies');
+    // 'match' with nothing chosen would attach to nothing — nudge instead of saving
+    // a dead scope.
+    if (mode === 'match' && ![parkUnits, activities, sensitiveSpecies, regions, associatedPermits].some((a) => a.length)) {
+      if (matchWarn) matchWarn.hidden = false;
+      return;
+    }
     const owner = currentOwner();
-    const isDefault = !!defaultEl()?.checked;
+    const scopeFields = { parkUnits, activities, sensitiveSpecies, regions, associatedPermits };
 
     if (editingIndex >= 0) {
-      items[editingIndex] = { ...items[editingIndex], body, isDefault };
+      items[editingIndex] = { ...items[editingIndex], body, isDefault, ...scopeFields };
     } else {
-      items.push({ id: newConditionId(owner === 'hq' ? 'hq' : owner), owner, body, isDefault });
+      items.push({ id: newConditionId(owner === 'hq' ? 'hq' : owner), owner, body, isDefault, ...scopeFields });
     }
     persist();
     renderInventory();
@@ -520,6 +736,8 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   ownerPicker?.addEventListener('cds-dropdown-selected', applyScope);
   $('add-condition')?.addEventListener('click', () => openModal(-1));
   $('c-save')?.addEventListener('click', saveCondition);
+  applyGroup()?.addEventListener('cds-radio-button-group-changed', syncApplyMode);
+  for (const p of PICKERS) $(p.id)?.addEventListener('cds-multi-select-selected', refreshChips);
 
   // View toggle (my catalog ↔ browse all) + browse owner filter.
   const viewSwitch = $('sc-view') as any;
@@ -588,6 +806,25 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
   .table-wrap { overflow-x: auto; }
   :global(.c-muted) { color: var(--cds-text-secondary, #525252); }
   :global(.row-actions) { display: flex; gap: 0.25rem; }
+  /* Scoped "Applies" cell: the badge over the park/activity names it targets. */
+  :global(.c-scope-parks) {
+    display: block;
+    margin-top: var(--cds-spacing-02, 0.25rem);
+    color: var(--cds-text-secondary, #525252);
+    font-size: var(--cds-label-01-font-size, 0.75rem);
+    line-height: var(--cds-label-01-line-height, 1.34);
+  }
+
+  /* Unified Auto-apply control in the add/edit modal. */
+  .autoapply { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
+  /* The match pickers, revealed only in "When the permit matches" mode. `hidden`
+     restated because an author element reset beats UA [hidden]. */
+  .match-panel { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
+  .match-panel[hidden] { display: none; }
+  .match-field { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+  /* Selected-park / -activity roster: names read at rest, not just a count. */
+  .chip-roster { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-02, 0.25rem); }
+  .chip-roster[hidden] { display: none; }
 
   /* Full condition text rendered in the table (rich HTML), kept compact. The body
      default is 16px (theme.css sets no base size), so pin the rich text to the
@@ -612,6 +849,8 @@ const districtsSorted = [...districtOptions].sort((a, b) => a.name.localeCompare
 
   /* Modal internals. */
   #condition-warning { margin-bottom: 1rem; }
-  #condition-warning[hidden] { display: none; }
+  /* cds-inline-notification sets :host display, so `hidden` alone won't collapse
+     it — restate for both warnings (see carbon-hidden-host-display note). */
+  #condition-warning[hidden], #c-match-warning[hidden] { display: none; }
   .field-label { display: block; margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
 </style>

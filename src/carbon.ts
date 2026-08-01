@@ -52,3 +52,9 @@ import '@carbon/web-components/es/components/ui-shell/index.js';
 // @carbon/web-components@2.59.0. Loaded last so every element is registered
 // first. See src/lib/carbon-a11y.ts (upstream fix = bump the Carbon version).
 import './lib/carbon-a11y';
+
+// Page-scroll lock for open cds-modal dialogs — Carbon's web-components modal
+// renders an overlay but doesn't stop the page behind it from scrolling. Loaded
+// with the registry so every modal, on every page, is covered. See
+// src/lib/carbon-modal-scroll-lock.ts.
+import './lib/carbon-modal-scroll-lock';

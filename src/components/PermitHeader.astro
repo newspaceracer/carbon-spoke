@@ -348,7 +348,7 @@ const rosterSections = [
 </cds-modal>
 
 {analysisTeam && (
-  <cds-modal id="analysis-team-modal" size="lg">
+  <cds-modal id="analysis-team-modal" size="lg" has-scrolling-content>
     <cds-modal-header>
       <cds-modal-close-button></cds-modal-close-button>
       <cds-modal-label>Permit {id}</cds-modal-label>
@@ -376,6 +376,7 @@ const rosterSections = [
             title-text="Add a member"
             label="Search the user directory…"
             helper-text="Select a user to add them to the team. Only users not already on the team appear here."
+            autoalign
           >
             {eligibleReviewers.map((u) => (
               <cds-combo-box-item value={u.id} data-name={u.name} data-detail={u.detail} data-email={u.email}>{u.name} — {u.detail}</cds-combo-box-item>

@@ -50,7 +50,7 @@ const initialSrc = `${withBase(initial.href)}#view=FitH`;
         <path d="M10 14h12v2H10zm0 5h12v2H10zm0 5h8v2h-8z"/>
       </svg>
       <div class="pdfv__idtext">
-        <cds-dropdown class="pdfv__select" size="sm" value={initial.href} title-text="Viewing document">
+        <cds-dropdown class="pdfv__select" size="sm" value={initial.href} title-text="Document">
           {documents.map((d) => (
             <cds-dropdown-item
               value={d.href}
@@ -61,7 +61,7 @@ const initialSrc = `${withBase(initial.href)}#view=FitH`;
             >{d.filename}</cds-dropdown-item>
           ))}
         </cds-dropdown>
-        <p class="pdfv__meta t-label-01">PDF · <span class="pdfv__size">{initial.size}</span> · <span class="pdfv__pages">{initial.pages}</span> pages</p>
+        <p class="pdfv__meta t-label-01">PDF · <span class="pdfv__size">{initial.size}</span> · <span class="pdfv__pages">{initial.pages} {initial.pages === 1 ? 'page' : 'pages'}</span></p>
       </div>
     </div>
     <cds-link class="pdfv__open" href={withBase(initial.href)} target="_blank" rel="noopener">Open ↗</cds-link>
@@ -90,7 +90,7 @@ const initialSrc = `${withBase(initial.href)}#view=FitH`;
       if (src) frame.src = src;
       if (open && openHref) open.setAttribute('href', openHref);
       if (sizeEl && size) sizeEl.textContent = size;
-      if (pagesEl && pages) pagesEl.textContent = pages;
+      if (pagesEl && pages) pagesEl.textContent = `${pages} ${pages === '1' ? 'page' : 'pages'}`;
       frame.title = `${item.textContent?.trim() ?? 'Document'} (PDF)`;
     });
   });
@@ -124,15 +124,18 @@ const initialSrc = `${withBase(initial.href)}#view=FitH`;
   .pdfv__meta { margin: 0.25rem 0 0; color: var(--cds-text-secondary); }
   .pdfv__open { flex-shrink: 0; }
 
-  /* The embedded PDF — the browser's native viewer fills the frame. Height is
-     viewport-relative so the document gets real reading room on any screen. */
+  /* The embedded PDF — the browser's native viewer fills the frame. `block-size` is
+     viewport-relative (80vh), but `min-block-size` is a hard rem FLOOR so a short
+     laptop still gets real reading height instead of a cramped vh (the page scrolls
+     if needed). The floor matters most where the frame is a flex item (the B2
+     two-pane layout): flex can shrink `block-size`, but never below min-block-size. */
   .pdfv__frame {
     inline-size: 100%;
     block-size: 80vh;
-    min-block-size: 30rem;
+    min-block-size: 44rem;
     border: 0;
     display: block;
     background: var(--cds-layer-02);
   }
-  .pdfv--compact .pdfv__frame { block-size: 72vh; }
+  .pdfv--compact .pdfv__frame { block-size: 72vh; min-block-size: 40rem; }
 </style>

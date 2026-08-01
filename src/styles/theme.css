@@ -145,6 +145,35 @@ cds-modal-body:has(cds-date-picker) {
   overflow: visible;
 }
 
+/* ---- TALL MODAL — internal scroll wins over the clip escape --------------
+   The rule above trades the body's scroll (overflow:auto) for overflow:visible
+   so an inline dropdown menu isn't clipped. But a modal with a LOT of content
+   (e.g. the special-conditions "Add condition" form with its expandable match
+   panel) then grows past the viewport with nowhere to scroll — the footer
+   buttons fall off-screen. When a modal opts into `has-scrolling-content`,
+   Carbon's contract is "this body scrolls" (it adds the fade affordance + a
+   keyboard-focusable scroll region), so restore overflow:auto and let it win.
+   Higher specificity than the :has() escape above, so it applies even when the
+   body holds listbox controls — SAFE precisely because those controls use
+   `autoalign`, which positions the open menu with Floating UI (position:fixed),
+   so it escapes the ancestor's overflow and is never clipped. A has-scrolling
+   modal whose listboxes are NOT autoaligned would re-clip — mark them autoalign. */
+cds-modal[has-scrolling-content] cds-modal-body {
+  overflow: auto;
+}
+
+/* ---- MODAL PAGE-SCROLL LOCK ---------------------------------------------
+   cds-modal renders a full-viewport overlay but doesn't stop the page behind it
+   from scrolling (a web-components-layer gap; see src/lib/carbon-modal-scroll-
+   lock.ts, which toggles this class while any modal is open). Lock the page and
+   pad back the scrollbar width the lock removes so nothing shifts sideways. */
+html.cds-modal-open {
+  overflow: hidden;
+}
+html.cds-modal-open body {
+  padding-inline-end: var(--modal-scrollbar-comp, 0);
+}
+
 /* Identity chip (Avatar) — ONE home for the round initials/glyph chip used by the
    <Avatar> component AND client-rendered chips (see src/lib/avatar.ts). Defined
    globally so chips created at runtime (JS-built table rows / cards) are styled

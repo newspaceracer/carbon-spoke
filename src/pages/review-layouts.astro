@@ -21,10 +21,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
 import ReviewAppSummary from '../components/ReviewAppSummary.astro';
+import ApplicationReview from '../components/ApplicationReview.astro';
 import DocumentViewer from '../components/DocumentViewer.astro';
+import ReviewConditions from '../components/ReviewConditions.astro';
 import { permit } from '../data/permit';
 import { userDirectory } from '../data/user';
 import { withBase } from '../lib/base';
+import { districtKey, seedInventory, plainText } from '../data/conditions';
 
 export const prototype = {
   title: 'Review wizard — layout studies',
@@ -76,23 +79,41 @@ const documents = permit.additionalDocs.files.map((f) => ({
   type: f.type,
 }));
 
-// Special conditions in play — HQ defaults + one conditional + district defaults.
-const conditions = [
-  { scope: 'Headquarters', label: 'Carry the permit in the field at all times', kind: 'Auto' },
-  { scope: 'Headquarters', label: 'Curation & specimen disposition', kind: 'Auto' },
-  { scope: 'Headquarters', label: 'Western Snowy Plover protection', kind: 'Conditional' },
-  { scope: 'North Coast Redwoods', label: 'Stay outside the False Klamath Cove marine reserve', kind: 'Auto' },
-  { scope: 'Mendocino', label: 'Harbor seal haul-out setback (50 m)', kind: 'Auto' },
+// ── Special conditions — the REAL catalog, same source as the detail page ────────
+// Pulled from src/data/conditions.ts (the single source of truth the permit's
+// Special conditions tab reads), not a flat mock. Each owner block (HQ + every
+// district on this permit) shows the conditions APPLIED to the permit — i.e. every
+// DEFAULT catalog item for that owner (the "auto-attach on submission" set) — so
+// the studies present the true HQ + district structure.
+const scPermitDistricts = permit.studyAreas.districts.map((d) => ({
+  key: districtKey(d.name),
+  label: d.name,
+  parks: d.parks.length,
+}));
+const scOwners = [
+  { key: 'hq', label: 'Headquarters', parks: null as number | null },
+  ...scPermitDistricts,
 ];
-// Saved-condition catalog + scopes for the Add-condition modal (the app's dual-path
-// catalog/manual pattern). Mock vocabulary for the study.
-const conditionCatalog = [
-  'Report collected specimens within 30 days of permit expiration',
-  'No collection within 100 m of a pinniped haul-out',
-  'Notify the district office 48 hours before each field visit',
-  'Deposit voucher specimens at an accredited herbarium',
-];
-const conditionScopes = ['Headquarters', 'North Coast Redwoods', 'Mendocino'];
+// Applied conditions per owner: the default items of that owner's catalog.
+const conditionGroups = scOwners.map((o) => ({
+  ...o,
+  items: seedInventory(o.key)
+    .filter((i) => i.isDefault)
+    .map((i) => ({ id: i.id, body: i.body, source: 'default' as const })),
+}));
+const scTotal = conditionGroups.reduce((n, g) => n + g.items.length, 0);
+// Per-owner catalog of NON-default items (what a reviewer can still pull in via the
+// Add-condition modal), each with a plain-text preview for the picker. Emitted as
+// JSON for the client so the picker repopulates when the scope changes.
+const scInventory: Record<string, { id: string; preview: string; body: string }[]> =
+  Object.fromEntries(
+    scOwners.map((o) => [
+      o.key,
+      seedInventory(o.key)
+        .filter((i) => !i.isDefault)
+        .map((i) => ({ id: i.id, preview: plainText(i.body).slice(0, 120), body: i.body })),
+    ]),
+  );
 
 // The application fields, section by section, for the section-anchored version —
 // each paired with the proposal section a reviewer checks it against.
@@ -127,6 +148,7 @@ const versions = [
   { id: 'compare', label: 'A · Compare-first', best: 'The proposal and the record side by side is the whole job; conditions and comments are summoned from the toolbar when needed.' },
   { id: 'workspace', label: 'B · Three-column', best: 'Proposal, record, and a working rail all visible at once — nothing hidden, for reviewers who bounce between the three jobs.' },
   { id: 'stacked', label: 'B2 · Full-width panel', best: 'Like the three-column workspace, but the conditions and comments panel docks full-width beneath the two documents — the proposal and record get the full width up top, and the working panel gets room to breathe below.' },
+  { id: 'docktabs', label: 'B3 · Docked documents', best: 'The record keeps the left column; everything else — the document viewer, conditions, comments, and the analysis team — becomes a tab in one working panel on the right, so the whole right side is a single tabbed surface the reviewer flips through in place.' },
   { id: 'sections', label: 'C · Section-anchored', best: 'Comparison and discussion attach to the specific finding — each application field carries its own proposal compare and comment count.' },
   { id: 'vtabs', label: 'E · Vertical tabs', best: 'The application record fills one half; the other half is a vertical tab set — Document viewer, Special conditions, and Comments — so the record stays in view while the reviewer flips the second panel between the three jobs.' },
 ];
@@ -240,7 +262,7 @@ const cancelHref = withBase('/final-letter');
         <div class="toolbar__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
           <cds-search size="md" placeholder="Jump to a section of the proposal…" label-text="Jump to a section"></cds-search>
           <div class="toolbar__actions">
-            <cds-button kind="tertiary" size="md">Special conditions · {conditions.length}</cds-button>
+            <cds-button kind="tertiary" size="md">Special conditions · {scTotal}</cds-button>
             <cds-button class="js-open-comments" kind="tertiary" size="md">Comments · {comments.length}</cds-button>
           </div>
         </div>
@@ -280,28 +302,12 @@ const cancelHref = withBase('/final-letter');
         <aside class="col-rail cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5" aria-label="Working panel">
           <div class="rail" data-tab-scope>
             <cds-tabs value="conditions" data-panels>
-              <cds-tab value="conditions">Conditions · {conditions.length}</cds-tab>
+              <cds-tab value="conditions">Conditions · {scTotal}</cds-tab>
               <cds-tab value="comments">Comments · {comments.length}</cds-tab>
             </cds-tabs>
 
             <div class="rail-panel" data-tabpanel="conditions">
-              <div class="rail__tools"><cds-button kind="tertiary" size="md">Add condition</cds-button></div>
-              <cds-contained-list label="Attached to this permit" kind="on-page">
-                {conditions.map((c) => (
-                  <cds-contained-list-item>
-                    <div class="cond">
-                      <div class="cond__body">
-                        <p class="cond__scope t-label-01">{c.scope}</p>
-                        <p class="cond__label t-body-01">{c.label}</p>
-                      </div>
-                      <div class="cond__meta">
-                        <cds-tag size="sm" type={c.kind === 'Conditional' ? 'teal' : 'cool-gray'}>{c.kind}</cds-tag>
-                        <cds-icon-button kind="ghost" size="sm" align="left" set:html={`${trash}<span slot="tooltip-content">Remove ${c.label}</span>`}></cds-icon-button>
-                      </div>
-                    </div>
-                  </cds-contained-list-item>
-                ))}
-              </cds-contained-list>
+              <ReviewConditions groups={conditionGroups} compact removable={false} />
             </div>
 
             <div class="rail-panel" data-tabpanel="comments" hidden>
@@ -350,47 +356,33 @@ const cancelHref = withBase('/final-letter');
            scrolling within — so they read as an even pair. -->
       <section class="step cds--css-grid cds--css-grid--with-row-gap">
         <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
-          <h3 class="pane-title t-heading-03">Application record</h3>
-          <ReviewAppSummary scroll />
-        </div>
-        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
-          <h3 class="pane-title t-heading-03">Document viewer</h3>
-          <DocumentViewer documents={documents} docTitle={permit.name} />
-        </div>
-      </section>
+          <h3 class="pane-title t-heading-04">Application record</h3>
+          <!-- The REAL, editable step-① application review (same component the finalize
+               wizard uses), not the read-only summary — so this study exercises the
+               actual edit affordances. Behavior (field seeding, study-areas roster,
+               specimen modal) is wired by page-local script below. The record grows the
+               page as its sections expand (no inner scroll box). -->
+          <div class="appreview" data-appreview>
+            <ApplicationReview collapsible />
+          </div>
 
-      <!-- Below: the conditions / comments working panel, docked full width. -->
-      <section class="dock-wrap cds--css-grid" data-tab-scope>
-        <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
-          <div class="dock">
+          <!-- Working panel — conditions / comments / analysis team, stacked directly
+               under the record in the SAME (left) column. -->
+          <div class="dock" data-tab-scope>
             <cds-tabs value="conditions" data-panels>
-              <cds-tab id="cond-tab" value="conditions">Conditions · {conditions.length}</cds-tab>
+              <cds-tab value="conditions">Conditions · {scTotal}</cds-tab>
               <cds-tab value="comments">Comments · {comments.length}</cds-tab>
-              <cds-tab id="team-tab" value="team">Analysis team · {team.length}</cds-tab>
+              <cds-tab value="team">Analysis team · {team.length}</cds-tab>
             </cds-tabs>
 
-            <!-- Special conditions — the SAME cds-contained-list pattern as the other
-                 layouts (B/C/E), capped to a readable width in the wide dock. "Add
-                 condition" opens the app's dual-path (catalog / manual) modal. -->
+            <!-- Special conditions — the REAL HQ + district structure from the
+                 catalog (ReviewConditions), same source as the permit detail page.
+                 "Add condition" opens the app's dual-path (catalog / manual) modal,
+                 scoped to the chosen owner. -->
             <div class="rail-panel" data-tabpanel="conditions">
               <div class="dock-list">
                 <div class="rail__tools"><cds-button class="js-open-add-cond" kind="tertiary" size="md">Add condition</cds-button></div>
-                <cds-contained-list id="cond-list" label="Attached to this permit" kind="on-page">
-                  {conditions.map((c) => (
-                    <cds-contained-list-item>
-                      <div class="cond">
-                        <div class="cond__body">
-                          <p class="cond__scope t-label-01">{c.scope}</p>
-                          <p class="cond__label t-body-01">{c.label}</p>
-                        </div>
-                        <div class="cond__meta">
-                          <cds-tag size="sm" type={c.kind === 'Conditional' ? 'teal' : 'cool-gray'}>{c.kind}</cds-tag>
-                          <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond set:html={`${trash}<span slot="tooltip-content">Remove ${c.label}</span>`}></cds-icon-button>
-                        </div>
-                      </div>
-                    </cds-contained-list-item>
-                  ))}
-                </cds-contained-list>
+                <ReviewConditions groups={conditionGroups} />
               </div>
             </div>
 
@@ -403,12 +395,12 @@ const cancelHref = withBase('/final-letter');
                      suggestion menu is a token-styled list — carbon-checked: Carbon
                      ships no @-mention typeahead; it composes over the stock textarea. -->
                 <div class="mention-field">
-                  <cds-textarea id="dock-comment-input" label="Add a comment" placeholder="Note something for the team… type @ to mention someone" rows="2"></cds-textarea>
-                  <ul class="mention-menu" id="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
+                  <cds-textarea data-comment-input label="Add a comment" placeholder="Note something for the team… type @ to mention someone" rows="2"></cds-textarea>
+                  <ul class="mention-menu" data-mention-menu role="listbox" aria-label="Mention a user" hidden></ul>
                 </div>
                 <cds-button class="js-post-comment" kind="primary" size="md">Add comment</cds-button>
               </div>
-              <ul class="dock-thread" id="dock-thread">
+              <ul class="dock-thread" data-thread>
                 {comments.map((c) => (
                   <li class="comment">
                     <span class="comment__avatar" aria-hidden="true">{initials(c.author)}</span>
@@ -432,7 +424,130 @@ const cancelHref = withBase('/final-letter');
                   <cds-button class="js-email-team" kind="ghost" size="md">Email all</cds-button>
                   <cds-button class="js-open-add-member" kind="tertiary" size="md">Add member</cds-button>
                 </div>
-                <cds-contained-list id="team-list" label="Assigned to this permit" kind="on-page">
+                <cds-contained-list data-team-list label="Assigned to this permit" kind="on-page">
+                  {team.map((m) => (
+                    <cds-contained-list-item data-user-id={m.id} data-email={userDirectory.find((u) => u.id === m.id)?.email ?? ''}>
+                      <div class="cond">
+                        <div class="cond__body">
+                          <p class="cond__label t-body-01">{m.name}{m.highlight ? <span class="member__lead t-label-01"> · Lead</span> : null}</p>
+                          <p class="member__role t-label-01">{m.role} · {m.detail}</p>
+                        </div>
+                        <div class="cond__meta">
+                          <cds-icon-indicator size="16" kind={TEAM_STATE[m.reviewStatus].kind} label={TEAM_STATE[m.reviewStatus].label}></cds-icon-indicator>
+                          {!m.highlight && (
+                            <cds-icon-button kind="ghost" size="sm" align="left" data-remove-member set:html={`${trash}<span slot="tooltip-content">Remove ${m.name}</span>`}></cds-icon-button>
+                          )}
+                        </div>
+                      </div>
+                    </cds-contained-list-item>
+                  ))}
+                </cds-contained-list>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Right column: the document viewer, pinned (sticky) so it stays in view
+             while the left column (record + working panel) scrolls. -->
+        <div class="col-main pdf-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+          <h3 class="pane-title t-heading-04">Document viewer</h3>
+          <DocumentViewer documents={documents} docTitle={permit.name} />
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══════════════ B3 · Record + docked documents/discussion ════════════ -->
+    <!-- Same two-column split as B2, but the RIGHT column is a single tabbed working
+         panel: the document viewer is now a TAB alongside conditions, comments, and
+         the analysis team, so the whole right side is one surface the reviewer flips
+         through in place. The record keeps the left column and grows the page; the
+         right panel is sticky so it stays in view while the record scrolls. -->
+    <div class="version" data-version="docktabs" hidden>
+      <nav class="wiz-track cds--css-grid" aria-label="Review steps">
+        <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <cds-progress-indicator space-equally>
+            <cds-progress-step state="current" label="Review application" secondary-label="Against the study proposal"></cds-progress-step>
+            <cds-progress-step label="Add conditions" secondary-label="With the application in context"></cds-progress-step>
+            <cds-progress-step label="Finalize letter" secondary-label="Confirm what prints"></cds-progress-step>
+            <cds-progress-step label="Review & send" secondary-label="The full package"></cds-progress-step>
+          </cds-progress-indicator>
+        </div>
+      </nav>
+
+      <div class="page-head cds--css-grid">
+        <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <h2 class="page-head__title t-heading-04">Review application</h2>
+        </header>
+      </div>
+
+      <section class="step cds--css-grid cds--css-grid--with-row-gap">
+        <!-- Left column: the full application record, growing the page as its sections
+             expand. B3 uses the read-only ReviewAppSummary (stock cds-accordion,
+             self-wired Expand/Collapse all per instance) rather than the editable
+             step-① ApplicationReview: that component hardcodes element ids, so it can
+             only be instantiated ONCE per page (B2 already renders it). The summary
+             renders every section and can coexist with B2's copy. -->
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+          <ReviewAppSummary heading="Application record" />
+        </div>
+
+        <!-- Right column: one tabbed working panel — Document viewer / Conditions /
+             Comments / Analysis team — pinned (sticky) so it stays in view while the
+             record scrolls. Same [data-tab-scope] dock hooks as B2, so every action
+             (add / remove / @-mention / email all) is wired identically. -->
+        <div class="col-main dock-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+          <h3 class="pane-title t-heading-04">Working panel</h3>
+          <div class="dock" data-tab-scope>
+            <cds-tabs value="document" data-panels>
+              <cds-tab value="document">Document viewer</cds-tab>
+              <cds-tab value="conditions">Conditions · {scTotal}</cds-tab>
+              <cds-tab value="comments">Comments · {comments.length}</cds-tab>
+              <cds-tab value="team">Analysis team · {team.length}</cds-tab>
+            </cds-tabs>
+
+            <!-- Document viewer — the same embedded PDF + picker, now the first tab. -->
+            <div class="rail-panel dock-doc" data-tabpanel="document">
+              <DocumentViewer documents={documents} docTitle={permit.name} />
+            </div>
+
+            <!-- Special conditions — the REAL HQ + district structure (ReviewConditions)
+                 + the dual-path add modal. -->
+            <div class="rail-panel" data-tabpanel="conditions" hidden>
+              <div class="dock-list">
+                <div class="rail__tools"><cds-button class="js-open-add-cond" kind="tertiary" size="md">Add condition</cds-button></div>
+                <ReviewConditions groups={conditionGroups} />
+              </div>
+            </div>
+
+            <!-- Comments — composer first (with @-mention), then the thread. -->
+            <div class="rail-panel" data-tabpanel="comments" hidden>
+              <div class="dock-composer">
+                <div class="mention-field">
+                  <cds-textarea data-comment-input label="Add a comment" placeholder="Note something for the team… type @ to mention someone" rows="2"></cds-textarea>
+                  <ul class="mention-menu" data-mention-menu role="listbox" aria-label="Mention a user" hidden></ul>
+                </div>
+                <cds-button class="js-post-comment" kind="primary" size="md">Add comment</cds-button>
+              </div>
+              <ul class="dock-thread" data-thread>
+                {comments.map((c) => (
+                  <li class="comment">
+                    <span class="comment__avatar" aria-hidden="true">{initials(c.author)}</span>
+                    <div class="comment__body">
+                      <p class="comment__meta t-label-01"><span class="comment__author">{c.author}</span> · {c.time}</p>
+                      <p class="comment__text t-body-01">{c.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <!-- Analysis team — same roster pattern; Email all + Add member. -->
+            <div class="rail-panel" data-tabpanel="team" hidden>
+              <div class="dock-list">
+                <div class="rail__tools">
+                  <cds-button class="js-email-team" kind="ghost" size="md">Email all</cds-button>
+                  <cds-button class="js-open-add-member" kind="tertiary" size="md">Add member</cds-button>
+                </div>
+                <cds-contained-list data-team-list label="Assigned to this permit" kind="on-page">
                   {team.map((m) => (
                     <cds-contained-list-item data-user-id={m.id} data-email={userDirectory.find((u) => u.id === m.id)?.email ?? ''}>
                       <div class="cond">
@@ -497,22 +612,7 @@ const cancelHref = withBase('/final-letter');
             <h3 class="rail__title t-heading-03">Special conditions</h3>
             <p class="rail__sub t-label-01">Standard conditions from headquarters and each district attach automatically. Add the conditional ones from the catalog, or remove any that don't apply.</p>
             <div class="rail__tools"><cds-button kind="tertiary" size="md">Add condition</cds-button></div>
-            <cds-contained-list label="Attached to this permit" kind="on-page">
-              {conditions.map((c) => (
-                <cds-contained-list-item>
-                  <div class="cond">
-                    <div class="cond__body">
-                      <p class="cond__scope t-label-01">{c.scope}</p>
-                      <p class="cond__label t-body-01">{c.label}</p>
-                    </div>
-                    <div class="cond__meta">
-                      <cds-tag size="sm" type={c.kind === 'Conditional' ? 'teal' : 'cool-gray'}>{c.kind}</cds-tag>
-                      <cds-icon-button kind="ghost" size="sm" align="left" set:html={`${trash}<span slot="tooltip-content">Remove ${c.label}</span>`}></cds-icon-button>
-                    </div>
-                  </div>
-                </cds-contained-list-item>
-              ))}
-            </cds-contained-list>
+            <ReviewConditions groups={conditionGroups} compact removable={false} />
           </div>
         </aside>
       </section>
@@ -529,7 +629,15 @@ const cancelHref = withBase('/final-letter');
       </div>
 
       <section class="step cds--css-grid cds--css-grid--with-row-gap">
-        <!-- Left (wider): a vertical tab set switching the three jobs in place —
+        <!-- Left (narrower): the application record (the form) as a fixed,
+             viewport-locked scroll pane so it stays level with the tab panel
+             instead of towering over it. -->
+        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6">
+          <p class="preview__label t-label-01">Application record</p>
+          <ReviewAppSummary scroll />
+        </div>
+
+        <!-- Right (wider): a vertical tab set switching the three jobs in place —
              the narrow rail + a roomy content panel for the PDF. -->
         <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
           <!-- Carbon's vertical-tabs wrapper: the tab rail slots into `tabs`, each
@@ -547,22 +655,7 @@ const cancelHref = withBase('/final-letter');
 
             <div slot="panel" data-tabpanel="conditions" class="vtabs__pad" hidden>
               <div class="vtabs__tools"><cds-button kind="tertiary" size="md">Add condition</cds-button></div>
-              <cds-contained-list label="Attached to this permit" kind="on-page">
-                {conditions.map((c) => (
-                  <cds-contained-list-item>
-                    <div class="cond">
-                      <div class="cond__body">
-                        <p class="cond__scope t-label-01">{c.scope}</p>
-                        <p class="cond__label t-body-01">{c.label}</p>
-                      </div>
-                      <div class="cond__meta">
-                        <cds-tag size="sm" type={c.kind === 'Conditional' ? 'teal' : 'cool-gray'}>{c.kind}</cds-tag>
-                        <cds-icon-button kind="ghost" size="sm" align="left" set:html={`${trash}<span slot="tooltip-content">Remove ${c.label}</span>`}></cds-icon-button>
-                      </div>
-                    </div>
-                  </cds-contained-list-item>
-                ))}
-              </cds-contained-list>
+              <ReviewConditions groups={conditionGroups} removable={false} />
             </div>
 
             <div slot="panel" data-tabpanel="comments" class="vtabs__pad" hidden>
@@ -581,14 +674,6 @@ const cancelHref = withBase('/final-letter');
               <div class="vtabs__send"><cds-button kind="primary" size="md">Add comment</cds-button></div>
             </div>
           </cds-tabs-vertical>
-        </div>
-
-        <!-- Right (narrower): the application record (the form) as a fixed,
-             viewport-locked scroll pane so it stays level with the tab panel
-             instead of towering over it. -->
-        <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6">
-          <p class="preview__label t-label-01">Application record</p>
-          <ReviewAppSummary scroll />
         </div>
       </section>
     </div>
@@ -687,11 +772,13 @@ const cancelHref = withBase('/final-letter');
       <cds-modal-label>Special conditions</cds-modal-label>
       <cds-modal-heading>Add condition</cds-modal-heading>
     </cds-modal-header>
-    <cds-modal-body has-scrolling-content>
+    <cds-modal-body>
       <cds-stack gap="6">
-        <cds-dropdown id="cond-scope" title-text="Scope" value="Headquarters" label="Choose a scope">
-          {conditionScopes.map((s) => (
-            <cds-dropdown-item value={s}>{s}</cds-dropdown-item>
+        <!-- Scope = the owner (HQ or a district on this permit) the condition attaches
+             to — the same owners the detail page curates. -->
+        <cds-dropdown id="cond-scope" title-text="Scope" value="hq" label="Choose a scope">
+          {scOwners.map((o) => (
+            <cds-dropdown-item value={o.key}>{o.label}</cds-dropdown-item>
           ))}
         </cds-dropdown>
 
@@ -704,12 +791,10 @@ const cancelHref = withBase('/final-letter');
           </cds-content-switcher>
         </div>
 
+        <!-- Catalog options are the chosen owner's non-default inventory; the script
+             repopulates this list whenever the scope changes. -->
         <div id="cond-catalog">
-          <cds-dropdown id="cond-pick" title-text="Saved conditions" label="Select a saved condition">
-            {conditionCatalog.map((c) => (
-              <cds-dropdown-item value={c}>{c}</cds-dropdown-item>
-            ))}
-          </cds-dropdown>
+          <cds-dropdown id="cond-pick" title-text="Saved conditions" label="Select a saved condition"></cds-dropdown>
         </div>
 
         <div id="cond-manual" hidden>
@@ -723,22 +808,51 @@ const cancelHref = withBase('/final-letter');
     </cds-modal-footer>
   </cds-modal>
 
-  <!-- Row template for a condition added via the modal — same contained-list-item
-       shape as the seeded rows. A manually-written one is tagged "Custom". -->
+  <!-- Add / edit a specimen — used by the editable ApplicationReview in the B2
+       version. SAME construction as the finalize wizard's specimen dialog
+       (final-letter.astro): four fields that add a row or edit one in place. -->
+  <cds-modal id="specimen-modal" size="md">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Authorized collection</cds-modal-label>
+      <cds-modal-heading id="specimen-modal-heading">Add a specimen type</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <div class="spec-fields">
+        <div class="spec-fields__wide">
+          <cds-text-input id="ns-species" label="Species"></cds-text-input>
+        </div>
+        <cds-text-input id="ns-quantity" label="Quantity"></cds-text-input>
+        <cds-text-input id="ns-portion" label="Portion"></cds-text-input>
+        <div class="spec-fields__wide">
+          <cds-text-input id="ns-condition" label="Condition"></cds-text-input>
+        </div>
+      </div>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="ns-save">Add specimen</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Row template for a condition added via the modal — the SAME item shape
+       ReviewConditions renders (rich-text body + source meta, remove in slot="action").
+       The script fills the body / source tag / added-by and appends into the chosen
+       owner's list. -->
   <template id="cond-row-template">
     <cds-contained-list-item>
-      <div class="cond">
-        <div class="cond__body">
-          <p class="cond__scope t-label-01"></p>
-          <p class="cond__label t-body-01"></p>
-        </div>
-        <div class="cond__meta">
+      <div class="rc-cond">
+        <div class="rc-cond__body"></div>
+        <div class="rc-cond__meta">
           <cds-tag size="sm" type="cool-gray"></cds-tag>
-          <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond>
-            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
-            <span slot="tooltip-content">Remove</span>
-          </cds-icon-button>
+          <span class="rc-cond__by t-label-01"></span>
         </div>
+      </div>
+      <div slot="action" class="rc-cond__actions">
+        <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond>
+          <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
+          <span slot="tooltip-content">Remove condition</span>
+        </cds-icon-button>
       </div>
     </cds-contained-list-item>
   </template>
@@ -758,6 +872,20 @@ const cancelHref = withBase('/final-letter');
 
   <!-- The user directory the @-mention picker draws from (id / name / detail / email). -->
   <script type="application/json" id="mention-directory" set:html={JSON.stringify(userDirectory.map((u) => ({ id: u.id, name: u.name, detail: u.detail, email: u.email })))}></script>
+
+  <!-- Per-owner catalog (non-default items) the Add-condition picker offers, keyed by
+       owner. The script repopulates #cond-pick from this when the scope changes. -->
+  <script type="application/json" id="sc-inventory" set:html={JSON.stringify(scInventory)}></script>
+
+  <!-- Seed for the editable ApplicationReview (B2 version): the same source data the
+       finalize wizard seeds step ① from — project title, authorized specimens, and
+       the authorized parks per district. The page-local wiring reads this, then
+       persists edits to its own localStorage key (see script). -->
+  <script type="application/json" id="appreview-seed" set:html={JSON.stringify({
+    projectTitle: permit.name,
+    specimens: permit.dataCollection.specimens.map((s) => ({ ...s })),
+    districts: permit.studyAreas.districts.map((d) => ({ name: d.name, parks: [...d.parks] })),
+  })}></script>
 
   <script>
     import { showToast } from '../lib/toast';
@@ -799,25 +927,87 @@ const cancelHref = withBase('/final-letter');
     document.getElementById('comments-close')?.addEventListener('click', closeComments);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeComments(); });
 
-    // ── B2 · Add a member to the analysis team (button-first modal) ────────────
-    // "Add member" opens the base-page modal; confirming appends the picked user to
-    // the team table, bumps the tab count, and drops them from the picker so they
-    // can't be added twice. Remove takes a row back out (never the lead). It's a
-    // design study, so this is in-DOM only — no persistence.
+    // ── Working dock (conditions / comments / analysis team) ───────────────────
+    // Both B2 (full-width panel) and B3 (docked documents) render a "dock": the same
+    // conditions / comments / analysis-team surface, differing only in arrangement.
+    // All the dock behavior (add member, add condition, @-mention comments, email
+    // all, remove) is wired PER SCOPE off shared [data-*] hooks, so every dock
+    // instance works independently and the two studies never fight over one id.
+    // Shared modals/templates are page-level singletons; opening one records which
+    // dock scope invoked it, so "confirm" appends to the right list. Design study →
+    // in-DOM only, no persistence.
+
+    // Shared modal + template refs (page-level singletons).
     const addModal = document.getElementById('add-member-modal') as any;
     const addSelect = document.getElementById('add-member-select') as any;
-    const teamList = document.getElementById('team-list');
-    const teamTab = document.getElementById('team-tab');
     const teamRowTpl = document.getElementById('team-row-template') as HTMLTemplateElement | null;
 
-    const syncTeamCount = () => {
-      if (teamTab && teamList) teamTab.textContent = `Analysis team · ${teamList.querySelectorAll('cds-contained-list-item').length}`;
+    const condModal = document.getElementById('cond-modal') as any;
+    const condMode = document.getElementById('cond-mode') as any;
+    const condCatalog = document.getElementById('cond-catalog');
+    const condManual = document.getElementById('cond-manual');
+    const condScope = document.getElementById('cond-scope') as any;
+    const condPick = document.getElementById('cond-pick') as any;
+    const condBody = document.getElementById('cond-body') as any;
+    const condRowTpl = document.getElementById('cond-row-template') as HTMLTemplateElement | null;
+
+    const commentTpl = document.getElementById('comment-row-template') as HTMLTemplateElement | null;
+    interface Dir { id: string; name: string; detail: string; email: string; }
+    let directory: Dir[] = [];
+    try { directory = JSON.parse(document.getElementById('mention-directory')?.textContent || '[]'); } catch { directory = []; }
+
+    // Which dock scope opened the currently-showing shared modal.
+    let activeScope: HTMLElement | null = null;
+
+    // Count labels live on the scope's own cds-tab (queried by value, no ids).
+    const teamListOf = (s: HTMLElement) => s.querySelector('[data-team-list]');
+    // Conditions now render as MULTIPLE owner lists (HQ + one per district), so the
+    // count sums every item across all of a scope's lists.
+    const condListsOf = (s: HTMLElement) => Array.from(s.querySelectorAll('[data-cond-list]'));
+    const syncTeamCount = (s: HTMLElement) => {
+      const list = teamListOf(s), tab = s.querySelector('cds-tab[value="team"]');
+      if (list && tab) tab.textContent = `Analysis team · ${list.querySelectorAll('cds-contained-list-item').length}`;
+    };
+    const syncCondCount = (s: HTMLElement) => {
+      const tab = s.querySelector('cds-tab[value="conditions"]');
+      if (!tab) return;
+      const n = condListsOf(s).reduce((sum, l) => sum + l.querySelectorAll('cds-contained-list-item').length, 0);
+      tab.textContent = `Conditions · ${n}`;
     };
 
-    document.querySelectorAll('.js-open-add-member').forEach((b) =>
-      b.addEventListener('click', () => { if (addModal) addModal.open = true; }));
+    // Per-owner catalog (non-default inventory) the Add-condition picker offers.
+    interface Inv { id: string; preview: string; body: string; }
+    let scInv: Record<string, Inv[]> = {};
+    try { scInv = JSON.parse(document.getElementById('sc-inventory')?.textContent || '{}'); } catch { scInv = {}; }
+    // Repopulate the catalog picker for the selected owner (value = inventory id).
+    const repopulateCatalog = (owner: string) => {
+      if (!condPick) return;
+      const items = scInv[owner] || [];
+      condPick.innerHTML = '';
+      items.forEach((it) => {
+        const opt = document.createElement('cds-dropdown-item');
+        opt.setAttribute('value', it.id);
+        opt.textContent = it.preview + (it.preview.length >= 120 ? '…' : '');
+        condPick.appendChild(opt);
+      });
+      condPick.value = items[0]?.id || '';
+    };
+    condScope?.addEventListener('cds-dropdown-selected', (e: any) =>
+      repopulateCatalog(e.detail?.item?.value || condScope.value || 'hq'));
 
+    // Toggle the two paths on the add-condition switcher (cds-* ignore [hidden] on
+    // hosts, but these are plain <div> wrappers, so the attribute collapses them).
+    const applyCondMode = () => {
+      const manual = (condMode?.value || 'catalog') === 'manual';
+      if (condCatalog) condCatalog.hidden = manual;
+      if (condManual) condManual.hidden = !manual;
+    };
+    condMode?.addEventListener('cds-content-switcher-selected', applyCondMode);
+
+    // Add-member confirm — append to whichever dock opened the modal.
     document.getElementById('add-member-confirm')?.addEventListener('click', () => {
+      const scope = activeScope;
+      const teamList = scope ? teamListOf(scope) : null;
       const id: string = addSelect?.value || '';
       if (!id || !teamList || !teamRowTpl) { if (addModal) addModal.open = false; return; }
       const opt = addSelect.querySelector(`cds-combo-box-item[value="${CSS.escape(id)}"]`) as HTMLElement | null;
@@ -832,97 +1022,51 @@ const cancelHref = withBase('/final-letter');
       opt?.remove();          // a user already on the team drops out of the picker
       addSelect.value = '';
       addModal.open = false;
-      syncTeamCount();
+      if (scope) syncTeamCount(scope);
     });
 
-    // Remove a member (delegated) — the lead has no remove control, so it never fires.
-    teamList?.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest?.('[data-remove-member]');
-      if (!btn) return;
-      btn.closest('cds-contained-list-item')?.remove();
-      syncTeamCount();
-    });
-
-    // Email all — one message to every current team member with an address on file
-    // (deduped), same behavior as the analysis-team modal's "Email all".
-    document.querySelectorAll('.js-email-team').forEach((b) => b.addEventListener('click', () => {
-      const emails = [...new Set(Array.from(teamList?.querySelectorAll<HTMLElement>('cds-contained-list-item[data-email]') ?? [])
-        .map((r) => (r.dataset.email || '').trim()).filter(Boolean))];
-      if (emails.length) window.location.href = `mailto:${emails.join(',')}`;
-    }));
-
-    // ── B2 · Add a special condition (dual-path catalog/manual modal) ──────────
-    // "Add condition" opens the modal; the content-switcher toggles the catalog picker
-    // vs the manual textarea; saving appends a row to the conditions list and bumps
-    // the tab count. In-DOM only (design study).
-    const condModal = document.getElementById('cond-modal') as any;
-    const condMode = document.getElementById('cond-mode') as any;
-    const condCatalog = document.getElementById('cond-catalog');
-    const condManual = document.getElementById('cond-manual');
-    const condScope = document.getElementById('cond-scope') as any;
-    const condPick = document.getElementById('cond-pick') as any;
-    const condBody = document.getElementById('cond-body') as any;
-    const condList = document.getElementById('cond-list');
-    const condTab = document.getElementById('cond-tab');
-    const condRowTpl = document.getElementById('cond-row-template') as HTMLTemplateElement | null;
-
-    const syncCondCount = () => {
-      if (condTab && condList) condTab.textContent = `Conditions · ${condList.querySelectorAll('cds-contained-list-item').length}`;
-    };
-
-    // Toggle the two paths on the switcher (cds-* ignore [hidden] on hosts, but these
-    // are plain <div> wrappers, so the attribute collapses them fine).
-    const applyCondMode = () => {
-      const manual = (condMode?.value || 'catalog') === 'manual';
-      if (condCatalog) condCatalog.hidden = manual;
-      if (condManual) condManual.hidden = !manual;
-    };
-    condMode?.addEventListener('cds-content-switcher-selected', applyCondMode);
-
-    document.querySelectorAll('.js-open-add-cond').forEach((b) =>
-      b.addEventListener('click', () => { if (condModal) { applyCondMode(); condModal.open = true; } }));
-
+    // Add-condition save — append into the chosen owner's list within the dock that
+    // opened the modal. Catalog → pull the picked inventory item's rich-text body
+    // (source "From catalog"); manual → wrap the typed text in a paragraph (source
+    // "Custom"). Mirrors the detail page's source labelling.
+    const escHtml = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as Record<string, string>)[c]);
     document.getElementById('cond-modal-save')?.addEventListener('click', () => {
-      if (!condList || !condRowTpl) { if (condModal) condModal.open = false; return; }
+      const scope = activeScope;
+      const owner = condScope?.value || 'hq';
+      const targetList = scope?.querySelector(`[data-cond-list][data-owner="${CSS.escape(owner)}"]`);
+      if (!targetList || !condRowTpl) { if (condModal) condModal.open = false; return; }
       const manual = (condMode?.value || 'catalog') === 'manual';
-      const scope = condScope?.value || 'Headquarters';
-      const label = manual ? (condBody?.value || '').trim() : (condPick?.value || '');
-      if (!label) { if (condModal) condModal.open = false; return; }
+      let bodyHtml = '';
+      if (manual) {
+        const text = (condBody?.value || '').trim();
+        if (!text) { if (condModal) condModal.open = false; return; }
+        bodyHtml = `<p>${escHtml(text)}</p>`;
+      } else {
+        const pickId = condPick?.value || '';
+        const picked = (scInv[owner] || []).find((i) => i.id === pickId);
+        if (!picked) { if (condModal) condModal.open = false; return; }
+        bodyHtml = picked.body;
+      }
       const item = condRowTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
-      const scopeEl = item.querySelector('.cond__scope');
-      if (scopeEl) scopeEl.textContent = scope;
-      const labelEl = item.querySelector('.cond__label');
-      if (labelEl) labelEl.textContent = label;
+      const bodyEl = item.querySelector('.rc-cond__body');
+      if (bodyEl) bodyEl.innerHTML = bodyHtml;   // our own sanitized seed HTML / escaped text
       const tag = item.querySelector('cds-tag');
-      if (tag) { tag.textContent = manual ? 'Custom' : 'Catalog'; tag.setAttribute('type', manual ? 'purple' : 'cool-gray'); }
-      condList.appendChild(item);
+      if (tag) tag.textContent = manual ? 'Custom' : 'From catalog';
+      const by = item.querySelector('.rc-cond__by');
+      if (by) by.textContent = manual ? 'Custom' : 'From catalog';
+      targetList.appendChild(item);
       if (condBody) condBody.value = '';
       condModal.open = false;
-      syncCondCount();
+      if (scope) syncCondCount(scope);
     });
 
-    // Remove a condition (delegated).
-    condList?.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest?.('[data-remove-cond]');
-      if (!btn) return;
-      btn.closest('cds-contained-list-item')?.remove();
-      syncCondCount();
-    });
-
-    // ── B2 · @-mention existing users in a comment ────────────────────────────
-    // Typing "@" opens a picker of directory users; choosing one inserts "@Name ".
-    // Posting renders the mentions as tokens and sends each mentioned user a
-    // (simulated) email. Design study → the email is a toast, not a real send.
-    interface Dir { id: string; name: string; detail: string; email: string; }
-    let directory: Dir[] = [];
-    try { directory = JSON.parse(document.getElementById('mention-directory')?.textContent || '[]'); } catch { directory = []; }
-
-    const cdsInput = document.getElementById('dock-comment-input') as any;
-    const menu = document.getElementById('mention-menu');
-    const thread = document.getElementById('dock-thread');
-    const commentTpl = document.getElementById('comment-row-template') as HTMLTemplateElement | null;
-
-    if (cdsInput && menu && thread && commentTpl) {
+    // @-mention wiring for one dock's composer (no-op if it has none, e.g. layouts
+    // B/E whose comment boxes aren't the mention composer).
+    const wireMentions = (scope: HTMLElement) => {
+      const cdsInput = scope.querySelector('[data-comment-input]') as any;
+      const menu = scope.querySelector('[data-mention-menu]') as HTMLElement | null;
+      const thread = scope.querySelector('[data-thread]') as HTMLElement | null;
+      if (!cdsInput || !menu || !thread || !commentTpl) return;
       customElements.whenDefined('cds-textarea').then(async () => {
         await (cdsInput.updateComplete ?? Promise.resolve());
         const ta = cdsInput.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null;
@@ -1053,9 +1197,242 @@ const cancelHref = withBase('/final-letter');
           }
           ta.value = ''; cdsInput.value = ''; picked.clear(); hideMenu();
         };
-        document.querySelectorAll('.js-post-comment').forEach((b) => b.addEventListener('click', post));
+        scope.querySelectorAll('.js-post-comment').forEach((b) => b.addEventListener('click', post));
       });
-    }
+    };
+
+    // Wire every dock instance (B2, B3, …) off its own scope.
+    document.querySelectorAll<HTMLElement>('[data-tab-scope]').forEach((scope) => {
+      // Open the shared modals — record the invoking scope so confirm targets it.
+      scope.querySelectorAll('.js-open-add-member').forEach((b) =>
+        b.addEventListener('click', () => { activeScope = scope; if (addModal) addModal.open = true; }));
+      scope.querySelectorAll('.js-open-add-cond').forEach((b) =>
+        b.addEventListener('click', () => {
+          activeScope = scope;
+          if (condModal) {
+            applyCondMode();
+            repopulateCatalog(condScope?.value || 'hq');
+            condModal.open = true;
+          }
+        }));
+
+      // Remove a member (delegated) — the lead has no remove control, so it never fires.
+      teamListOf(scope)?.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest?.('[data-remove-member]');
+        if (!btn) return;
+        btn.closest('cds-contained-list-item')?.remove();
+        syncTeamCount(scope);
+      });
+      // Remove a condition (delegated) — one listener per owner list (HQ + districts).
+      condListsOf(scope).forEach((list) => list.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest?.('[data-remove-cond]');
+        if (!btn) return;
+        btn.closest('cds-contained-list-item')?.remove();
+        syncCondCount(scope);
+      }));
+
+      // Email all — one message to every current team member with an address on file.
+      scope.querySelectorAll('.js-email-team').forEach((b) => b.addEventListener('click', () => {
+        const list = teamListOf(scope);
+        const emails = [...new Set(Array.from(list?.querySelectorAll<HTMLElement>('cds-contained-list-item[data-email]') ?? [])
+          .map((r) => (r.dataset.email || '').trim()).filter(Boolean))];
+        if (emails.length) window.location.href = `mailto:${emails.join(',')}`;
+      }));
+
+      // @-mention composer.
+      wireMentions(scope);
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Editable ApplicationReview (B2 · Full-width panel) — page-local wiring
+    // ──────────────────────────────────────────────────────────────────────────
+    // The B2 study renders the REAL step-① ApplicationReview component so the
+    // layout can be exercised with live edit affordances. That component is markup
+    // only; the finalize wizard's behavior (final-letter.astro) is entangled with
+    // the letter + conditions. Rather than import that machinery, this is a
+    // SELF-CONTAINED port of just the step-① editing — seed + persist the
+    // letter-bound fields, the study-areas roster, and the specimen modal — scoped
+    // to this page and persisted under its OWN key, decoupled from the wizard.
+    // (Deliberately omits the wizard's drop-district confirmation / team
+    // reassignment: this is a layout study, so parks add/remove freely.)
+    (async () => {
+      const appReviewRoot = document.querySelector('[data-appreview]');
+      if (!appReviewRoot) return;
+
+      await Promise.all([
+        customElements.whenDefined('cds-multi-select'),
+        customElements.whenDefined('cds-dropdown'),
+        customElements.whenDefined('cds-text-input'),
+      ]);
+
+      const $ar = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as T | null;
+      const escAr = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as Record<string, string>)[c]);
+      const trashIcon =
+        '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>';
+      const editIcon =
+        '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>';
+
+      // ── State: persisted edits win over the application seed ──────────────────
+      const seedEl = document.getElementById('appreview-seed');
+      const seed = seedEl ? JSON.parse(seedEl.textContent || '{}') : {};
+      const STORE = 'review-layouts-appreview';
+      let persisted: any = {};
+      try { persisted = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch { persisted = {}; }
+
+      const districtNames: string[] = (seed.districts || []).map((d: any) => d.name);
+      const catEl = $ar('fb-category') as any;
+      const state = {
+        fields: {
+          projectTitle: seed.projectTitle ?? '',
+          category: catEl?.value ?? '',
+          ...(persisted.fields || {}),
+        } as Record<string, string>,
+        parks: (persisted.parks
+          || Object.fromEntries((seed.districts || []).map((d: any) => [d.name, [...d.parks]]))) as Record<string, string[]>,
+        specimens: (Array.isArray(persisted.specimens)
+          ? persisted.specimens
+          : (seed.specimens || []).map((s: any) => ({ ...s }))) as Array<Record<string, string>>,
+      };
+      const persist = () => localStorage.setItem(STORE, JSON.stringify(state));
+
+      // ── Editable letter-bound fields (project title + category) ───────────────
+      const titleEl = $ar('fb-title') as any;
+      if (titleEl) {
+        titleEl.value = state.fields.projectTitle ?? '';
+        titleEl.addEventListener('input', () => { state.fields.projectTitle = titleEl.value; persist(); });
+      }
+      if (catEl) {
+        if (state.fields.category) catEl.value = state.fields.category;
+        catEl.addEventListener('cds-dropdown-selected', (e: any) => {
+          state.fields.category = e.detail?.item?.value || state.fields.category; persist();
+        });
+      }
+
+      // ── Study-areas roster (multi-select → Park/District table) ───────────────
+      const saSelect = $ar('sa-select') as any;
+      const parkDistrict = new Map<string, string>();
+      saSelect?.querySelectorAll('cds-multi-select-item').forEach((it: any) => {
+        parkDistrict.set(it.getAttribute('value') || '', it.dataset.district || '');
+      });
+      const selectedNames = () => Object.values(state.parks).flat();
+      const groupNames = (names: string[]) => {
+        const grouped: Record<string, string[]> = Object.fromEntries(districtNames.map((n) => [n, []]));
+        names.forEach((name) => {
+          const d = parkDistrict.get(name);
+          if (d && grouped[d]) grouped[d].push(name);
+        });
+        return grouped;
+      };
+      const renderStudyAreas = () => {
+        const names = selectedNames();
+        if (saSelect) saSelect.value = names.join(',');
+        const count = $ar('sa-count');
+        if (count) count.textContent = names.length ? `(${names.length})` : '';
+        const empty = $ar('sa-empty');
+        if (empty) (empty as HTMLElement).hidden = names.length > 0;
+        const body = $ar('sa-body');
+        if (body) {
+          body.innerHTML = names.slice().sort((a, b) => a.localeCompare(b)).map((name) => `
+            <cds-table-row>
+              <cds-table-cell>${escAr(name)}</cds-table-cell>
+              <cds-table-cell>${escAr(parkDistrict.get(name) || '')}</cds-table-cell>
+              <cds-table-cell>
+                <cds-icon-button kind="ghost" size="sm" align="left" data-remove-park="${encodeURIComponent(name)}">
+                  ${trashIcon}<span slot="tooltip-content">Remove ${escAr(name)}</span>
+                </cds-icon-button>
+              </cds-table-cell>
+            </cds-table-row>`).join('');
+        }
+      };
+      saSelect?.addEventListener('cds-multi-select-selected', () => {
+        const v = (saSelect?.value ?? '') as string;
+        state.parks = groupNames(v ? v.split(',').filter(Boolean) : []);
+        persist(); renderStudyAreas();
+      });
+      $ar('sa-body')?.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest?.('[data-remove-park]') as HTMLElement | null;
+        if (!btn) return;
+        const name = decodeURIComponent(btn.dataset.removePark || '');
+        const district = parkDistrict.get(name);
+        if (!district) return;
+        state.parks[district] = (state.parks[district] || []).filter((p) => p !== name);
+        persist(); renderStudyAreas();
+      });
+
+      // ── Specimens (display table + add/edit modal) ────────────────────────────
+      const specBody = $ar('specimen-body');
+      const specEmpty = $ar('specimen-empty');
+      const specModal = $ar('specimen-modal') as any;
+      const specHeading = $ar('specimen-modal-heading');
+      const specSaveBtn = $ar('ns-save') as any;
+      let editingSpecIndex: number | null = null;
+
+      const renderSpecimens = () => {
+        if (!specBody) return;
+        specBody.innerHTML = state.specimens.map((s, i) => `
+          <cds-table-row>
+            <cds-table-cell>${escAr(s.species) || '—'}</cds-table-cell>
+            <cds-table-cell>${escAr(s.quantity) || '—'}</cds-table-cell>
+            <cds-table-cell>${escAr(s.portion) || '—'}</cds-table-cell>
+            <cds-table-cell>${escAr(s.condition) || '—'}</cds-table-cell>
+            <cds-table-cell>
+              <cds-icon-button kind="ghost" size="sm" data-edit-specimen="${i}">${editIcon}<span slot="tooltip-content">Edit specimen</span></cds-icon-button>
+              <cds-icon-button kind="ghost" size="sm" data-remove-specimen="${i}">${trashIcon}<span slot="tooltip-content">Remove specimen</span></cds-icon-button>
+            </cds-table-cell>
+          </cds-table-row>`).join('');
+        if (specEmpty) (specEmpty as HTMLElement).hidden = state.specimens.length > 0;
+      };
+      const openSpecimenModal = (index: number | null) => {
+        editingSpecIndex = index;
+        const s = index !== null ? state.specimens[index] : null;
+        if (specHeading) specHeading.textContent = index !== null ? 'Edit specimen' : 'Add a specimen type';
+        if (specSaveBtn) specSaveBtn.textContent = index !== null ? 'Save specimen' : 'Add specimen';
+        (($ar('ns-species') as any) || {}).value = s?.species ?? '';
+        (($ar('ns-quantity') as any) || {}).value = s?.quantity ?? '';
+        (($ar('ns-portion') as any) || {}).value = s?.portion ?? '';
+        (($ar('ns-condition') as any) || {}).value = s?.condition ?? '';
+        if (specModal) specModal.open = true;
+      };
+      $ar('add-specimen')?.addEventListener('click', () => openSpecimenModal(null));
+      specBody?.addEventListener('click', (e) => {
+        const ed = (e.target as HTMLElement).closest?.('[data-edit-specimen]') as HTMLElement | null;
+        if (ed) { openSpecimenModal(Number(ed.dataset.editSpecimen)); return; }
+        const rm = (e.target as HTMLElement).closest?.('[data-remove-specimen]') as HTMLElement | null;
+        if (rm) { state.specimens.splice(Number(rm.dataset.removeSpecimen), 1); persist(); renderSpecimens(); }
+      });
+      specSaveBtn?.addEventListener('click', () => {
+        const val = (id: string) => (($ar(id) as any)?.value ?? '').toString().trim();
+        const species = val('ns-species');
+        if (!species) { ($ar('ns-species') as any)?.focus(); return; }
+        const entry = { species, quantity: val('ns-quantity'), portion: val('ns-portion'), condition: val('ns-condition') };
+        if (editingSpecIndex !== null) state.specimens[editingSpecIndex] = entry;
+        else state.specimens.push(entry);
+        if (specModal) specModal.open = false;
+        persist(); renderSpecimens();
+      });
+
+      // ── Collapsible sections (sticky-stackable disclosures) ───────────────────
+      // Each section header is a data-section-toggle button over a data-section-body.
+      // Expand/Collapse all flips them together. Sticky/stacking is pure CSS
+      // (ReviewSection); this just drives the open/closed state.
+      const sectionToggles = Array.from(appReviewRoot.querySelectorAll<HTMLElement>('[data-section-toggle]'));
+      const setSectionOpen = (btn: HTMLElement, open: boolean) => {
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        const body = btn.closest('[data-review-section]')?.querySelector<HTMLElement>('[data-section-body]');
+        if (body) body.hidden = !open;
+      };
+      sectionToggles.forEach((btn) =>
+        btn.addEventListener('click', () => setSectionOpen(btn, btn.getAttribute('aria-expanded') !== 'true')));
+      appReviewRoot.querySelector('.js-appreview-expand')
+        ?.addEventListener('click', () => sectionToggles.forEach((b) => setSectionOpen(b, true)));
+      appReviewRoot.querySelector('.js-appreview-collapse')
+        ?.addEventListener('click', () => sectionToggles.forEach((b) => setSectionOpen(b, false)));
+
+      // Initial paint from the (possibly persisted) state.
+      renderStudyAreas();
+      renderSpecimens();
+    })();
   </script>
 
   <style>
@@ -1114,22 +1491,40 @@ const cancelHref = withBase('/final-letter');
     /* B2 pane headers — a proper title above each pane. */
     .pane-title { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-primary, #161616); }
 
-    /* B2: pin BOTH panes to the SAME explicit height (60vh) so the grid row can't
-       grow and neither column stretches to leave white space. The document viewer
-       becomes a fixed 60vh box (its PDF frame flexes to fill under the file bar); the
-       record is a fixed 60vh box that scrolls its sections within. This keeps the row
-       constant whether the record is expanded or collapsed, so it can no longer push
-       the viewer taller (the white-space-under-the-viewer bug), and leaves the working
-       panel below peeking into the viewport.
-       `:global` is REQUIRED: .pdfv / .app-sum--scroll are rendered by child components
-       (DocumentViewer / ReviewAppSummary), which carry a different Astro scope id — a
-       plain scoped selector here silently fails to match them. */
-    [data-version="stacked"] .step :global(.pdfv) { block-size: 60vh; }
+    /* B2: LEFT column = the record + the working panel (conditions / comments /
+       analysis team) stacked in one column; RIGHT column = the document viewer, made
+       sticky so it stays in view while the left column scrolls.
+       The record GROWS THE PAGE (no inner scroll box); its sticky section headers pin
+       below the page chrome (--rsec-sticky-top) and stack. --rsec-top is that clearance:
+       the fixed UI-Shell header + PermitHeader bar (6rem) plus the sticky step tracker
+       (~4rem) — the document viewer pins at the same line.
+       `:global` is REQUIRED for .pdfv (rendered by the DocumentViewer child component,
+       which carries a different Astro scope id — a plain scoped selector won't match). */
+    [data-version="stacked"] .step { --rsec-top: calc(6rem + 4rem); }
+    [data-version="stacked"] .appreview { --rsec-sticky-top: var(--rsec-top); }
+    [data-version="stacked"] .pdf-col { position: sticky; top: var(--rsec-top); align-self: start; }
+    [data-version="stacked"] .step :global(.pdfv) { block-size: max(74vh, 44rem); }
     [data-version="stacked"] .step :global(.pdfv__frame) { flex: 1 1 auto; block-size: auto; min-block-size: 0; }
-    [data-version="stacked"] .step :global(.app-sum--scroll) { block-size: 60vh; max-block-size: 60vh; }
 
-    /* Full-width docked working panel (version B2). */
-    .dock-wrap { margin-top: var(--cds-spacing-07, 2rem); }
+    /* B3 · Docked documents — SAME split as B2 (record left, grows the page; working
+       panel right, sticky), except the RIGHT column is the whole dock (document
+       viewer + conditions + comments + team as tabs), not just the PDF. The dock
+       sits at the top of its column, so no top margin. The document-viewer tab fits
+       within a sticky pin: cap the PDF at a viewport-relative height with a rem floor
+       and let the frame flex to fill it. */
+    [data-version="docktabs"] .step { --rsec-top: calc(6rem + 4rem); }
+    [data-version="docktabs"] .dock-col { position: sticky; top: var(--rsec-top); align-self: start; }
+    [data-version="docktabs"] .dock { margin-top: 0; }
+    [data-version="docktabs"] .dock-doc { padding: 0; }
+    [data-version="docktabs"] .step :global(.pdfv) { block-size: max(68vh, 40rem); }
+    [data-version="docktabs"] .step :global(.pdfv__frame) { flex: 1 1 auto; block-size: auto; min-block-size: 0; }
+
+    /* Specimen add/edit modal fields — same shape as the finalize wizard's dialog. */
+    .spec-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--cds-spacing-05, 1rem); }
+    .spec-fields__wide { grid-column: 1 / -1; }
+
+    /* Working panel (version B2) — stacked under the record in the left column. */
+    [data-version="stacked"] .dock { margin-top: var(--cds-spacing-07, 2rem); }
     .dock { background: var(--cds-layer-01, #f4f4f4); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); padding: var(--cds-spacing-06, 1.5rem); }
     /* Conditions + team use the same cds-contained-list pattern as the other layouts;
        cap them to a readable width so rows don't stretch across the full-width dock. */

@@ -1314,6 +1314,9 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
     type ConditionOwner,
     type PermitCondition,
   } from '../data/conditions';
+  import { parkKey } from '../data/parks';
+  import { derivePermitActivities } from '../data/activities';
+  import { derivePermitSensitiveSpecies, derivePermitRegions, derivePermitAssociatedPermits } from '../data/scope';
 
   const $ = (id: string) => document.getElementById(id);
   const permitId = permit.id;
@@ -1322,15 +1325,25 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
     key: districtKey(d.name),
     parks: d.parks.length,
   }));
+  // Study-area park slugs + field-activity ids — the match sets for scoped conditions.
+  // Activities are DERIVED from the application's narrative (no structured activity
+  // field exists yet — see activities.ts derivePermitActivities).
+  const permitParkKeys = permit.studyAreas.districts.flatMap((d) => d.parks.map(parkKey));
+  const permitActivityKeys = derivePermitActivities(permit);
   // Whoever adds a condition is the person behind the active prototype identity
   // (Story 1: identity is the single global actor), not a hardcoded roster member.
   const identity = readIdentity();
   const reviewer = activeUser(identity)?.name ?? 'Reviewer';
 
-  let conditions: PermitCondition[] = loadPermitConditions(
-    permitId,
-    districts.map((d) => d.key),
-  );
+  let conditions: PermitCondition[] = loadPermitConditions(permitId, {
+    districtKeys: districts.map((d) => d.key),
+    parkKeys: permitParkKeys,
+    activityKeys: permitActivityKeys,
+    // Location- + application-derived scope (see scope.ts).
+    speciesKeys: derivePermitSensitiveSpecies(permit),
+    regionKeys: derivePermitRegions(permit),
+    agencyKeys: derivePermitAssociatedPermits(permit),
+  });
   // Conditions freeze the moment the permit leaves review — i.e. once it's been
   // approved (Out for signature) and thereafter (Active). Under review, they're
   // still editable; Changes requested / Rejected never leave them frozen.
@@ -1385,7 +1398,10 @@ const ownerIdentifiers = [t.submitter, t.principalInvestigator, t.fieldLead]
   });
 
   const sourceLabel = (c: PermitCondition) =>
-    c.source === 'default' ? 'Standard' : c.source === 'inventory' ? 'From catalog' : 'Custom';
+    c.source === 'default' ? 'Standard'
+      : c.source === 'scoped' ? 'Park-scoped'
+      : c.source === 'inventory' ? 'From catalog'
+      : 'Custom';
 
   // ── Render a single condition item into a contained-list ──────────────────
   const buildItem = (c: PermitCondition, ownerConds: PermitCondition[], idxInOwner: number) => {

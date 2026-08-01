@@ -21,12 +21,33 @@ export interface Park {
   district: string;
 }
 
-/** name → slug. Deterministic; accented letters / punctuation collapse to `-`. */
-const slugify = (name: string): string =>
-  name
+// CA State Parks unit-designation abbreviations, expanded to their full form so a
+// unit named with an abbreviation ("Prairie Creek Redwoods SP") keys to the SAME
+// slug as the department's spelled-out directory name ("... State Park"). This
+// reconciles the two conventions in the data — the directory + application picker
+// spell them out; some legacy permit records abbreviate — so condition scoping
+// matches either. Longest tokens first (SVRA before SRA); word-boundary anchored.
+const DESIGNATIONS: [RegExp, string][] = [
+  [/\bSVRA\b/gi, 'State Vehicular Recreation Area'],
+  [/\bSRA\b/gi, 'State Recreation Area'],
+  [/\bSNR\b/gi, 'State Natural Reserve'],
+  [/\bSHP\b/gi, 'State Historic Park'],
+  [/\bSB\b/gi, 'State Beach'],
+  [/\bSP\b/gi, 'State Park'],
+];
+
+/** name → slug. Deterministic; designation abbreviations are expanded first so
+ *  "… SP" and "… State Park" collapse to one key, then accented letters /
+ *  punctuation collapse to `-`. Exported as `parkKey` so other modules (e.g.
+ *  condition scoping) derive the exact same slug a Park carries as its `id`. */
+export const parkKey = (name: string): string => {
+  const expanded = DESIGNATIONS.reduce((s, [re, full]) => s.replace(re, full), name);
+  return expanded
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
+};
+const slugify = parkKey;
 
 // Authored district-first so every unit carries its district; flattened + sorted
 // into the flat `parks` list the form renders. Grouping is the department's field

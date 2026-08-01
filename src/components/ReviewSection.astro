@@ -1,0 +1,122 @@
+---
+// A titled section for ApplicationReview. Two modes:
+//
+//   • default — a plain titled block with a hairline rule, IDENTICAL to
+//     PermitSection (so the finalize wizard's step ① is unchanged). It simply
+//     renders PermitSection.
+//   • collapsible — the header becomes a disclosure toggle and the body collapses.
+//     Used by the B2 review-layout study, where the headers are also made
+//     STICKY-STACKABLE: each pins at an offset (orderIndex × header height) so the
+//     section headers pile up at the top of the scroll pane as you scroll.
+//     `orderIndex` drives both the visual order (CSS `order`) and the sticky offset
+//     (so the pinned headers stay in visual order); `open` sets the initial state.
+//     Expand/collapse-all + per-section toggling is wired by the page script
+//     (review-layouts.astro) via the data-section-toggle / data-section-body hooks.
+//
+// carbon-checked: cds-accordion is the spoke's collapsible primitive, but its
+// header lives in shadow DOM and cannot be made `position: sticky`. The B2 study
+// requires sticky, stacking section headers, so the collapsible mode uses a
+// light-DOM disclosure — a stock <button> toggling aria-expanded over a [hidden]
+// body. Carbon ships no sticky-header accordion; this is a documented exception,
+// not a reinvented lego.
+import PermitSection from './PermitSection.astro';
+
+interface Props {
+  title: string;
+  /** Render as a sticky, collapsible disclosure (B2 study) instead of a plain block. */
+  collapsible?: boolean;
+  /** Initial expanded state (collapsible mode only). */
+  open?: boolean;
+  /** Visual position — drives CSS `order` and the sticky-stack offset. */
+  orderIndex?: number;
+}
+const { title, collapsible = false, open = true, orderIndex = 0 } = Astro.props;
+---
+
+{collapsible ? (
+  <section
+    class="rsec"
+    data-review-section
+    style={`--order-i:${orderIndex}; --stack-i:${orderIndex}`}
+  >
+    <h2 class="rsec__head">
+      <button type="button" class="rsec__toggle" aria-expanded={open ? 'true' : 'false'} data-section-toggle>
+        <svg class="rsec__chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 11L3 6 3.7 5.3 8 9.6 12.3 5.3 13 6z"></path></svg>
+        <span class="rsec__title t-heading-03">{title}</span>
+      </button>
+    </h2>
+    <div class="rsec__body" data-section-body hidden={!open}>
+      <slot />
+    </div>
+  </section>
+) : (
+  <PermitSection title={title}>
+    <slot />
+  </PermitSection>
+)}
+
+<style>
+  /* ── Collapsible, sticky-stackable disclosure (B2 study) ─────────────────────
+     The header pins to the top of the nearest scroll ancestor (B2's .appreview-scroll
+     pane). Each section's offset = its visual index × the header height, so headers
+     stack rather than overlap. Earlier sections keep a higher z-index so an incoming
+     header slides UNDER the already-pinned ones until it reaches its own stop.
+
+     `display: contents` is what makes the headers ACCUMULATE: it dissolves this
+     section's box so the header + body become direct children of .app-review (the
+     full-height container). A sticky element can only stick within its containing
+     block, so with the per-section box gone, each header's sticky range spans the
+     WHOLE record — all five stay pinned and pile up as you scroll, instead of each
+     leaving when its own section scrolls past. The head + body carry the section's
+     `order` (kept together, header first) so reordering still works. */
+  .rsec { display: contents; --rsec-h: 3rem; }
+
+  .rsec__head {
+    order: var(--order-i, 0);
+    position: sticky;
+    /* --rsec-sticky-top lets the host page push the whole stack below fixed/sticky
+       page chrome (e.g. B2's step tracker). Defaults to 0 when unset. */
+    top: calc(var(--rsec-sticky-top, 0px) + var(--stack-i, 0) * var(--rsec-h));
+    z-index: calc(50 - var(--stack-i, 0));
+    margin: 0;
+    background: var(--cds-background, #ffffff);
+    border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+
+  /* The whole header bar is the disclosure control (a stock button — see
+     carbon-checked note above). Full-width, left-aligned, token-styled. */
+  .rsec__toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    inline-size: 100%;
+    min-block-size: var(--rsec-h);
+    padding: 0.5rem 0;
+    background: none;
+    border: 0;
+    text-align: start;
+    cursor: pointer;
+    color: var(--cds-text-primary, #161616);
+  }
+  .rsec__toggle:focus-visible {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+
+  .rsec__title { margin: 0; }
+
+  .rsec__chevron {
+    flex: 0 0 auto;
+    color: var(--cds-icon-primary, #161616);
+    transition: transform 0.15s ease;
+  }
+  .rsec__toggle[aria-expanded='false'] .rsec__chevron { transform: rotate(-90deg); }
+
+  /* Body is now a sibling flex item (see display:contents above): carry the same
+     order so it tracks its header, and use padding — not container gap — to separate
+     one section's content from the next header (gap would space header from body). */
+  .rsec__body { order: var(--order-i, 0); padding-block: 1.25rem 2.5rem; }
+  /* Author element reset beats the UA [hidden] rule — restate it (see
+     docs/…; the "hidden author-reset" gotcha) so a collapsed body truly collapses. */
+  .rsec__body[hidden] { display: none; }
+</style>

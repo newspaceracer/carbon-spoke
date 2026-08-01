@@ -14,11 +14,26 @@
 // table (#specimen-body) + add/edit modal. All of these are seeded, wired, and
 // persisted by the page script (final-letter.astro) — this component only renders
 // the controls. All read-only content is static, from data/permit.
-import PermitSection from './PermitSection.astro';
+//
+// `collapsible` (opt-in, off by default so the finalize wizard is unchanged):
+// renders each section as a sticky, collapsible disclosure (via ReviewSection),
+// adds Expand/Collapse-all, and reorders Project information first. Used by the B2
+// review-layout study; the toggling is wired by that page's script.
+import ReviewSection from './ReviewSection.astro';
 import ContactCard from './ContactCard.astro';
 import FactGrid from './FactGrid.astro';
 import { permit } from '../data/permit';
 import { parks } from '../data/parks';
+
+interface Props {
+  /** Render sections as sticky, collapsible disclosures + reorder (B2 study). */
+  collapsible?: boolean;
+}
+const { collapsible = false } = Astro.props;
+
+// Visual order used only in collapsible mode (CSS `order` + sticky-stack offset):
+// Project information leads, then the rest in reading order.
+const ORDER = { project: 0, team: 1, study: 2, data: 3, docs: 4 };
 
 // Project categories — the CA State Parks scientific-research classifications the
 // analyst can reclassify the permit into (invented, credible). The application's
@@ -61,18 +76,27 @@ const fileGlyph =
   'M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z';
 ---
 
-<div class="app-review">
-  <cds-inline-notification
-    class="app-review__intro"
-    kind="info"
-    low-contrast
-    hide-close-button
-    title="Review the application, set the conditions"
-    subtitle="Read the request below. The fields you can edit here print on the permit letter — fix one and every place it appears updates. Set the special conditions in the panel to the right."
-  ></cds-inline-notification>
+<div class:list={['app-review', collapsible && 'app-review--collapsible']}>
+  {!collapsible && (
+    <cds-inline-notification
+      class="app-review__intro"
+      kind="info"
+      low-contrast
+      hide-close-button
+      title="Review the application, set the conditions"
+      subtitle="Read the request below. The fields you can edit here print on the permit letter — fix one and every place it appears updates. Set the special conditions in the panel to the right."
+    ></cds-inline-notification>
+  )}
+
+  {collapsible && (
+    <div class="app-review__tools">
+      <cds-button class="js-appreview-expand" kind="ghost" size="sm">Expand all</cds-button>
+      <cds-button class="js-appreview-collapse" kind="ghost" size="sm">Collapse all</cds-button>
+    </div>
+  )}
 
   <!-- ── Research team ────────────────────────────────────────────────────── -->
-  <PermitSection title="Research team">
+  <ReviewSection title="Research team" collapsible={collapsible} orderIndex={ORDER.team}>
     <div class="subblock">
       <div class="contact-grid">
         <ContactCard role="Organization" contact={org} />
@@ -122,10 +146,10 @@ const fileGlyph =
         </div>
       </dl>
     </div>
-  </PermitSection>
+  </ReviewSection>
 
   <!-- ── Project information ──────────────────────────────────────────────── -->
-  <PermitSection title="Project information">
+  <ReviewSection title="Project information" collapsible={collapsible} orderIndex={ORDER.project}>
     <div class="subblock">
       <h3 class="sub-head t-heading-02">Project</h3>
       <div class="field-stack">
@@ -184,10 +208,10 @@ const fileGlyph =
         <p class="sub-note t-body-01">No field investigation occurrences added.</p>
       )}
     </div>
-  </PermitSection>
+  </ReviewSection>
 
   <!-- ── Study areas ──────────────────────────────────────────────────────── -->
-  <PermitSection title="Study areas">
+  <ReviewSection title="Study areas" collapsible={collapsible} orderIndex={ORDER.study}>
     <div class="subblock">
       <h3 class="sub-head t-heading-02">Study area parks</h3>
       <p class="sub-note t-body-01">Search by park or district name and add every unit where field work will take place. These parks and their district coordinators print on the permit's contact list.</p>
@@ -230,10 +254,10 @@ const fileGlyph =
         ))}
       </dl>
     </div>
-  </PermitSection>
+  </ReviewSection>
 
   <!-- ── Data collection ──────────────────────────────────────────────────── -->
-  <PermitSection title="Data collection">
+  <ReviewSection title="Data collection" collapsible={collapsible} orderIndex={ORDER.data}>
     <div class="subblock">
       <div class="roster__head">
         <h3 class="sub-head t-heading-02">Specimens</h3>
@@ -267,10 +291,10 @@ const fileGlyph =
         <FactGrid rows={dc.laboratory} min="20rem" tiles />
       </div>
     )}
-  </PermitSection>
+  </ReviewSection>
 
   <!-- ── Additional documents ─────────────────────────────────────────────── -->
-  <PermitSection title="Additional documents">
+  <ReviewSection title="Additional documents" collapsible={collapsible} orderIndex={ORDER.docs}>
     <div class="subblock">
       <dl class="review">
         {ad.facts.map((r) => (
@@ -293,12 +317,27 @@ const fileGlyph =
         ))}
       </ul>
     </div>
-  </PermitSection>
+  </ReviewSection>
 </div>
 
 <style>
   .app-review { display: flex; flex-direction: column; gap: 2.75rem; }
   .app-review__intro { display: block; }
+
+  /* Collapsible mode (B2 study): ReviewSection is display:contents, so every section
+     header + body is a direct flex item here — that's what lets the sticky headers
+     accumulate (each header's range spans this whole container, not one section).
+     `order` (set per section) puts Project information first while keeping intro +
+     tools on top. gap MUST be 0: with the headers/bodies as siblings, a flex gap
+     would push each header off its body — inter-section spacing comes from the
+     body's own bottom padding (ReviewSection) instead. */
+  .app-review--collapsible { gap: 0; }
+  .app-review__tools {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--cds-spacing-03, 0.5rem);
+    margin-bottom: var(--cds-spacing-05, 1rem);
+  }
 
   .subblock + .subblock { margin-top: 2rem; }
   .sub-head { margin: 0 0 0.75rem; color: var(--cds-text-primary, #161616); }

@@ -357,6 +357,14 @@ export const permit = {
 
   // ── Additional documentation tab ─────────────────────────────────────────
   additionalDocs: {
+    // Free-text detail behind the "requires additional permits = Yes" gate — names
+    // the underlying agency permit, from which associated-permit scope is derived
+    // (see scope.ts). Coastal intertidal collection needs a CDFW SCP (still pending
+    // — hence the permit's "Awaiting external permit" tag).
+    additionalPermitsDetails:
+      'California Department of Fish & Wildlife Scientific Collecting Permit (SCP) — application ' +
+      'submitted, currently pending. Coastal collection of marine algae requires the CDFW SCP; the ' +
+      'renewed permit will be provided to nrd.research@parks.ca.gov once issued.',
     facts: [
       { key: 'Involves soil disturbance', value: 'No', boolean: true },
       { key: 'Requires additional federal/state/local permits', value: 'Yes', boolean: true },

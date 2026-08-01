@@ -200,7 +200,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
 
     <!-- ── Edit-user modal: name + contact (email read-only), and role/expertise
          for internal accounts ───────────────────────────────────────────────── -->
-    <cds-modal id="user-modal" size="sm">
+    <cds-modal id="user-modal" size="sm" has-scrolling-content>
       <cds-modal-header>
         <cds-modal-close-button></cds-modal-close-button>
         <cds-modal-label>User account</cds-modal-label>
@@ -291,7 +291,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
     </cds-modal>
 
     <!-- ── Invite-user modal: create a PENDING account, set its role + expertise ── -->
-    <cds-modal id="add-modal" size="sm">
+    <cds-modal id="add-modal" size="sm" has-scrolling-content>
       <cds-modal-header>
         <cds-modal-close-button></cds-modal-close-button>
         <cds-modal-label>New account</cds-modal-label>

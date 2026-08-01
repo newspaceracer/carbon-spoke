@@ -30,8 +30,12 @@ interface Props {
    *  companion column (the PDF, a tab panel) stays in view instead of the record
    *  growing the whole page. Height matches the PDF viewer (80vh / 72vh compact). */
   scroll?: boolean;
+  /** Optional pane heading (e.g. "Application record"). When set, it renders on the
+   *  SAME row as the Expand all / Collapse all controls, so the header and its
+   *  controls sit inline instead of the header floating on a separate line above. */
+  heading?: string;
 }
-const { compact = false, scroll = false } = Astro.props;
+const { compact = false, scroll = false, heading } = Astro.props;
 
 const t = permit.researchTeam;
 const pj = permit.projectInfo;
@@ -53,8 +57,11 @@ const fileGlyph =
 
 <div class:list={['app-sum', compact && 'app-sum--compact', scroll && 'app-sum--scroll']}>
   <div class="app-acc-tools">
-    <cds-button class="js-acc-expand" kind="ghost" size="sm">Expand all</cds-button>
-    <cds-button class="js-acc-collapse" kind="ghost" size="sm">Collapse all</cds-button>
+    {heading && <h3 class="app-acc-title t-heading-03">{heading}</h3>}
+    <div class="app-acc-tools__btns">
+      <cds-button class="js-acc-expand" kind="ghost" size="sm">Expand all</cds-button>
+      <cds-button class="js-acc-collapse" kind="ghost" size="sm">Collapse all</cds-button>
+    </div>
   </div>
   <div class="app-acc-body">
   <cds-accordion class="app-acc" size="lg">
@@ -300,10 +307,23 @@ const fileGlyph =
 <style>
   /* Reuses ApplicationReview's read-only vocabulary — layout only, tokens for
      type/color. */
-  .app-sum { display: flex; flex-direction: column; }
+  /* `--read-measure` is the readable line-length cap for READ-ONLY TEXT (prose,
+     notes, field label/value lists). Structured content — tables, the contact grid,
+     fact grids, the file list — is intentionally NOT capped and uses the section's
+     full width (we removed Carbon's blanket content cap via ::part(content) above).
+     ~40rem ≈ a comfortable measure; the section column is ~44rem, so text visibly
+     keeps a margin while tables break out to full width. */
+  .app-sum { display: flex; flex-direction: column; --read-measure: 40rem; }
+  .narrative,
+  .sub-note,
+  .review { max-inline-size: var(--read-measure); }
 
-  /* Expand all / Collapse all — a quiet toolbar above the sections. */
-  .app-acc-tools { display: flex; justify-content: flex-end; gap: var(--cds-spacing-02, 0.25rem); margin-bottom: var(--cds-spacing-03, 0.5rem); }
+  /* Header row: the optional pane heading on the left, the Expand all / Collapse all
+     controls on the right (pushed there by the buttons' auto inline-start margin, so
+     they stay right whether or not a heading is present). */
+  .app-acc-tools { display: flex; align-items: center; gap: var(--cds-spacing-05, 1rem); margin-bottom: var(--cds-spacing-05, 1rem); }
+  .app-acc-title { margin: 0; color: var(--cds-text-primary, #161616); }
+  .app-acc-tools__btns { display: flex; gap: var(--cds-spacing-02, 0.25rem); margin-inline-start: auto; }
 
   /* Viewport-capped scroll region — the record grows with its content up to the PDF
      viewer's 80vh, then the SECTIONS scroll within (`.app-acc-body`), so a companion
@@ -312,8 +332,11 @@ const fileGlyph =
      height with no box around it. NB: `max-block-size` (not a fixed height) so a
      collapsed record shrinks to its content, and NO `overscroll-behavior:contain` —
      both would otherwise trap the wheel and stop the page scrolling. */
-  .app-sum--scroll { max-block-size: 80vh; }
-  .app-sum--scroll.app-sum--compact { max-block-size: 72vh; }
+  /* max(viewport-relative, a rem floor) so a short laptop still gets real reading
+     height (the page scrolls if needed) instead of a cramped vh — matches the PDF
+     viewer's frame height. */
+  .app-sum--scroll { max-block-size: max(80vh, 44rem); }
+  .app-sum--scroll.app-sum--compact { max-block-size: max(72vh, 40rem); }
   /* Only the sections scroll — the Expand/Collapse toolbar stays pinned above them
      (it's outside this overflow box), so it's always reachable. */
   .app-sum--scroll .app-acc-tools { flex: 0 0 auto; }
@@ -329,6 +352,16 @@ const fileGlyph =
     top: 0;
     z-index: 2;
     background: var(--cds-background, #ffffff);
+  }
+
+  /* Reclaim the section's full width for the record. Carbon's accordion caps its
+     content with a large responsive trailing padding (~25% at wide breakpoints) to
+     hold a readable line length — right for prose, but it boxes THIS record's tables
+     and contact grid into ~73%. The record is mostly structured content, and the
+     prose fields keep their own 46rem measure cap (.narrative), so drop Carbon's cap
+     to a normal gutter. `::part(content)` is Carbon's sanctioned styling hook. */
+  .app-acc cds-accordion-item::part(content) {
+    padding-inline-end: var(--cds-spacing-05, 1rem);
   }
 
   .subblock + .subblock { margin-top: 2rem; }
@@ -350,7 +383,6 @@ const fileGlyph =
   /* In a narrow column the label/value stack rather than fight for width. */
   .app-sum--compact .review__row { grid-template-columns: 1fr; gap: 0.125rem; }
 
-  .narrative { max-width: 46rem; }
   .narrative + .narrative { margin-top: 1.5rem; }
   .narrative__label { margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
   .narrative__body { margin: 0; color: var(--cds-text-primary, #161616); line-height: 1.6; }

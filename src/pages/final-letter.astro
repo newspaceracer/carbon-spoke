@@ -54,6 +54,8 @@ import ApplicationReview from '../components/ApplicationReview.astro';
 import ContactCard from '../components/ContactCard.astro';
 import { permit } from '../data/permit';
 import { parks } from '../data/parks';
+import { derivePermitActivities } from '../data/activities';
+import { derivePermitSensitiveSpecies, derivePermitRegions, derivePermitAssociatedPermits } from '../data/scope';
 import { districtKey } from '../data/conditions';
 import { userDirectory } from '../data/user';
 import { withBase } from '../lib/base';
@@ -162,6 +164,13 @@ const letterData = {
   permitId: permit.id,
   window: permit.activeWindow,
   districtKeys: districts.map((d) => d.key),
+  // Field-activity ids — DERIVED from the application narrative (no structured
+  // activity field yet; see activities.ts derivePermitActivities).
+  activityKeys: derivePermitActivities(permit),
+  // Location- + application-derived scope match sets (see scope.ts).
+  speciesKeys: derivePermitSensitiveSpecies(permit),
+  regionKeys: derivePermitRegions(permit),
+  agencyKeys: derivePermitAssociatedPermits(permit),
   districts,
   // Park-locking rule (see above): originally-single permits can't gain other
   // districts' parks.
@@ -464,7 +473,7 @@ const letterData = {
       <cds-modal-label id="cond-modal-owner">Headquarters</cds-modal-label>
       <cds-modal-heading id="cond-modal-heading">Add condition</cds-modal-heading>
     </cds-modal-header>
-    <cds-modal-body has-scrolling-content>
+    <cds-modal-body>
       <cds-stack gap="6">
         <!-- Add mode only: pull a saved condition from the catalog, or write a
              new one. Same switcher as the Add-member and permit condition modals —
@@ -575,6 +584,7 @@ const letterData = {
     import { readPermitRole } from '../lib/permissions';
     import { directory } from '../data/user';
     import { permit } from '../data/permit';
+    import { parkKey } from '../data/parks';
     // Same rich-text condition editor the permit detail page uses in its
     // add/edit-condition modal — registered here so <sc-rich-text> upgrades.
     import '../components/sc-rich-text.ts';
@@ -592,7 +602,9 @@ const letterData = {
     interface LetterData {
       permitId: string;
       window: { start: string; end: string; startISO: string; endISO: string };
-      districtKeys: string[]; districts: DistrictSeed[];
+      districtKeys: string[]; activityKeys: string[];
+      speciesKeys: string[]; regionKeys: string[]; agencyKeys: string[];
+      districts: DistrictSeed[];
       originallySingle: boolean; soleDistrict: string | null;
       pages: { id: string; label: string; secondaryLabel: string }[];
       permitUrl: string;
@@ -635,16 +647,26 @@ const letterData = {
     // ── State ──────────────────────────────────────────────────────────────────
     const persistedFinal = JSON.parse(localStorage.getItem(finalKey) || '{}');
     const fld = persistedFinal.fields || {};
+    // Study-area parks (persisted edits win over the seed) → slugs, the match set
+    // for park-scoped conditions when they first auto-attach.
+    const initialParkMap = {
+      ...Object.fromEntries(districts.map((d) => [d.name, d.parks])),
+      ...JSON.parse(localStorage.getItem(parksKey) || '{}'),
+    } as Record<string, string[]>;
+    const permitParkKeys = Object.values(initialParkMap).flat().map(parkKey);
     const state = {
       startISO: (persistedFinal.startISO || data.window.startISO) as string,
       endISO: (persistedFinal.endISO || data.window.endISO) as string,
       reportISO: (persistedFinal.reportISO || plusYear(persistedFinal.startISO || data.window.startISO)) as string,
       reportOverridden: Boolean(persistedFinal.reportISO),
-      parks: { ...Object.fromEntries(districts.map((d) => [d.name, d.parks])), ...JSON.parse(localStorage.getItem(parksKey) || '{}') } as Record<string, string[]>,
+      parks: initialParkMap,
       // Chosen district contact (a contactOptions id) per district — persisted edits
       // win over the seeded coordinator.
       contactIds: { ...Object.fromEntries(districts.map((d) => [d.name, d.selectedContactId])), ...(persistedFinal.contactIds || {}) } as Record<string, string>,
-      conditions: loadPermitConditions(permitId, data.districtKeys) as PermitCondition[],
+      conditions: loadPermitConditions(permitId, {
+        districtKeys: data.districtKeys, parkKeys: permitParkKeys, activityKeys: data.activityKeys,
+        speciesKeys: data.speciesKeys, regionKeys: data.regionKeys, agencyKeys: data.agencyKeys,
+      }) as PermitCondition[],
       note: (persistedFinal.note || '') as string,
       // Editable letter fields — persisted seeds win over the application seed.
       fields: { ...data.seed, ...fld } as Record<string, string>,
@@ -1033,11 +1055,13 @@ const letterData = {
     const chevronUp = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 5 13 10 12.3 10.7 8 6.4 3.7 10.7 3 10z"/></svg>';
     const chevronDown = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 11 3 6 3.7 5.3 8 9.6 12.3 5.3 13 6z"/></svg>';
 
-    // Text preview of a condition — resolves the annual-report date the same way
-    // the letter does, so the builder and the letter agree.
+    // Text preview of a condition — resolves the summary-report date the same way
+    // the letter does, so the builder and the letter agree. The HQ reporting
+    // condition (hq-c04) carries a "[Month, Day], 2027" placeholder; fill it from
+    // the finalize step's report date.
     const condDisplayHtml = (c: PermitCondition) =>
-      c.inventoryId === 'hq-annual'
-        ? `<p>A summary report is due by ${fmt(state.reportISO)}.</p>`
+      c.inventoryId === 'hq-c04'
+        ? c.body.replace('[Month, Day], 2027', fmt(state.reportISO))
         : c.body;
     const condPreview = (c: PermitCondition) => plainText(condDisplayHtml(c));
 
@@ -1292,8 +1316,8 @@ const letterData = {
     const packageRecap = $('package-recap');
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const conditionBody = (c: PermitCondition) =>
-      c.inventoryId === 'hq-annual'
-        ? `<p>A summary report is due by <strong>${fmt(state.reportISO)}</strong>.</p>`
+      c.inventoryId === 'hq-c04'
+        ? c.body.replace('[Month, Day], 2027', fmt(state.reportISO))
         : c.body;
 
     const renderPreview = () => {

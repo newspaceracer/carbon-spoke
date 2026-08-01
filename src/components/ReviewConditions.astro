@@ -1,0 +1,133 @@
+---
+// Special conditions, rendered the way the permit DETAIL page shows them: a
+// Headquarters (universal) block plus one block per district on the permit, each a
+// cds-contained-list of the conditions APPLIED to the permit. The data comes from
+// the real special-conditions catalog (src/data/conditions.ts) — the same source
+// the detail page reads — so the review-layout studies present the TRUE structure
+// (owner blocks, rich-text bodies, source tags), not a flat mock list.
+//
+// Read + optional per-row remove; adding is driven by the host page's shared
+// Add-condition modal, which appends rows into the matching [data-cond-list].
+//
+// carbon-checked: stock cds-contained-list / cds-contained-list-item / cds-tag /
+// cds-icon-button — the identical primitives the detail page's Special conditions
+// tab composes. The rich-text condition body is our own sanitized seed HTML.
+export interface CondItem {
+  id: string;
+  /** Sanitized rich-text HTML — the whole condition. */
+  body: string;
+  source: 'default' | 'inventory' | 'custom';
+}
+export interface CondGroup {
+  /** 'hq' or a district slug. */
+  key: string;
+  label: string;
+  /** Authorized-park count for a district block; null for HQ. */
+  parks: number | null;
+  items: CondItem[];
+}
+interface Props {
+  groups: CondGroup[];
+  /** Tighten spacing for a narrow column (layouts B / E). */
+  compact?: boolean;
+  /** Show the per-row remove control (the interactive docks). */
+  removable?: boolean;
+}
+const { groups, compact = false, removable = true } = Astro.props;
+
+// Same source→label mapping the detail page uses (permit.astro sourceLabel).
+const sourceLabel = (s: CondItem['source']) =>
+  s === 'default' ? 'Standard' : s === 'inventory' ? 'From catalog' : 'Custom';
+const addedBy = (s: CondItem['source']) =>
+  s === 'default' ? 'Standard condition' : s === 'inventory' ? 'From catalog' : 'Custom';
+
+const hq = groups.find((g) => g.key === 'hq');
+const districts = groups.filter((g) => g.key !== 'hq');
+
+const trash =
+  '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>';
+---
+
+<div class:list={['rc', compact && 'rc--compact']}>
+  {hq && (
+    <section class="rc-block">
+      <h4 class="rc-block__title t-heading-02">Headquarters conditions</h4>
+      <p class="rc-hint t-body-01">Apply to all locations covered by this permit.</p>
+      <cds-contained-list data-cond-list data-owner="hq" kind="on-page" label="Universal conditions">
+        {hq.items.map((c) => (
+          <cds-contained-list-item>
+            <div class="rc-cond">
+              <div class="rc-cond__body" set:html={c.body}></div>
+              <div class="rc-cond__meta">
+                <cds-tag type="cool-gray" size="sm">{sourceLabel(c.source)}</cds-tag>
+                <span class="rc-cond__by t-label-01">{addedBy(c.source)}</span>
+              </div>
+            </div>
+            {removable && (
+              <div slot="action" class="rc-cond__actions">
+                <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond set:html={`${trash}<span slot="tooltip-content">Remove condition</span>`}></cds-icon-button>
+              </div>
+            )}
+          </cds-contained-list-item>
+        ))}
+      </cds-contained-list>
+    </section>
+  )}
+
+  {districts.length > 0 && (
+    <section class="rc-block">
+      <h4 class="rc-block__title t-heading-02">District special conditions</h4>
+      <p class="rc-hint t-body-01">Additional conditions apply within each district on this permit.</p>
+      {districts.map((d) => (
+        <cds-contained-list data-cond-list data-owner={d.key} kind="on-page">
+          <div slot="label" class="rc-dlabel">
+            <span class="rc-dlabel__name">{d.label}</span>
+            {d.parks != null && <span class="rc-dlabel__count t-label-01">{d.parks} authorized parks</span>}
+          </div>
+          {d.items.map((c) => (
+            <cds-contained-list-item>
+              <div class="rc-cond">
+                <div class="rc-cond__body" set:html={c.body}></div>
+                <div class="rc-cond__meta">
+                  <cds-tag type="cool-gray" size="sm">{sourceLabel(c.source)}</cds-tag>
+                  <span class="rc-cond__by t-label-01">{addedBy(c.source)}</span>
+                </div>
+              </div>
+              {removable && (
+                <div slot="action" class="rc-cond__actions">
+                  <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond set:html={`${trash}<span slot="tooltip-content">Remove condition</span>`}></cds-icon-button>
+                </div>
+              )}
+            </cds-contained-list-item>
+          ))}
+        </cds-contained-list>
+      ))}
+    </section>
+  )}
+</div>
+
+<style>
+  .rc { display: flex; flex-direction: column; gap: var(--cds-spacing-07, 2rem); }
+  .rc--compact { gap: var(--cds-spacing-06, 1.5rem); }
+  .rc-block { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+  .rc-block__title { margin: 0; }
+  .rc-hint { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
+
+  /* Condition item — a column (rich-text body over its source meta), matching the
+     detail page's .cond. The rich body is server-injected set:html, so its inner
+     tags carry no scoped attribute → those rules must be :global. */
+  .rc-cond { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
+  :global(.rc-cond__body) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; line-height: 1.28572; }
+  :global(.rc-cond__body p) { margin: 0 0 0.375rem; font-size: 0.875rem; }
+  :global(.rc-cond__body p:last-child) { margin-bottom: 0; }
+  :global(.rc-cond__body ul), :global(.rc-cond__body ol) { margin: 0 0 0.375rem; padding-left: 1.5rem; }
+  :global(.rc-cond__body ul) { list-style: disc; }
+  :global(.rc-cond__body ol) { list-style: decimal; }
+  :global(.rc-cond__body a) { color: var(--cds-link-primary, #0f62fe); }
+  .rc-cond__meta { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .rc-cond__by { color: var(--cds-text-secondary, #525252); }
+  :global(.rc-cond__actions) { display: flex; gap: 0.125rem; align-items: center; }
+
+  .rc-dlabel { display: flex; flex-direction: column; gap: 0.125rem; }
+  .rc-dlabel__count { color: var(--cds-text-secondary, #525252); }
+</style>
