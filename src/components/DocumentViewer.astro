@@ -31,10 +31,15 @@ interface Props {
   docTitle: string;
   /** Narrow-column treatment (shorter frame). */
   compact?: boolean;
+  /** Slim file bar — collapse the picker's "Document" label and set the size/pages
+   *  meta on the SAME row as the picker, so the header stops stacking three lines
+   *  and gives the embed back the vertical space (used where the viewer is a tab in
+   *  a working panel rather than a standalone column). */
+  slim?: boolean;
   /** Which document to show first; defaults to the first in `documents`. */
   defaultHref?: string;
 }
-const { documents, docTitle, compact = false, defaultHref } = Astro.props;
+const { documents, docTitle, compact = false, slim = false, defaultHref } = Astro.props;
 
 const initial = documents.find((d) => d.href === defaultHref) ?? documents[0];
 // #view=FitH fits the page to the frame width; the native viewer supplies scroll,
@@ -42,7 +47,7 @@ const initial = documents.find((d) => d.href === defaultHref) ?? documents[0];
 const initialSrc = `${withBase(initial.href)}#view=FitH`;
 ---
 
-<div class:list={['pdfv', compact && 'pdfv--compact']}>
+<div class:list={['pdfv', compact && 'pdfv--compact', slim && 'pdfv--slim']}>
   <div class="pdfv__bar">
     <div class="pdfv__id">
       <svg class="pdfv__glyph" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" fill="currentColor" aria-hidden="true">
@@ -123,6 +128,32 @@ const initialSrc = `${withBase(initial.href)}#view=FitH`;
   .pdfv--compact .pdfv__select { min-inline-size: 10rem; max-inline-size: 16rem; }
   .pdfv__meta { margin: 0.25rem 0 0; color: var(--cds-text-secondary); }
   .pdfv__open { flex-shrink: 0; }
+
+  /* Slim bar — reclaim header height where the viewer is a tab in a working panel.
+     Drop the picker's "Document" label (the file glyph + panel already say what this
+     is; the label is visually hidden but KEPT in the accessibility tree so the
+     picker still has a name), set the meta on the SAME row as the picker, and tighten
+     the bar padding, so the bar is one line instead of three. `::part(title-text)` is
+     Carbon's sanctioned styling hook. */
+  .pdfv--slim .pdfv__bar { padding: 0.375rem 0.75rem; }
+  .pdfv--slim .pdfv__select::part(title-text) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* The id block (glyph + picker + meta) takes the available bar width so the picker
+     can grow wide, pushing the Open link to the far right. */
+  .pdfv--slim .pdfv__id { flex: 1 1 auto; min-inline-size: 0; }
+  .pdfv--slim .pdfv__idtext { display: flex; align-items: center; flex-wrap: nowrap; gap: 0.625rem; min-inline-size: 0; flex: 1 1 auto; }
+  /* Wide picker: grow to fill the row (so long file names show), capped generously;
+     the size/pages meta keeps its place at the end. */
+  .pdfv--slim .pdfv__select { flex: 1 1 auto; min-inline-size: 12rem; max-inline-size: 36rem; }
+  .pdfv--slim .pdfv__meta { margin: 0; white-space: nowrap; flex: 0 0 auto; }
 
   /* The embedded PDF — the browser's native viewer fills the frame. `block-size` is
      viewport-relative (80vh), but `min-block-size` is a hard rem FLOOR so a short

@@ -34,6 +34,9 @@ export interface Contact {
   phone?: string;
   email?: string;
   address?: string;
+  /** This person's CV/resume among the uploaded documents (raw href) — surfaced as a
+   *  "View CV" action on their contact tile that opens it in the document viewer. */
+  cvHref?: string;
 }
 
 /** An additional field-team member listed on the application. */
@@ -191,18 +194,21 @@ export const permit = {
       phone: '(415) 555-0173',
       email: 'r.halvorsen@cascadiamarine.org',
       address: '18 Nautilus Court, Mill Valley, CA 94941',
+      cvHref: '/docs/renata-halvorsen-cv.pdf',
     } as Contact,
     principalInvestigator: {
       name: 'Dr. Alena Reyes',
       phone: '(707) 555-0142',
       email: 'areyes@humboldt.edu',
       address: '1 Harpst St, Arcata, CA 95521',
+      cvHref: '/docs/cv-jun-2025.pdf',
     } as Contact,
     fieldLead: {
       name: 'Dr. Alena Reyes',
       phone: '(707) 555-0142',
       email: 'areyes@humboldt.edu',
       address: '1 Harpst St, Arcata, CA 95521',
+      cvHref: '/docs/cv-jun-2025.pdf',
     } as Contact,
     participants: [
       { name: 'Priya Nadar', title: 'Graduate researcher', phone: '(707) 555-0173', email: 'pnadar@humboldt.edu', comments: 'Subtidal survey lead; AAUS scientific diver.' },
@@ -375,6 +381,7 @@ export const permit = {
     files: [
       { name: 'Coralline Diversity & Reproductive Systems Proposal.pdf', type: 'Study Proposal', size: '313 KB', pages: 4, by: 'A. Reyes', date: 'Jul 8, 2026', href: proposalHref },
       { name: 'CV_Jun2025.pdf', type: 'Principal Investigator Resume', size: '118.05 KB', pages: 2, by: 'A. Reyes', date: 'Jun 3, 2025', href: '/docs/cv-jun-2025.pdf' },
+      { name: 'CV_Halvorsen.pdf', type: 'Submitter Resume', size: '117.84 KB', pages: 2, by: 'R. Halvorsen', date: 'Jun 12, 2025', href: '/docs/renata-halvorsen-cv.pdf' },
       { name: 'False Klamath Cove Study Area Map.pdf', type: 'Study Area Supporting Documentation', size: '132.45 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/false-klamath-cove-study-area-map.pdf' },
       { name: 'Additional-Permit-Details.pdf', type: 'Additional Permit Supporting Documentation', size: '103.65 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/additional-permit-details.pdf' },
       { name: 'Liability-Waiver-Addendum-DPR65B.pdf', type: 'Optional Liability Waiver Addendum (DPR65B)', size: '90.99 KB', pages: 1, by: 'A. Reyes', date: 'Jul 14, 2026', href: '/docs/liability-waiver-addendum-dpr65b.pdf' },

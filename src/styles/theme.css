@@ -162,6 +162,20 @@ cds-modal[has-scrolling-content] cds-modal-body {
   overflow: auto;
 }
 
+/* ---- MODAL FORM CONTROLS — shrink to the modal, don't overflow it ---------
+   A cds-stack of form fields lays its children out as flex/grid items whose
+   default `min-inline-size: auto` is their MIN-CONTENT. A control with verbose
+   content — e.g. an "Add condition" dropdown whose options are full-sentence
+   conditions — then has a large min-content and grows the whole column WIDER than
+   the modal. On its own that would just scroll; but the overflow:visible escape
+   above (needed so the open menu isn't clipped) lets that width spill OUTSIDE the
+   modal instead. Zero the min so the fields shrink to the modal width (they still
+   stretch to fill it — this only removes the min-content floor). Covers every
+   stacked-form modal at once. */
+cds-modal-body cds-stack > * {
+  min-inline-size: 0;
+}
+
 /* ---- MODAL PAGE-SCROLL LOCK ---------------------------------------------
    cds-modal renders a full-viewport overlay but doesn't stop the page behind it
    from scrolling (a web-components-layer gap; see src/lib/carbon-modal-scroll-

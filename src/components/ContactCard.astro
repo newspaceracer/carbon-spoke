@@ -10,8 +10,12 @@ interface Props {
   contact: Contact;
   /** 'facility' shows a building glyph instead of person initials. */
   kind?: 'person' | 'facility';
+  /** When set, render a "View CV" action that opens this document (raw href, e.g.
+   *  '/docs/cv-jun-2025.pdf') — the host page wires the [data-view-cv] click to its
+   *  document viewer. */
+  cvHref?: string;
 }
-const { role, contact, kind = 'person' } = Astro.props;
+const { role, contact, kind = 'person', cvHref } = Astro.props;
 
 // Carbon `building` 20 glyph — marks a facility/place rather than a person.
 const buildingIcon =
@@ -32,6 +36,14 @@ const buildingIcon =
     {contact.address && <span>{contact.address}</span>}
     {contact.email && <cds-link href={`mailto:${contact.email}`}>{contact.email}</cds-link>}
   </div>
+  {cvHref && (
+    <div class="contact__actions">
+      <cds-button kind="ghost" size="sm" data-view-cv={cvHref}>
+        View CV
+        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M20 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V8zm-1 2.4L23.6 9H19zM8 28V4h9v6h6v18z"/><path d="M10 14h12v2H10zm0 5h12v2H10zm0 5h8v2h-8z"/></svg>
+      </cds-button>
+    </div>
+  )}
 </cds-tile>
 
 <style>
@@ -54,5 +66,11 @@ const buildingIcon =
     flex-direction: column;
     gap: 0.25rem;
     color: var(--cds-text-secondary, #525252);
+  }
+  /* "View CV" action — a ghost button pulled to the tile's start edge so it aligns
+     with the content above rather than sitting inset. */
+  .contact__actions {
+    margin-top: 0.75rem;
+    margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem));
   }
 </style>

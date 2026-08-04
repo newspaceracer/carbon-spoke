@@ -100,9 +100,9 @@ const fileGlyph =
     <div class="subblock">
       <div class="contact-grid">
         <ContactCard role="Organization" contact={org} />
-        <ContactCard role="Submitter" contact={submitter} />
-        <ContactCard role="Principal investigator" contact={pi} />
-        <ContactCard role="Person in direct charge of field work" contact={fieldLead} />
+        <ContactCard role="Submitter" contact={submitter} cvHref={submitter.cvHref} />
+        <ContactCard role="Principal investigator" contact={pi} cvHref={pi.cvHref} />
+        <ContactCard role="Person in direct charge of field work" contact={fieldLead} cvHref={fieldLead.cvHref} />
       </div>
     </div>
 
@@ -230,11 +230,13 @@ const fileGlyph =
       </div>
       <div class="selected">
         <p class="selected__label t-label-01">Selected parks <span id="sa-count"></span></p>
+        <!-- Parks are GROUPED BY DISTRICT: the page script injects a district header
+             row (.sa-grouprow) before each district's parks, so the District column
+             is redundant — the roster is Park | Remove. -->
         <cds-table id="sa-table" class="ro-table">
           <cds-table-head>
             <cds-table-header-row>
               <cds-table-header-cell>Park</cds-table-header-cell>
-              <cds-table-header-cell>District</cds-table-header-cell>
               <cds-table-header-cell>Remove</cds-table-header-cell>
             </cds-table-header-row>
           </cds-table-head>
@@ -242,17 +244,6 @@ const fileGlyph =
         </cds-table>
         <p id="sa-empty" class="sub-note t-body-01" hidden>No parks selected yet — search above to add study areas.</p>
       </div>
-    </div>
-    <div class="subblock">
-      <h3 class="sub-head t-heading-02">Collection sites</h3>
-      <dl class="review">
-        {sa.sites.map((s) => (
-          <div class="review__row">
-            <dt class="review__label t-label-01">{s.name}</dt>
-            <dd class="review__value t-body-01">{s.coords} — {s.note}</dd>
-          </div>
-        ))}
-      </dl>
     </div>
   </ReviewSection>
 
@@ -391,4 +382,10 @@ const fileGlyph =
   .select-wrap { max-width: 46rem; }
   .selected { margin-top: 1.5rem; max-width: 46rem; }
   .selected__label { margin: 0 0 0.5rem; color: var(--cds-text-secondary, #525252); }
+
+  /* Parks grouped by district: a bold district header row over its parks (indented).
+     The roster rows are injected by the page script (no scoped attr) → :global. */
+  :global(#sa-body .sa-grouprow .sa-groupcell) { background: var(--cds-layer-accent-01, #e0e0e0); font-weight: 600; color: var(--cds-text-primary, #161616); }
+  :global(#sa-body .sa-groupcount) { font-weight: 400; color: var(--cds-text-secondary, #525252); }
+  :global(#sa-body .sa-parkcell) { padding-inline-start: var(--cds-spacing-06, 1.5rem); }
 </style>

@@ -34,8 +34,19 @@ interface Props {
    *  SAME row as the Expand all / Collapse all controls, so the header and its
    *  controls sit inline instead of the header floating on a separate line above. */
   heading?: string;
+  /** Lead with Project information: move it to the top of the record and open ONLY
+   *  it, with every other section collapsed — so a reviewer lands on the project
+   *  itself and expands the rest as needed. The reorder is done client-side (each
+   *  section is a large markup block); Expand/Collapse all still reach every section. */
+  projectFirst?: boolean;
 }
-const { compact = false, scroll = false, heading } = Astro.props;
+const { compact = false, scroll = false, heading, projectFirst = false } = Astro.props;
+
+// With `projectFirst`, only Project information starts open; otherwise the whole
+// record shows on load (every section open). Returns `undefined` (not `false`) for
+// a closed section so Astro OMITS the attribute — cds-accordion-item's `open` is a
+// boolean attribute, so a present `open="false"` would still read as open.
+const secOpen = (id: string) => (!projectFirst || id === 'project' ? true : undefined);
 
 const t = permit.researchTeam;
 const pj = permit.projectInfo;
@@ -55,7 +66,7 @@ const fileGlyph =
   'M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z';
 ---
 
-<div class:list={['app-sum', compact && 'app-sum--compact', scroll && 'app-sum--scroll']}>
+<div class:list={['app-sum', compact && 'app-sum--compact', scroll && 'app-sum--scroll']} data-project-first={projectFirst ? '' : undefined}>
   <div class="app-acc-tools">
     {heading && <h3 class="app-acc-title t-heading-03">{heading}</h3>}
     <div class="app-acc-tools__btns">
@@ -66,7 +77,7 @@ const fileGlyph =
   <div class="app-acc-body">
   <cds-accordion class="app-acc" size="lg">
   <!-- ── Research team ────────────────────────────────────────────────────── -->
-  <cds-accordion-item title="Research team" open>
+  <cds-accordion-item title="Research team" open={secOpen('research')}>
     <div class="subblock">
       <div class="contact-grid">
         <ContactCard role="Organization" contact={org} />
@@ -119,7 +130,7 @@ const fileGlyph =
   </cds-accordion-item>
 
   <!-- ── Project information ──────────────────────────────────────────────── -->
-  <cds-accordion-item title="Project information" open>
+  <cds-accordion-item title="Project information" open={secOpen('project')}>
     <div class="subblock">
       <h3 class="sub-head t-heading-02">Project</h3>
       <dl class="review">
@@ -179,7 +190,7 @@ const fileGlyph =
   </cds-accordion-item>
 
   <!-- ── Study areas ──────────────────────────────────────────────────────── -->
-  <cds-accordion-item title="Study areas" open>
+  <cds-accordion-item title="Study areas" open={secOpen('studyAreas')}>
     <div class="subblock">
       <h3 class="sub-head t-heading-02">Study area parks</h3>
       {studyAreaParks.length ? (
@@ -203,21 +214,10 @@ const fileGlyph =
         <p class="sub-note t-body-01">No parks selected yet.</p>
       )}
     </div>
-    <div class="subblock">
-      <h3 class="sub-head t-heading-02">Collection sites</h3>
-      <dl class="review">
-        {sa.sites.map((s) => (
-          <div class="review__row">
-            <dt class="review__label t-label-01">{s.name}</dt>
-            <dd class="review__value t-body-01">{s.coords} — {s.note}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
   </cds-accordion-item>
 
   <!-- ── Data collection ──────────────────────────────────────────────────── -->
-  <cds-accordion-item title="Data collection" open>
+  <cds-accordion-item title="Data collection" open={secOpen('data')}>
     <div class="subblock">
       <h3 class="sub-head t-heading-02">Specimens</h3>
       <p class="sub-note t-body-01">The taxa and quantities authorized for collection. This list prints on the permit as the authorized collection.</p>
@@ -259,7 +259,7 @@ const fileGlyph =
   </cds-accordion-item>
 
   <!-- ── Additional documents ─────────────────────────────────────────────── -->
-  <cds-accordion-item title="Additional documents" open>
+  <cds-accordion-item title="Additional documents" open={secOpen('docs')}>
     <div class="subblock">
       <dl class="review">
         {ad.facts.map((r) => (
@@ -293,6 +293,12 @@ const fileGlyph =
   // so wire each `.app-sum` independently. Runs after the elements upgrade, so the
   // click handlers set the accordion-item state directly.
   document.querySelectorAll('.app-sum').forEach((sum) => {
+    // Lead with Project information: move it to the front of the accordion so the
+    // reviewer lands on the project itself (its `open` state is set server-side).
+    if (sum.hasAttribute('data-project-first')) {
+      const proj = sum.querySelector('cds-accordion-item[title="Project information"]');
+      proj?.parentElement?.prepend(proj);
+    }
     const items = Array.from(sum.querySelectorAll('cds-accordion-item'));
     if (!items.length) return;
     const setAll = (open: boolean) => items.forEach((it) => {

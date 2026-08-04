@@ -361,9 +361,14 @@ const cancelHref = withBase('/final-letter');
                wizard uses), not the read-only summary — so this study exercises the
                actual edit affordances. Behavior (field seeding, study-areas roster,
                specimen modal) is wired by page-local script below. The record grows the
-               page as its sections expand (no inner scroll box). -->
-          <div class="appreview" data-appreview>
-            <ApplicationReview collapsible />
+               page as its sections expand (no inner scroll box).
+               SHARED with B3: the record is a single instance (hardcoded ids) that the
+               version switcher relocates into whichever of B2/B3 is active. This slot is
+               its home; B3 has the matching empty slot. -->
+          <div data-appreview-slot data-slot-for="stacked">
+            <div class="appreview" data-appreview>
+              <ApplicationReview collapsible />
+            </div>
           </div>
 
           <!-- Working panel — conditions / comments / analysis team, stacked directly
@@ -481,13 +486,14 @@ const cancelHref = withBase('/final-letter');
 
       <section class="step cds--css-grid cds--css-grid--with-row-gap">
         <!-- Left column: the full application record, growing the page as its sections
-             expand. B3 uses the read-only ReviewAppSummary (stock cds-accordion,
-             self-wired Expand/Collapse all per instance) rather than the editable
-             step-① ApplicationReview: that component hardcodes element ids, so it can
-             only be instantiated ONCE per page (B2 already renders it). The summary
-             renders every section and can coexist with B2's copy. -->
+             expand. B3 shows the SAME editable step-① ApplicationReview as B2 — a single
+             instance (it hardcodes element ids, so it can't render twice) that the
+             version switcher relocates here when B3 is active. This is its empty slot;
+             B2 holds the record markup. The editable record already leads with Project
+             information (its collapsible ORDER) and carries Expand/Collapse all. -->
         <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
-          <ReviewAppSummary heading="Application record" />
+          <h3 class="pane-title t-heading-04">Application record</h3>
+          <div data-appreview-slot data-slot-for="docktabs"></div>
         </div>
 
         <!-- Right column: one tabbed working panel — Document viewer / Conditions /
@@ -504,9 +510,11 @@ const cancelHref = withBase('/final-letter');
               <cds-tab value="team">Analysis team · {team.length}</cds-tab>
             </cds-tabs>
 
-            <!-- Document viewer — the same embedded PDF + picker, now the first tab. -->
+            <!-- Document viewer — the same embedded PDF + picker, now the first tab.
+                 `slim` collapses the file bar to one line so the tabbed panel spends
+                 its height on the document, not the header. -->
             <div class="rail-panel dock-doc" data-tabpanel="document">
-              <DocumentViewer documents={documents} docTitle={permit.name} />
+              <DocumentViewer documents={documents} docTitle={permit.name} slim />
             </div>
 
             <!-- Special conditions — the REAL HQ + district structure (ReviewConditions)
@@ -514,7 +522,7 @@ const cancelHref = withBase('/final-letter');
             <div class="rail-panel" data-tabpanel="conditions" hidden>
               <div class="dock-list">
                 <div class="rail__tools"><cds-button class="js-open-add-cond" kind="tertiary" size="md">Add condition</cds-button></div>
-                <ReviewConditions groups={conditionGroups} />
+                <ReviewConditions groups={conditionGroups} collapsible />
               </div>
             </div>
 
@@ -849,6 +857,10 @@ const cancelHref = withBase('/final-letter');
         </div>
       </div>
       <div slot="action" class="rc-cond__actions">
+        <cds-icon-button kind="ghost" size="sm" align="left" data-edit-cond>
+          <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26h28v2H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V26h8.4zM20.4 4L24 7.6l-3 3L17.4 7zM6 24v-3.6l10-10 3.6 3.6-10 10z"/></svg>
+          <span slot="tooltip-content">Edit condition</span>
+        </cds-icon-button>
         <cds-icon-button kind="ghost" size="sm" align="left" data-remove-cond>
           <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
           <span slot="tooltip-content">Remove condition</span>
@@ -895,7 +907,21 @@ const cancelHref = withBase('/final-letter');
     const vtabs = document.getElementById('version-tabs') as any;
     const versions = Array.from(document.querySelectorAll<HTMLElement>('.version'));
     const ids = versions.map((p) => p.dataset.version);
-    const show = (v: string) => versions.forEach((p) => { p.hidden = p.dataset.version !== v; });
+
+    // The editable application record is a SINGLE instance (ApplicationReview
+    // hardcodes element ids, so it can't be rendered twice). B2 and B3 both show it,
+    // and they're never visible at once, so one instance is shared: it lives in
+    // whichever of the two is active, moved into that version's slot on switch.
+    const appreviewNode = document.querySelector('[data-appreview]');
+    const placeAppreview = (v: string) => {
+      if (!appreviewNode) return;
+      const slot = document.querySelector(`[data-appreview-slot][data-slot-for="${v}"]`);
+      if (slot && !slot.contains(appreviewNode)) slot.appendChild(appreviewNode);
+    };
+    const show = (v: string) => {
+      versions.forEach((p) => { p.hidden = p.dataset.version !== v; });
+      placeAppreview(v);
+    };
     vtabs?.addEventListener('cds-tabs-selected', () => { show(vtabs.value); history.replaceState(null, '', `#${vtabs.value}`); });
 
     const wanted = location.hash.replace('#', '');
@@ -917,6 +943,27 @@ const cancelHref = withBase('/final-letter');
       tabs.addEventListener('cds-tabs-selected', sync);
       customElements.whenDefined('cds-tabs').then(sync);
       sync();
+    });
+
+    // "View CV" (research-team PI tile) → open that document in the active version's
+    // working panel: switch to its Document viewer tab and select the file in the
+    // picker. Scoped to the trigger's own .version so B2/B3 drive their own dock.
+    document.addEventListener('click', (e) => {
+      const trigger = (e.target as HTMLElement).closest('[data-view-cv]') as HTMLElement | null;
+      if (!trigger) return;
+      const href = trigger.dataset.viewCv;
+      if (!href) return;
+      const scope = (trigger.closest('.version') || document).querySelector('[data-tab-scope]');
+      const tabsEl = scope?.querySelector('cds-tabs[data-panels]') as any;
+      if (tabsEl) { tabsEl.value = 'document'; tabsEl.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
+      // Some versions embed the viewer without a dock (not tabbed) — fall back to any
+      // picker within the version.
+      const sel = (scope || trigger.closest('.version') || document)?.querySelector('.pdfv__select') as any;
+      const item = sel?.querySelector(`cds-dropdown-item[value="${href}"]`) as HTMLElement | null;
+      if (sel && item) {
+        sel.value = href;
+        sel.dispatchEvent(new CustomEvent('cds-dropdown-selected', { detail: { item } }));
+      }
     });
 
     // Comments drawer open/close — same behavior as the real wizard.
@@ -950,6 +997,10 @@ const cancelHref = withBase('/final-letter');
     const condPick = document.getElementById('cond-pick') as any;
     const condBody = document.getElementById('cond-body') as any;
     const condRowTpl = document.getElementById('cond-row-template') as HTMLTemplateElement | null;
+    const condModalHeading = condModal?.querySelector('cds-modal-heading') as HTMLElement | null;
+    const condSaveBtn = document.getElementById('cond-modal-save') as HTMLElement | null;
+    // The condition row currently being edited (null = the modal is in Add mode).
+    let editingCond: HTMLElement | null = null;
 
     const commentTpl = document.getElementById('comment-row-template') as HTMLTemplateElement | null;
     interface Dir { id: string; name: string; detail: string; email: string; }
@@ -1030,11 +1081,18 @@ const cancelHref = withBase('/final-letter');
     // (source "From catalog"); manual → wrap the typed text in a paragraph (source
     // "Custom"). Mirrors the detail page's source labelling.
     const escHtml = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as Record<string, string>)[c]);
+    // Set the condition body / source tag / added-by on a row (shared by add + edit).
+    const fillCondRow = (row: HTMLElement, bodyHtml: string, manual: boolean) => {
+      const bodyEl = row.querySelector('.rc-cond__body');
+      if (bodyEl) bodyEl.innerHTML = bodyHtml;   // our own sanitized seed HTML / escaped text
+      const tag = row.querySelector('cds-tag');
+      if (tag) tag.textContent = manual ? 'Custom' : 'From catalog';
+      const by = row.querySelector('.rc-cond__by');
+      if (by) by.textContent = manual ? 'Custom' : 'From catalog';
+    };
     document.getElementById('cond-modal-save')?.addEventListener('click', () => {
       const scope = activeScope;
       const owner = condScope?.value || 'hq';
-      const targetList = scope?.querySelector(`[data-cond-list][data-owner="${CSS.escape(owner)}"]`);
-      if (!targetList || !condRowTpl) { if (condModal) condModal.open = false; return; }
       const manual = (condMode?.value || 'catalog') === 'manual';
       let bodyHtml = '';
       if (manual) {
@@ -1047,14 +1105,17 @@ const cancelHref = withBase('/final-letter');
         if (!picked) { if (condModal) condModal.open = false; return; }
         bodyHtml = picked.body;
       }
-      const item = condRowTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
-      const bodyEl = item.querySelector('.rc-cond__body');
-      if (bodyEl) bodyEl.innerHTML = bodyHtml;   // our own sanitized seed HTML / escaped text
-      const tag = item.querySelector('cds-tag');
-      if (tag) tag.textContent = manual ? 'Custom' : 'From catalog';
-      const by = item.querySelector('.rc-cond__by');
-      if (by) by.textContent = manual ? 'Custom' : 'From catalog';
-      targetList.appendChild(item);
+      if (editingCond) {
+        // Edit in place — the row stays in its owner list; only its body/source change.
+        fillCondRow(editingCond, bodyHtml, manual);
+      } else {
+        // Add — clone the row template into the chosen owner's list within this dock.
+        const targetList = scope?.querySelector(`[data-cond-list][data-owner="${CSS.escape(owner)}"]`);
+        if (!targetList || !condRowTpl) { if (condModal) condModal.open = false; return; }
+        const item = condRowTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+        fillCondRow(item, bodyHtml, manual);
+        targetList.appendChild(item);
+      }
       if (condBody) condBody.value = '';
       condModal.open = false;
       if (scope) syncCondCount(scope);
@@ -1201,6 +1262,29 @@ const cancelHref = withBase('/final-letter');
       });
     };
 
+    // Put the condition modal in Add mode (new row appended on save).
+    const enterCondAddMode = () => {
+      editingCond = null;
+      if (condModalHeading) condModalHeading.textContent = 'Add condition';
+      if (condSaveBtn) condSaveBtn.textContent = 'Add condition';
+      if (condScope) condScope.disabled = false;
+      if (condMode) condMode.value = 'catalog';
+      if (condBody) condBody.value = '';
+    };
+    // Put the condition modal in Edit mode for a specific row (updated in place on
+    // save). The owner is fixed while editing; the current wording seeds the textarea.
+    const enterCondEditMode = (row: HTMLElement) => {
+      editingCond = row;
+      const owner = row.closest('[data-cond-list]')?.getAttribute('data-owner') || 'hq';
+      if (condScope) { condScope.value = owner; condScope.disabled = true; }
+      if (condMode) condMode.value = 'manual';
+      applyCondMode();
+      const text = (row.querySelector('.rc-cond__body') as HTMLElement | null)?.textContent?.trim() || '';
+      if (condBody) condBody.value = text;
+      if (condModalHeading) condModalHeading.textContent = 'Edit condition';
+      if (condSaveBtn) condSaveBtn.textContent = 'Save changes';
+    };
+
     // Wire every dock instance (B2, B3, …) off its own scope.
     document.querySelectorAll<HTMLElement>('[data-tab-scope]').forEach((scope) => {
       // Open the shared modals — record the invoking scope so confirm targets it.
@@ -1210,6 +1294,7 @@ const cancelHref = withBase('/final-letter');
         b.addEventListener('click', () => {
           activeScope = scope;
           if (condModal) {
+            enterCondAddMode();
             applyCondMode();
             repopulateCatalog(condScope?.value || 'hq');
             condModal.open = true;
@@ -1223,11 +1308,24 @@ const cancelHref = withBase('/final-letter');
         btn.closest('cds-contained-list-item')?.remove();
         syncTeamCount(scope);
       });
-      // Remove a condition (delegated) — one listener per owner list (HQ + districts).
+      // Edit / remove a condition (delegated) — one listener per owner list (HQ +
+      // districts). Edit opens the modal on that row; remove deletes it in place.
       condListsOf(scope).forEach((list) => list.addEventListener('click', (e) => {
-        const btn = (e.target as HTMLElement).closest?.('[data-remove-cond]');
-        if (!btn) return;
-        btn.closest('cds-contained-list-item')?.remove();
+        const target = e.target as HTMLElement;
+        const editBtn = target.closest?.('[data-edit-cond]');
+        if (editBtn) {
+          const row = editBtn.closest('cds-contained-list-item') as HTMLElement | null;
+          if (row && condModal) {
+            activeScope = scope;
+            enterCondEditMode(row);
+            repopulateCatalog(condScope?.value || 'hq');
+            condModal.open = true;
+          }
+          return;
+        }
+        const rmBtn = target.closest?.('[data-remove-cond]');
+        if (!rmBtn) return;
+        rmBtn.closest('cds-contained-list-item')?.remove();
         syncCondCount(scope);
       }));
 
@@ -1294,7 +1392,30 @@ const cancelHref = withBase('/final-letter');
           ? persisted.specimens
           : (seed.specimens || []).map((s: any) => ({ ...s }))) as Array<Record<string, string>>,
       };
-      const persist = () => localStorage.setItem(STORE, JSON.stringify(state));
+      // ── Auto-save indicator ───────────────────────────────────────────────────
+      // Every edit persists immediately (below); this gives that silent save a
+      // visible confirmation so the reviewer knows changes are kept without a Save
+      // button. It flips to "Saving…" on change, then settles on "All changes saved".
+      // Lives in the record's toolbar, so it travels with the record between B2/B3.
+      const saveState = document.createElement('span');
+      saveState.className = 'appreview-savestate t-label-01';
+      saveState.setAttribute('role', 'status');
+      saveState.setAttribute('aria-live', 'polite');
+      saveState.dataset.state = 'idle';
+      saveState.textContent = 'All changes saved';
+      appReviewRoot.querySelector('.app-review__tools')?.prepend(saveState);
+      let saveTimer: ReturnType<typeof setTimeout> | undefined;
+      const flashSaved = () => {
+        saveState.dataset.state = 'saving';
+        saveState.textContent = 'Saving…';
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          saveState.dataset.state = 'saved';
+          saveState.textContent = 'All changes saved';
+        }, 500);
+      };
+
+      const persist = () => { localStorage.setItem(STORE, JSON.stringify(state)); flashSaved(); };
 
       // ── Editable letter-bound fields (project title + category) ───────────────
       const titleEl = $ar('fb-title') as any;
@@ -1324,6 +1445,9 @@ const cancelHref = withBase('/final-letter');
         });
         return grouped;
       };
+      // Parks GROUPED BY DISTRICT: a district header row over its parks (state.parks
+      // is already district-keyed). Matches ApplicationReview's 2-col Park | Remove
+      // roster (the District column is redundant once grouped).
       const renderStudyAreas = () => {
         const names = selectedNames();
         if (saSelect) saSelect.value = names.join(',');
@@ -1333,16 +1457,22 @@ const cancelHref = withBase('/final-letter');
         if (empty) (empty as HTMLElement).hidden = names.length > 0;
         const body = $ar('sa-body');
         if (body) {
-          body.innerHTML = names.slice().sort((a, b) => a.localeCompare(b)).map((name) => `
-            <cds-table-row>
-              <cds-table-cell>${escAr(name)}</cds-table-cell>
-              <cds-table-cell>${escAr(parkDistrict.get(name) || '')}</cds-table-cell>
-              <cds-table-cell>
-                <cds-icon-button kind="ghost" size="sm" align="left" data-remove-park="${encodeURIComponent(name)}">
-                  ${trashIcon}<span slot="tooltip-content">Remove ${escAr(name)}</span>
-                </cds-icon-button>
-              </cds-table-cell>
-            </cds-table-row>`).join('');
+          body.innerHTML = districtNames
+            .filter((n) => (state.parks[n] || []).length > 0)
+            .map((n) => {
+              const ps = (state.parks[n] || []).slice().sort((a, b) => a.localeCompare(b));
+              const head = `<cds-table-row class="sa-grouprow"><cds-table-cell class="sa-groupcell">${escAr(n)} <span class="sa-groupcount">(${ps.length})</span></cds-table-cell><cds-table-cell class="sa-groupcell"></cds-table-cell></cds-table-row>`;
+              const rows = ps.map((name) => `
+                <cds-table-row>
+                  <cds-table-cell class="sa-parkcell">${escAr(name)}</cds-table-cell>
+                  <cds-table-cell>
+                    <cds-icon-button kind="ghost" size="sm" align="left" data-remove-park="${encodeURIComponent(name)}">
+                      ${trashIcon}<span slot="tooltip-content">Remove ${escAr(name)}</span>
+                    </cds-icon-button>
+                  </cds-table-cell>
+                </cds-table-row>`).join('');
+              return head + rows;
+            }).join('');
         }
       };
       saSelect?.addEventListener('cds-multi-select-selected', () => {
@@ -1457,6 +1587,26 @@ const cancelHref = withBase('/final-letter');
 
     .step { margin-top: var(--cds-spacing-07, 2rem); }
     .col-main, .col-rail { min-width: 0; }
+
+    /* Auto-save confirmation in the editable record's toolbar (B2/B3). Sits left of
+       the Expand/Collapse buttons; a quiet green dot on "saved", plain while saving. */
+    .appreview-savestate {
+      margin-inline-end: auto;
+      align-self: center;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      color: var(--cds-text-secondary, #525252);
+    }
+    .appreview-savestate::before {
+      content: "";
+      inline-size: 0.5rem;
+      block-size: 0.5rem;
+      border-radius: 50%;
+      background: var(--cds-support-success, #24a148);
+      transition: background 0.15s;
+    }
+    .appreview-savestate[data-state="saving"]::before { background: var(--cds-border-strong-01, #8d8d8d); }
 
     /* Proposal viewer sits like the letter preview — sticky beside the record. */
     .preview__label { display: block; margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }

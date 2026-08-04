@@ -148,7 +148,9 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
             analysis team: the <strong>lead</strong> reviewer leads single-district permits (supporting on
             multi-district); <strong>assistant</strong> reviewers are added as supporting analysts when a
             requested park matches their auto-assignment. Members marked a <strong>point of contact</strong> appear
-            on the district's detail screen.
+            on the district's detail screen, and are offered as permit-letter contacts: the lead is each
+            permit's default district contact, and a point of contact scoped to specific parks is added
+            to the letter automatically when one of those parks is on the permit.
           </p>
           <div class="table-wrap">
             <cds-table>
@@ -277,6 +279,7 @@ const districtsSorted = [...districtDirectory].sort((a, b) => a.name.localeCompa
           </div>
 
           <cds-checkbox id="m-published" label-text="Show as a district point of contact"></cds-checkbox>
+          <p class="modal-hint t-label-01">Points of contact appear on the district's detail screen and are offered as permit-letter contacts. If scoped to specific parks above, this person is added to a permit's letter automatically when one of those parks is on it.</p>
         </div>
       </cds-modal-body>
       <cds-modal-footer>

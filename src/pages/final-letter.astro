@@ -6,17 +6,31 @@
      spine:  main.page
                wiz-track  (grid, col 16) -> horizontal cds-progress-indicator, one per STEP
                page-head  (grid, col 16) -> Step N of M + title (JS-updated)
-               step 0     (grid) -> application review (col 10) + conditions rail (col 6)
+               step 0     (grid) -> application record (col 8) + docked working panel
+                                    (col 8, sticky): a cds-tabs surface — Document viewer /
+                                    Special conditions / Comments / Analysis team (B3)
                step 1     (grid) -> letter-feeding fields (col 7) + live letter (col 9)
                step 2     (grid) -> the finished package + send (col 12, centered)
-               wiz-actions(grid, col 16) -> Back / Cancel / Continue-or-Send
+               wiz-actions(grid, col 8/7/12) -> Back / Cancel / role+step CTA
      purpose:
        ONE review journey, not two. The analyst reviews the permit BY WALKING the
-       wizard; the letter is the running output of that walk. The right rail changes
-       job per step — conditions while reviewing, the letter while finalizing —
-       because *which* conditions apply is driven by what's in the application, so
-       application ↔ conditions belong side by side, and the letter is downstream
-       of both.
+       wizard; the letter is the running output of that walk. Step ① pairs the
+       application record with a single docked working panel (B3 · Docked documents):
+       the study documents, the special conditions, the comment thread, and the
+       analysis team are TABS in one sticky surface the reviewer flips through while
+       the record scrolls — *which* conditions apply is driven by the application, so
+       record ↔ conditions ↔ documents sit together, and the letter is downstream.
+
+     Roles (permissions.ts): the wizard is reachable only once review has started, and
+       only by a reviewer ASSIGNED to the permit — the lead (Responsible Agent / Admin)
+       or an assistant (Supporting Agent); anyone else is sent to the permit detail.
+       The primary CTA is role- and step-aware:
+         • lead, step ① — "Finalize review" (advances to Finalize letter → Send)
+         • assistant, step ① — "Complete review" (records their supporting review under
+            permit-supporting-review-${id}-${identity}, returns to the permit; the
+            assistant never reaches the letter/send steps, and their record is
+            READ-ONLY — matrix: form update = RA/Admin — though they curate conditions
+            + comment, and see the team roster read-only).
 
          ① Review & conditions — the application in the submitter's own summary
             format. The applicant's IDENTITY (research team, institution,
@@ -24,10 +38,10 @@
             read-only; what the analyst may still set for the permit is EDITABLE
             INLINE here — project title, category, the authorized parks per
             district, and the collected specimens — while curating the special
-            conditions in the right rail.
+            conditions in the working panel's Conditions tab.
          ② Finalize the letter — the internal review items that shape the letter
             (permit type, valid dates, report-due, authorized parks + district
-            contacts, signer, an optional note), with the real letter regenerating
+            contacts, signer), with the real letter regenerating
             live alongside. The applicant identity is shown read-only here (it's
             fixed from the application), so there's one source of truth.
          ③ Review & send — the finished package (a recap of what was set + the full
@@ -44,6 +58,9 @@
        permit-final-${id}            confirmed dates, applicant + signer fields, note
        permit-parks-${id}            edited authorized-parks set
        permit-conditions-${id}       applied conditions (shared with the permit tab)
+       permit-comments-${id}         reviewer thread (shared with the permit tab)
+       permit-team-${id}             analysis-team edits (shared with the permit tab)
+       permit-supporting-review-${id}-${identity}  an assistant's Complete-review state
        permit-finalize-step-${id}    resume position in the wizard
        permit-status-${id}           lifecycle status (shared with PermitHeader)
 */
@@ -52,12 +69,14 @@ import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
 import ApplicationReview from '../components/ApplicationReview.astro';
 import ContactCard from '../components/ContactCard.astro';
+import DocumentViewer from '../components/DocumentViewer.astro';
 import { permit } from '../data/permit';
-import { parks } from '../data/parks';
+import { parks, parkKey } from '../data/parks';
 import { derivePermitActivities } from '../data/activities';
 import { derivePermitSensitiveSpecies, derivePermitRegions, derivePermitAssociatedPermits } from '../data/scope';
 import { districtKey } from '../data/conditions';
-import { userDirectory } from '../data/user';
+import { userDirectory, findUser } from '../data/user';
+import { district as districtRecord } from '../data/district';
 import { withBase } from '../lib/base';
 
 export const prototype = {
@@ -104,38 +123,122 @@ const pages = [
   { id: 'package', label: 'Review & send', secondaryLabel: 'The full package, then send for signature' },
 ];
 
-// Candidate district contacts come from the user directory, scoped to the users
-// associated with that district (`detail` = the district name). The current
-// coordinator is always a selectable option — if they aren't in the directory,
-// prepend them so the current contact is still representable and pre-selected.
-const districtContactOptions = (districtName: string, coordinator: { name: string; email?: string; phone?: string }) => {
-  const key = districtKey(districtName);
-  const fromDirectory = userDirectory
-    .filter((u) => u.detail === districtName)
-    .map((u) => ({ id: u.id, name: u.name, role: u.role, email: u.email, phone: '' }));
-  const match = fromDirectory.find((o) => o.email === (coordinator.email ?? ''));
-  if (match) match.phone = coordinator.phone ?? ''; // keep the coordinator's phone on the default pick
-  const options = match
-    ? fromDirectory
-    : [{ id: `coord-${key}`, name: coordinator.name, role: 'District coordinator', email: coordinator.email ?? '', phone: coordinator.phone ?? '' }, ...fromDirectory];
-  return { options, selectedId: (match ?? options[0]).id };
+// ── District contacts on the letter ─────────────────────────────────────────
+// A district's letter contacts are derived from its published point-of-contact
+// MEMBERS (managed on /manage-district), bridging the district roster into the
+// letter:
+//   • Primary contact — one per district, the District LEAD by default. The
+//     assigned supporting analyst can swap it to another published member (or the
+//     coordinator). Falls back to the permit's embedded coordinator when the
+//     district has no populated member record.
+//   • Park-scoped special contacts — published members auto-included when one of
+//     their auto-assignment parks is on the permit (mode 'all' = always). Managed
+//     centrally, not swappable here.
+//   • District additions — extra contacts the supporting analyst adds during
+//     review (handled client-side; not seeded here).
+// Only North Coast Redwoods is fully populated with members; other districts have
+// no record and fall back to the coordinator. INVENTED people, house rules.
+const districtRecords = [districtRecord];
+const recordFor = (name: string) => districtRecords.find((r) => r.name === name) ?? null;
+
+interface LetterContact {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  /** True for a published point-of-contact member (letter-eligible + a special-
+   *  contact candidate). The coordinator + non-published members are false. */
+  published?: boolean;
+  // Park scope for a special contact: null = all parks (always included); a
+  // string[] = included only when one of these parks is on the permit. undefined =
+  // a plain pick (never auto-included as a special).
+  scopeParks?: string[] | null;
+}
+
+// Every contact is picked from the district's user list. `pool` is that list —
+// ALL of the district's members plus the coordinator — used for the primary swap
+// and for additions. `defaultPrimaryId` is the district lead (else the coordinator).
+const buildContactModel = (
+  d: (typeof permit.studyAreas.districts)[number],
+  key: string,
+) => {
+  const rec = recordFor(d.name);
+  const members = rec ? rec.members : [];
+  const toContact = (m: (typeof members)[number]): LetterContact => {
+    const u = findUser(m.userId);
+    return {
+      id: m.userId,
+      name: u?.name ?? m.userId,
+      role: m.role === 'district-lead' ? 'District lead' : 'District contact',
+      email: u?.email ?? '',
+      phone: u?.phone ?? '',
+      published: m.published,
+      scopeParks:
+        m.autoAssign.mode === 'all' ? null : m.autoAssign.mode === 'specific' ? m.autoAssign.parks : undefined,
+    };
+  };
+  // The coordinator is always representable — the fallback lead and a valid pick.
+  const coordContact: LetterContact = {
+    id: `coord-${key}`,
+    name: d.coordinator.name,
+    role: 'District coordinator',
+    email: d.coordinator.email ?? '',
+    phone: d.coordinator.phone ?? '',
+    published: false,
+  };
+  let memberContacts: LetterContact[];
+  let defaultPrimaryId: string;
+  if (rec) {
+    memberContacts = members.map(toContact);
+    const leadMember = members.find((m) => m.role === 'district-lead');
+    defaultPrimaryId = leadMember ? leadMember.userId : coordContact.id;
+  } else {
+    // No populated member record — build the roster from the affiliation-tagged
+    // directory so EVERY study-area district has a real user list to pick/add from
+    // (not just its coordinator). District superintendent is the default lead.
+    const affUsers = userDirectory.filter((u) => u.detail === d.name);
+    memberContacts = affUsers.map((u) => ({
+      id: u.id, name: u.name, role: u.role, email: u.email, phone: '', published: true, scopeParks: undefined,
+    }));
+    defaultPrimaryId = (affUsers.find((u) => /superintendent/i.test(u.role)) ?? affUsers[0])?.id ?? coordContact.id;
+  }
+  const coordDuplicated = memberContacts.some((c) => c.email && c.email === coordContact.email);
+  const pool = coordDuplicated ? memberContacts : [...memberContacts, coordContact];
+  return { pool, defaultPrimaryId };
 };
 
 const districts = permit.studyAreas.districts.map((d) => {
-  const { options, selectedId } = districtContactOptions(d.name, d.coordinator);
+  const key = districtKey(d.name);
+  const { pool, defaultPrimaryId } = buildContactModel(d, key);
   return {
     name: d.name,
-    key: districtKey(d.name),
+    key,
     coordinator: d.coordinator,
     officePhone: d.coordinator.phone ?? '',
     parks: d.parks,
     available: parks
       .filter((p) => p.district === d.name && !d.parks.includes(p.name))
       .map((p) => ({ id: p.id, name: p.name })),
-    contactOptions: options,
-    selectedContactId: selectedId,
+    // The district's user list (members + coordinator) + the default primary.
+    pool,
+    defaultPrimaryId,
   };
 });
+
+// Letter signers — the HQ Natural Resources Division staff authorized to sign permit
+// letters (an Environmental Scientist / EG). The DEFAULT is an administrator-configured
+// default signer (a site-wide setting), pre-selected on every new letter; the reviewer
+// can reassign it for this permit — shown the SAME way as district contacts (a contact
+// tile + a reassignment picker), not a free-text field.
+const signerOptions = [
+  { id: 'sig-quintero', name: 'Dana Sarabia', classification: 'Senior Environmental Scientist', email: 'nrd.research@parks.ca.gov', phone: '(916) 555-0110' },
+  { id: 'sig-okafor', name: 'J. Okafor', classification: 'Environmental Scientist', email: 'jokafor@parks.ca.gov', phone: '(916) 555-0142' },
+  { id: 'sig-mendez', name: 'R. Mendez', classification: 'Environmental Program Manager', email: 'rmendez@parks.ca.gov', phone: '(916) 555-0155' },
+  { id: 'sig-anand', name: 'Priya Anand', classification: 'Environmental Scientist', email: 'panand@parks.ca.gov', phone: '(916) 555-0168' },
+];
+const defaultSignerId = 'sig-quintero'; // the administrator-configured default signer
+const defaultSigner = signerOptions.find((s) => s.id === defaultSignerId) ?? signerOptions[0];
 
 // One flat parks list for step ②'s authorized-parks control (single list, not one
 // per district). Scoped to this permit's districts — the state parks directory for
@@ -159,6 +262,32 @@ const originalDistrictsWithParks = permit.studyAreas.districts.filter((d) => d.p
 const originallySingle = originalDistrictsWithParks.length === 1;
 const soleDistrict = originallySingle ? originalDistrictsWithParks[0] : null;
 const scopedParkOptions = allParkOptions;
+
+// ── Docked working panel data ────────────────────────────────────────────────
+// The document viewer's picker: every file uploaded to the permit (the study
+// proposal, first, is the default). Same shape DocumentViewer expects.
+const documents = permit.additionalDocs.files.map((f) => ({
+  href: f.href,
+  filename: f.name,
+  size: f.size,
+  pages: f.pages,
+  type: f.type,
+}));
+
+// Analysis-team roster for the Team tab. Review status shows as an icon-indicator
+// (status is meaning, not colour alone). eligibleMembers seed the Add-member combo.
+const team = permit.overview.analysisTeam;
+const teamIds = new Set(team.map((m) => m.id));
+const eligibleMembers = userDirectory.filter((u) => !teamIds.has(u.id));
+const TEAM_STATE: Record<string, { kind: string; label: string }> = {
+  'not-started': { kind: 'not-started', label: 'Not started' },
+  'pending': { kind: 'in-progress', label: 'Pending' },
+  'complete': { kind: 'succeeded', label: 'Complete' },
+};
+const teamInitials = (name: string) =>
+  name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+const trashIcon =
+  '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>';
 
 const letterData = {
   permitId: permit.id,
@@ -186,10 +315,15 @@ const letterData = {
   // Specimen seed — the authorized taxa/quantities, editable on step ① and
   // printed on the letter as the authorized collection.
   specimens: permit.dataCollection.specimens.map((s) => ({ ...s })),
+  // The letter-signer pool + the admin default (step ②). The chosen signer's name +
+  // classification print on the letter; it's picked from a tile + picker, not typed.
+  signerOptions,
+  signerId: defaultSignerId,
   // Editable field seeds. Identity (salutation/piName/department/institution/
   // street/cityStateZip) is now FIXED from the application — it still seeds the
   // letter, but there are no inputs for it. Editable on step ①: projectTitle,
-  // category. Editable on step ②: signer, permitType.
+  // category. Editable on step ②: permitType. The signer name/classification are
+  // DERIVED from the selected signer (admin default), not typed.
   seed: {
     salutation: saluteMatch ? saluteMatch[1] : 'Dr.',
     piName: saluteMatch ? saluteMatch[2] : t.principalInvestigator.name,
@@ -200,8 +334,8 @@ const letterData = {
     projectTitle: permit.name,
     category: permit.category,
     permitType: isMultiDistrict ? 'multi-district' : 'single-district',
-    signerName: responsibleAnalyst?.name ?? '',
-    signerClassification: 'Environmental Scientist',
+    signerName: defaultSigner.name,
+    signerClassification: defaultSigner.classification,
   },
 };
 ---
@@ -254,43 +388,125 @@ const letterData = {
       </header>
     </div>
 
-    <!-- ① Review & conditions ─ application (editable identity fields) + rail. -->
+    <!-- ① Review application ─ the record on the left, a single docked working
+         panel on the right (B3 · Docked documents): the document viewer, special
+         conditions, the comment thread, and the analysis team are TABS in one
+         surface the reviewer flips through in place. The record grows the page as
+         its sections expand; the working panel is sticky so it stays in view. -->
     <section class="step cds--css-grid cds--css-grid--with-row-gap" data-step="0">
-      <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
-        <ApplicationReview />
+      <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+        <h3 class="pane-title t-heading-04">Application record</h3>
+        <ApplicationReview collapsible />
       </div>
-      <aside class="col-rail cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-6" aria-label="Special conditions">
-        <div class="rail">
-          <h3 class="rail__title t-heading-03">Special conditions</h3>
-          <p class="rail__sub t-label-01">Standard conditions from headquarters and each district attach automatically. Add the conditional ones (e.g. Western Snowy Plover) from the catalog, or remove any that don't apply to this permit.</p>
-          <div class="rail__tools">
-            <cds-button kind="tertiary" size="md" id="cond-collapse-all">Collapse all</cds-button>
-            <cds-button kind="tertiary" size="md" id="cond-expand-all">Expand all</cds-button>
+
+      <div class="col-main dock-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8" aria-label="Working panel">
+        <h3 class="pane-title t-heading-04">Working panel</h3>
+        <div class="dock" data-tab-scope>
+          <cds-tabs value="document" data-panels>
+            <cds-tab value="document">Document viewer <span class="tab-badge" data-tab-badge="document">{documents.length}</span></cds-tab>
+            <cds-tab value="conditions">Special conditions <span class="tab-badge" data-tab-badge="conditions" hidden></span></cds-tab>
+            <cds-tab value="comments">Comments <span class="tab-badge" data-tab-badge="comments" hidden></span></cds-tab>
+            <cds-tab value="team">Analysis team <span class="tab-badge" data-tab-badge="team">{team.length}</span></cds-tab>
+          </cds-tabs>
+
+          <!-- Document viewer — the embedded PDF + picker, first tab. `slim`
+               collapses the file bar to one line so the panel spends its height on
+               the document, not the header. -->
+          <div class="rail-panel dock-doc" data-tabpanel="document">
+            <DocumentViewer documents={documents} docTitle={permit.name} slim />
           </div>
-          <div id="conditions-input"></div>
+
+          <!-- Special conditions — the SAME builder as before (HQ + each district,
+               reorder + continuous numbering, add / edit / remove), now a tab. -->
+          <div class="rail-panel" data-tabpanel="conditions" hidden>
+            <div class="dock-list">
+              <p class="rail__sub t-label-01">Standard conditions from headquarters and each district attach automatically. Add the conditional ones (e.g. Western Snowy Plover) from the catalog, or remove any that don't apply to this permit.</p>
+              <div class="rail__tools">
+                <cds-button kind="tertiary" size="md" id="cond-collapse-all">Collapse all</cds-button>
+                <cds-button kind="tertiary" size="md" id="cond-expand-all">Expand all</cds-button>
+              </div>
+              <div id="conditions-input"></div>
+            </div>
+          </div>
+
+          <!-- Comments — the review thread, shared with the permit detail page.
+               Composer first, then the thread (newest first). -->
+          <div class="rail-panel" data-tabpanel="comments" hidden>
+            <div class="dock-composer">
+              <div class="mention-field">
+                <cds-textarea id="comments-input" label="Add a comment" placeholder="Note something for the team… type @ to mention someone (⌘/Ctrl+Enter to post)" rows="2"></cds-textarea>
+                <ul id="comments-mention-menu" class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
+              </div>
+              <cds-button id="comments-add" kind="primary" size="md">Add comment</cds-button>
+            </div>
+            <p class="comments-note t-label-01">Shared with the permit's review thread. Newest first.</p>
+            <ul id="comments-thread" class="dock-thread"></ul>
+            <script type="application/json" id="mention-directory" set:html={JSON.stringify(userDirectory.map((u) => ({ id: u.id, name: u.name, detail: u.detail ?? u.role })))}></script>
+          </div>
+
+          <!-- Analysis team — the roster, shared with the permit page (same
+               permit-team storage). Lead can add / remove / email all; an assistant
+               sees it read-only. -->
+          <div class="rail-panel" data-tabpanel="team" hidden>
+            <div class="dock-list">
+              <div class="rail__tools">
+                <cds-button id="team-email-all" kind="ghost" size="md">Email all</cds-button>
+                <cds-button id="team-add-open" kind="tertiary" size="md" type="button">Add member</cds-button>
+              </div>
+              <cds-contained-list id="team-roster" data-team-list label="Assigned to this permit" kind="on-page" data-storage-key={`permit-team-${permit.id}`}>
+                {team.map((m) => (
+                  <cds-contained-list-item data-user-id={m.id} data-email={userDirectory.find((u) => u.id === m.id)?.email ?? ''}>
+                    <div class="member">
+                      <span class="member__avatar" aria-hidden="true">{teamInitials(m.name)}</span>
+                      <div class="member__body">
+                        <p class="member__name t-body-01">{m.name}{m.highlight ? <span class="member__lead t-label-01"> · Lead</span> : null}</p>
+                        <p class="member__role t-label-01">{m.role}{m.detail ? ` · ${m.detail}` : ''}</p>
+                      </div>
+                      <div class="member__end">
+                        <cds-icon-indicator size="16" kind={TEAM_STATE[m.reviewStatus]?.kind ?? 'not-started'} label={TEAM_STATE[m.reviewStatus]?.label ?? 'Not started'}></cds-icon-indicator>
+                        {!m.highlight && (
+                          <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member set:html={`${trashIcon}<span slot="tooltip-content">Remove ${m.name}</span>`}></cds-icon-button>
+                        )}
+                      </div>
+                    </div>
+                  </cds-contained-list-item>
+                ))}
+              </cds-contained-list>
+
+              <!-- Template for JS-added roster rows — rendered inert so its markup
+                   carries Astro's scoped-style attributes, then cloned. -->
+              <template id="team-row-template">
+                <cds-contained-list-item data-user-id="" data-email="">
+                  <div class="member">
+                    <span class="member__avatar" aria-hidden="true"></span>
+                    <div class="member__body">
+                      <p class="member__name t-body-01"></p>
+                      <p class="member__role t-label-01"></p>
+                    </div>
+                    <div class="member__end">
+                      <cds-icon-indicator size="16" kind="not-started" label="Not started"></cds-icon-indicator>
+                      <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member>
+                        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
+                        <span slot="tooltip-content"></span>
+                      </cds-icon-button>
+                    </div>
+                  </div>
+                </cds-contained-list-item>
+              </template>
+              <script type="application/json" id="team-directory" set:html={JSON.stringify(userDirectory)}></script>
+            </div>
+          </div>
         </div>
-      </aside>
+      </div>
     </section>
 
     <!-- ② Finalize the letter ─ letter-feeding fields + the live letter. -->
     <section class="step cds--css-grid cds--css-grid--with-row-gap" data-step="1" hidden>
       <div class="col-fields cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-7">
-        <cds-inline-notification
-          kind="info" low-contrast hide-close-button
-          title="These set the letter"
-          subtitle="The internal review items that shape the letter. The applicant's identity is fixed from the submitted application."
-        ></cds-inline-notification>
-
         <!-- Read-only recap of the applicant identity — fixed from the application. -->
         <div class="field-group">
           <h3 class="field-group__title t-heading-compact-01">Addressed to</h3>
           <div id="identity-recap" class="recap"></div>
-        </div>
-
-        <div class="field-group">
-          <h3 class="field-group__title t-heading-compact-01">Permit type</h3>
-          <p id="fb-permittype" class="derived-value t-body-01">—</p>
-          <p class="field-hint t-label-01">Set automatically from the authorized parks — multi-district when they span more than one district.</p>
         </div>
 
         <div class="field-group">
@@ -344,61 +560,62 @@ const letterData = {
           </div>
         </div>
 
+        <!-- District contacts — the lead's assignment surface on the Finalize-the-
+             letter step: confirm / change / add the people who print on the letter's
+             Contact List for Parks, and accept or decline the supporting analysts'
+             change requests. Rendered by the script. (Supporting analysts assign
+             contacts for their own district via the confirm-on-complete modal on
+             step ①.) The lead's Finalize letter locks the set. -->
         <div class="field-group">
           <h3 class="field-group__title t-heading-compact-01">District contacts</h3>
-          <p class="field-hint t-label-01">The coordinator each district authorizes applicants to contact before field work — shown as a contact tile. Reassign it to another person in that district and the letter's contact list updates to match.</p>
-          <!-- One group per district: a ContactCard tile per candidate (only the
-               selected one shown) + a picker to reassign. Rendering the tiles up
-               front lets the script swap the visible one by toggling display —
-               matching the ContactCard pattern used for every other contact. -->
-          <div id="contacts-input">
-            {districts.map((d) => (
-              <div class="contact-group" data-contact-group={d.name}>
-                <div class="contact-group__tiles">
-                  {d.contactOptions.map((c) => (
-                    <div data-contact-tile={c.id} style={c.id === d.selectedContactId ? '' : 'display:none'}>
-                      <ContactCard role={d.name} contact={{ name: c.name, phone: c.phone, email: c.email }} />
-                    </div>
-                  ))}
-                </div>
-                <cds-dropdown class="contact-picker" data-contact-picker title-text="Change contact" value={d.selectedContactId}>
-                  {d.contactOptions.map((c) => (
-                    <cds-dropdown-item value={c.id}>{c.name} — {c.role}</cds-dropdown-item>
-                  ))}
-                </cds-dropdown>
+          <p class="field-hint t-label-01">These print on the letter's Contact List for Parks. Each district's lead is its <strong>Primary</strong> contact (the main point of contact). <strong>Park contacts</strong> attach automatically for the specific parks on this permit. Add more from the district's users. Supporting analysts' change requests appear here to accept or decline.</p>
+          <cds-inline-notification
+            id="contacts-locked-note"
+            kind="info" low-contrast hide-close-button
+            title="Contacts locked"
+            subtitle="The letter has been finalized. The contact set is fixed and prints as shown."
+            hidden
+          ></cds-inline-notification>
+          <div id="contacts-input" class="contacts-input"></div>
+        </div>
+
+        <div class="field-group">
+          <div class="field-group__bar">
+            <h3 class="field-group__title t-heading-compact-01">Signature</h3>
+            <cds-button kind="tertiary" size="sm" id="signer-change">Change signer</cds-button>
+          </div>
+          <p class="field-hint t-label-01">A default signer is set by an administrator. Reassign it for this permit if a different Environmental Scientist will sign — the name and classification print on the letter.</p>
+          <!-- The signer is shown the SAME way as a district contact: a ContactCard
+               tile (one per candidate, only the selected one visible). "Change signer"
+               (in the section header) reassigns. The admin-configured default is pre-selected. -->
+          <div id="signer-input">
+            <div class="contact-group" data-signer-group>
+              <div class="contact-group__tiles">
+                {signerOptions.map((s) => (
+                  <div data-signer-tile={s.id} style={s.id === defaultSignerId ? '' : 'display:none'}>
+                    <ContactCard role={s.classification} contact={{ name: s.name, phone: s.phone, email: s.email }} />
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         </div>
 
-        <div class="field-group">
-          <h3 class="field-group__title t-heading-compact-01">Signature</h3>
-          <cds-text-input id="fb-signername" data-field="signerName" label="Signer name" placeholder="ES or EG name"></cds-text-input>
-          <cds-text-input id="fb-signerclass" data-field="signerClassification" label="Classification" placeholder="e.g. Environmental Scientist"></cds-text-input>
-        </div>
-
-        <div class="field-group">
-          <h3 class="field-group__title t-heading-compact-01">Reviewer note</h3>
-          <p class="field-hint t-label-01">Optional. Appears on the letter under the conditions. Captured with the permit, so it can't drift from the record.</p>
-          <cds-textarea id="fb-note" label="Note to the applicant" placeholder="e.g. Please pay particular attention to the Western Snowy Plover condition when working in coastal areas." rows="4"></cds-textarea>
-        </div>
       </div>
 
       <aside class="preview cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-9" aria-label="Final letter preview">
-        <p class="preview__label t-label-01">Final letter — updates as you go</p>
-        <article class="sheet cds--white letter-host" aria-label={`Final permit letter for ${permit.id}`}></article>
+        <div class="preview__head">
+          <p class="preview__label t-label-01">Final letter — updates as you go</p>
+          <cds-button id="copy-reset" kind="ghost" size="sm" style="display:none">Restore default wording</cds-button>
+        </div>
+        <p class="preview__hint t-label-01">Click a body paragraph to edit its wording. The dates, parks, and conditions stay derived.</p>
+        <article class="sheet cds--white letter-host letter-host--editable" aria-label={`Final permit letter for ${permit.id}`}></article>
       </aside>
     </section>
 
     <!-- ③ Review & send ─ the finished package: recap + the full letter. -->
     <section class="step cds--css-grid cds--css-grid--with-row-gap" data-step="2" hidden>
       <div class="col-package cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12 cds--lg:col-start-3">
-        <cds-inline-notification
-          kind="info" low-contrast hide-close-button
-          title="Review the full package, then send"
-          subtitle="This is the letter as it will be issued. Confirm the summary below and read the letter through, then send it for signature."
-        ></cds-inline-notification>
-
         <section class="pkg-recap">
           <h3 class="pkg-recap__title t-heading-03">What you're issuing</h3>
           <div id="package-recap" class="recap"></div>
@@ -415,7 +632,7 @@ const letterData = {
          span tracks the active step's main column (set in render()): step ① col-10,
          step ② col-7, step ③ col-12 offset by col-start-3. -->
     <footer class="wiz-actions cds--css-grid">
-      <div class="wiz-actions__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
+      <div class="wiz-actions__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
         <cds-button id="wiz-back" kind="secondary" hidden>Back</cds-button>
         <cds-button kind="ghost" href={withBase('/permit')}>Cancel</cds-button>
         <div class="wiz-actions__spacer"></div>
@@ -539,38 +756,112 @@ const letterData = {
     </cds-modal-footer>
   </cds-modal>
 
-  <!-- Persistent comments trigger — fixed so it's reachable from ANY step and at
-       any scroll position. carbon-checked: Carbon ships no floating-action host;
-       this is only a fixed positioning wrapper (same pattern as apply's toast-host)
-       around a stock cds-button. -->
-  <div class="comments-fab">
-    <cds-button id="comments-open" kind="ghost" size="md">
-      Comments
-      <span id="comments-count" class="comments-count" hidden></span>
-    </cds-button>
-  </div>
+  <!-- Add a member to the analysis team — the SAME button-first pattern as the
+       permit detail page: the Team tab's "Add member" opens this, you pick a
+       directory user (only those not already on the team), and the modal's own
+       "Add member" commits. Shared permit-team storage keeps both surfaces in sync. -->
+  <cds-modal id="team-add-modal" size="sm">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Analysis team</cds-modal-label>
+      <cds-modal-heading>Add to team</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <cds-combo-box
+        id="team-add-select"
+        title-text="Reviewer"
+        label="Search the user directory…"
+        helper-text="Only users not already on the analysis team appear here."
+      >
+        {eligibleMembers.map((u) => (
+          <cds-combo-box-item value={u.id}>{u.name} — {u.role}</cds-combo-box-item>
+        ))}
+      </cds-combo-box>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="team-add-confirm">Add to team</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
 
-  <!-- Comments thread — a non-blocking slide-over so the analyst can read the
-       team's comments and add their own while still viewing any step.
-       carbon-checked: cds-side-panel is the stock overlay, but it's a heavy,
-       animation/focus-managed component that misbehaved here; this is a documented
-       bespoke drawer SHELL (fixed positioning only) whose controls are all stock
-       cds-* (textarea, buttons, icon-button). Toggled by adding .drawer--open. -->
-  <aside id="comments-panel" class="drawer" aria-label="Comments" aria-hidden="true">
-    <div class="drawer__head">
-      <h2 class="drawer__title t-heading-03">Comments</h2>
-      <cds-icon-button id="comments-close" kind="ghost" size="sm" align="left">
-        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.4141 16 24 9.4141 22.5859 8 16 14.5859 9.4143 8 8 9.4141 14.5859 16 8 22.5859 9.4143 24 16 17.4141 22.5859 24 24 22.5859 17.4141 16z"/></svg>
-        <span slot="tooltip-content">Close comments</span>
-      </cds-icon-button>
-    </div>
-    <p class="comments-note t-label-01">Shared with the permit's review thread. Newest first.</p>
-    <ul id="comments-thread" class="comments-thread"></ul>
-    <div class="comments-composer">
-      <cds-textarea id="comments-input" label="Add a comment" placeholder="Note something for the team… (⌘/Ctrl+Enter to post)" rows="3"></cds-textarea>
-      <cds-button id="comments-add" kind="primary" size="md">Add comment</cds-button>
-    </div>
-  </aside>
+  <!-- Change the letter signer — the SAME button→modal→search pattern as Add member:
+       the Signature section's "Change signer" opens this, you pick from the signer
+       pool, and Save commits. Reassigning updates the name + classification on the
+       letter. -->
+  <cds-modal id="signer-modal" size="sm">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Permit letter</cds-modal-label>
+      <cds-modal-heading>Change signer</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <cds-combo-box
+        id="signer-select"
+        title-text="Signer"
+        label="Search signers by name…"
+        helper-text="An Environmental Scientist authorized to sign permit letters."
+        autoalign
+      >
+        {signerOptions.map((s) => (
+          <cds-combo-box-item value={s.id}>{s.name} — {s.classification}</cds-combo-box-item>
+        ))}
+      </cds-combo-box>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="signer-save">Save</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Pick a district contact — one shared modal for BOTH "change primary" and
+       "add contact". The invoking district + intent are recorded, the combo is
+       rebuilt from that district's USER LIST (members + coordinator), and Save
+       commits: a direct change for the lead, a change request for a supporting
+       analyst. Contacts can only be picked from district users — no free entry. -->
+  <cds-modal id="contact-modal" size="sm">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label id="contact-modal-label">District contact</cds-modal-label>
+      <cds-modal-heading id="contact-modal-heading">Change primary contact</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <p id="contact-person-static" class="contact-person-static t-body-01" hidden></p>
+      <cds-combo-box
+        id="contact-select"
+        title-text="Contact"
+        label="Search district users by name…"
+        helper-text="Pick from the users in this district."
+        autoalign
+      ></cds-combo-box>
+      <!-- Scope (which parks) — filled per district when the editor opens; hidden for
+           the primary contact, which is always the district-wide (all parks) contact. -->
+      <div id="contact-scope-host" class="contact-scope-host"></div>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="contact-save">Save</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Complete-review contacts modal — the SUPPORTING analyst's contact surface. On
+       "Complete review" they confirm their district's contacts and can request changes
+       (change primary / add / remove), which the lead accepts on the Finalize-letter
+       step. Uses inline pickers so it never stacks a second modal. -->
+  <cds-modal id="confirm-contacts-modal" size="md">
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Complete supporting review</cds-modal-label>
+      <cds-modal-heading>Confirm the district contacts</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <p class="confirm-contacts__lead t-body-01">These print on the letter's Contact List for Parks. Confirm your district's contacts — any change you make is a request your lead approves before the letter is finalized.</p>
+      <div id="confirm-contacts-body" class="confirm-contacts contacts-input"></div>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="confirm-contacts-done">Confirm &amp; complete review</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
 
   <script type="application/json" id="letter-data" set:html={JSON.stringify(letterData)}></script>
 
@@ -582,21 +873,42 @@ const letterData = {
     } from '../data/conditions';
     import { readIdentity } from '../lib/maintenance';
     import { readPermitRole } from '../lib/permissions';
-    import { directory } from '../data/user';
+    import { showToast } from '../lib/toast';
+    import { directory, activeUser } from '../data/user';
+    import { districtName } from '../data/district';
     import { permit } from '../data/permit';
     import { parkKey } from '../data/parks';
     // Same rich-text condition editor the permit detail page uses in its
     // add/edit-condition modal — registered here so <sc-rich-text> upgrades.
     import '../components/sc-rich-text.ts';
 
-    interface ContactOption { id: string; name: string; role: string; email: string; phone: string }
+    interface ContactOption {
+      id: string; name: string; role: string; email: string; phone: string;
+      published?: boolean;
+      // Special-contact park scope: null = all parks; string[] = only those parks;
+      // undefined = a plain pick (never auto-included as a special).
+      scopeParks?: string[] | null;
+    }
+    // A district's contacts are a flat list of ENTRIES — each is just a PERSON + a park
+    // SCOPE (null = all parks on the permit; string[] = only those). No roles/badges:
+    // "covers all parks" IS what used to be called the primary/main contact.
+    interface ContactEntry { eid: string; person: string; scope: string[] | null }
+    // A change to that list — applied directly by the lead, or queued as a request by a
+    // supporting analyst (accept/decline by the lead). 'add' = new entry; 'remove' = drop
+    // one; 'edit' = change a person and/or scope (undefined field = leave it as-is).
+    type ChangeKind = 'add' | 'remove' | 'edit';
+    interface ContactChange { kind: ChangeKind; eid?: string; person?: string; scope?: string[] | null; summary: string }
+    interface ContactRequest extends ContactChange { id: string; by: string }
     interface DistrictSeed {
       name: string; key: string;
       coordinator: { name: string; email?: string; phone?: string };
       officePhone: string; parks: string[];
       available: { id: string; name: string }[];
-      contactOptions: ContactOption[];
-      selectedContactId: string;
+      // The district's user list (members + coordinator): the pick-list for the
+      // primary swap and for additions. Published members with a park scope are also
+      // the special-contact candidates. `defaultPrimaryId` is the district lead.
+      pool: ContactOption[];
+      defaultPrimaryId: string;
     }
     interface Specimen { species: string; quantity: string; portion: string; condition: string }
     interface LetterData {
@@ -611,12 +923,15 @@ const letterData = {
       comments: { author: string; time: string; text: string }[];
       currentUser: string;
       specimens: Specimen[];
+      signerOptions: SignerOption[];
+      signerId: string;
       seed: {
         salutation: string; piName: string; department: string; institution: string;
         street: string; cityStateZip: string; projectTitle: string; category: string;
         permitType: string; signerName: string; signerClassification: string;
       };
     }
+    interface SignerOption { id: string; name: string; classification: string; email: string; phone: string }
 
     const data: LetterData = JSON.parse(document.getElementById('letter-data')?.textContent || '{}');
     const { permitId, districts } = data;
@@ -627,19 +942,40 @@ const letterData = {
     const stepKey = `permit-finalize-step-${permitId}`;
     const reviewStartedKey = `permit-review-started-${permitId}`;
 
-    // Guard (Story 9 — the review wizard is the RA's editing surface): it's reachable
-    // only (1) once review has started AND (2) by the Responsible Agent or a System
-    // Admin. Anyone else — a Supporting Agent, an unassigned reviewer, a researcher —
-    // is sent back to the permit detail (which enforces its own read-only view). This
-    // closes the hole where a non-RA could edit parks/dates/conditions/signing here.
+    // Guard + role model (the review wizard is the analysis team's review surface).
+    // Reachable only (1) once review has started AND (2) by a reviewer ASSIGNED to
+    // this permit — the Responsible Agent (lead), a Supporting Agent (assistant), or
+    // a System Admin. Anyone else — an unassigned reviewer, a researcher — is sent to
+    // the permit detail (which enforces its own read-only view).
+    //   • Lead (RA/Admin): edits the application, curates conditions, and drives the
+    //     letter — Finalize review → Finalize letter → Send for signature.
+    //   • Assistant (SA): the application is READ-ONLY (matrix: form update = RA only),
+    //     but they curate conditions and comment; their terminal action is Complete
+    //     review. They never reach the Finalize-letter / Review-&-send steps.
     const wizIdentity = readIdentity();
-    const wizCanEdit = wizIdentity === 'admin' || readPermitRole(permitId) === 'responsible';
-    if (permitId && (!localStorage.getItem(reviewStartedKey) || !wizCanEdit)) {
+    const wizRole = readPermitRole(permitId);
+    const isAdmin = wizIdentity === 'admin';
+    const isRA = wizRole === 'responsible';
+    const isSA = wizRole === 'supporting';
+    const isLead = isRA || isAdmin;        // drives finalize/send + form/team editing
+    const canAccess = isLead || isSA;      // assigned-reviewer access to the wizard
+    const canEditForm = isLead;            // §5.3: form update = RA/Admin only
+    const canEditTeam = isLead;            // §5.3: supporting-agents roster = RA/Admin
+    if (permitId && (!localStorage.getItem(reviewStartedKey) || !canAccess)) {
       window.location.replace(data.permitUrl);
     }
+    // The acting person + the district they belong to — the lead edits contacts for
+    // ALL districts directly; a supporting analyst can only RAISE change requests for
+    // the district they're a member of.
+    const me = activeUser(wizIdentity);
+    const myName = me?.name || 'You';
+    const myDistrictName = me?.district ? districtName(me.district) : null;
 
     const parseISO = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
     const fmt = (iso: string) => parseISO(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    // Numeric MM/DD/YYYY — used in the send-step recap where the dates are the
+    // scannable anchor; the letter body keeps the written month (fmt).
+    const fmtNum = (iso: string) => parseISO(iso).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
     const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const plusYear = (iso: string) => { const d = parseISO(iso); return toISO(new Date(d.getFullYear() + 1, d.getMonth(), d.getDate())); };
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -654,33 +990,82 @@ const letterData = {
       ...JSON.parse(localStorage.getItem(parksKey) || '{}'),
     } as Record<string, string[]>;
     const permitParkKeys = Object.values(initialParkMap).flat().map(parkKey);
+    // Seed a district's contact list from its roster: the lead as an all-parks contact,
+    // plus any admin park-specialists whose parks are on the permit (as park-scoped
+    // contacts). After seeding the list is fully user-owned — add / edit / remove.
+    const seedContacts = (d: DistrictSeed, parkList: string[]): ContactEntry[] => {
+      const out: ContactEntry[] = [];
+      const leadId = d.defaultPrimaryId;
+      if (d.pool.some((c) => c.id === leadId)) out.push({ eid: `seed-${leadId}`, person: leadId, scope: null });
+      d.pool.forEach((c) => {
+        if (c.id === leadId || !c.published || c.scopeParks === undefined) return;
+        if (c.scopeParks === null) { out.push({ eid: `seed-${c.id}`, person: c.id, scope: null }); return; }
+        const covered = parkList.filter((p) => c.scopeParks!.some((sp) => parkKey(sp) === parkKey(p)));
+        if (covered.length) out.push({ eid: `seed-${c.id}`, person: c.id, scope: covered });
+      });
+      return out;
+    };
     const state = {
       startISO: (persistedFinal.startISO || data.window.startISO) as string,
       endISO: (persistedFinal.endISO || data.window.endISO) as string,
       reportISO: (persistedFinal.reportISO || plusYear(persistedFinal.startISO || data.window.startISO)) as string,
       reportOverridden: Boolean(persistedFinal.reportISO),
       parks: initialParkMap,
-      // Chosen district contact (a contactOptions id) per district — persisted edits
-      // win over the seeded coordinator.
-      contactIds: { ...Object.fromEntries(districts.map((d) => [d.name, d.selectedContactId])), ...(persistedFinal.contactIds || {}) } as Record<string, string>,
+      // The district's contact list (what the letter prints) — a flat array of entries
+      // per district, each a person + park scope. Seeded from the roster, then fully
+      // editable. A persisted list wins over the seed for that district.
+      contacts: Object.fromEntries(districts.map((d) => [d.name,
+        (persistedFinal.contacts && persistedFinal.contacts[d.name]) || seedContacts(d, initialParkMap[d.name] || d.parks),
+      ])) as Record<string, ContactEntry[]>,
+      // Pending change requests raised by supporting analysts, awaiting the lead's
+      // accept/decline. These do NOT affect the letter until accepted.
+      contactRequests: { ...Object.fromEntries(districts.map((d) => [d.name, [] as ContactRequest[]])), ...(persistedFinal.contactRequests || {}) } as Record<string, ContactRequest[]>,
       conditions: loadPermitConditions(permitId, {
         districtKeys: data.districtKeys, parkKeys: permitParkKeys, activityKeys: data.activityKeys,
         speciesKeys: data.speciesKeys, regionKeys: data.regionKeys, agencyKeys: data.agencyKeys,
       }) as PermitCondition[],
-      note: (persistedFinal.note || '') as string,
       // Editable letter fields — persisted seeds win over the application seed.
       fields: { ...data.seed, ...fld } as Record<string, string>,
       // Authorized specimens — persisted edits win over the application seed.
       specimens: (Array.isArray(persistedFinal.specimens) ? persistedFinal.specimens : data.specimens.map((s) => ({ ...s }))) as Specimen[],
+      // The selected letter signer (an id into data.signerOptions) — persisted edits
+      // win over the admin default.
+      signerId: (persistedFinal.signerId || data.signerId) as string,
+      // Reviewer overrides for the letter's three boilerplate body paragraphs
+      // (intro / conditions notice / report reminder). null = use the live-derived
+      // default (dates, permit type, etc. stay current); a string = the reviewer's
+      // frozen wording for that paragraph, cleared back to live by "Restore default
+      // wording". The structured content (dates elsewhere, parks, conditions,
+      // contacts, specimens) is NOT editable — only these prose blocks.
+      letterCopy: {
+        intro: null, conditionsNotice: null, reportReminder: null,
+        ...(persistedFinal.letterCopy || {}),
+      } as Record<string, string | null>,
     };
 
     const $ = (id: string) => document.getElementById(id);
-    const persistParks = () => localStorage.setItem(parksKey, JSON.stringify(state.parks));
-    const persistConditions = () => savePermitConditions(permitId, state.conditions);
-    const persistFinal = () => localStorage.setItem(finalKey, JSON.stringify({
-      ...persistedFinal, startISO: state.startISO, endISO: state.endISO, reportISO: state.reportISO,
-      note: state.note, fields: state.fields, specimens: state.specimens, contactIds: state.contactIds,
-    }));
+    // Count badges on the working-panel tabs (conditions / comments / team / docs).
+    // Updated live from the render functions; hidden at zero.
+    const setTabBadge = (name: string, n: number) => {
+      const el = document.querySelector(`[data-tab-badge="${name}"]`) as HTMLElement | null;
+      if (!el) return;
+      el.textContent = String(n);
+      el.hidden = n === 0;
+    };
+    // Visible auto-save hook — assigned later once the indicator span exists; every
+    // persist below flashes it. No-op until then (and for read-only assistants).
+    let flashSaved: () => void = () => {};
+    const persistParks = () => { localStorage.setItem(parksKey, JSON.stringify(state.parks)); flashSaved(); };
+    const persistConditions = () => { savePermitConditions(permitId, state.conditions); flashSaved(); };
+    const persistFinal = () => {
+      localStorage.setItem(finalKey, JSON.stringify({
+        ...persistedFinal, startISO: state.startISO, endISO: state.endISO, reportISO: state.reportISO,
+        fields: state.fields, specimens: state.specimens, contacts: state.contacts,
+        contactRequests: state.contactRequests, signerId: state.signerId,
+        letterCopy: state.letterCopy,
+      }));
+      flashSaved();
+    };
 
     // Trash glyph for row-level DELETE actions (remove a park / specimen /
     // condition) — matches the application form's convention (StudyAreasStep,
@@ -750,7 +1135,32 @@ const letterData = {
             </cds-table-row>`).join('');
       }
     };
-    const renderStudyAreas = () => renderParkList(saSelect, $('sa-body'), $('sa-count'), $('sa-empty') as HTMLElement | null);
+    // Step ① Study areas — GROUPED BY DISTRICT: a district header row over its parks
+    // (state.parks is already district-keyed). Districts in a stable order, parks
+    // sorted within each. (Step ②'s Authorized parks stays one flat list.)
+    const renderStudyAreas = () => {
+      const names = selectedNames();
+      if (saSelect) saSelect.value = names.join(',');
+      const count = $('sa-count'); if (count) count.textContent = names.length ? `(${names.length})` : '';
+      const empty = $('sa-empty') as HTMLElement | null; if (empty) empty.hidden = names.length > 0;
+      const body = $('sa-body'); if (!body) return;
+      body.innerHTML = districts
+        .filter((d) => (state.parks[d.name] || []).length > 0)
+        .map((d) => {
+          const ps = (state.parks[d.name] || []).slice().sort((a, b) => a.localeCompare(b));
+          const head = `<cds-table-row class="sa-grouprow"><cds-table-cell class="sa-groupcell">${esc(d.name)} <span class="sa-groupcount">(${ps.length})</span></cds-table-cell><cds-table-cell class="sa-groupcell"></cds-table-cell></cds-table-row>`;
+          const rows = ps.map((name) => `
+            <cds-table-row>
+              <cds-table-cell class="sa-parkcell">${esc(name)}</cds-table-cell>
+              <cds-table-cell>
+                <cds-icon-button kind="ghost" size="sm" align="left" data-remove-park="${encodeURIComponent(name)}">
+                  ${trashIcon}<span slot="tooltip-content">Remove ${esc(name)}</span>
+                </cds-icon-button>
+              </cds-table-cell>
+            </cds-table-row>`).join('');
+          return head + rows;
+        }).join('');
+    };
     const renderFbParks = () => renderParkList(fbSelect, $('fb-parks-body'), $('fb-parks-count'), $('fb-parks-empty') as HTMLElement | null);
 
     // ── Permit type — DERIVED from the parks, not chosen. Multi-district when the
@@ -764,7 +1174,10 @@ const letterData = {
     };
 
     // Re-render BOTH editors + the derived type + the letter from the single source.
-    const syncParks = () => { refreshPermitType(); renderStudyAreas(); renderFbParks(); renderPreview(); };
+    // Park changes also change which park-scoped special contacts are included, so
+    // refresh the contacts editor too. (refreshContacts is defined below; syncParks is
+    // only invoked after init, once every const is bound.)
+    const syncParks = () => { refreshPermitType(); renderStudyAreas(); renderFbParks(); refreshContacts(); renderPreview(); };
 
     // Group a flat list of names into a NEW district→names map (pure — doesn't
     // touch state, so a change can be previewed/confirmed before it's committed).
@@ -935,38 +1348,412 @@ const letterData = {
     $('sa-body')?.addEventListener('click', onRosterRemove);
     $('fb-parks-body')?.addEventListener('click', onRosterRemove);
 
-    // ── District contacts (step ②) ───────────────────────────────────────────────
-    // Each district shows the selected contact as a ContactCard tile (one tile per
-    // candidate, only the selected one visible) + a picker to reassign. Options are
-    // the users associated with that district.
-    const contactFor = (districtName: string): ContactOption | null => {
-      const d = districts.find((x) => x.name === districtName);
-      if (!d) return null;
-      return d.contactOptions.find((c) => c.id === state.contactIds[districtName])
-        ?? d.contactOptions.find((c) => c.id === d.selectedContactId)
-        ?? null;
+    // ── District contacts (Working Panel tab, step ①) ────────────────────────────
+    // The letter's Contact List for Parks is built here. Per district: a PRIMARY
+    // contact (the district lead by default), park-scoped SPECIAL contacts that
+    // auto-attach when a scoped park is on the permit, and ADDITIONS picked from the
+    // district's user list. Every contact can change, gated by WHO:
+    //   • the LEAD (RA/Admin) changes any district's contacts directly;
+    //   • a SUPPORTING analyst can only RAISE change requests for the district they
+    //     belong to — those don't touch the letter until the lead accepts them.
+    // Contacts lock ONLY once the letter is actually SENT (status 'Out for signature'),
+    // not when the lead merely advances past step ② — so step ② stays editable through
+    // the whole review. Deriving from status self-heals any stale lock flag and unlocks
+    // automatically if the permit is reset back to review.
+    const isContactsLocked = () => localStorage.getItem(statusKey) === 'Out for signature';
+
+    // Per-district edit mode: 'edit' (lead, direct) · 'request' (supporting, own
+    // district) · 'view' (read-only). Locking drops everyone to 'view'.
+    type EditMode = 'edit' | 'request' | 'view';
+    const modeFor = (d: DistrictSeed): EditMode => {
+      if (isContactsLocked()) return 'view';
+      if (isLead) return 'edit';
+      if (isSA && d.name === myDistrictName) return 'request';
+      return 'view';
     };
-    const contactGroups = [...document.querySelectorAll<HTMLElement>('[data-contact-group]')];
-    const renderContacts = () => {
-      contactGroups.forEach((group) => {
-        const name = group.dataset.contactGroup!;
-        const selId = state.contactIds[name];
-        const dd = group.querySelector('[data-contact-picker]') as any;
-        if (dd) dd.value = selId;
-        group.querySelectorAll<HTMLElement>('[data-contact-tile]').forEach((tile) => {
-          tile.style.display = tile.dataset.contactTile === selId ? '' : 'none';
-        });
+
+    const poolOf = (name: string): ContactOption[] => districts.find((x) => x.name === name)?.pool ?? [];
+    const findInPool = (name: string, id: string) => poolOf(name).find((c) => c.id === id) ?? null;
+    const nameOf = (name: string, id: string) => findInPool(name, id)?.name ?? id;
+
+    // ── The flat contact model: each district is a list of {person, scope} entries ──
+    const contactsOf = (d: DistrictSeed): ContactEntry[] => state.contacts[d.name] || (state.contacts[d.name] = []);
+    const personOf = (d: DistrictSeed, e: ContactEntry): ContactOption | null => findInPool(d.name, e.person);
+    // Which of THIS permit's parks a scope covers. null = every park on the permit for
+    // this district; a set = the on-permit intersection (matched by parkKey).
+    const coveredFor = (scope: string[] | null, d: DistrictSeed): string[] => {
+      const permitParks = state.parks[d.name] || [];
+      if (scope == null) return permitParks;
+      const keys = new Set(scope.map(parkKey));
+      return permitParks.filter((p) => keys.has(parkKey(p)));
+    };
+    const coveredParks = (e: ContactEntry, d: DistrictSeed): string[] => coveredFor(e.scope, d);
+    const scopeLabel = (e: ContactEntry, d: DistrictSeed): string => {
+      if (e.scope == null) return 'Covers all parks on this permit';
+      const cov = coveredParks(e, d);
+      return cov.length ? `Covers: ${cov.join(', ')}` : 'No parks on this permit — will not print';
+    };
+    // District users not already on the list — the pick-list for adding (and, when
+    // reassigning an entry, plus that entry's own current person).
+    const usedPersons = (d: DistrictSeed): Set<string> => new Set(contactsOf(d).map((e) => e.person));
+    const availableToAdd = (d: DistrictSeed): ContactOption[] => {
+      const used = usedPersons(d);
+      return d.pool.filter((c) => !used.has(c.id));
+    };
+    const assignOptions = (d: DistrictSeed, e: ContactEntry): ContactOption[] => {
+      const used = usedPersons(d);
+      return d.pool.filter((c) => c.id === e.person || !used.has(c.id));
+    };
+
+    // ── Applying / requesting a change ───────────────────────────────────────────
+    let entrySeq = 0;
+    const newId = (p: string) => `${p}-${Date.now()}-${entrySeq++}`;
+    const applyChange = (dName: string, ch: ContactChange) => {
+      const list = state.contacts[dName] || (state.contacts[dName] = []);
+      if (ch.kind === 'add') list.push({ eid: newId('e'), person: ch.person!, scope: ch.scope ?? null });
+      else if (ch.kind === 'remove') state.contacts[dName] = list.filter((e) => e.eid !== ch.eid);
+      else if (ch.kind === 'edit') {
+        const e = list.find((x) => x.eid === ch.eid);
+        if (e) { if (ch.person !== undefined) e.person = ch.person; if (ch.scope !== undefined) e.scope = ch.scope; }
+      }
+    };
+    // Lead → apply directly; supporting → queue a pending request for the lead. An
+    // 'edit'/'remove' request REPLACES any pending one for the same entry, so live
+    // inline edits don't stack into many requests. `debounce` defers the re-render so an
+    // open inline control isn't torn down mid-interaction (the letter still updates now).
+    const commitChange = (dName: string, ch: ContactChange, opts: { quiet?: boolean; debounce?: boolean } = {}) => {
+      const d = districts.find((x) => x.name === dName);
+      if (!d) return;
+      if (modeFor(d) === 'edit') {
+        applyChange(dName, ch);
+        persistFinal(); renderPreview();
+        if (opts.debounce) scheduleContactsRefresh(); else refreshContacts();
+      } else if (modeFor(d) === 'request') {
+        const reqs = state.contactRequests[dName] || (state.contactRequests[dName] = []);
+        const existing = (ch.kind === 'edit' || ch.kind === 'remove') ? reqs.find((r) => r.kind === ch.kind && r.eid === ch.eid) : undefined;
+        if (existing) { existing.person = ch.person; existing.scope = ch.scope; existing.summary = ch.summary; }
+        else reqs.push({ id: newId('req'), by: myName, ...ch });
+        persistFinal();
+        if (opts.debounce) scheduleContactsRefresh(); else refreshContacts();
+        if (!opts.quiet) showToast('Change requested — pending your lead’s approval');
+      }
+    };
+    const resolveRequest = (dName: string, reqId: string, accept: boolean) => {
+      const list = state.contactRequests[dName] || [];
+      const req = list.find((r) => r.id === reqId);
+      if (!req) return;
+      if (accept) applyChange(dName, req);
+      state.contactRequests[dName] = list.filter((r) => r.id !== reqId);
+      persistFinal(); refreshContacts(); renderPreview();
+      showToast(accept ? 'Change applied' : 'Request declined');
+    };
+    // A pending edit for an entry (so the SA's inline controls keep the requested
+    // person/scope across a re-render — the request isn't applied to the letter yet).
+    const pendingEdit = (dName: string, eid: string): ContactRequest | undefined =>
+      (state.contactRequests[dName] || []).find((r) => r.kind === 'edit' && r.eid === eid);
+    const displayEntry = (d: DistrictSeed, e: ContactEntry, usePending: boolean): { person: string; scope: string[] | null } => {
+      if (usePending) { const r = pendingEdit(d.name, e.eid); if (r) return { person: r.person ?? e.person, scope: r.scope !== undefined ? r.scope : e.scope }; }
+      return { person: e.person, scope: e.scope };
+    };
+    let scopeRefreshTimer = 0;
+    const scheduleContactsRefresh = () => {
+      window.clearTimeout(scopeRefreshTimer);
+      scopeRefreshTimer = window.setTimeout(refreshContacts, 450);
+    };
+
+    const contactMetaLine = (c: ContactOption) =>
+      [c.role, c.phone, c.email].filter(Boolean).map(esc).join(' · ');
+    const initialsOf = (name: string) =>
+      name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+    const actionBtn = (act: string, dName: string, label: string, id = '') =>
+      `<cds-button class="crow-act" data-act="${act}" data-district="${esc(dName)}"${id ? ` data-id="${esc(id)}"` : ''} kind="ghost" size="sm">${esc(label)}</cds-button>`;
+    // Row-level Edit / Remove as icon buttons (tooltip carries the accessible name),
+    // matching the conditions-list idiom. `.crow-act` + data-* keep onContactAction working.
+    const rowEditIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>';
+    const iconActionBtn = (act: string, dName: string, tip: string, id: string, icon: string) =>
+      `<cds-icon-button class="crow-act" kind="ghost" size="sm" align="top" data-act="${act}" data-district="${esc(dName)}"${id ? ` data-id="${esc(id)}"` : ''}>${icon}<span slot="tooltip-content">${esc(tip)}</span></cds-icon-button>`;
+    const contactRow = (c: ContactOption, action: string, sub = '', extra = '', muted = false) => `
+      <cds-contained-list-item>
+        <div class="crow${muted ? ' crow--muted' : ''}">
+          <span class="crow__avatar" aria-hidden="true">${esc(initialsOf(c.name))}</span>
+          <div class="crow__body">
+            <p class="crow__name t-body-01">${esc(c.name)}</p>
+            <p class="crow__meta t-label-01">${contactMetaLine(c) || '—'}</p>
+            ${sub ? `<p class="crow__scope t-label-01">${esc(sub)}</p>` : ''}
+          </div>
+          ${action ? `<div class="crow__end">${action}</div>` : ''}
+        </div>
+        ${extra}
+      </cds-contained-list-item>`;
+
+    // A contact's SECOND component — WHICH PARKS it applies to. A radio (All parks /
+    // Specific parks) with a park checkbox list revealed only for "Specific" — the
+    // same shape as the special-conditions auto-apply control. Used INSIDE the lead's
+    // contact-editor modal AND inline in the SA's confirm modal (identical fields).
+    const scopeFieldset = (idBase: string, d: DistrictSeed, current: string[] | null): string => {
+      const parks = state.parks[d.name] || [];
+      const some = current != null;
+      const sel = new Set((current ?? []).map(parkKey));
+      const boxes = parks
+        .map((p) => `<cds-checkbox data-scope-park value="${esc(p)}"${some && sel.has(parkKey(p)) ? ' checked' : ''} label-text="${esc(p)}"></cds-checkbox>`)
+        .join('');
+      return `
+        <div class="scope-field" data-scope-field>
+          <p class="scope-field__legend t-label-01">Applies to</p>
+          <cds-radio-button-group data-scope-mode name="scope-${esc(idBase)}" orientation="vertical" value="${some ? 'some' : 'all'}">
+            <cds-radio-button label-text="All parks on this permit" value="all"></cds-radio-button>
+            <cds-radio-button label-text="Specific parks" value="some"></cds-radio-button>
+          </cds-radio-button-group>
+          <div class="scope-parks" data-scope-parks${some ? '' : ' hidden'}>${boxes}</div>
+        </div>`;
+    };
+    // Read a scope fieldset's value: null = all parks; string[] = the checked parks
+    // (an empty "Specific" selection collapses back to all, so nothing silently drops).
+    const readScope = (root: Element | null): string[] | null => {
+      if (!root) return null;
+      const mode = (root.querySelector('[data-scope-mode]') as any)?.value || 'all';
+      if (mode !== 'some') return null;
+      const parks = Array.from(root.querySelectorAll('[data-scope-park]'))
+        .filter((c: any) => c.checked).map((c: any) => c.value as string);
+      return parks.length ? parks : null;
+    };
+    // Two surfaces render the SAME flat contact list:
+    //   • 'panel' — the LEAD's editor on step ②. Edit / add open the contact-editor
+    //     MODAL (person + scope together).
+    //   • 'modal' — the SUPPORTING analyst's confirm-on-complete modal. Edit / add are
+    //     INLINE (person dropdown + scope fieldset) — never a modal-on-modal.
+    // modeFor(): lead → 'edit' (applies directly), SA on own district → 'request'
+    // (queues), else 'view'. Only the control surface differs.
+    const contactsHost = $('contacts-input');
+    const contactsLockedNote = $('contacts-locked-note') as HTMLElement | null;
+    const contactsConfirmBody = $('confirm-contacts-body');
+
+    const userOptions = (list: ContactOption[]) =>
+      list.map((c) => `<cds-dropdown-item value="${esc(c.id)}">${esc(c.name)} — ${esc(c.role)}</cds-dropdown-item>`).join('');
+
+    const renderContacts = (host: HTMLElement | null, surface: 'panel' | 'modal') => {
+      if (!host) return;
+      const locked = isContactsLocked();
+      host.innerHTML = districts.map((d) => {
+        const mode = modeFor(d);
+        const entries = contactsOf(d);
+        // One uniform row per contact = person + scope. PANEL → Edit opens the modal;
+        // SA MODAL → edit inline (person dropdown + scope fieldset).
+        const editBtn = (e: ContactEntry) => (mode !== 'view' && surface === 'panel')
+          ? iconActionBtn('edit', d.name, mode === 'request' ? 'Request change' : 'Edit', e.eid, rowEditIcon) : '';
+        const removeBtn = (e: ContactEntry) => mode === 'view' ? ''
+          : iconActionBtn('remove', d.name, mode === 'request' ? 'Request removal' : 'Remove', e.eid, trashIcon);
+        const inlineEditor = (e: ContactEntry) => {
+          if (!(surface === 'modal' && mode !== 'view')) return '';
+          const disp = displayEntry(d, e, true);
+          const seed = disp.scope == null ? null : coveredFor(disp.scope, d);
+          return `<div class="crow-edit" data-entry="${esc(e.eid)}" data-district="${esc(d.name)}">
+            <cds-dropdown class="crow-inline" data-entry-person value="${esc(disp.person)}" label="Reassign contact" size="sm">${userOptions(assignOptions(d, e))}</cds-dropdown>
+            ${scopeFieldset('i-' + e.eid, d, seed)}
+          </div>`;
+        };
+        const rows = entries.map((e) => {
+          const person = personOf(d, e);
+          if (!person) return '';
+          return contactRow(person, editBtn(e) + removeBtn(e), scopeLabel(e, d), inlineEditor(e));
+        }).join('');
+        // SA modal add block — person + scope captured in one request.
+        const addBlock = surface === 'modal' && mode === 'request' && availableToAdd(d).length
+          ? `<div class="crow-add" data-add-district="${esc(d.name)}">
+               <p class="crow-add__title t-label-01">Add a contact</p>
+               <cds-dropdown data-add-person label="Choose a district user…" size="sm">${userOptions(availableToAdd(d))}</cds-dropdown>
+               ${scopeFieldset('add-' + d.key, d, null)}
+               <cds-button class="crow-act" data-act="add-submit" data-district="${esc(d.name)}" kind="tertiary" size="sm">Request to add</cds-button>
+             </div>` : '';
+        // Pending requests: the lead sees all (accept/decline); a requester sees their own (withdraw).
+        const reqs = state.contactRequests[d.name] || [];
+        const visibleReqs = mode === 'edit' ? reqs : mode === 'request' ? reqs.filter((r) => r.by === myName) : [];
+        const reqItems = visibleReqs.map((r) => {
+          const controls = mode === 'edit'
+            ? `${actionBtn('accept', d.name, 'Accept', r.id)}${actionBtn('decline', d.name, 'Decline', r.id)}`
+            : actionBtn('withdraw', d.name, 'Withdraw', r.id);
+          return `<li class="creq"><span class="creq__text t-label-01">${esc(r.by)} requests to ${esc(r.summary)}</span><span class="creq__acts">${controls}</span></li>`;
+        }).join('');
+        const reqBlock = visibleReqs.length
+          ? `<div class="contact-requests"><p class="contact-requests__title t-label-01">${mode === 'edit' ? 'Pending change requests' : 'Your change requests · pending lead approval'}</p><ul class="contact-requests__list">${reqItems}</ul></div>`
+          : '';
+        const emptyNote = entries.length ? '' : '<p class="contact-district__note t-label-01">No contacts on the letter for this district yet.</p>';
+        const canAddBtn = surface === 'panel' && mode !== 'view' && availableToAdd(d).length > 0;
+        const viewNote = mode === 'view' && !locked
+          ? `<p class="contact-district__note t-label-01">${surface === 'modal' ? 'Not your district — managed by its reviewer.' : 'Managed by this district’s reviewer.'}</p>` : '';
+        // Header bar: the "<district> contacts" title with Add contact inline on the
+        // right. The separate district-name + parks-on-permit line is dropped — that
+        // context already lives on the permit detail / study areas.
+        return `
+          <section class="contact-district" data-district="${esc(d.name)}">
+            <div class="contact-district__bar">
+              <h4 class="contact-district__name t-heading-compact-01">${esc(d.name)} contacts</h4>
+              ${canAddBtn ? `<cds-button class="crow-act" data-act="add" data-district="${esc(d.name)}" kind="tertiary" size="sm">Add contact</cds-button>` : ''}
+            </div>
+            ${viewNote}
+            <cds-contained-list kind="on-page" aria-label="${esc(d.name)} contacts">${rows}</cds-contained-list>
+            ${emptyNote}
+            ${addBlock}
+            ${reqBlock}
+          </section>`;
+      }).join('');
+    };
+    const renderContactsPanel = () => {
+      if (contactsLockedNote) contactsLockedNote.hidden = !isContactsLocked();
+      renderContacts(contactsHost, 'panel');
+    };
+    const renderConfirmContacts = () => renderContacts(contactsConfirmBody, 'modal');
+    // Any change re-renders the lead's panel and, if the SA's modal is open, its body.
+    const refreshContacts = () => {
+      renderContactsPanel();
+      const cm = $('confirm-contacts-modal') as any;
+      if (cm?.open) renderConfirmContacts();
+    };
+
+    // Shared picker modal (PANEL surface only): "change primary" / "add contact" open it;
+    // the combo is rebuilt from the district's user list, and Save commits.
+    const contactModal = $('contact-modal') as any;
+    const contactSelect = $('contact-select') as any;
+    const contactModalLabel = $('contact-modal-label');
+    const contactModalHeading = $('contact-modal-heading');
+    const contactPersonStatic = $('contact-person-static') as HTMLElement | null;
+    const contactScopeHost = $('contact-scope-host') as HTMLElement | null;
+    let pickerDistrict: string | null = null;
+    let pickerIntent: 'add' | 'edit' = 'add';
+    let pickerEid = '';
+    const fillPicker = (options: ContactOption[], selectedId?: string) => {
+      if (!contactSelect) return;
+      contactSelect.innerHTML = '';
+      options.forEach((c) => {
+        const it = document.createElement('cds-combo-box-item');
+        it.setAttribute('value', c.id);
+        it.textContent = `${c.name} — ${c.role}`;
+        contactSelect.appendChild(it);
+      });
+      contactSelect.value = selectedId && options.some((o) => o.id === selectedId) ? selectedId : '';
+    };
+    // The contact-editor modal (LEAD panel): add OR edit an entry — person picker +
+    // scope radio in ONE place. Editing preselects the entry's person + parks.
+    const openContactEditor = (intent: 'add' | 'edit', name: string, eid = '') => {
+      const d = districts.find((x) => x.name === name);
+      if (!d) return;
+      pickerDistrict = name; pickerIntent = intent; pickerEid = eid;
+      const entry = intent === 'edit' ? contactsOf(d).find((e) => e.eid === eid) ?? null : null;
+      if (contactPersonStatic) contactPersonStatic.hidden = true;
+      if (contactSelect) contactSelect.style.display = '';
+      if (contactModalLabel) contactModalLabel.textContent = name;
+      if (contactModalHeading) contactModalHeading.textContent = intent === 'add' ? 'Add a contact' : 'Edit contact';
+      if (intent === 'edit' && entry) fillPicker(assignOptions(d, entry), entry.person);
+      else fillPicker(availableToAdd(d));
+      if (contactScopeHost) {
+        contactScopeHost.hidden = false;
+        const seed = intent === 'edit' && entry && entry.scope != null ? coveredFor(entry.scope, d) : null;
+        contactScopeHost.innerHTML = scopeFieldset('m', d, seed);
+      }
+      if (contactModal) contactModal.open = true;
+    };
+    const scopeText = (parks: string[] | null) => (parks && parks.length ? parks.join(', ') : 'all parks on this permit');
+    $('contact-save')?.addEventListener('click', () => {
+      const dName = pickerDistrict;
+      const d = districts.find((x) => x.name === dName);
+      if (dName && d) {
+        const id = contactSelect?.value;
+        const parks = readScope(contactScopeHost);
+        if (id && pickerIntent === 'edit') {
+          commitChange(dName, { kind: 'edit', eid: pickerEid, person: id, scope: parks, summary: `set ${nameOf(dName, id)} to cover ${scopeText(parks)}` });
+        } else if (id) {
+          commitChange(dName, { kind: 'add', person: id, scope: parks, summary: `add ${nameOf(dName, id)} for ${scopeText(parks)}` });
+        }
+      }
+      if (contactModal) contactModal.open = false;
+    });
+
+    const entryPersonName = (dName: string, eid: string) => {
+      const e = (state.contacts[dName] || []).find((x) => x.eid === eid);
+      return e ? nameOf(dName, e.person) : eid;
+    };
+    // Delegated button actions — shared by BOTH surfaces (panel + confirm modal).
+    const onContactAction = (e: Event) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('.crow-act');
+      if (!btn) return;
+      const dName = btn.dataset.district!;
+      const id = btn.dataset.id || '';
+      switch (btn.dataset.act) {
+        case 'add': openContactEditor('add', dName); break;
+        case 'edit': openContactEditor('edit', dName, id); break;
+        case 'add-submit': {
+          // SA inline add: read the person + scope from the add block, raise ONE request.
+          const wrap = btn.closest('.crow-add');
+          const pid = (wrap?.querySelector('[data-add-person]') as any)?.value as string;
+          if (pid) {
+            const parks = readScope(wrap);
+            commitChange(dName, { kind: 'add', person: pid, scope: parks, summary: `add ${nameOf(dName, pid)} for ${scopeText(parks)}` });
+          }
+          break;
+        }
+        case 'remove': commitChange(dName, { kind: 'remove', eid: id, summary: `remove ${entryPersonName(dName, id)}` }); break;
+        case 'accept': resolveRequest(dName, id, true); break;
+        case 'decline': resolveRequest(dName, id, false); break;
+        case 'withdraw': resolveRequest(dName, id, false); break;
+      }
+    };
+    // Reveal / hide the park checkbox list when the All ↔ Specific radio flips. Runs on
+    // every scope fieldset (the editor modal, SA inline rows, and the SA add block).
+    const onScopeModeToggle = (e: Event) => {
+      const grp = (e.target as HTMLElement).closest('[data-scope-mode]');
+      if (!grp) return;
+      const parksEl = grp.closest('[data-scope-field]')?.querySelector('[data-scope-parks]') as HTMLElement | null;
+      if (parksEl) parksEl.hidden = (grp as any).value !== 'some';
+    };
+    // SA inline entry edit (person dropdown OR scope radio/checkbox) → ONE edit request
+    // per entry, replacing any prior pending edit; debounced so the control isn't torn
+    // down mid-interaction. The add block (.crow-add) is excluded — it commits on its
+    // own button, not on every field change.
+    const onInlineEntryChange = (e: Event) => {
+      const wrap = (e.target as HTMLElement).closest<HTMLElement>('.crow-edit');
+      if (!wrap) return;
+      const dName = wrap.dataset.district!;
+      const eid = wrap.dataset.entry!;
+      const person = ((wrap.querySelector('[data-entry-person]') as any)?.value as string) || undefined;
+      const parks = readScope(wrap);
+      const nm = person ? nameOf(dName, person) : entryPersonName(dName, eid);
+      commitChange(dName, { kind: 'edit', eid, person, scope: parks, summary: `set ${nm} to cover ${scopeText(parks)}` }, { quiet: true, debounce: true });
+    };
+    contactsHost?.addEventListener('click', onContactAction);
+    contactModal?.addEventListener('cds-radio-button-group-changed', onScopeModeToggle);
+    contactsConfirmBody?.addEventListener('click', onContactAction);
+    contactsConfirmBody?.addEventListener('cds-dropdown-selected', onInlineEntryChange);
+    contactsConfirmBody?.addEventListener('cds-radio-button-group-changed', (e) => { onScopeModeToggle(e); onInlineEntryChange(e); });
+    contactsConfirmBody?.addEventListener('cds-checkbox-changed', onInlineEntryChange);
+
+    // ── Letter signer (step ②) ───────────────────────────────────────────────────
+    // Same pattern as district contacts: a ContactCard tile (one per candidate, only
+    // the selected one visible) + a "Change signer" button that opens the picker modal.
+    // Defaults to the admin-set signer. The chosen signer's name + classification drive
+    // the letter (state.fields.signerName / signerClassification), no free-text inputs.
+    const signerGroup = document.querySelector<HTMLElement>('[data-signer-group]');
+    const signerFor = (): SignerOption =>
+      data.signerOptions.find((s) => s.id === state.signerId) ?? data.signerOptions[0];
+    const renderSigner = () => {
+      const s = signerFor();
+      if (!s) return;
+      state.fields.signerName = s.name;
+      state.fields.signerClassification = s.classification;
+      if (!signerGroup) return;
+      signerGroup.querySelectorAll<HTMLElement>('[data-signer-tile]').forEach((tile) => {
+        tile.style.display = tile.dataset.signerTile === state.signerId ? '' : 'none';
       });
     };
-    contactGroups.forEach((group) => {
-      const name = group.dataset.contactGroup!;
-      const dd = group.querySelector('[data-contact-picker]') as any;
-      dd?.addEventListener('cds-dropdown-selected', (e: any) => {
-        const id = e.detail?.item?.value;
-        if (!id) return;
-        state.contactIds[name] = id;
-        persistFinal(); renderContacts(); renderPreview();
-      });
+    const signerModal = $('signer-modal') as any;
+    const signerSelect = $('signer-select') as any;
+    $('signer-change')?.addEventListener('click', () => {
+      if (signerSelect) signerSelect.value = state.signerId;
+      if (signerModal) signerModal.open = true;
+    });
+    $('signer-save')?.addEventListener('click', () => {
+      const id = signerSelect?.value;
+      if (id) { state.signerId = id; persistFinal(); renderSigner(); renderPreview(); }
+      if (signerModal) signerModal.open = false;
     });
 
     // ── Specimens input (step ①) ─────────────────────────────────────────────────
@@ -1106,6 +1893,7 @@ const letterData = {
             <cds-button kind="tertiary" size="md" data-add-cond="${owner}">Add condition</cds-button>
           </cds-accordion-item>`;
       }).join('')}</cds-accordion>`;
+      setTabBadge('conditions', state.conditions.length);
     };
 
     // Reorder WITHIN an owner scope (a district condition can't jump into HQ).
@@ -1303,11 +2091,6 @@ const letterData = {
       if (d) { state.reportISO = toISO(d); state.reportOverridden = true; persistFinal(); renderPreview(); }
     });
 
-    // ── Reviewer note ─────────────────────────────────────────────────────────────
-    const noteEl = $('fb-note') as any;
-    if (noteEl) noteEl.value = state.note;
-    noteEl?.addEventListener('input', () => { state.note = noteEl.value; persistFinal(); renderPreview(); });
-
     // ── Live letter preview (modeled on the real template) ──────────────────────
     // Rendered into EVERY .letter-host — the finalize step's live preview AND the
     // package step's read-through — so they can never show different letters.
@@ -1315,6 +2098,91 @@ const letterData = {
     const identityRecap = $('identity-recap');
     const packageRecap = $('package-recap');
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    // ── Editable letter copy (step ②) ───────────────────────────────────────────
+    // The three boilerplate body paragraphs are directly editable in the step-②
+    // preview (contenteditable). The finished-package host on step ③ renders the
+    // same HTML but stays read-only. Edits live in state.letterCopy (not just the
+    // DOM) so they survive the full re-render that every form change triggers.
+    const editableHost = document.querySelector<HTMLElement>('.letter-host--editable');
+    const copyResetBtn = $('copy-reset');
+    const COPY_KEYS = ['intro', 'conditionsNotice', 'reportReminder'] as const;
+
+    // Live-derived defaults — recomputed each render so an un-overridden paragraph
+    // always reflects the current dates, permit type, project title, and report due.
+    const defaultLetterCopy = (): Record<string, string> => {
+      const f = state.fields;
+      return {
+        intro: `Enclosed is your ${esc(f.permitType)} permit for studying <strong>${esc(f.projectTitle)}</strong> within selected units of the California State Park System. It is a policy of this office to issue permits annually, so this permit is valid from <strong>${fmt(state.startISO)}</strong> to <strong>${fmt(state.endISO)}</strong>. Each year, you may request a renewal of this permit before it expires.`,
+        conditionsNotice: `Please read all the conditions that apply to this permit carefully. You are prohibited from conducting research activities in any park units until you contact the appropriate district permit coordinator (see the attached list of contacts) and receive permission to begin field work.`,
+        reportReminder: `As a reminder, you are required to submit a summary report of your activities by <strong>${fmt(state.reportISO)}</strong>, as well as a final report and any associated data products within one month of their completion.`,
+      };
+    };
+
+    // A reviewer typing/pasting into a paragraph can bring arbitrary markup — keep
+    // only light inline formatting (bold/italic/line break), strip everything else
+    // (and all attributes), so a paste can't inject styles or scripts.
+    const COPY_ALLOWED = new Set(['STRONG', 'EM', 'B', 'I', 'BR']);
+    const sanitizeCopy = (html: string): string => {
+      const root = document.createElement('div');
+      root.innerHTML = html;
+      const walk = (node: Node) => {
+        [...node.childNodes].forEach((child) => {
+          if (child.nodeType !== 1) return;
+          const el = child as HTMLElement;
+          walk(el);
+          if (COPY_ALLOWED.has(el.tagName)) {
+            [...el.attributes].forEach((a) => el.removeAttribute(a.name));
+          } else {
+            el.replaceWith(...el.childNodes); // unwrap — keep the text, drop the tag
+          }
+        });
+      };
+      walk(root);
+      return root.innerHTML;
+    };
+
+    // Show "Restore default wording" only when at least one paragraph is overridden.
+    // cds-button sets :host display, so `hidden` won't collapse it — toggle inline
+    // display (carbon-hidden-host-display-gotcha).
+    const updateCopyReset = () => {
+      if (copyResetBtn) copyResetBtn.style.display = COPY_KEYS.some((k) => state.letterCopy[k] != null) ? '' : 'none';
+    };
+
+    // Turn on editing for the step-② host's paragraphs after each render (they're
+    // recreated by innerHTML), flag the overridden ones, and refresh the reset CTA.
+    const applyCopyEditing = () => {
+      if (editableHost && isLead) {
+        editableHost.querySelectorAll<HTMLElement>('[data-copy]').forEach((p) => {
+          p.setAttribute('contenteditable', 'true');
+          p.setAttribute('spellcheck', 'true');
+          p.classList.toggle('is-edited', state.letterCopy[p.dataset.copy!] != null);
+        });
+      }
+      updateCopyReset();
+    };
+
+    // Capture edits on blur (not per-keystroke — a mid-edit re-render would drop the
+    // caret). Delegated on the persistent host since the paragraphs are re-created
+    // each render. An edit equal to the current default (or emptied) reverts to live.
+    editableHost?.addEventListener('blur', (e) => {
+      const p = (e.target as HTMLElement)?.closest?.('[data-copy]') as HTMLElement | null;
+      if (!p || !editableHost.contains(p)) return;
+      const key = p.dataset.copy!;
+      const cleaned = sanitizeCopy(p.innerHTML);
+      const isDefault = !p.textContent?.trim() || cleaned === defaultLetterCopy()[key];
+      state.letterCopy[key] = isDefault ? null : cleaned;
+      if (!isDefault && cleaned !== p.innerHTML) p.innerHTML = cleaned; // reflect the strip
+      p.classList.toggle('is-edited', !isDefault);
+      persistFinal();
+      updateCopyReset();
+    }, true);
+
+    copyResetBtn?.addEventListener('click', () => {
+      COPY_KEYS.forEach((k) => (state.letterCopy[k] = null));
+      persistFinal();
+      renderPreview();
+    });
     const conditionBody = (c: PermitCondition) =>
       c.inventoryId === 'hq-c04'
         ? c.body.replace('[Month, Day], 2027', fmt(state.reportISO))
@@ -1322,6 +2190,9 @@ const letterData = {
 
     const renderPreview = () => {
       const f = state.fields;
+      // Override-or-default for the three editable body paragraphs (see letterCopy).
+      const defaultCopy = defaultLetterCopy();
+      const copyFor = (k: string) => state.letterCopy[k] ?? defaultCopy[k];
       // Standard (HQ) conditions numbered continuously, then district-specific
       // sections that continue the numbering — as the template lays it out.
       let n = 0;
@@ -1338,26 +2209,40 @@ const letterData = {
         return `<p class="ltr__cond-owner t-label-01">Special Conditions for ${name}</p><ol class="ltr__conditions">${lis}</ol>`;
       }).join('');
 
-      // Contact List for Parks — a block per district (name + office phone, the
-      // coordinator, and the authorized parks the applicant may work in).
+      // Contact List for Parks — each contact is either DISTRICT-WIDE (covers all parks,
+      // so listed ONCE) or PARK-SPECIFIC (listed under each park it covers). No repeating
+      // a district-wide contact under every park.
+      const letterLine = (c: ContactOption) => {
+        const info = [c.name, c.phone, c.email].filter(Boolean).join(' · ');
+        return `<p class="ltr__coord t-label-01">${esc(info)}</p>`;
+      };
       const contactBlocks = districts.map((d) => {
         const current = state.parks[d.name] || [];
-        const c = contactFor(d.name);
-        const coordLine = c ? `${c.name}${c.phone ? ` · ${c.phone}` : ''}${c.email ? ` · ${c.email}` : ''}` : '';
+        // Each entry resolves to a person + effective park scope. null scope → the
+        // district-wide block; a park set → listed under each park it covers.
+        const printable = contactsOf(d)
+          .map((e) => ({ c: personOf(d, e), scope: e.scope }))
+          .filter((x): x is { c: ContactOption; scope: string[] | null } => !!x.c);
+        const wide = printable.filter((e) => e.scope == null).map((e) => letterLine(e.c)).join('');
+        const specific = printable.filter((e) => e.scope != null);
+        const perPark = current.map((park) => {
+          const key = parkKey(park);
+          const here = specific.filter((e) => e.scope!.some((pk) => parkKey(pk) === key));
+          if (!here.length) return '';
+          return `<div class="ltr__park"><p class="ltr__park-name t-body-01">${esc(park)} — also notify:</p>${here.map((e) => letterLine(e.c)).join('')}</div>`;
+        }).join('');
         return `
           <div class="ltr__contact">
             <div class="ltr__contact-head">
               <p class="ltr__district-name t-heading-compact-01">${d.name}</p>
               ${d.officePhone ? `<p class="ltr__coord t-label-01">District Office: ${d.officePhone}</p>` : ''}
-              ${coordLine ? `<p class="ltr__coord t-label-01">${esc(coordLine)}</p>` : ''}
             </div>
-            <ul class="ltr__parks">${current.map((p) => `<li class="t-body-01">${p}</li>`).join('') || '<li class="t-body-01">—</li>'}</ul>
+            <p class="ltr__park-name t-body-01">For all authorized park units — notify:</p>
+            ${wide || '<p class="ltr__coord t-label-01">—</p>'}
+            ${perPark}
+            <p class="ltr__coord t-label-01">Authorized park units: ${current.length ? current.map(esc).join(' · ') : '—'}</p>
           </div>`;
       }).join('');
-
-      const noteSection = state.note.trim()
-        ? `<p class="ltr__body t-body-01"><em>${esc(state.note).replace(/\n/g, '<br>')}</em></p>`
-        : '';
 
       // Authorized collection — the taxa/quantities table (step ① specimens).
       const specimenRows = state.specimens
@@ -1383,9 +2268,9 @@ const letterData = {
         <p class="ltr__date t-body-01">${today}</p>
         <address class="ltr__to t-body-01">${esc(f.piName)}<br>${esc(f.department)}<br>${esc(f.institution)}<br>${esc(f.street)}<br>${esc(f.cityStateZip)}</address>
         <p class="ltr__body t-body-01">Dear ${esc(f.salutation)} ${esc(f.piName)}:</p>
-        <p class="ltr__body t-body-01">Enclosed is your ${esc(f.permitType)} permit for studying <strong>${esc(f.projectTitle)}</strong> within selected units of the California State Park System. It is a policy of this office to issue permits annually, so this permit is valid from <strong>${fmt(state.startISO)}</strong> to <strong>${fmt(state.endISO)}</strong>. Each year, you may request a renewal of this permit before it expires.</p>
-        <p class="ltr__body t-body-01">Please read all the conditions that apply to this permit carefully. You are prohibited from conducting research activities in any park units until you contact the appropriate district permit coordinator (see the attached list of contacts) and receive permission to begin field work.</p>
-        <p class="ltr__body t-body-01">As a reminder, you are required to submit a summary report of your activities by <strong>${fmt(state.reportISO)}</strong>, as well as a final report and any associated data products within one month of their completion.</p>
+        <p class="ltr__body ltr__body--copy t-body-01" data-copy="intro">${copyFor('intro')}</p>
+        <p class="ltr__body ltr__body--copy t-body-01" data-copy="conditionsNotice">${copyFor('conditionsNotice')}</p>
+        <p class="ltr__body ltr__body--copy t-body-01" data-copy="reportReminder">${copyFor('reportReminder')}</p>
         <p class="ltr__body t-body-01">Sincerely,</p>
         <div class="ltr__signer t-body-01">
           <div class="ltr__sig-line"></div>
@@ -1398,7 +2283,6 @@ const letterData = {
         <p class="ltr__body t-body-01">In addition to the Standard Conditions and Restrictions stated on the Application and Permit to Conduct Scientific Research and Collections, the following conditions are applied:</p>
         <ol class="ltr__conditions">${hqItems}</ol>
         ${districtCondBlocks}
-        ${noteSection}
         ${collectionSection}
 
         <hr class="ltr__pagebreak">
@@ -1407,6 +2291,7 @@ const letterData = {
         ${contactBlocks}`;
 
       letterHosts.forEach((h) => (h.innerHTML = letterHTML));
+      applyCopyEditing();
 
       // Read-only identity recap on the finalize step (reflects step ① edits).
       if (identityRecap) {
@@ -1418,27 +2303,48 @@ const letterData = {
           <p class="recap__line recap__line--muted t-label-01">Project: ${esc(f.projectTitle)}</p>`;
       }
 
-      // Package recap on the send step — the key facts being issued.
+      // Package recap on the send step — the key facts being issued, grouped by
+      // meaning instead of a flat key/value list: the identity, then a DATES card
+      // as the anchor (the valid window leads — the permit's most important fact —
+      // with the report-due date prominent beside it), the authorization counts as
+      // metric tiles, then the signer. Reads as a certificate summary for a final
+      // check before sending.
       if (packageRecap) {
         const total = state.conditions.length;
         const parkCount = Object.values(state.parks).reduce((a, p) => a + p.length, 0);
         const typeLabel = f.permitType === 'single-district' ? 'Single-district permit' : 'Multi-district permit';
-        const specCount = state.specimens.length;
-        const rows: [string, string][] = [
-          ['Permit type', typeLabel],
-          ['Category', esc(f.category)],
-          ['Valid window', `${fmt(state.startISO)} – ${fmt(state.endISO)}`],
-          ['Summary report due', fmt(state.reportISO)],
-          ['Special conditions', `${total} attached`],
-          ['Authorized parks', `${parkCount} across ${districts.length} district${districts.length === 1 ? '' : 's'}`],
-          ['Authorized specimens', `${specCount} ${specCount === 1 ? 'taxon' : 'taxa'}`],
-          ['Signed by', `${esc(f.signerName)} · ${esc(f.signerClassification)}`],
-        ];
-        packageRecap.innerHTML = rows.map(([k, v]) => `
-          <div class="recap__row">
-            <span class="recap__key t-label-01">${k}</span>
-            <span class="recap__val t-body-01">${v}</span>
-          </div>`).join('');
+        const districtCount = districts.length;
+        packageRecap.innerHTML = `
+          <div class="issue">
+            <div class="issue__ident">
+              <p class="issue__type t-heading-03">${typeLabel}</p>
+              <p class="issue__cat t-label-01">${esc(f.category)}</p>
+            </div>
+
+            <cds-tile class="issue__dates">
+              <div class="issue__date">
+                <p class="issue__date-label t-label-01">Valid</p>
+                <p class="issue__date-val t-heading-04">${fmtNum(state.startISO)} – ${fmtNum(state.endISO)}</p>
+              </div>
+              <div class="issue__date">
+                <p class="issue__date-label t-label-01">Summary report due</p>
+                <p class="issue__date-val t-heading-03">${fmtNum(state.reportISO)}</p>
+              </div>
+            </cds-tile>
+
+            <div class="issue__metrics">
+              <cds-tile class="metric">
+                <p class="metric__value t-heading-04">${parkCount}</p>
+                <p class="metric__label t-heading-01">Authorized parks</p>
+                <p class="metric__sub t-label-01">across ${districtCount} district${districtCount === 1 ? '' : 's'}</p>
+              </cds-tile>
+              <cds-tile class="metric">
+                <p class="metric__value t-heading-04">${total}</p>
+                <p class="metric__label t-heading-01">Special conditions</p>
+                <p class="metric__sub t-label-01">on this permit</p>
+              </cds-tile>
+            </div>
+          </div>`;
       }
     };
 
@@ -1446,6 +2352,8 @@ const letterData = {
     const sendModal = $('send-modal') as any;
     $('send-confirm')?.addEventListener('click', () => {
       persistFinal(); persistParks(); persistConditions();
+      // Sending sets status 'Out for signature', which is exactly what locks the
+      // contact set (see isContactsLocked) — no separate lock flag needed.
       localStorage.setItem(statusKey, 'Out for signature');
       window.location.href = data.permitUrl;
     });
@@ -1459,124 +2367,438 @@ const letterData = {
     // The action bar sits under the left content section, so its column tracks each
     // step's main column: ① review col-10, ② letter col-7, ③ package col-12/start-3.
     const actionsInner = document.querySelector<HTMLElement>('.wiz-actions__inner');
-    const ACTION_COLS = [['cds--lg:col-span-10'], ['cds--lg:col-span-7'], ['cds--lg:col-span-12', 'cds--lg:col-start-3']];
-    const ALL_ACTION_COLS = ['cds--lg:col-span-10', 'cds--lg:col-span-7', 'cds--lg:col-span-12', 'cds--lg:col-start-3'];
+    const ACTION_COLS = [['cds--lg:col-span-8'], ['cds--lg:col-span-7'], ['cds--lg:col-span-12', 'cds--lg:col-start-3']];
+    const ALL_ACTION_COLS = ['cds--lg:col-span-8', 'cds--lg:col-span-10', 'cds--lg:col-span-7', 'cds--lg:col-span-12', 'cds--lg:col-start-3'];
     const headEyebrow = $('page-head-eyebrow');
     const headTitle = $('page-head-title');
     const headSub = $('page-head-sub');
-    let current = Math.min(PAGES - 1, Math.max(0, parseInt(localStorage.getItem(stepKey) || '0', 10) || 0));
+    // An assistant (Supporting Agent) reviews the application only — they never
+    // reach the Finalize-letter / Review-&-send steps. Their journey is the single
+    // review step, capped here so a stored/return step can't stray past it.
+    const LAST_STEP = isLead ? PAGES - 1 : 0;
+    // Fold away the later progress steps for an assistant — showing steps they can't
+    // act on misrepresents their journey.
+    if (!isLead && progress) {
+      [...progress.querySelectorAll('cds-progress-step')].forEach((s, i) => {
+        if (i > 0) (s as HTMLElement).style.display = 'none';
+      });
+    }
+    let current = Math.min(LAST_STEP, Math.max(0, parseInt(localStorage.getItem(stepKey) || '0', 10) || 0));
+
+    // The primary CTA is role- and step-aware:
+    //   step ① — lead: "Finalize review" (advances to the letter); assistant:
+    //            "Complete review" (records their review, returns to the permit).
+    //   step ② — "Finalize letter" (advances to Review & send).
+    //   step ③ — "Send for signature".
+    const ctaLabel = () => {
+      if (current === 0) return isLead ? 'Finalize review' : 'Complete review';
+      if (current === 1) return 'Finalize letter';
+      return 'Send for signature';
+    };
 
     const render = (scroll = false) => {
       panels.forEach((p) => (p.hidden = Number(p.dataset.step) !== current));
       if (progress) progress.currentIndex = current;
       const page = data.pages[current];
-      if (headEyebrow) headEyebrow.textContent = `Step ${current + 1} of ${PAGES}`;
+      if (headEyebrow) headEyebrow.textContent = isLead ? `Step ${current + 1} of ${PAGES}` : 'Supporting review';
       if (headTitle) headTitle.textContent = page.label;
       if (headSub) headSub.textContent = page.secondaryLabel;
       if (backBtn) backBtn.hidden = current === 0;
       if (actionsInner) { actionsInner.classList.remove(...ALL_ACTION_COLS); actionsInner.classList.add(...ACTION_COLS[current]); }
-      const last = current === PAGES - 1;
-      if (nextBtn) nextBtn.textContent = last ? 'Send for signature' : 'Save and continue';
+      if (nextBtn) nextBtn.textContent = ctaLabel();
       if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
     };
-    const goTo = (i: number) => { current = Math.min(PAGES - 1, Math.max(0, i)); localStorage.setItem(stepKey, String(current)); render(true); };
+    const goTo = (i: number) => { current = Math.min(LAST_STEP, Math.max(0, i)); localStorage.setItem(stepKey, String(current)); renderPreview(); render(true); };
     if (progress) progress.onChange = (e: CustomEvent<{ index: number }>) => goTo(e.detail.index);
     backBtn?.addEventListener('click', () => goTo(current - 1));
-    nextBtn?.addEventListener('click', () => { if (current === PAGES - 1) { sendModal.open = true; return; } goTo(current + 1); });
+
+    // Assistant's terminal action: record their supporting review complete under the
+    // SAME per-identity key the permit detail page's Supporting review section reads,
+    // so both surfaces agree, then return to the permit.
+    const completeReview = () => {
+      try { localStorage.setItem(`permit-supporting-review-${permitId}-${wizIdentity}`, 'complete'); } catch {}
+      window.location.href = data.permitUrl;
+    };
+    // The SUPPORTING analyst's contact surface: on "Complete review" this modal opens
+    // as their editor — they confirm their district's contacts and can request changes
+    // (change primary / add / remove), which go to the lead to accept on step ②. It
+    // renders through the shared renderer in 'modal' surface (inline pickers, no
+    // second modal). "Confirm & complete review" records the review.
+    const confirmModal = $('confirm-contacts-modal') as any;
+    const openContactsConfirm = () => {
+      if (!confirmModal || !contactsConfirmBody) { completeReview(); return; }
+      renderConfirmContacts();
+      confirmModal.open = true;
+    };
+    $('confirm-contacts-done')?.addEventListener('click', () => {
+      if (confirmModal) confirmModal.open = false;
+      completeReview();
+    });
+    // Guard: the letter must name who to notify for EVERY authorized park unit, so a
+    // district that has parks on this permit must have at least one contact. Blocks
+    // finalizing the letter (step ②) and sending (step ③); bounces to the offender.
+    const emptyDistricts = () => districts.filter((d) => (state.parks[d.name] || []).length > 0 && contactsOf(d).length === 0);
+    const contactsComplete = (): boolean => {
+      const empty = emptyDistricts();
+      if (!empty.length) return true;
+      showToast(`Add a contact for ${empty.map((d) => d.name).join(', ')}`, 'Every district with authorized parks needs a contact on the letter.', 'warning');
+      goTo(1); // the Finalize-the-letter step, where contacts are edited
+      requestAnimationFrame(() => {
+        const sel = `.contact-district[data-district="${(window.CSS?.escape ? CSS.escape(empty[0].name) : empty[0].name)}"]`;
+        (contactsHost?.querySelector(sel) as HTMLElement | null)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+      return false;
+    };
+    nextBtn?.addEventListener('click', () => {
+      if (current === 0 && !isLead) { openContactsConfirm(); return; }
+      // Can't finalize the letter or send it while a district on the permit has no
+      // contact. (Advancing past step ② does NOT lock contacts — the lead can still
+      // edit them until the letter is sent; see send-confirm.)
+      if (isLead && current >= 1 && !contactsComplete()) return;
+      if (current === PAGES - 1) { sendModal.open = true; return; }
+      goTo(current + 1);
+    });
     // The header's "Approve permit" action jumps to the "Review & send" step —
     // the last step, where the package is confirmed and sent for signature.
     const sendStep = data.pages.findIndex((p) => p.id === 'package');
     document.addEventListener('permit:approve', () => goTo(sendStep < 0 ? PAGES - 1 : sendStep));
 
-    // ── Comments: always-available thread, shared with the permit tab ───────────
-    // Stored under the SAME key the permit detail page uses, so it's one
-    // conversation. New comments also record the wizard step they were written on,
-    // so the team can see (and jump to) the context — while seed/permit-tab
-    // comments simply carry no step tag.
-    interface StoredComment { author: string; time: string; text: string; page?: number }
+    // ── Comments: the review thread with @-mention tagging, in the Comments tab ──
+    // Stored under the SAME key the permit detail page uses (one conversation); new
+    // comments record the wizard step + any @-mentions. Typing "@" opens a typeahead
+    // over the user directory; picking inserts "@Name", tokenizes it in the thread,
+    // and notifies the mentioned people (simulated).
+    interface StoredComment { author: string; time: string; text: string; mentions?: string[] }
+    interface MentionUser { id: string; name: string; detail: string }
     const commentsKey = `permit-comments-${permitId}`;
-    const panel = $('comments-panel') as any;
     const thread = $('comments-thread')!;
-    const countEl = $('comments-count')!;
     const commentInput = $('comments-input') as any;
+    let mentionDir: MentionUser[] = [];
+    try { mentionDir = JSON.parse($('mention-directory')?.textContent || '[]'); } catch { mentionDir = []; }
+
     const loadComments = (): StoredComment[] => {
       try { const a = JSON.parse(localStorage.getItem(commentsKey) || '[]'); return Array.isArray(a) ? a : []; }
       catch { return []; }
     };
-    const initials = (name: string) => name.replace(/^(Dr\.?|Prof\.?)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
-    // Mirror the permit page's comment pattern: avatar + a single "author · time"
-    // meta line, then the text (and an optional step-jump chip).
+    // Render comment text with @Name mentions as .mention tokens — DOM-built, never
+    // innerHTML'd, so the user's text can't inject markup.
+    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const renderText = (text: string, names: string[]): DocumentFragment => {
+      const frag = document.createDocumentFragment();
+      const valid = names.filter(Boolean);
+      if (!valid.length) { frag.appendChild(document.createTextNode(text)); return frag; }
+      const re = new RegExp('@(' + valid.slice().sort((a, b) => b.length - a.length).map(escapeRe).join('|') + ')', 'g');
+      let last = 0, m: RegExpExecArray | null;
+      while ((m = re.exec(text))) {
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const span = document.createElement('span'); span.className = 'mention'; span.textContent = '@' + m[1];
+        frag.appendChild(span);
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      return frag;
+    };
+
+    // A single "author · time" meta line, then the text (with @mentions tokenized).
     const buildComment = (c: StoredComment): HTMLElement => {
       const li = document.createElement('li'); li.className = 'comment';
-      const av = document.createElement('span'); av.className = 'comment__avatar'; av.textContent = initials(c.author); av.setAttribute('aria-hidden', 'true');
-      const body = document.createElement('div'); body.className = 'comment__body';
       const meta = document.createElement('p'); meta.className = 'comment__meta t-label-01';
       const who = document.createElement('span'); who.className = 'comment__author'; who.textContent = c.author;
       meta.append(who, document.createTextNode(` · ${c.time}`));
-      const text = document.createElement('p'); text.className = 'comment__text t-body-01'; text.textContent = c.text;
-      body.append(meta, text);
-      // Step context (new comments only) — a jump chip back to where it was written.
-      if (typeof c.page === 'number' && data.pages[c.page]) {
-        const chip = document.createElement('cds-button') as any;
-        chip.setAttribute('kind', 'ghost'); chip.setAttribute('size', 'md'); chip.className = 'comment__page';
-        chip.textContent = `on ${data.pages[c.page].label}`;
-        chip.addEventListener('click', () => { goTo(c.page as number); closePanel(); });
-        body.append(chip);
-      }
-      li.append(av, body);
+      const text = document.createElement('p'); text.className = 'comment__text t-body-01';
+      text.appendChild(renderText(c.text, c.mentions ?? []));
+      li.append(meta, text);
       return li;
-    };
-    const paintCount = () => {
-      const n = data.comments.length + loadComments().length;
-      countEl.textContent = String(n);
-      (countEl as HTMLElement).hidden = n === 0;
     };
     const renderThread = () => {
       thread.innerHTML = '';
-      // Newest-first: stored (already unshifted newest-first) above the seed thread.
-      [...loadComments(), ...data.comments].forEach((c) => thread.appendChild(buildComment(c)));
-      paintCount();
+      const all = [...loadComments(), ...data.comments];
+      all.forEach((c) => thread.appendChild(buildComment(c)));
+      setTabBadge('comments', all.length);
     };
+
+    // @-mention typeahead. carbon-checked: it composes over the STOCK cds-textarea by
+    // reading that component's OWN inner shadow textarea (same pattern as the
+    // review-layouts B3 composer) — no raw control is authored; the field is cds-*.
+    // `picked` remembers users inserted via the menu so a post records only the
+    // mentions that actually survive in the text.
+    const picked = new Map<string, MentionUser>();
+    (function wireMentions() {
+      const menu = $('comments-mention-menu') as HTMLElement | null;
+      if (!commentInput || !menu) return;
+      customElements.whenDefined('cds-textarea').then(async () => {
+        await (commentInput.updateComplete ?? Promise.resolve());
+        const ta = commentInput.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null;
+        if (!ta) return;
+        let items: MentionUser[] = [];
+        let active = -1;
+        // The in-progress "@token" ending at the caret: from the last "@" starting a
+        // word (not an email's a@b), no newline, not closed by a trailing space.
+        const queryAtCaret = () => {
+          const caret = ta.selectionStart ?? ta.value.length;
+          const upto = ta.value.slice(0, caret);
+          const at = upto.lastIndexOf('@');
+          if (at === -1) return null;
+          if (at !== 0 && !/\s/.test(upto[at - 1])) return null;
+          const q = upto.slice(at + 1);
+          if (/\n/.test(q) || /\s$/.test(q) || q.length > 30) return null;
+          return { at, caret, q };
+        };
+        const hideMenu = () => { menu.hidden = true; menu.innerHTML = ''; active = -1; };
+        const paintActive = () => Array.from(menu.children).forEach((li, i) => (li as HTMLElement).classList.toggle('is-active', i === active));
+        const renderMenu = (matches: MentionUser[]) => {
+          items = matches; menu.innerHTML = '';
+          matches.forEach((u, i) => {
+            const li = document.createElement('li'); li.className = 'mention-menu__item'; li.setAttribute('role', 'option'); li.dataset.idx = String(i);
+            const n = document.createElement('span'); n.className = 'mention-menu__name'; n.textContent = u.name;
+            const d = document.createElement('span'); d.className = 'mention-menu__detail'; d.textContent = u.detail;
+            li.append(n, d); menu.appendChild(li);
+          });
+          active = matches.length ? 0 : -1; paintActive(); menu.hidden = matches.length === 0;
+        };
+        const refresh = () => {
+          const ctx = queryAtCaret();
+          if (!ctx) { hideMenu(); return; }
+          const q = ctx.q.toLowerCase();
+          renderMenu(mentionDir.filter((u) => u.name.toLowerCase().includes(q)).slice(0, 6));
+        };
+        const choose = (u: MentionUser) => {
+          const ctx = queryAtCaret();
+          if (!ctx) return;
+          const before = ta.value.slice(0, ctx.at), after = ta.value.slice(ctx.caret), insert = `@${u.name} `;
+          ta.value = before + insert + after;
+          const pos = (before + insert).length; ta.setSelectionRange(pos, pos);
+          commentInput.value = ta.value; picked.set(u.name, u); hideMenu(); ta.focus();
+        };
+        ta.addEventListener('input', refresh);
+        ta.addEventListener('keyup', (e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes((e as KeyboardEvent).key)) refresh(); });
+        ta.addEventListener('keydown', (e) => {
+          const k = (e as KeyboardEvent).key;
+          if (menu.hidden) return;
+          if (k === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); paintActive(); }
+          else if (k === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); paintActive(); }
+          else if (k === 'Enter' && active >= 0) { e.preventDefault(); choose(items[active]); }
+          else if (k === 'Escape') { e.preventDefault(); hideMenu(); }
+        });
+        // mousedown (not click) so the pick beats the textarea blur.
+        menu.addEventListener('mousedown', (e) => {
+          const li = (e.target as HTMLElement).closest('.mention-menu__item') as HTMLElement | null;
+          if (!li) return;
+          e.preventDefault();
+          const u = items[Number(li.dataset.idx)];
+          if (u) choose(u);
+        });
+        document.addEventListener('click', (e) => { if (!(e.target as HTMLElement).closest('.mention-field')) hideMenu(); });
+      });
+    })();
+
     const addComment = () => {
       const text = (commentInput.value ?? '').trim();
       if (!text) { commentInput.focus(); return; }
+      // Only the picked mentions that actually survive in the text are recorded.
+      const mentioned = [...picked.values()].filter((u) => text.includes(`@${u.name}`));
       const time = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const list = loadComments();
-      list.unshift({ author: data.currentUser, time, text, page: current });
+      list.unshift({ author: data.currentUser, time, text, mentions: mentioned.map((u) => u.name) });
       localStorage.setItem(commentsKey, JSON.stringify(list));
-      commentInput.value = '';
+      commentInput.value = ''; picked.clear();
       renderThread();
       commentInput.focus();
+      showToast('Comment posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
     };
-    const openPanel = () => {
-      panel.classList.add('drawer--open');
-      panel.setAttribute('aria-hidden', 'false');
-      commentInput?.focus?.();
-    };
-    const closePanel = () => {
-      panel.classList.remove('drawer--open');
-      panel.setAttribute('aria-hidden', 'true');
-      ($('comments-open') as any)?.focus?.();
-    };
-    $('comments-open')?.addEventListener('click', openPanel);
-    $('comments-close')?.addEventListener('click', closePanel);
     $('comments-add')?.addEventListener('click', addComment);
     commentInput?.addEventListener('keydown', (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); addComment(); }
     });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && panel.classList.contains('drawer--open')) closePanel();
-    });
     renderThread();
+
+    // ── Working-panel tabs ───────────────────────────────────────────────────────
+    // Sync [data-tabpanel] visibility to the cds-tabs value. Read the attribute
+    // pre-upgrade so the first panel isn't blank before cds-tabs upgrades, then
+    // re-sync on upgrade (see hidden-author-reset-gotcha).
+    document.querySelectorAll<HTMLElement>('[data-tab-scope]').forEach((scope) => {
+      const tabsEl = scope.querySelector('cds-tabs[data-panels]') as any;
+      if (!tabsEl) return;
+      const dpanels = Array.from(scope.querySelectorAll<HTMLElement>('[data-tabpanel]'));
+      const curTab = () => tabsEl.value || tabsEl.getAttribute('value');
+      const syncTabs = () => dpanels.forEach((p) => { p.hidden = p.dataset.tabpanel !== curTab(); });
+      tabsEl.addEventListener('cds-tabs-selected', syncTabs);
+      customElements.whenDefined('cds-tabs').then(syncTabs);
+      syncTabs();
+    });
+
+    // "View CV" (research-team PI tile) → open that document in the working panel:
+    // switch to the Document viewer tab and select the file in its picker (the
+    // DocumentViewer's own listener swaps the embed).
+    document.addEventListener('click', (e) => {
+      const trigger = (e.target as HTMLElement).closest('[data-view-cv]') as HTMLElement | null;
+      if (!trigger) return;
+      const href = trigger.dataset.viewCv;
+      if (!href) return;
+      const scope = (trigger.closest('.step, .version') || document).querySelector('[data-tab-scope]');
+      if (!scope) return;
+      const tabs = scope.querySelector('cds-tabs[data-panels]') as any;
+      if (tabs) { tabs.value = 'document'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
+      const sel = scope.querySelector('.pdfv__select') as any;
+      const item = sel?.querySelector(`cds-dropdown-item[value="${href}"]`) as HTMLElement | null;
+      if (sel && item) {
+        sel.value = href;
+        sel.dispatchEvent(new CustomEvent('cds-dropdown-selected', { detail: { item } }));
+      }
+    });
+
+    // ── Analysis team tab — roster shared with the permit detail page (SAME
+    // permit-team storage: {removed, added}). The lead (RA/Admin) can add / remove /
+    // email; an assistant sees it read-only. Mirrors the permit page's roster logic.
+    const teamRoster = $('team-roster');
+    const teamAddOpen = $('team-add-open');
+    const teamAddModal = $('team-add-modal') as any;
+    const teamAddSelect = $('team-add-select') as any;
+    const teamAddConfirm = $('team-add-confirm');
+    const teamRowTpl = $('team-row-template') as HTMLTemplateElement | null;
+    const teamDirEl = $('team-directory');
+    const teamEmailAll = $('team-email-all');
+    const teamInit = (name: string) => name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+    if (!canEditTeam) (teamAddOpen as HTMLElement | null)?.style.setProperty('display', 'none');
+
+    if (teamRoster && teamRowTpl && teamDirEl) {
+      interface DirUser { id: string; name: string; role: string; detail: string; email: string; }
+      interface TeamEdits { removed: string[]; added: DirUser[]; }
+      const teamKey = (teamRoster as HTMLElement).dataset.storageKey || `permit-team-${permitId}`;
+      let teamDir: DirUser[] = [];
+      try { teamDir = JSON.parse(teamDirEl.textContent || '[]'); } catch { teamDir = []; }
+      const teamById = new Map(teamDir.map((u) => [u.id, u]));
+      const seedIds = new Set(Array.from(teamRoster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!));
+      const loadTeam = (): TeamEdits => {
+        try { const p = JSON.parse(localStorage.getItem(teamKey) || '{}'); return { removed: Array.isArray(p.removed) ? p.removed : [], added: Array.isArray(p.added) ? p.added : [] }; }
+        catch { return { removed: [], added: [] }; }
+      };
+      const saveTeam = (e: TeamEdits) => localStorage.setItem(teamKey, JSON.stringify(e));
+      let teamEdits = loadTeam();
+      const onTeamIds = () => new Set(Array.from(teamRoster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!));
+      const refreshTeamCombo = () => {
+        setTabBadge('team', onTeamIds().size);
+        if (!teamAddSelect) return;
+        const on = onTeamIds();
+        teamAddSelect.value = '';
+        teamAddSelect.innerHTML = '';
+        teamDir.filter((u) => !on.has(u.id)).sort((a, b) => a.name.localeCompare(b.name)).forEach((u) => {
+          const it = document.createElement('cds-combo-box-item');
+          it.setAttribute('value', u.id);
+          it.textContent = `${u.name} — ${u.role}`;
+          teamAddSelect.appendChild(it);
+        });
+      };
+      const removeMember = (id: string, row: HTMLElement) => {
+        row.remove();
+        if (seedIds.has(id)) { if (!teamEdits.removed.includes(id)) teamEdits.removed.push(id); }
+        else { teamEdits.added = teamEdits.added.filter((u) => u.id !== id); }
+        saveTeam(teamEdits); refreshTeamCombo();
+      };
+      const wireRemove = (row: HTMLElement) => {
+        const btn = row.querySelector('[data-remove-member]') as HTMLElement | null;
+        if (!btn) return;
+        if (!canEditTeam) { btn.style.display = 'none'; return; }
+        btn.addEventListener('click', () => removeMember(row.dataset.userId!, row));
+      };
+      const buildRow = (u: DirUser): HTMLElement => {
+        const li = teamRowTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+        li.dataset.userId = u.id;
+        li.dataset.email = u.email || '';
+        const av = li.querySelector('.member__avatar'); if (av) av.textContent = teamInit(u.name);
+        const nm = li.querySelector('.member__name'); if (nm) nm.textContent = u.name;
+        const rl = li.querySelector('.member__role'); if (rl) rl.textContent = u.detail ? `${u.role} · ${u.detail}` : u.role;
+        const tip = li.querySelector('[slot="tooltip-content"]'); if (tip) tip.textContent = `Remove ${u.name}`;
+        wireRemove(li);
+        return li;
+      };
+      teamRoster.querySelectorAll<HTMLElement>('[data-user-id]').forEach(wireRemove);
+      teamEdits.removed.forEach((id) => teamRoster.querySelector<HTMLElement>(`[data-user-id="${id}"]`)?.remove());
+      teamEdits.added.forEach((u) => teamRoster.appendChild(buildRow(u)));
+      const addMember = () => {
+        const id = teamAddSelect?.value;
+        const user = id && teamById.get(id);
+        if (!user || onTeamIds().has(id)) return;
+        teamRoster.appendChild(buildRow(user));
+        if (teamEdits.removed.includes(id)) teamEdits.removed = teamEdits.removed.filter((r) => r !== id);
+        else if (!teamEdits.added.some((u) => u.id === id)) teamEdits.added.push(user);
+        saveTeam(teamEdits); refreshTeamCombo();
+      };
+      teamAddOpen?.addEventListener('click', () => { refreshTeamCombo(); if (teamAddModal) teamAddModal.open = true; });
+      teamAddConfirm?.addEventListener('click', () => { addMember(); if (teamAddModal) teamAddModal.open = false; });
+      teamEmailAll?.addEventListener('click', () => {
+        const emails = Array.from(teamRoster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.email).filter(Boolean);
+        if (emails.length) window.location.href = `mailto:${emails.join(',')}`;
+      });
+      refreshTeamCombo();
+    }
+
+    // ── Auto-save indicator (lead only — the assistant's record is read-only) ─────
+    // The record already persists every edit silently; surface it in the record's
+    // Expand/Collapse-all toolbar so the reviewer sees changes stick.
+    if (canEditForm) {
+      const tools = document.querySelector('.app-review__tools');
+      if (tools) {
+        const saveState = document.createElement('span');
+        saveState.className = 'appreview-savestate t-label-01';
+        saveState.setAttribute('role', 'status');
+        saveState.setAttribute('aria-live', 'polite');
+        saveState.textContent = 'All changes saved';
+        tools.prepend(saveState);
+        let saveTimer: number | undefined;
+        flashSaved = () => {
+          saveState.dataset.state = 'saving';
+          saveState.textContent = 'Saving…';
+          clearTimeout(saveTimer);
+          saveTimer = window.setTimeout(() => { saveState.dataset.state = ''; saveState.textContent = 'All changes saved'; }, 500);
+        };
+      }
+    }
+
+    // ── Collapsible record sections (ApplicationReview collapsible, matching B3) ──
+    // Each section is a data-section-toggle disclosure over data-section-body;
+    // Expand/Collapse all flips them together (sticky stacking is pure CSS). Mirrors
+    // the review-layouts wiring so the wizard's record behaves like the study.
+    const appRoot = document.querySelector('.app-review');
+    if (appRoot) {
+      const sectionToggles = Array.from(appRoot.querySelectorAll<HTMLElement>('[data-section-toggle]'));
+      const setSectionOpen = (btn: HTMLElement, open: boolean) => {
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        const body = btn.closest('[data-review-section]')?.querySelector<HTMLElement>('[data-section-body]');
+        if (body) body.hidden = !open;
+      };
+      sectionToggles.forEach((btn) => btn.addEventListener('click', () => setSectionOpen(btn, btn.getAttribute('aria-expanded') !== 'true')));
+      appRoot.querySelector('.js-appreview-expand')?.addEventListener('click', () => sectionToggles.forEach((b) => setSectionOpen(b, true)));
+      appRoot.querySelector('.js-appreview-collapse')?.addEventListener('click', () => sectionToggles.forEach((b) => setSectionOpen(b, false)));
+    }
 
     refreshPermitType();
     renderStudyAreas();
     renderFbParks();
-    renderContacts();
+    renderContactsPanel();
+    renderSigner();
     renderSpecimensInput();
     renderConditionsInput();
     renderPreview();
     render(false);
+
+    // ── Assistant read-only application (matrix: form update = RA/Admin only) ─────
+    // Applied AFTER the record renders so dynamically-added rows (specimens, parks)
+    // are covered. The conditions + comments tabs stay interactive. The record's
+    // Expand/Collapse-all toolbar stays live so the assistant can still read.
+    if (!canEditForm) {
+      const record = document.querySelector('.step[data-step="0"] .col-main:not(.dock-col)') as HTMLElement | null;
+      if (record) {
+        record.querySelectorAll('cds-text-input, cds-dropdown, cds-multi-select, cds-textarea, cds-date-picker, cds-number-input')
+          .forEach((el) => { (el as any).disabled = true; });
+        record.querySelectorAll('cds-icon-button').forEach((el) => ((el as HTMLElement).style.display = 'none'));
+        record.querySelectorAll('cds-button').forEach((el) => {
+          // Keep the read-only affordances: Expand/Collapse-all and "View CV" (viewing
+          // a document is a read action available to an assistant).
+          if (!el.matches('.js-appreview-expand, .js-appreview-collapse, [data-view-cv]')) (el as HTMLElement).style.display = 'none';
+        });
+      }
+    }
   </script>
 
   <style>
@@ -1599,14 +2821,70 @@ const letterData = {
     .step[hidden] { display: none; }
     .col-main, .col-fields, .col-package { min-width: 0; }
 
-    /* Conditions rail (step ①) — the analyst's working panel, on a raised layer. */
-    .col-rail { min-width: 0; }
-    .rail { background: var(--cds-layer-01, #f4f4f4); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); padding: var(--cds-spacing-06, 1.5rem); }
-    @media (min-width: 66.01rem) { .rail { position: sticky; top: 4rem; } }
-    @media (min-width: 66.01rem) { .rail { max-height: calc(100vh - 5rem); overflow-y: auto; } }
-    .rail__title { margin: 0 0 var(--cds-spacing-03, 0.5rem); }
+    /* Step ① column titles — record on the left, working panel on the right. */
+    .pane-title { margin: 0 0 var(--cds-spacing-05, 1rem); }
+
+    /* Docked working panel (step ①, B3) — a single tabbed surface on a raised layer,
+       pinned so it stays in view while the record scrolls the page. */
+    .dock-col { min-width: 0; }
+    .dock { background: var(--cds-layer-01, #f4f4f4); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .rail-panel { padding: var(--cds-spacing-06, 1.5rem); }
+    .rail-panel[hidden] { display: none; }
+    /* The document viewer fills its panel edge-to-edge (its own bar + embed). */
+    .dock-doc { padding: 0; }
+    .dock-list { display: flex; flex-direction: column; }
+
+    /* Count badges on the working-panel tabs (X conditions / Y comments / Z team). */
+    .tab-badge {
+      display: inline-grid; place-items: center; min-inline-size: 1.25rem; block-size: 1.25rem;
+      margin-inline-start: 0.375rem; padding: 0 0.375rem; border-radius: 0.75rem;
+      background: var(--cds-layer-accent-01, #e0e0e0); color: var(--cds-text-primary, #161616);
+      font-size: 0.75rem; font-weight: 600; line-height: 1; vertical-align: middle;
+    }
+    .tab-badge[hidden] { display: none; }
+
+    /* On wide screens the working panel pins beside the record AND scrolls WITHIN
+       itself: capped to the viewport, the tab strip stays put, and the active panel
+       (a long conditions list, the comment thread, or the embedded PDF) scrolls in
+       place — so the reviewer never has to scroll the whole page/record to reach the
+       bottom of the panel. */
+    @media (min-width: 66.01rem) {
+      .dock-col {
+        position: sticky; top: 4rem; align-self: start;
+        /* A definite height (not max-*) so the flex children have a box to fill —
+           the document frame fills it, and short tabs still cap + scroll here rather
+           than growing the page. */
+        block-size: calc(100vh - 5rem);
+        display: flex; flex-direction: column;
+      }
+      .dock-col .pane-title { flex: 0 0 auto; }
+      .dock-col .dock { flex: 1 1 auto; min-block-size: 0; display: flex; flex-direction: column; }
+      .dock-col .dock cds-tabs { flex: 0 0 auto; }
+      .dock-col .rail-panel:not([hidden]) { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; }
+      /* Document tab: the embed fills the available height (native PDF scroll),
+         instead of its tall fixed frame forcing an outer scrollbar. */
+      .dock-col .dock-doc:not([hidden]) { overflow-y: hidden; }
+      .dock-col .dock-doc :global(.pdfv) { block-size: 100%; }
+      .dock-col .dock-doc :global(.pdfv__frame) { block-size: auto; min-block-size: 0; flex: 1 1 auto; }
+    }
+
     .rail__sub { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
     .rail__tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); margin: 0 0 var(--cds-spacing-05, 1rem); }
+
+    /* Visible auto-save confirmation — sits at the left of the record's
+       Expand/Collapse-all toolbar; a quiet dot (green idle, grey while saving). */
+    .appreview-savestate { margin-inline-end: auto; align-self: center; display: inline-flex; align-items: center; gap: 0.375rem; color: var(--cds-text-secondary, #525252); }
+    .appreview-savestate::before { content: ''; inline-size: 0.5rem; block-size: 0.5rem; border-radius: 50%; background: var(--cds-support-success, #24a148); }
+    .appreview-savestate[data-state="saving"]::before { background: var(--cds-text-placeholder, #a8a8a8); }
+
+    /* Analysis-team roster (team tab) — avatar · name/role · status + remove. */
+    .member { display: grid; grid-template-columns: auto 1fr auto; gap: var(--cds-spacing-04, 0.75rem); align-items: center; inline-size: 100%; }
+    .member__avatar { inline-size: 2rem; block-size: 2rem; border-radius: 50%; display: grid; place-items: center; font-size: 0.75rem; font-weight: 600; background: var(--cds-layer-accent-01, #e0e0e0); color: var(--cds-text-primary, #161616); }
+    .member__body { min-width: 0; }
+    .member__name { margin: 0; color: var(--cds-text-primary, #161616); }
+    .member__lead { color: var(--cds-text-secondary, #525252); }
+    .member__role { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); }
+    .member__end { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); }
 
     /* Condition cards — the TEXT is the content, shown in full; a source pill and
        optional label caption it, reorder handles on the left, remove on the right. */
@@ -1624,6 +2902,14 @@ const letterData = {
        carries the scope name + count tag inline, filling the toggle's width. */
     #conditions-input :global(.cond-acc__title) { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); inline-size: 100%; }
     #conditions-input :global(.cond-acc__title .subgroup__name) { margin-inline-end: auto; }
+    /* Carbon caps accordion content with a wide responsive RIGHT padding (~48px) for
+       prose line-length — right for prose, but it insets these condition cards and
+       leaves an odd gutter narrower than the panel. Match the left gutter so the cards
+       fill the width (::part(content) is Carbon's sanctioned hook; same fix as
+       ReviewConditions). The accordion-item is built at runtime (innerHTML) so it
+       carries no Astro scope attr — the part hook must be :global, like the .cond
+       rules above. */
+    #conditions-input :global(cds-accordion-item::part(content)) { padding-inline-end: var(--cds-spacing-05, 1rem); }
 
     /* Add/edit modal — catalog / manual switcher, one path at a time.
        cds-* set :host display, so a scoped [hidden] must force display:none. */
@@ -1635,6 +2921,10 @@ const letterData = {
 
     .field-group { display: grid; gap: var(--cds-spacing-04, 0.75rem); margin-bottom: var(--cds-spacing-07, 2rem); }
     .field-group__title { margin: 0; padding-bottom: var(--cds-spacing-02, 0.25rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    /* Section header with an inline action (e.g. Signature + Change signer): the
+       divider moves to the bar so it spans the whole row, not just the title. */
+    .field-group__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-04, 0.75rem); padding-bottom: var(--cds-spacing-02, 0.25rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .field-group__bar .field-group__title { padding-bottom: 0; border-bottom: none; }
     .field-hint { margin: 0; color: var(--cds-text-secondary, #525252); }
 
     /* Read-only identity recap on the finalize step. */
@@ -1644,13 +2934,71 @@ const letterData = {
     .recap__line { margin: 0; color: var(--cds-text-primary, #161616); }
     .recap__line--muted { margin-top: var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
 
-    /* Permit type is derived, shown read-only. */
-    .derived-value { margin: 0; color: var(--cds-text-primary, #161616); }
-
-    /* District contacts (step ②) — a ContactCard tile per district + a reassignment
-       picker below it. One group per district. */
-    #contacts-input { display: grid; gap: var(--cds-spacing-05, 1rem); }
+    /* Signature group (step ②) — a ContactCard tile + a "Change signer" button. */
     .contact-group { display: grid; gap: var(--cds-spacing-04, 0.75rem); }
+
+    /* District contacts tab (Working Panel, step ①) — one section per district:
+       parks context, a contained list of contacts, and an "Add contact" button.
+       The rows are injected via innerHTML, so they lack Astro's scope attribute —
+       scope the Astro-rendered ancestor (.contacts-input) and :global() the injected
+       descendants. */
+    /* cds-inline-notification sets :host display, so a `hidden` property alone won't
+       collapse the locked note — restate [hidden] here (Carbon host-display gotcha). */
+    #contacts-locked-note[hidden] { display: none; }
+    .contacts-input { display: flex; flex-direction: column; gap: var(--cds-spacing-06, 1.5rem); }
+    .contacts-input :global(.contact-district) { display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); }
+    /* Header bar: "<district> contacts" title with Add contact inline on the right. */
+    .contacts-input :global(.contact-district__bar) { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-04, 0.75rem); min-height: 2rem; }
+    .contacts-input :global(.contact-district__name) { margin: 0; }
+    .contacts-input :global(.contact-district__note) { margin: 0; color: var(--cds-text-secondary, #525252); font-style: italic; }
+    /* Pending change requests — a small list under a district (lead: accept/decline;
+       requester: withdraw). */
+    .contacts-input :global(.contact-requests) { border-top: 1px solid var(--cds-border-subtle, #e0e0e0); padding-top: var(--cds-spacing-04, 0.75rem); display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+    .contacts-input :global(.contact-requests__title) { margin: 0; color: var(--cds-text-secondary, #525252); }
+    .contacts-input :global(.contact-requests__list) { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+    .contacts-input :global(.creq) { display: flex; align-items: center; gap: var(--cds-spacing-04, 0.75rem); flex-wrap: wrap; }
+    .contacts-input :global(.creq__text) { flex: 1 1 12rem; }
+    .contacts-input :global(.creq__acts) { display: flex; gap: var(--cds-spacing-02, 0.25rem); margin-inline-start: auto; }
+    /* A removed (excluded) special contact — dimmed, with a Re-add action. */
+    .contacts-input :global(.crow--muted) { opacity: 0.6; }
+    /* A contact row inside the contained list: avatar, name + badge, meta, action. */
+    .contacts-input :global(.crow) { display: flex; align-items: center; gap: var(--cds-spacing-04, 0.75rem); width: 100%; }
+    .contacts-input :global(.crow__avatar) {
+      flex: none; width: 2rem; height: 2rem; border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--cds-layer-accent, #e0e0e0); color: var(--cds-text-primary, #161616);
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .contacts-input :global(.crow__body) { flex: 1 1 auto; min-width: 0; }
+    .contacts-input :global(.crow__name) { margin: 0; display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); flex-wrap: wrap; }
+    .contacts-input :global(.crow__meta) { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); overflow-wrap: anywhere; }
+    /* The park(s) a contact covers — the only classifier now (no role badges). */
+    .contacts-input :global(.crow__scope) { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); font-style: italic; overflow-wrap: anywhere; }
+    /* Scope fieldset (radio + park checkboxes) — used inline in the SA modal AND inside
+       the lead's editor modal. Injected via innerHTML in both, so styled with :global. */
+    :global(.scope-field) { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+    :global(.scope-field__legend) { margin: 0; color: var(--cds-text-secondary, #525252); }
+    :global(.scope-parks) { display: flex; flex-direction: column; gap: var(--cds-spacing-02, 0.25rem); padding-inline-start: var(--cds-spacing-05, 1rem); }
+    :global(.scope-parks[hidden]) { display: none; }
+    /* SA inline entry editor (reassign dropdown + scope fieldset) under a contact row. */
+    .contacts-input :global(.crow-edit) { width: 100%; margin-top: var(--cds-spacing-03, 0.5rem); display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); }
+    .contacts-input :global(.crow-add) { display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); border-top: 1px solid var(--cds-border-subtle, #e0e0e0); padding-top: var(--cds-spacing-04, 0.75rem); }
+    .contacts-input :global(.crow-add__title) { margin: 0; color: var(--cds-text-secondary, #525252); }
+    #contact-scope-host { margin-top: var(--cds-spacing-05, 1rem); }
+    #contact-scope-host[hidden] { display: none; }
+    .contact-person-static { margin: 0 0 var(--cds-spacing-04, 0.75rem); }
+    .contact-person-static[hidden] { display: none; }
+    .contacts-input :global(.crow__end) { flex: none; margin-inline-start: auto; display: flex; align-items: center; gap: var(--cds-spacing-02, 0.25rem); }
+
+    /* Confirm-on-complete — the supporting analyst's contact sign-off. The list is
+       injected into #confirm-contacts-body, so :global() its descendants. */
+    .confirm-contacts__lead { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
+    .confirm-contacts { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
+    .confirm-contacts :global(.confirm-contacts__district) { display: flex; flex-direction: column; gap: 0.125rem; }
+    .confirm-contacts :global(.confirm-contacts__name) { margin: 0; }
+    .confirm-contacts :global(.confirm-contacts__parks) { margin: 0; color: var(--cds-text-secondary, #525252); }
+    .confirm-contacts :global(.confirm-contacts__list) { margin: var(--cds-spacing-03, 0.5rem) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; }
+    .confirm-contacts :global(.confirm-contacts__meta) { color: var(--cds-text-secondary, #525252); }
 
     .subgroup { display: grid; gap: var(--cds-spacing-03, 0.5rem); margin-bottom: var(--cds-spacing-05, 1rem); }
     .subgroup__head { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); }
@@ -1666,76 +3014,88 @@ const letterData = {
     .pkg-recap { margin-top: var(--cds-spacing-06, 1.5rem); }
     .pkg-recap__title { margin: 0 0 var(--cds-spacing-05, 1rem); }
     .pkg-letter { margin-top: var(--cds-spacing-08, 2.5rem); }
-    .recap__row { display: grid; grid-template-columns: minmax(9rem, 15rem) 1fr; gap: 0.5rem 1.5rem; padding: 0.625rem 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
-    .recap__row:first-child { border-top: 0; padding-top: 0; }
-    .recap__key { color: var(--cds-text-secondary, #525252); }
-    .recap__val { color: var(--cds-text-primary, #161616); }
-    @media (max-width: 42rem) { .recap__row { grid-template-columns: 1fr; gap: 0.125rem; } }
+    /* "What you're issuing" — grouped recap. The markup is injected via innerHTML
+       (see renderRecap), so it never gets Astro's scoped data-attribute — these
+       selectors MUST be :global() or they won't match. Surfaces come from
+       cds-tile; only layout tracks and the muted/emphasis type colors live here. */
+    :global(.issue) { display: grid; gap: var(--cds-spacing-06, 1.5rem); }
+
+    /* Identity — permit kind + category, above a rule. */
+    :global(.issue__ident) {
+      padding-bottom: var(--cds-spacing-05, 1rem);
+      border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    }
+    :global(.issue__type) { margin: 0; color: var(--cds-text-primary, #161616); }
+    :global(.issue__cat) {
+      margin: var(--cds-spacing-02, 0.25rem) 0 0; text-transform: uppercase;
+      color: var(--cds-text-secondary, #525252);
+    }
+
+    /* Dates card — the anchor of the recap. The valid window leads at the largest
+       size (the permit's most important fact); the report-due date sits beside it,
+       clearly prominent, sharing the tile's bottom edge. */
+    :global(.issue__dates) {
+      display: grid; grid-template-columns: 2fr 1fr; align-items: end;
+      gap: var(--cds-spacing-04, 0.75rem) var(--cds-spacing-07, 2rem);
+    }
+    :global(.issue__date-label) {
+      margin: 0; text-transform: uppercase; color: var(--cds-text-secondary, #525252);
+    }
+    :global(.issue__date-val) {
+      margin: var(--cds-spacing-02, 0.25rem) 0 0; color: var(--cds-text-primary, #161616);
+      line-height: 1.15;
+    }
+
+    /* Authorization counts — scannable metric tiles (big number leads). */
+    :global(.issue__metrics) {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+      gap: var(--cds-spacing-05, 1rem);
+    }
+    :global(.metric) { display: flex; flex-direction: column; }
+    :global(.metric__value) { margin: 0; color: var(--cds-text-primary, #161616); line-height: 1.1; }
+    :global(.metric__label) { margin: var(--cds-spacing-03, 0.5rem) 0 0; color: var(--cds-text-primary, #161616); }
+    :global(.metric__sub) { margin: var(--cds-spacing-01, 0.125rem) 0 0; color: var(--cds-text-secondary, #525252); }
+
+    @media (max-width: 42rem) {
+      :global(.issue__dates) { grid-template-columns: 1fr; align-items: start; }
+    }
 
     .wiz-actions { margin-top: var(--cds-spacing-08, 2.5rem); }
     .wiz-actions__inner { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); padding-top: var(--cds-spacing-05, 1rem); border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
     .wiz-actions__spacer { flex: 1 1 auto; }
     #wiz-back[hidden] { display: none; }
 
-    /* carbon-checked: fixed positioning host for a stock cds-button — Carbon ships
-       no floating-action container (same pattern as apply.astro's toast-host).
-       An OPAQUE layer plate (subtle border + elevation) backs the ghost button so
-       its interior never shows scrolling content through — the label stays legible
-       over anything behind it, and the shadow reads it as a distinct floating chip. */
-    .comments-fab {
-      position: fixed; right: var(--cds-spacing-05, 1rem); bottom: var(--cds-spacing-05, 1rem);
-      z-index: 8000;
-      background: var(--cds-layer-01, #f4f4f4);
-      border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
-    .comments-count {
-      display: inline-grid; place-items: center; min-width: 1.25rem; height: 1.25rem;
-      margin-inline-start: var(--cds-spacing-03, 0.5rem); padding: 0 0.375rem;
-      border-radius: 0.75rem; background: var(--cds-background-inverse, #393939);
-      color: var(--cds-text-inverse, #fff); font-size: 0.75rem; line-height: 1;
-    }
-    .comments-count[hidden] { display: none; }
+    /* Comments tab — composer (top) then the thread (newest first). */
+    .comments-note { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
+    /* Composer: full-width field, the Add-comment button aligned bottom-right. */
+    .dock-composer { display: grid; gap: var(--cds-spacing-04, 0.75rem); justify-items: end; margin-block-end: var(--cds-spacing-06, 1.5rem); }
+    .mention-field { position: relative; inline-size: 100%; }
+    .dock-composer cds-textarea { display: block; inline-size: 100%; }
+    /* @-mention picker — a token-styled suggestion menu anchored under the composer.
+       carbon-checked: Carbon ships no @-mention typeahead; this composes over the
+       stock cds-textarea, styled entirely with --cds-* tokens. */
+    .mention-menu { position: absolute; inset-inline: 0; top: calc(100% + 0.25rem); z-index: 100; margin: 0; padding: 0; list-style: none; max-block-size: 14rem; overflow-y: auto; background: var(--cds-layer-02, #fff); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }
+    .mention-menu[hidden] { display: none; }
+    /* Menu items + posted mention tokens are BUILT IN JS (no Astro scope attribute),
+       so their rules must be :global to match. */
+    :global(.mention-menu__item) { display: flex; flex-direction: column; gap: 0.0625rem; cursor: pointer; padding: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem); border-block-end: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    :global(.mention-menu__item:last-child) { border-block-end: none; }
+    :global(.mention-menu__item.is-active), :global(.mention-menu__item:hover) { background: var(--cds-layer-hover-02, #e8e8e8); }
+    :global(.mention-menu__name) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; }
+    :global(.mention-menu__detail) { color: var(--cds-text-secondary, #525252); font-size: 0.75rem; }
+    :global(.mention) { color: var(--cds-link-primary, #0f62fe); font-weight: 600; }
 
-    /* Slide-over drawer shell (bespoke positioning; controls inside are cds-*). */
-    /* A fixed-height flex column: header + note pinned at top, thread scrolls in
-       the middle, composer pinned at the bottom (always reachable, no matter how
-       long the thread). */
-    .drawer {
-      position: fixed; top: 0; right: 0; z-index: 8500;
-      inline-size: min(28rem, 100%); block-size: 100vh;
-      display: flex; flex-direction: column;
-      background: var(--cds-layer-01, #f4f4f4);
-      border-inline-start: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-      box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
-      transform: translateX(100%);
-      transition: transform 0.2s ease;
-    }
-    .drawer--open { transform: none; }
-    @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
-    .drawer__head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem); padding: var(--cds-spacing-05, 1rem) var(--cds-spacing-05, 1rem) var(--cds-spacing-04, 0.75rem); }
-    .drawer__title { margin: 0; }
-
-    /* Comments content. */
-    .comments-note { flex: none; margin: 0; padding: 0 var(--cds-spacing-05, 1rem) var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
-    /* The only scrolling region — grows to fill, so the composer below stays put. */
-    .comments-thread { flex: 1 1 auto; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0 var(--cds-spacing-05, 1rem) var(--cds-spacing-05, 1rem); display: grid; gap: var(--cds-spacing-05, 1rem); align-content: start; }
-    .comment { display: grid; grid-template-columns: auto 1fr; gap: var(--cds-spacing-04, 0.75rem); align-items: start; }
-    .comment__avatar {
-      inline-size: 2rem; block-size: 2rem; border-radius: 50%;
-      display: grid; place-items: center; font-size: 0.75rem; font-weight: 600;
-      background: var(--cds-layer-accent-01, #e0e0e0); color: var(--cds-text-primary, #161616);
-    }
-    .comment__body { min-width: 0; }
+    .dock-thread { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--cds-spacing-05, 1rem); align-content: start; }
+    .comment { min-width: 0; }
     .comment__meta { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
     .comment__author { font-weight: 600; color: var(--cds-text-primary, #161616); }
     .comment__text { margin: 0; }
-    .comment__page { display: block; margin-top: var(--cds-spacing-02, 0.25rem); }
-    /* Pinned to the bottom of the drawer — always reachable regardless of thread length. */
-    .comments-composer { flex: none; display: grid; gap: var(--cds-spacing-04, 0.75rem); justify-items: start; padding: var(--cds-spacing-05, 1rem); border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); background: var(--cds-layer-01, #f4f4f4); }
 
     /* ── Live letter preview ── a white document surface, sticky beside the fields. */
+    .preview__head { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem); }
     .preview__label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
+    .preview__head .preview__label { margin-bottom: 0; }
+    .preview__hint { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
     @media (min-width: 66.01rem) { .preview { position: sticky; top: 4rem; align-self: start; } }
     .sheet {
       background: var(--cds-background, #ffffff);
@@ -1755,6 +3115,13 @@ const letterData = {
     .sheet :global(.ltr__date) { margin: 0 0 var(--cds-spacing-05, 1rem); }
     .sheet :global(.ltr__to) { font-style: normal; line-height: 1.5; margin: 0 0 var(--cds-spacing-05, 1rem); }
     .sheet :global(.ltr__body) { line-height: 1.6; margin: 0 0 var(--cds-spacing-05, 1rem); }
+    /* Editable body paragraphs (step ②): a quiet click-to-edit affordance, a focus
+       field, and a left accent once a paragraph carries a reviewer override. Only
+       the editable host gets it; the step-③ read-through paragraphs stay plain. */
+    .letter-host--editable :global(.ltr__body--copy) { cursor: text; border-radius: 2px; padding: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-03, 0.5rem); margin-left: calc(-1 * var(--cds-spacing-03, 0.5rem)); margin-right: calc(-1 * var(--cds-spacing-03, 0.5rem)); transition: background-color 70ms ease; }
+    .letter-host--editable :global(.ltr__body--copy:hover) { background: var(--cds-field-02, #f4f4f4); }
+    .letter-host--editable :global(.ltr__body--copy:focus) { outline: 2px solid var(--cds-focus, #0f62fe); outline-offset: -2px; background: var(--cds-field-02, #f4f4f4); }
+    .letter-host--editable :global(.ltr__body--copy.is-edited) { box-shadow: inset 3px 0 0 var(--cds-border-interactive, #0f62fe); }
     .sheet :global(.ltr__signer) { line-height: 1.5; margin: 0 0 var(--cds-spacing-05, 1rem); }
     .sheet :global(.ltr__sig-line) { height: 2rem; width: 16rem; max-width: 100%; border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d); margin-bottom: var(--cds-spacing-03, 0.5rem); }
     .sheet :global(.ltr__pagebreak) { border: 0; border-top: 1px dashed var(--cds-border-subtle-01, #c6c6c6); margin: var(--cds-spacing-07, 2rem) 0; }
@@ -1766,7 +3133,11 @@ const letterData = {
     .sheet :global(.ltr__contact-head) { margin-bottom: var(--cds-spacing-02, 0.25rem); }
     .sheet :global(.ltr__district-name) { margin: 0; }
     .sheet :global(.ltr__coord) { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); }
+    .sheet :global(.ltr__coord-tag) { font-style: italic; }
     .sheet :global(.ltr__parks) { margin: var(--cds-spacing-02, 0.25rem) 0 0; padding-left: var(--cds-spacing-06, 1.5rem); }
+    /* Park-first contact list: each park unit heads its own set of contacts. */
+    .sheet :global(.ltr__park) { margin: var(--cds-spacing-03, 0.5rem) 0 0; padding-left: var(--cds-spacing-05, 1rem); }
+    .sheet :global(.ltr__park-name) { margin: 0; font-weight: 600; }
     .sheet :global(.ltr__specimens) { width: 100%; border-collapse: collapse; margin: var(--cds-spacing-03, 0.5rem) 0 var(--cds-spacing-05, 1rem); }
     .sheet :global(.ltr__specimens th), .sheet :global(.ltr__specimens td) { text-align: left; vertical-align: top; padding: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-04, 0.75rem) var(--cds-spacing-02, 0.25rem) 0; border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
     .sheet :global(.ltr__specimens th) { font-weight: 600; border-bottom-color: var(--cds-border-strong-01, #8d8d8d); }
