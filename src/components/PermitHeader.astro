@@ -85,7 +85,7 @@ const STATE_META: Record<ReviewStatus, { kind: string; label: string; verb: stri
   'pending':     { kind: 'in-progress', label: 'Pending',     verb: 'Started' },
   'complete':    { kind: 'succeeded',   label: 'Complete',    verb: 'Completed' },
 };
-const isLead = (m: TeamMember) => m.highlight === true || m.role === 'Lead analyst';
+const isLead = (m: TeamMember) => m.highlight === true || m.role === 'Responsible analyst';
 // The Lead analyst reads Complete only once the permit has left review (Out for
 // signature and beyond) — their sign-off IS the end of the analysis. Before that
 // they're actively reviewing (Pending). Everyone else carries their own status.
@@ -143,7 +143,7 @@ const orderedUnits = [
   ...unitOrder.filter((u) => u !== 'Headquarters'),
 ];
 const rosterSections = [
-  ...(leadMembers.length ? [{ key: '__lead', label: 'Lead analyst', members: leadMembers, counts: false }] : []),
+  ...(leadMembers.length ? [{ key: '__lead', label: 'Responsible analyst', members: leadMembers, counts: false }] : []),
   ...orderedUnits.map((u) => ({ key: u, label: u, members: unitMembers.get(u)!, counts: true })),
 ];
 ---
@@ -413,7 +413,7 @@ const rosterSections = [
                   <li class="review-row" data-user-id={m.id} data-seed data-status={st} data-unit={unitOf(m) ?? ''} data-email={email} data-lead={m.highlight ? 'true' : 'false'}>
                     <Avatar name={m.name} size="md" />
                     <div class="review-row__id">
-                      <p class="review-row__name t-body-01">{m.name}{m.highlight ? <span class="review-row__lead t-label-01"> · Lead</span> : null}</p>
+                      <p class="review-row__name t-body-01">{m.name}</p>
                       <p class="review-row__role t-label-01">{m.role}</p>
                       {email && (
                         <p class="review-row__email t-label-01">

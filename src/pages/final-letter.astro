@@ -68,6 +68,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
 import ApplicationReview from '../components/ApplicationReview.astro';
+import AnalysisTeam from '../components/AnalysisTeam.astro';
 import ContactCard from '../components/ContactCard.astro';
 import DocumentViewer from '../components/DocumentViewer.astro';
 import { permit } from '../data/permit';
@@ -274,20 +275,9 @@ const documents = permit.additionalDocs.files.map((f) => ({
   type: f.type,
 }));
 
-// Analysis-team roster for the Team tab. Review status shows as an icon-indicator
-// (status is meaning, not colour alone). eligibleMembers seed the Add-member combo.
+// Analysis-team roster for the Team tab — rendered by the shared AnalysisTeam
+// component. `team` also feeds the tab's count badge.
 const team = permit.overview.analysisTeam;
-const teamIds = new Set(team.map((m) => m.id));
-const eligibleMembers = userDirectory.filter((u) => !teamIds.has(u.id));
-const TEAM_STATE: Record<string, { kind: string; label: string }> = {
-  'not-started': { kind: 'not-started', label: 'Not started' },
-  'pending': { kind: 'in-progress', label: 'Pending' },
-  'complete': { kind: 'succeeded', label: 'Complete' },
-};
-const teamInitials = (name: string) =>
-  name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-const trashIcon =
-  '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>';
 
 const letterData = {
   permitId: permit.id,
@@ -444,56 +434,12 @@ const letterData = {
             <script type="application/json" id="mention-directory" set:html={JSON.stringify(userDirectory.map((u) => ({ id: u.id, name: u.name, detail: u.detail ?? u.role })))}></script>
           </div>
 
-          <!-- Analysis team — the roster, shared with the permit page (same
-               permit-team storage). Lead can add / remove / email all; an assistant
-               sees it read-only. -->
+          <!-- Analysis team — the SHARED roster component, identical to the permit
+               detail page (same permit-team storage). Lead can add / remove / email
+               all; an assistant sees it read-only. -->
           <div class="rail-panel" data-tabpanel="team" hidden>
             <div class="dock-list">
-              <div class="rail__tools">
-                <cds-button id="team-email-all" kind="ghost" size="md">Email all</cds-button>
-                <cds-button id="team-add-open" kind="tertiary" size="md" type="button">Add member</cds-button>
-              </div>
-              <cds-contained-list id="team-roster" data-team-list label="Assigned to this permit" kind="on-page" data-storage-key={`permit-team-${permit.id}`}>
-                {team.map((m) => (
-                  <cds-contained-list-item data-user-id={m.id} data-email={userDirectory.find((u) => u.id === m.id)?.email ?? ''}>
-                    <div class="member">
-                      <span class="member__avatar" aria-hidden="true">{teamInitials(m.name)}</span>
-                      <div class="member__body">
-                        <p class="member__name t-body-01">{m.name}{m.highlight ? <span class="member__lead t-label-01"> · Lead</span> : null}</p>
-                        <p class="member__role t-label-01">{m.role}{m.detail ? ` · ${m.detail}` : ''}</p>
-                      </div>
-                      <div class="member__end">
-                        <cds-icon-indicator size="16" kind={TEAM_STATE[m.reviewStatus]?.kind ?? 'not-started'} label={TEAM_STATE[m.reviewStatus]?.label ?? 'Not started'}></cds-icon-indicator>
-                        {!m.highlight && (
-                          <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member set:html={`${trashIcon}<span slot="tooltip-content">Remove ${m.name}</span>`}></cds-icon-button>
-                        )}
-                      </div>
-                    </div>
-                  </cds-contained-list-item>
-                ))}
-              </cds-contained-list>
-
-              <!-- Template for JS-added roster rows — rendered inert so its markup
-                   carries Astro's scoped-style attributes, then cloned. -->
-              <template id="team-row-template">
-                <cds-contained-list-item data-user-id="" data-email="">
-                  <div class="member">
-                    <span class="member__avatar" aria-hidden="true"></span>
-                    <div class="member__body">
-                      <p class="member__name t-body-01"></p>
-                      <p class="member__role t-label-01"></p>
-                    </div>
-                    <div class="member__end">
-                      <cds-icon-indicator size="16" kind="not-started" label="Not started"></cds-icon-indicator>
-                      <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member>
-                        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
-                        <span slot="tooltip-content"></span>
-                      </cds-icon-button>
-                    </div>
-                  </div>
-                </cds-contained-list-item>
-              </template>
-              <script type="application/json" id="team-directory" set:html={JSON.stringify(userDirectory)}></script>
+              <AnalysisTeam permitId={permit.id} team={team} directory={userDirectory} />
             </div>
           </div>
         </div>
@@ -756,34 +702,6 @@ const letterData = {
     </cds-modal-footer>
   </cds-modal>
 
-  <!-- Add a member to the analysis team — the SAME button-first pattern as the
-       permit detail page: the Team tab's "Add member" opens this, you pick a
-       directory user (only those not already on the team), and the modal's own
-       "Add member" commits. Shared permit-team storage keeps both surfaces in sync. -->
-  <cds-modal id="team-add-modal" size="sm">
-    <cds-modal-header>
-      <cds-modal-close-button></cds-modal-close-button>
-      <cds-modal-label>Analysis team</cds-modal-label>
-      <cds-modal-heading>Add to team</cds-modal-heading>
-    </cds-modal-header>
-    <cds-modal-body>
-      <cds-combo-box
-        id="team-add-select"
-        title-text="Reviewer"
-        label="Search the user directory…"
-        helper-text="Only users not already on the analysis team appear here."
-      >
-        {eligibleMembers.map((u) => (
-          <cds-combo-box-item value={u.id}>{u.name} — {u.role}</cds-combo-box-item>
-        ))}
-      </cds-combo-box>
-    </cds-modal-body>
-    <cds-modal-footer>
-      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-      <cds-modal-footer-button kind="primary" id="team-add-confirm">Add to team</cds-modal-footer-button>
-    </cds-modal-footer>
-  </cds-modal>
-
   <!-- Change the letter signer — the SAME button→modal→search pattern as Add member:
        the Signature section's "Change signer" opens this, you pick from the signer
        pool, and Save commits. Reassigning updates the name + classification on the
@@ -874,6 +792,7 @@ const letterData = {
     import { readIdentity } from '../lib/maintenance';
     import { readPermitRole } from '../lib/permissions';
     import { showToast } from '../lib/toast';
+    import { renderMentionText, wireMentionTypeahead, type MentionUser } from '../lib/comment-mentions';
     import { directory, activeUser } from '../data/user';
     import { districtName } from '../data/district';
     import { permit } from '../data/permit';
@@ -2405,7 +2324,12 @@ const letterData = {
       if (headSub) headSub.textContent = page.secondaryLabel;
       if (backBtn) backBtn.hidden = current === 0;
       if (actionsInner) { actionsInner.classList.remove(...ALL_ACTION_COLS); actionsInner.classList.add(...ACTION_COLS[current]); }
-      if (nextBtn) nextBtn.textContent = ctaLabel();
+      const cta = ctaLabel();
+      if (nextBtn) nextBtn.textContent = cta;
+      // Keep the identity header's primary button in lockstep with the footer CTA
+      // (both mounts: full banner + sticky compact bar) so it reads "Finalize
+      // review" / "Finalize letter" / "Send for signature", not a static label.
+      document.querySelectorAll('.permit-open-review').forEach((c) => c.setAttribute('label', cta));
       if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
     };
     const goTo = (i: number) => { current = Math.min(LAST_STEP, Math.max(0, i)); localStorage.setItem(stepKey, String(current)); renderPreview(); render(true); };
@@ -2449,7 +2373,9 @@ const letterData = {
       });
       return false;
     };
-    nextBtn?.addEventListener('click', () => {
+    // The primary advance action, shared by the footer CTA and the identity
+    // header's primary button (permit:approve) so the two stay one action.
+    const advance = () => {
       if (current === 0 && !isLead) { openContactsConfirm(); return; }
       // Can't finalize the letter or send it while a district on the permit has no
       // contact. (Advancing past step ② does NOT lock contacts — the lead can still
@@ -2457,11 +2383,13 @@ const letterData = {
       if (isLead && current >= 1 && !contactsComplete()) return;
       if (current === PAGES - 1) { sendModal.open = true; return; }
       goTo(current + 1);
-    });
-    // The header's "Approve permit" action jumps to the "Review & send" step —
-    // the last step, where the package is confirmed and sent for signature.
-    const sendStep = data.pages.findIndex((p) => p.id === 'package');
-    document.addEventListener('permit:approve', () => goTo(sendStep < 0 ? PAGES - 1 : sendStep));
+    };
+    nextBtn?.addEventListener('click', advance);
+    // The identity header's primary button mirrors the footer CTA — same label
+    // (set in render) and same action. It fires `permit:approve`, so advancing the
+    // wizard step-by-step is exactly what "Finalize letter → Send for signature"
+    // means from the header, no separate jump.
+    document.addEventListener('permit:approve', advance);
 
     // ── Comments: the review thread with @-mention tagging, in the Comments tab ──
     // Stored under the SAME key the permit detail page uses (one conversation); new
@@ -2469,7 +2397,6 @@ const letterData = {
     // over the user directory; picking inserts "@Name", tokenizes it in the thread,
     // and notifies the mentioned people (simulated).
     interface StoredComment { author: string; time: string; text: string; mentions?: string[] }
-    interface MentionUser { id: string; name: string; detail: string }
     const commentsKey = `permit-comments-${permitId}`;
     const thread = $('comments-thread')!;
     const commentInput = $('comments-input') as any;
@@ -2480,24 +2407,6 @@ const letterData = {
       try { const a = JSON.parse(localStorage.getItem(commentsKey) || '[]'); return Array.isArray(a) ? a : []; }
       catch { return []; }
     };
-    // Render comment text with @Name mentions as .mention tokens — DOM-built, never
-    // innerHTML'd, so the user's text can't inject markup.
-    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const renderText = (text: string, names: string[]): DocumentFragment => {
-      const frag = document.createDocumentFragment();
-      const valid = names.filter(Boolean);
-      if (!valid.length) { frag.appendChild(document.createTextNode(text)); return frag; }
-      const re = new RegExp('@(' + valid.slice().sort((a, b) => b.length - a.length).map(escapeRe).join('|') + ')', 'g');
-      let last = 0, m: RegExpExecArray | null;
-      while ((m = re.exec(text))) {
-        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
-        const span = document.createElement('span'); span.className = 'mention'; span.textContent = '@' + m[1];
-        frag.appendChild(span);
-        last = m.index + m[0].length;
-      }
-      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
-      return frag;
-    };
 
     // A single "author · time" meta line, then the text (with @mentions tokenized).
     const buildComment = (c: StoredComment): HTMLElement => {
@@ -2506,7 +2415,7 @@ const letterData = {
       const who = document.createElement('span'); who.className = 'comment__author'; who.textContent = c.author;
       meta.append(who, document.createTextNode(` · ${c.time}`));
       const text = document.createElement('p'); text.className = 'comment__text t-body-01';
-      text.appendChild(renderText(c.text, c.mentions ?? []));
+      text.appendChild(renderMentionText(c.text, c.mentions ?? []));
       li.append(meta, text);
       return li;
     };
@@ -2517,80 +2426,10 @@ const letterData = {
       setTabBadge('comments', all.length);
     };
 
-    // @-mention typeahead. carbon-checked: it composes over the STOCK cds-textarea by
-    // reading that component's OWN inner shadow textarea (same pattern as the
-    // review-layouts B3 composer) — no raw control is authored; the field is cds-*.
-    // `picked` remembers users inserted via the menu so a post records only the
-    // mentions that actually survive in the text.
-    const picked = new Map<string, MentionUser>();
-    (function wireMentions() {
-      const menu = $('comments-mention-menu') as HTMLElement | null;
-      if (!commentInput || !menu) return;
-      customElements.whenDefined('cds-textarea').then(async () => {
-        await (commentInput.updateComplete ?? Promise.resolve());
-        const ta = commentInput.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null;
-        if (!ta) return;
-        let items: MentionUser[] = [];
-        let active = -1;
-        // The in-progress "@token" ending at the caret: from the last "@" starting a
-        // word (not an email's a@b), no newline, not closed by a trailing space.
-        const queryAtCaret = () => {
-          const caret = ta.selectionStart ?? ta.value.length;
-          const upto = ta.value.slice(0, caret);
-          const at = upto.lastIndexOf('@');
-          if (at === -1) return null;
-          if (at !== 0 && !/\s/.test(upto[at - 1])) return null;
-          const q = upto.slice(at + 1);
-          if (/\n/.test(q) || /\s$/.test(q) || q.length > 30) return null;
-          return { at, caret, q };
-        };
-        const hideMenu = () => { menu.hidden = true; menu.innerHTML = ''; active = -1; };
-        const paintActive = () => Array.from(menu.children).forEach((li, i) => (li as HTMLElement).classList.toggle('is-active', i === active));
-        const renderMenu = (matches: MentionUser[]) => {
-          items = matches; menu.innerHTML = '';
-          matches.forEach((u, i) => {
-            const li = document.createElement('li'); li.className = 'mention-menu__item'; li.setAttribute('role', 'option'); li.dataset.idx = String(i);
-            const n = document.createElement('span'); n.className = 'mention-menu__name'; n.textContent = u.name;
-            const d = document.createElement('span'); d.className = 'mention-menu__detail'; d.textContent = u.detail;
-            li.append(n, d); menu.appendChild(li);
-          });
-          active = matches.length ? 0 : -1; paintActive(); menu.hidden = matches.length === 0;
-        };
-        const refresh = () => {
-          const ctx = queryAtCaret();
-          if (!ctx) { hideMenu(); return; }
-          const q = ctx.q.toLowerCase();
-          renderMenu(mentionDir.filter((u) => u.name.toLowerCase().includes(q)).slice(0, 6));
-        };
-        const choose = (u: MentionUser) => {
-          const ctx = queryAtCaret();
-          if (!ctx) return;
-          const before = ta.value.slice(0, ctx.at), after = ta.value.slice(ctx.caret), insert = `@${u.name} `;
-          ta.value = before + insert + after;
-          const pos = (before + insert).length; ta.setSelectionRange(pos, pos);
-          commentInput.value = ta.value; picked.set(u.name, u); hideMenu(); ta.focus();
-        };
-        ta.addEventListener('input', refresh);
-        ta.addEventListener('keyup', (e) => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes((e as KeyboardEvent).key)) refresh(); });
-        ta.addEventListener('keydown', (e) => {
-          const k = (e as KeyboardEvent).key;
-          if (menu.hidden) return;
-          if (k === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); paintActive(); }
-          else if (k === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); paintActive(); }
-          else if (k === 'Enter' && active >= 0) { e.preventDefault(); choose(items[active]); }
-          else if (k === 'Escape') { e.preventDefault(); hideMenu(); }
-        });
-        // mousedown (not click) so the pick beats the textarea blur.
-        menu.addEventListener('mousedown', (e) => {
-          const li = (e.target as HTMLElement).closest('.mention-menu__item') as HTMLElement | null;
-          if (!li) return;
-          e.preventDefault();
-          const u = items[Number(li.dataset.idx)];
-          if (u) choose(u);
-        });
-        document.addEventListener('click', (e) => { if (!(e.target as HTMLElement).closest('.mention-field')) hideMenu(); });
-      });
-    })();
+    // @-mention typeahead — shared with the permit detail page (src/lib/comment-mentions),
+    // so a mention works identically in both composers. `picked` records users
+    // inserted via the menu; a post keeps only the mentions surviving in the text.
+    const picked = wireMentionTypeahead(commentInput, $('comments-mention-menu'), mentionDir);
 
     const addComment = () => {
       const text = (commentInput.value ?? '').trim();
@@ -2647,91 +2486,11 @@ const letterData = {
       }
     });
 
-    // ── Analysis team tab — roster shared with the permit detail page (SAME
-    // permit-team storage: {removed, added}). The lead (RA/Admin) can add / remove /
-    // email; an assistant sees it read-only. Mirrors the permit page's roster logic.
-    const teamRoster = $('team-roster');
-    const teamAddOpen = $('team-add-open');
-    const teamAddModal = $('team-add-modal') as any;
-    const teamAddSelect = $('team-add-select') as any;
-    const teamAddConfirm = $('team-add-confirm');
-    const teamRowTpl = $('team-row-template') as HTMLTemplateElement | null;
-    const teamDirEl = $('team-directory');
-    const teamEmailAll = $('team-email-all');
-    const teamInit = (name: string) => name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-    if (!canEditTeam) (teamAddOpen as HTMLElement | null)?.style.setProperty('display', 'none');
-
-    if (teamRoster && teamRowTpl && teamDirEl) {
-      interface DirUser { id: string; name: string; role: string; detail: string; email: string; }
-      interface TeamEdits { removed: string[]; added: DirUser[]; }
-      const teamKey = (teamRoster as HTMLElement).dataset.storageKey || `permit-team-${permitId}`;
-      let teamDir: DirUser[] = [];
-      try { teamDir = JSON.parse(teamDirEl.textContent || '[]'); } catch { teamDir = []; }
-      const teamById = new Map(teamDir.map((u) => [u.id, u]));
-      const seedIds = new Set(Array.from(teamRoster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!));
-      const loadTeam = (): TeamEdits => {
-        try { const p = JSON.parse(localStorage.getItem(teamKey) || '{}'); return { removed: Array.isArray(p.removed) ? p.removed : [], added: Array.isArray(p.added) ? p.added : [] }; }
-        catch { return { removed: [], added: [] }; }
-      };
-      const saveTeam = (e: TeamEdits) => localStorage.setItem(teamKey, JSON.stringify(e));
-      let teamEdits = loadTeam();
-      const onTeamIds = () => new Set(Array.from(teamRoster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!));
-      const refreshTeamCombo = () => {
-        setTabBadge('team', onTeamIds().size);
-        if (!teamAddSelect) return;
-        const on = onTeamIds();
-        teamAddSelect.value = '';
-        teamAddSelect.innerHTML = '';
-        teamDir.filter((u) => !on.has(u.id)).sort((a, b) => a.name.localeCompare(b.name)).forEach((u) => {
-          const it = document.createElement('cds-combo-box-item');
-          it.setAttribute('value', u.id);
-          it.textContent = `${u.name} — ${u.role}`;
-          teamAddSelect.appendChild(it);
-        });
-      };
-      const removeMember = (id: string, row: HTMLElement) => {
-        row.remove();
-        if (seedIds.has(id)) { if (!teamEdits.removed.includes(id)) teamEdits.removed.push(id); }
-        else { teamEdits.added = teamEdits.added.filter((u) => u.id !== id); }
-        saveTeam(teamEdits); refreshTeamCombo();
-      };
-      const wireRemove = (row: HTMLElement) => {
-        const btn = row.querySelector('[data-remove-member]') as HTMLElement | null;
-        if (!btn) return;
-        if (!canEditTeam) { btn.style.display = 'none'; return; }
-        btn.addEventListener('click', () => removeMember(row.dataset.userId!, row));
-      };
-      const buildRow = (u: DirUser): HTMLElement => {
-        const li = teamRowTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
-        li.dataset.userId = u.id;
-        li.dataset.email = u.email || '';
-        const av = li.querySelector('.member__avatar'); if (av) av.textContent = teamInit(u.name);
-        const nm = li.querySelector('.member__name'); if (nm) nm.textContent = u.name;
-        const rl = li.querySelector('.member__role'); if (rl) rl.textContent = u.detail ? `${u.role} · ${u.detail}` : u.role;
-        const tip = li.querySelector('[slot="tooltip-content"]'); if (tip) tip.textContent = `Remove ${u.name}`;
-        wireRemove(li);
-        return li;
-      };
-      teamRoster.querySelectorAll<HTMLElement>('[data-user-id]').forEach(wireRemove);
-      teamEdits.removed.forEach((id) => teamRoster.querySelector<HTMLElement>(`[data-user-id="${id}"]`)?.remove());
-      teamEdits.added.forEach((u) => teamRoster.appendChild(buildRow(u)));
-      const addMember = () => {
-        const id = teamAddSelect?.value;
-        const user = id && teamById.get(id);
-        if (!user || onTeamIds().has(id)) return;
-        teamRoster.appendChild(buildRow(user));
-        if (teamEdits.removed.includes(id)) teamEdits.removed = teamEdits.removed.filter((r) => r !== id);
-        else if (!teamEdits.added.some((u) => u.id === id)) teamEdits.added.push(user);
-        saveTeam(teamEdits); refreshTeamCombo();
-      };
-      teamAddOpen?.addEventListener('click', () => { refreshTeamCombo(); if (teamAddModal) teamAddModal.open = true; });
-      teamAddConfirm?.addEventListener('click', () => { addMember(); if (teamAddModal) teamAddModal.open = false; });
-      teamEmailAll?.addEventListener('click', () => {
-        const emails = Array.from(teamRoster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.email).filter(Boolean);
-        if (emails.length) window.location.href = `mailto:${emails.join(',')}`;
-      });
-      refreshTeamCombo();
-    }
+    // ── Analysis team tab ──
+    // The roster + its add / remove / email-all / copy behavior live in the shared
+    // AnalysisTeam component (src/components/AnalysisTeam.astro) — identical to the
+    // permit detail page, same permit-team storage. It ships its own script and
+    // keeps the tab's count badge in step, so there's nothing to wire here.
 
     // ── Auto-save indicator (lead only — the assistant's record is read-only) ─────
     // The record already persists every edit silently; surface it in the record's
@@ -2877,14 +2636,8 @@ const letterData = {
     .appreview-savestate::before { content: ''; inline-size: 0.5rem; block-size: 0.5rem; border-radius: 50%; background: var(--cds-support-success, #24a148); }
     .appreview-savestate[data-state="saving"]::before { background: var(--cds-text-placeholder, #a8a8a8); }
 
-    /* Analysis-team roster (team tab) — avatar · name/role · status + remove. */
-    .member { display: grid; grid-template-columns: auto 1fr auto; gap: var(--cds-spacing-04, 0.75rem); align-items: center; inline-size: 100%; }
-    .member__avatar { inline-size: 2rem; block-size: 2rem; border-radius: 50%; display: grid; place-items: center; font-size: 0.75rem; font-weight: 600; background: var(--cds-layer-accent-01, #e0e0e0); color: var(--cds-text-primary, #161616); }
-    .member__body { min-width: 0; }
-    .member__name { margin: 0; color: var(--cds-text-primary, #161616); }
-    .member__lead { color: var(--cds-text-secondary, #525252); }
-    .member__role { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); }
-    .member__end { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); }
+    /* The analysis-team roster (team tab) is the shared AnalysisTeam component,
+       which carries its own styles. */
 
     /* Condition cards — the TEXT is the content, shown in full; a source pill and
        optional label caption it, reorder handles on the left, remove on the right. */

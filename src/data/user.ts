@@ -37,7 +37,7 @@ export interface DirectoryUser {
 // permit plus other eligible reviewers across divisions and districts. Ordered
 // as authored; the combo-box filters this to whoever isn't already on the team.
 export const userDirectory: DirectoryUser[] = [
-  { id: 'okafor', name: 'J. Okafor', role: 'Lead analyst', detail: 'Natural Resources Division', email: 'j.okafor@parks.ca.gov' },
+  { id: 'okafor', name: 'J. Okafor', role: 'Responsible analyst', detail: 'Natural Resources Division', email: 'j.okafor@parks.ca.gov' },
   { id: 'santos', name: 'M. Santos', role: 'District reviewer', detail: 'North Coast Redwoods District', email: 'm.santos@parks.ca.gov' },
   { id: 'cheng', name: 'Dr. L. Cheng', role: 'Scientific advisor', detail: 'Marine ecology', email: 'l.cheng@parks.ca.gov' },
   { id: 'delgado', name: 'R. Delgado', role: 'Permit coordinator', detail: 'Statewide Permitting Office', email: 'r.delgado@parks.ca.gov' },
@@ -302,7 +302,7 @@ export const currentUser = {
   lastName: 'Okafor',
   // How the reviewer is shown across the app (comment thread, analysis roster).
   displayName: 'J. Okafor',
-  title: 'Lead analyst',
+  title: 'Responsible analyst',
   division: 'natural-resources',
   email: 'j.okafor@parks.ca.gov',
   // Phone is stored canonically as E.164; the profile shows it formatted.
@@ -319,7 +319,7 @@ export const currentUser = {
 
   // Role & access — READ ONLY on the profile. Changing these is an admin action,
   // so the page states that rather than offering a control the user can't use.
-  role: 'Lead analyst',
+  role: 'Responsible analyst',
   permissionLevel: 'Internal reviewer',
   districts: [
     { name: 'North Coast Redwoods District', parks: 3 },

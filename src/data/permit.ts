@@ -72,6 +72,35 @@ const proposalHref = '/docs/coralline-diversity-proposal.pdf';
 // The PI also serves as the responsible official for both curation and lab work.
 const reyesContact: Contact = { name: 'Dr. Alena Reyes', phone: '(707) 555-0142', email: 'areyes@humboldt.edu' };
 
+// Field-investigation sessions as structured ISO dates — the single source of truth
+// (calendar events read these directly; the display list below is DERIVED from them,
+// so there's no fragile re-parsing of "Aug 13 – 15, 2026" strings).
+export interface FieldSession { start: string; end?: string }
+const fieldSessions: FieldSession[] = [
+  { start: '2026-07-30' },
+  { start: '2026-08-13', end: '2026-08-15' },
+  { start: '2026-09-29' },
+  { start: '2026-10-27' },
+  { start: '2026-11-25' },
+  { start: '2026-12-09' },
+  { start: '2027-01-22' },
+  { start: '2027-02-19' },
+  { start: '2027-03-19' },
+  { start: '2027-04-10' },
+  { start: '2027-05-08' },
+  { start: '2027-06-07' },
+];
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const partsOf = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return { y, m, d }; };
+function sessionLabel(s: FieldSession): string {
+  const a = partsOf(s.start);
+  if (!s.end || s.end === s.start) return `${MONTH_ABBR[a.m - 1]} ${a.d}, ${a.y}`;
+  const b = partsOf(s.end);
+  return a.y === b.y && a.m === b.m
+    ? `${MONTH_ABBR[a.m - 1]} ${a.d} – ${b.d}, ${a.y}`
+    : `${MONTH_ABBR[a.m - 1]} ${a.d}, ${a.y} – ${MONTH_ABBR[b.m - 1]} ${b.d}, ${b.y}`;
+}
+
 export const permit = {
   id: '26-635-017',
   name: 'Diversity of coralline algae in northern California and their reproductive systems',
@@ -100,14 +129,14 @@ export const permit = {
     //   'not-started' — assigned, hasn't opened their review yet
     //   'pending'     — started their review (clicked Start review), in progress
     //   'complete'    — finished (a Supporting analyst clicked Complete review; the
-    //                   Lead analyst only reads Complete once the permit is Out for
-    //                   signature — derived from permit status, not stored here).
+    //                   Responsible analyst only reads Complete once the permit is Out
+    //                   for signature — derived from permit status, not stored here).
     // `when` is the date that state was reached (added / started / completed).
-    // `highlight` marks the Lead analyst (the current reviewer, you). `id` keys each
+    // `highlight` marks the Responsible analyst (the current reviewer, you). `id` keys each
     // row to the shared user directory (src/data/user.ts) so the "add reviewer"
     // control can offer only users not already on the team.
     analysisTeam: [
-      { id: 'okafor', role: 'Lead analyst', name: 'J. Okafor', detail: 'Natural Resources Division', reviewStatus: 'pending', when: 'Jun 28, 2026', highlight: true },
+      { id: 'okafor', role: 'Responsible analyst', name: 'J. Okafor', detail: 'Natural Resources Division', reviewStatus: 'pending', when: 'Jun 28, 2026', highlight: true },
       { id: 'santos', role: 'District reviewer', name: 'M. Santos', detail: 'North Coast Redwoods District', reviewStatus: 'not-started', when: 'Jun 28, 2026' },
       { id: 'cheng', role: 'Scientific advisor', name: 'Dr. L. Cheng', detail: 'Marine ecology', reviewStatus: 'pending', when: 'Jul 6, 2026' },
       { id: 'delgado', role: 'Permit coordinator', name: 'R. Delgado', detail: 'Statewide Permitting Office', reviewStatus: 'complete', when: 'Jul 5, 2026' },
@@ -225,14 +254,17 @@ export const permit = {
     details: [
       { key: 'Project category', value: 'Marine Aquatic Resources (e.g. tidepools, coastal wetlands)' },
       { key: 'Project dates', entries: [
-        { label: 'Start', value: 'Jul 22, 2026' },
-        { label: 'End', value: 'Jul 22, 2027' },
+        { label: 'Start', value: '07/22/2026' },
+        { label: 'End', value: '07/22/2027' },
       ] },
       { key: 'Permit requested dates', entries: [
-        { label: 'Start', value: 'Jul 22, 2026' },
-        { label: 'End', value: 'Jul 22, 2027' },
+        { label: 'Start', value: '07/22/2026' },
+        { label: 'End', value: '07/22/2027' },
       ] },
-      { key: 'Annual report tentative completion', value: 'Aug 31, 2027' },
+      { key: 'Annual report', entries: [
+        { label: 'Tentative completion', value: '08/31/2027' },
+        { label: 'Required by', value: '09/30/2027' },
+      ] },
     ] as MetaRow[],
     purpose:
       'Coralline red algae are calcifying macroalgae found in every ocean basin and ' +
@@ -248,20 +280,19 @@ export const permit = {
       'The study raises awareness of an overlooked but ecologically important group of ' +
       'seaweeds, supporting shared stewardship of healthy coastal ecosystems within the ' +
       'State Park System.',
-    fieldOccurrences: [
-      'Jul 30, 2026',
-      'Aug 13 – 15, 2026',
-      'Sep 29, 2026',
-      'Oct 27, 2026',
-      'Nov 25, 2026',
-      'Dec 9, 2026',
-      'Jan 22, 2027',
-      'Feb 19, 2027',
-      'Mar 19, 2027',
-      'Apr 10, 2027',
-      'May 8, 2027',
-      'Jun 7, 2027',
-    ],
+    // Structured ISO sessions (calendar source) + the display list derived from them.
+    fieldSessions,
+    fieldOccurrences: fieldSessions.map(sessionLabel),
+    // Annual-report milestones — two distinct dates: the author's TARGET completion
+    // and the hard SUBMISSION deadline that follows it (also the special condition).
+    // ISO + display pairs drive the schedule calendar's report markers.
+    annualReport: {
+      tentativeISO: '2027-08-31', tentativeLabel: 'Aug 31, 2027',
+      requiredISO: '2027-09-30', requiredLabel: 'Sep 30, 2027',
+    },
+    // Fixed "today" for the schedule calendar's current-date marker — anchored (not
+    // new Date()) so the mock stays deterministic and the marker lands in-window.
+    demoTodayISO: '2026-08-04',
   },
 
   // ── Study areas tab ──────────────────────────────────────────────────────
@@ -319,7 +350,7 @@ export const permit = {
     'Collection is limited to the approved study areas and the taxa and quantities listed under Data Collection.',
     'No collection within posted marine reserve or special-closure boundaries.',
     'All collected specimens are State property and must be curated at the approved facility.',
-    'An annual report is due by Aug 31, 2027.',
+    'An annual report is due by Sep 30, 2027.',
   ],
 
   // ── Data collection tab ──────────────────────────────────────────────────

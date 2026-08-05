@@ -34,7 +34,18 @@ const buildingIcon =
   <div class="contact__meta t-body-01">
     {contact.phone && <span>{contact.phone}</span>}
     {contact.address && <span>{contact.address}</span>}
-    {contact.email && <cds-link href={`mailto:${contact.email}`}>{contact.email}</cds-link>}
+    {contact.email && (
+      <span class="contact__email">
+        <cds-link href={`mailto:${contact.email}`}>{contact.email}</cds-link>
+        <cds-icon-button class="contact__copy" kind="ghost" size="sm" align="bottom" data-copy-email={contact.email}>
+          <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/>
+            <path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/>
+          </svg>
+          <span slot="tooltip-content">Copy email</span>
+        </cds-icon-button>
+      </span>
+    )}
   </div>
   {cvHref && (
     <div class="contact__actions">
@@ -67,6 +78,12 @@ const buildingIcon =
     gap: 0.25rem;
     color: var(--cds-text-secondary, #525252);
   }
+  /* Email + its copy control on one line; the icon button sits flush to the address. */
+  .contact__email {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+  }
   /* "View CV" action — a ghost button pulled to the tile's start edge so it aligns
      with the content above rather than sitting inset. */
   .contact__actions {
@@ -74,3 +91,10 @@ const buildingIcon =
     margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem));
   }
 </style>
+
+<script>
+  // Copy a contact's email to the clipboard — the shared delegated handler, so the
+  // same `data-copy-email` affordance works identically wherever it renders.
+  import { installEmailCopy } from '../lib/email-copy';
+  installEmailCopy();
+</script>

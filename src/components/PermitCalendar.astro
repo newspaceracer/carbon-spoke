@@ -1,0 +1,241 @@
+---
+// carbon-checked: Carbon ships no calendar / month- or year-view component. Per the
+// house precedent for heavy/edge-case UI (AG Grid, @carbon/charts), the schedule
+// calendar uses a sanctioned engine — FullCalendar — which owns the grid, date math,
+// a true year-at-a-glance (multiMonth) view AND a month view, and event clicks. It is
+// Carbon-themed via --fc-* → --cds-* tokens; navigation/view-toggle use stock cds-button.
+//
+// Read-only schedule: the permit period (background shading), field-investigation
+// sessions, the two annual-report milestones, and today. Events come from structured
+// ISO data (src/data/permit.ts) — never parsed display strings.
+
+interface FieldSession { start: string; end?: string }
+interface Props {
+  windowStartISO: string;
+  windowEndISO: string;
+  windowStartLabel: string;
+  windowEndLabel: string;
+  fieldSessions: readonly FieldSession[];
+  tentativeISO: string;
+  tentativeLabel: string;
+  requiredISO: string;
+  requiredLabel: string;
+  todayISO: string;
+}
+
+const {
+  windowStartISO, windowEndISO, windowStartLabel, windowEndLabel,
+  fieldSessions, tentativeISO, tentativeLabel, requiredISO, requiredLabel, todayISO,
+} = Astro.props;
+
+// Categorical colors — validated dataviz palette; each carries a text color for legible
+// chips in month view. Legend + event colors are built from this one list.
+// `color` = the solid legend swatch; `bg` = the day-cell fill (translucent so the date
+// number stays readable). Milestones render as filled day cells — legible in the tiny
+// year-view cells and never collapsed into "+N more" the way event chips are.
+const cats = [
+  { id: 'field', name: 'Field investigation', color: '#2a78d6', bg: 'rgba(42, 120, 214, 0.68)' },
+  { id: 'permit', name: 'Permit period', color: '#4a3aa7', bg: 'rgba(74, 58, 167, 0.14)' },
+  { id: 'tentative', name: 'Report — tentative completion', color: '#eda100', bg: 'rgba(237, 161, 0, 0.72)' },
+  { id: 'required', name: 'Report — required by', color: '#e34948', bg: 'rgba(227, 73, 72, 0.68)' },
+  { id: 'today', name: 'Today', color: '#161616', bg: 'rgba(22, 22, 22, 0.62)' },
+];
+const col = Object.fromEntries(cats.map((c) => [c.id, c]));
+
+// Human date labels (event `body`, shown in the click toast). FullCalendar all-day ends
+// are EXCLUSIVE, so a range/day end is the day AFTER the last covered day.
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dayLabel = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return `${MONTH_ABBR[m - 1]} ${d}, ${y}`; };
+const rangeLabel = (a: string, b?: string) => (!b || b === a ? dayLabel(a) : `${dayLabel(a)} – ${dayLabel(b)}`);
+const addDay = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10); };
+
+// All events are background fills. `title`/`cat` ride in extendedProps so a delegated
+// day-cell click (below) can surface them — background events don't fire eventClick.
+const bgEvent = (id: string, cat: string, title: string, startISO: string, endISO: string | undefined, body: string) => ({
+  id, start: startISO, end: endISO, allDay: true, display: 'background',
+  backgroundColor: col[cat].bg, extendedProps: { title, body, cat, clickable: cat !== 'permit' },
+});
+
+const events = [
+  // Permit window: light shading across the whole period (context; not a click target).
+  bgEvent('permit', 'permit', 'Permit period', windowStartISO, addDay(windowEndISO), `${windowStartLabel} – ${windowEndLabel}`),
+  ...fieldSessions.map((s, i) =>
+    bgEvent(`field-${i}`, 'field', 'Field investigation', s.start, s.end ? addDay(s.end) : undefined, rangeLabel(s.start, s.end))),
+  bgEvent('tentative', 'tentative', 'Annual report — tentative completion', tentativeISO, undefined, tentativeLabel),
+  bgEvent('required', 'required', 'Annual report — required by', requiredISO, undefined, requiredLabel),
+  bgEvent('today', 'today', 'Today', todayISO, undefined, dayLabel(todayISO)),
+];
+
+// A date → milestone index (permit excluded) so a day-cell click can report what's on
+// that day. Ranges are expanded to each covered ISO day. Built here, used client-side.
+const dayIndex: Record<string, { title: string; body: string }> = {};
+const eachDay = (startISO: string, endExclusiveISO?: string) => {
+  const out: string[] = [];
+  let [y, m, d] = startISO.split('-').map(Number);
+  const cur = new Date(Date.UTC(y, m - 1, d));
+  const stop = endExclusiveISO ?? addDay(startISO);
+  while (cur.toISOString().slice(0, 10) < stop) { out.push(cur.toISOString().slice(0, 10)); cur.setUTCDate(cur.getUTCDate() + 1); }
+  return out;
+};
+for (const s of fieldSessions) for (const iso of eachDay(s.start, s.end ? addDay(s.end) : undefined)) dayIndex[iso] = { title: 'Field investigation', body: rangeLabel(s.start, s.end) };
+dayIndex[tentativeISO] = { title: 'Annual report — tentative completion', body: tentativeLabel };
+dayIndex[requiredISO] = { title: 'Annual report — required by', body: requiredLabel };
+dayIndex[todayISO] = { title: 'Today', body: dayLabel(todayISO) };
+
+// Year view starts at the permit's first month so the full span is visible at once.
+const config = { initialISO: `${windowStartISO.slice(0, 7)}-01`, events, dayIndex };
+---
+
+<div class="permit-cal">
+  <div class="cal__bar">
+    <div class="cal__nav">
+      <cds-button data-cal="today" kind="tertiary" size="sm">Jump to today</cds-button>
+      <cds-button data-cal="prev" kind="ghost" size="sm">‹ Prev</cds-button>
+      <cds-button data-cal="next" kind="ghost" size="sm">Next ›</cds-button>
+    </div>
+    <span class="cal__title t-heading-03" data-cal-title>—</span>
+    <div class="cal__views">
+      <cds-button data-view="yearView" kind="primary" size="sm">Year</cds-button>
+      <cds-button data-view="dayGridMonth" kind="ghost" size="sm">Month</cds-button>
+    </div>
+  </div>
+
+  <div class="cal__legend">
+    {cats.map((c) => (
+      <span class="lg"><i class="sw" style={`background:${c.color}`} aria-hidden="true"></i>{c.name}</span>
+    ))}
+  </div>
+  <p class="cal__hint t-helper-text-01">Select an event for its dates. Toggle Year / Month; Prev / Next to move.</p>
+
+  <div class="cal__mount" data-cal-mount data-config={JSON.stringify(config)} aria-label="Permit schedule calendar"></div>
+</div>
+
+<script>
+  import { Calendar } from '@fullcalendar/core';
+  import dayGridPlugin from '@fullcalendar/daygrid';
+  import multiMonthPlugin from '@fullcalendar/multimonth';
+  import { showToast } from '../lib/toast';
+
+  document.querySelectorAll<HTMLElement>('.permit-cal').forEach((root) => {
+    const mount = root.querySelector<HTMLElement>('[data-cal-mount]')!;
+    const cfg = JSON.parse(mount.dataset.config!);
+    const titleEl = root.querySelector('[data-cal-title]')!;
+    const viewBtns = Array.from(root.querySelectorAll<HTMLElement>('[data-view]'));
+    let cal: any = null;
+
+    const setTitle = () => { titleEl.textContent = cal.view.title; };
+    const setActiveView = (view: string) => {
+      for (const b of viewBtns) b.setAttribute('kind', b.dataset.view === view ? 'primary' : 'ghost');
+    };
+
+    // Flag the milestone day cells (pointer + hover title) after each (re)render.
+    const markCells = () => {
+      mount.querySelectorAll('.fc-daygrid-day.has-milestone').forEach((el) => el.classList.remove('has-milestone'));
+      for (const iso in cfg.dayIndex) {
+        const cell = mount.querySelector(`.fc-daygrid-day[data-date="${iso}"]`);
+        if (cell) { cell.classList.add('has-milestone'); cell.setAttribute('title', `${cfg.dayIndex[iso].title} — ${cfg.dayIndex[iso].body}`); }
+      }
+    };
+
+    const init = () => {
+      cal = new Calendar(mount, {
+        plugins: [dayGridPlugin, multiMonthPlugin],
+        initialView: 'yearView',
+        initialDate: cfg.initialISO,
+        headerToolbar: false,
+        height: 'auto',
+        firstDay: 0,
+        multiMonthMinWidth: 220,
+        views: {
+          // Custom-named (NOT 'multiMonth' — that key collides with the built-in view
+          // type and silently drops the extra options). 15-month year-at-a-glance.
+          yearView: { type: 'multiMonth', duration: { months: 15 }, dateIncrement: { months: 12 } },
+        },
+        events: cfg.events,
+        datesSet: () => markCells(),
+      });
+      cal.render();
+      setTitle();
+
+      // Milestones are background fills (no eventClick), so surface detail via a
+      // delegated day-cell click mapped through the date index.
+      mount.addEventListener('click', (e) => {
+        const cell = (e.target as HTMLElement).closest<HTMLElement>('.fc-daygrid-day[data-date]');
+        const hit = cell && cfg.dayIndex[cell.dataset.date!];
+        if (hit) showToast(hit.title, hit.body, 'info');
+      });
+
+      root.querySelector('[data-cal="prev"]')!.addEventListener('click', () => { cal.prev(); setTitle(); });
+      root.querySelector('[data-cal="next"]')!.addEventListener('click', () => { cal.next(); setTitle(); });
+      root.querySelector('[data-cal="today"]')!.addEventListener('click', () => { cal.gotoDate(cfg.initialISO); setTitle(); });
+      for (const b of viewBtns) b.addEventListener('click', () => {
+        cal.changeView(b.dataset.view!); setActiveView(b.dataset.view!); setTitle();
+      });
+    };
+
+    // The calendar lives inside a hidden tab panel (display:none → zero size). Build it
+    // only once it first has a real width (tab shown); re-fit on later resizes.
+    let lastW = 0;
+    new ResizeObserver(() => {
+      const w = mount.clientWidth;
+      if (w === 0) return;
+      if (!cal) { init(); lastW = w; }
+      else if (w !== lastW) { lastW = w; cal.updateSize(); }
+    }).observe(mount);
+    if (mount.clientWidth > 0 && !cal) init();
+  });
+</script>
+
+<style>
+  .permit-cal { margin: 0; }
+
+  .cal__bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  .cal__nav, .cal__views { display: flex; align-items: center; gap: 0.25rem; }
+  .cal__title { margin: 0; color: var(--cds-text-primary); flex: 1 1 auto; text-align: center; min-width: 12rem; }
+
+  .cal__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin-bottom: 0.5rem;
+    color: var(--cds-text-secondary);
+    font: var(--cds-label-01);
+  }
+  .lg { display: inline-flex; align-items: center; gap: 0.5rem; }
+  .sw { width: 0.75rem; height: 0.75rem; border-radius: 2px; flex: 0 0 auto; }
+  .cal__hint { color: var(--cds-text-helper); margin: 0 0 1rem; }
+
+  /* Carbon-theme FullCalendar through its --fc-* variables + a few element hooks.
+     carbon-checked: token-mapped theming for the sanctioned FullCalendar dependency,
+     the same pattern carbon-ag-grid.ts uses for AG Grid. */
+  .permit-cal :global(.fc) {
+    --fc-border-color: var(--cds-border-subtle);
+    --fc-page-bg-color: transparent;
+    --fc-neutral-bg-color: var(--cds-layer);
+    --fc-today-bg-color: color-mix(in srgb, var(--cds-focus, #0f62fe) 10%, transparent);
+    --fc-event-border-color: transparent;
+    font-family: inherit;
+    color: var(--cds-text-primary);
+  }
+  .permit-cal :global(.fc .fc-multimonth-title) {
+    font: var(--cds-heading-compact-01);
+    color: var(--cds-text-primary);
+    background: transparent;
+    padding: 0.5rem 0;
+  }
+  .permit-cal :global(.fc .fc-col-header-cell-cushion),
+  .permit-cal :global(.fc .fc-daygrid-day-number) {
+    color: var(--cds-text-secondary);
+    text-decoration: none;
+  }
+  .permit-cal :global(.fc .fc-daygrid-day.has-milestone) { cursor: pointer; }
+  .permit-cal :global(.fc .fc-multimonth) { border: 0; }
+  .permit-cal :global(.fc .fc-multimonth-daygrid) { background: transparent; }
+</style>
