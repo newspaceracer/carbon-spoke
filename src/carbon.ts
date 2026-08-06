@@ -25,6 +25,7 @@ import '@carbon/web-components/es/components/file-uploader/index.js';
 import '@carbon/web-components/es/components/form-group/index.js';
 import '@carbon/web-components/es/components/icon-button/index.js';
 import '@carbon/web-components/es/components/icon-indicator/index.js';
+import '@carbon/web-components/es/components/inline-loading/index.js';
 import '@carbon/web-components/es/components/layer/index.js';
 import '@carbon/web-components/es/components/link/index.js';
 import '@carbon/web-components/es/components/menu/index.js';

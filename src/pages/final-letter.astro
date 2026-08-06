@@ -971,7 +971,7 @@ const letterData = {
       el.textContent = String(n);
       el.hidden = n === 0;
     };
-    // Visible auto-save hook — assigned later once the indicator span exists; every
+    // Auto-save hook — assigned later (lead only) once the indicator exists; every
     // persist below flashes it. No-op until then (and for read-only assistants).
     let flashSaved: () => void = () => {};
     const persistParks = () => { localStorage.setItem(parksKey, JSON.stringify(state.parks)); flashSaved(); };
@@ -2493,23 +2493,30 @@ const letterData = {
     // keeps the tab's count badge in step, so there's nothing to wire here.
 
     // ── Auto-save indicator (lead only — the assistant's record is read-only) ─────
-    // The record already persists every edit silently; surface it in the record's
-    // Expand/Collapse-all toolbar so the reviewer sees changes stick.
+    // The record persists every edit silently; surface it with Carbon's stock
+    // cds-inline-loading in the record's Expand/Collapse-all toolbar — a spinner +
+    // "Saving…" while a burst of edits settles, resolving to a checkmark + "Saved".
+    // (Carbon owns the icon/spinner/aria-live; no hand-rolled dot like before.)
     if (canEditForm) {
       const tools = document.querySelector('.app-review__tools');
       if (tools) {
-        const saveState = document.createElement('span');
-        saveState.className = 'appreview-savestate t-label-01';
-        saveState.setAttribute('role', 'status');
-        saveState.setAttribute('aria-live', 'polite');
-        saveState.textContent = 'All changes saved';
+        const saveState = document.createElement('cds-inline-loading');
+        saveState.className = 'appreview-savestate';
+        saveState.setAttribute('status', 'finished');
+        saveState.textContent = 'Saved';
         tools.prepend(saveState);
         let saveTimer: number | undefined;
         flashSaved = () => {
-          saveState.dataset.state = 'saving';
+          saveState.setAttribute('status', 'active');
           saveState.textContent = 'Saving…';
           clearTimeout(saveTimer);
-          saveTimer = window.setTimeout(() => { saveState.dataset.state = ''; saveState.textContent = 'All changes saved'; }, 500);
+          saveTimer = window.setTimeout(() => {
+            saveState.setAttribute('status', 'finished');
+            saveState.textContent = 'Saved';
+            // Toast once the burst settles, matching the app's save pattern — the
+            // debounce keeps a run of edits to a single toast, not one per keystroke.
+            showToast('Changes saved');
+          }, 800);
         };
       }
     }
@@ -2630,11 +2637,10 @@ const letterData = {
     .rail__sub { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
     .rail__tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); margin: 0 0 var(--cds-spacing-05, 1rem); }
 
-    /* Visible auto-save confirmation — sits at the left of the record's
-       Expand/Collapse-all toolbar; a quiet dot (green idle, grey while saving). */
-    .appreview-savestate { margin-inline-end: auto; align-self: center; display: inline-flex; align-items: center; gap: 0.375rem; color: var(--cds-text-secondary, #525252); }
-    .appreview-savestate::before { content: ''; inline-size: 0.5rem; block-size: 0.5rem; border-radius: 50%; background: var(--cds-support-success, #24a148); }
-    .appreview-savestate[data-state="saving"]::before { background: var(--cds-text-placeholder, #a8a8a8); }
+    /* Auto-save indicator placement only — push it to the left of the record's
+       Expand/Collapse-all toolbar (which right-aligns its buttons). Carbon styles
+       the cds-inline-loading itself; this sets layout, not the component's parts. */
+    .appreview-savestate { margin-inline-end: auto; align-self: center; }
 
     /* The analysis-team roster (team tab) is the shared AnalysisTeam component,
        which carries its own styles. */

@@ -143,10 +143,12 @@ rules for that permit-role (governed by single- vs multi-district span in
   row is visually distinguished from the others.
 
 **State & status transitions**
-- Each member's status shows an icon indicator plus a dated line: **"Completed
-  {date}"** when their review is complete, **"Last opened {date}"** while their review
-  is in progress, and **"Added {date}"** when they have not started.
-- A newly added member shows **"Added {today's date}"**.
+- Each member's status shows an icon indicator that **names the status** —
+  **"Complete"**, **"In progress"**, or **"Not started"** — followed **inline** (on
+  the same line, after a "·" separator) by the dated context: **"Completed {date}"**
+  when complete, **"Last opened {date}"** while in progress, and **"Added {date}"**
+  when not started.
+- A newly added member shows **"Not started · Added {today's date}"**.
 
 **UI & field details**
 - The word "Lead" / "Lead analyst" does not appear on the roster, the member's role,

@@ -23,16 +23,17 @@ const { permitId, team, directory } = Astro.props;
 
 // Review status → icon-indicator kind + the dated line. One `when` per member is
 // relabelled by status (a prototype has no live per-event log): completed date,
-// last-opened date (in progress), or added date (not yet started).
-const STATUS: Record<string, { kind: string; verb: string }> = {
-  'complete': { kind: 'succeeded', verb: 'Completed' },
-  'pending': { kind: 'in-progress', verb: 'Last opened' },
-  'not-started': { kind: 'not-started', verb: 'Added' },
+// last-opened date (in progress), or added date (not yet started). `name` is the
+// status itself (shown next to the icon); `verb` frames the dated second line.
+const STATUS: Record<string, { kind: string; name: string; verb: string }> = {
+  'complete': { kind: 'succeeded', name: 'Complete', verb: 'Completed' },
+  'pending': { kind: 'in-progress', name: 'In progress', verb: 'Last opened' },
+  'not-started': { kind: 'not-started', name: 'Not started', verb: 'Added' },
 };
 const statusOf = (m: TeamMember) => STATUS[m.reviewStatus] ?? STATUS['not-started'];
-const statusLine = (m: TeamMember) => {
+const whenLine = (m: TeamMember) => {
   const s = statusOf(m);
-  return m.when ? `${s.verb} ${m.when}` : s.verb;
+  return m.when ? `${s.verb} ${m.when}` : '';
 };
 const initials = (name: string) =>
   name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
@@ -100,15 +101,16 @@ const trashIcon =
                         <cds-icon-button class="member__copy" kind="ghost" size="sm" align="bottom" data-copy-email={email} set:html={`${copyIcon}<span slot="tooltip-content">Copy email</span>`}></cds-icon-button>
                       </span>
                     )}
-                    <p class="member__status t-label-01">
-                      <cds-icon-indicator size="16" kind={st.kind} label={statusLine(m)}></cds-icon-indicator>
-                    </p>
                   </div>
                   {!m.highlight && (
                     <div class="member__end">
                       <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member set:html={`${trashIcon}<span slot="tooltip-content">Remove ${m.name}</span>`}></cds-icon-button>
                     </div>
                   )}
+                  <div class="member__status">
+                    <cds-icon-indicator size="16" kind={st.kind} label={st.name}></cds-icon-indicator>
+                    {m.when && <span class="member__when t-label-01">{whenLine(m)}</span>}
+                  </div>
                 </div>
               </cds-contained-list-item>
             );
@@ -142,15 +144,16 @@ const trashIcon =
               <span slot="tooltip-content">Copy email</span>
             </cds-icon-button>
           </span>
-          <p class="member__status t-label-01">
-            <cds-icon-indicator size="16" kind="not-started" label="Not started"></cds-icon-indicator>
-          </p>
         </div>
         <div class="member__end">
           <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member>
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
             <span slot="tooltip-content"></span>
           </cds-icon-button>
+        </div>
+        <div class="member__status">
+          <cds-icon-indicator size="16" kind="not-started" label="Not started"></cds-icon-indicator>
+          <span class="member__when t-label-01"></span>
         </div>
       </div>
     </cds-contained-list-item>
@@ -202,14 +205,24 @@ const trashIcon =
     flex-direction: column;
     gap: 1rem;
   }
-  /* One member row: initials chip · body (name / role / email / status) · remove. */
+  /* One member row: initials chip · body (name / role / email) · remove, with the
+     status line on a second row spanning under the name across the body + action
+     columns (so the dated line has room to sit inline and never squeezes). */
   .member {
     display: grid;
     grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "avatar body   action"
+      ".      status status";
     align-items: start;
-    gap: 0.75rem;
+    column-gap: 0.75rem;
+    row-gap: 0.25rem;
     width: 100%;
   }
+  .member__avatar { grid-area: avatar; }
+  .member__body { grid-area: body; }
+  .member__end { grid-area: action; }
+  .member__status { grid-area: status; }
   .member--responsible {
     /* The Responsible analyst — a quiet layered surface, not colour-as-status. */
     margin: calc(-1 * var(--cds-spacing-05, 1rem));
@@ -247,13 +260,26 @@ const trashIcon =
     max-width: 100%;
   }
   .member__email[hidden] { display: none; }
+  /* Status name (icon-indicator) followed inline by a quiet dated context, kept
+     on one line so the separator never starts a wrapped line. */
   .member__status {
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 0.375rem;
-    margin: 0.125rem 0 0;
-    color: var(--cds-text-secondary, #525252);
+    min-width: 0;
   }
+  .member__when {
+    color: var(--cds-text-secondary, #525252);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  /* The status name never squeezes; only the dated tail ellipsizes if truly tight. */
+  .member__status cds-icon-indicator { flex: 0 0 auto; }
+  .member__when::before { content: '·'; margin-inline-end: 0.375rem; }
+  .member__when:empty { display: none; }
   .member__end { flex: 0 0 auto; }
 </style>
 
@@ -376,9 +402,10 @@ const trashIcon =
       set('.member__avatar', initials(u.name));
       set('.member__name', u.name);
       set('.member__role', u.detail ? `${u.role} · ${u.detail}` : u.role);
-      // Added members are Not started, added today (the icon-indicator's label IS
-      // the visible status line — don't add a second copy).
-      li.querySelector('.member__status cds-icon-indicator')?.setAttribute('label', `Added ${todayLabel()}`);
+      // Added members are Not started, added today: the icon-indicator names the
+      // status, the second line dates it.
+      li.querySelector('.member__status cds-icon-indicator')?.setAttribute('label', 'Not started');
+      set('.member__when', `Added ${todayLabel()}`);
       const emailWrap = li.querySelector('.member__email') as HTMLElement | null;
       if (u.email && emailWrap) {
         emailWrap.hidden = false;

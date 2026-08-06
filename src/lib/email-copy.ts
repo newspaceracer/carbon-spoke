@@ -1,17 +1,21 @@
 // One delegated "copy this email" handler, shared by every surface that renders a
 // copy-email affordance (ContactCard, AnalysisTeam, …). Any element carrying a
 // `data-copy-email="<address>"` attribute becomes a copy button — click it and the
-// address goes to the clipboard with a confirming toast. The listener installs
-// ONCE per page (module singletons are shared across Astro's bundled component
-// scripts), so multiple components can call installEmailCopy() without stacking
-// duplicate listeners (which would fire the toast more than once).
+// address goes to the clipboard with a confirming toast.
+//
+// The listener installs ONCE per page, so several components can each call
+// installEmailCopy() without stacking duplicates (which would fire the toast
+// twice per click). The guard is a DOCUMENT flag, not a module-level boolean:
+// Astro can bundle the same module into more than one page script, and each copy
+// would carry its own `installed = false`.
 import { showToast } from './toast';
 
-let installed = false;
+const FLAG = 'emailCopyInstalled';
 
 export function installEmailCopy(): void {
-  if (installed) return;
-  installed = true;
+  const root = document.documentElement as HTMLElement;
+  if (root.dataset[FLAG]) return;
+  root.dataset[FLAG] = 'true';
   document.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest?.('[data-copy-email]');
     if (!btn) return;

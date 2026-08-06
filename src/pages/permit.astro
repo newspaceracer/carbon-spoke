@@ -38,6 +38,7 @@ import { permit } from '../data/permit';
 import { userDirectory, findUser } from '../data/user';
 import { district as districtRecord } from '../data/district';
 import { parkKey } from '../data/parks';
+import { contactCellHtml, dedupeContacts } from '../lib/contact-cell';
 
 export const prototype = {
   title: 'Permit detail',
@@ -167,25 +168,52 @@ const seedContacts = (
   return out;
 };
 
-// Per district: the resolved pool + the seed contact entries, plus a park→contacts
-// map for the initial server render. The client hydrates these from localStorage.
+// Per district: the resolved pool + the seed contact entries, split for the
+// Authorized-parks TABLE — one row per park unit, carrying its district, the
+// district-wide contact(s) (scope null), and only that park's OWN park-scoped
+// contact (assigned during the finalize wizard). The district cells print once
+// per district group; continuation rows repeat the name to screen readers only.
+// The client re-hydrates the same rows from localStorage.
+const dedupePeople = (arr: (ContactPerson | null)[]) => dedupeContacts(arr) as ContactPerson[];
 const studyAreaDistricts = permit.studyAreas.districts.map((d) => {
   const { pool, defaultPrimaryId } = buildDistrictContacts(d);
   const seed = seedContacts(pool, defaultPrimaryId, d.parks);
   const personOf = (id: string) => pool.find((c) => c.id === id) ?? null;
-  const contactsForPark = (park: string) =>
-    seed
-      .filter((e) => e.scope === null || e.scope.some((sp) => parkKey(sp) === parkKey(park)))
-      .map((e) => personOf(e.person))
-      .filter((p): p is ContactPerson => Boolean(p));
+  // District-wide contacts cover every park in the district (scope null).
+  const districtContacts = dedupePeople(
+    seed.filter((e) => e.scope === null).map((e) => personOf(e.person)),
+  );
+  // A park's own contact is any scoped entry naming that park (a unique park
+  // contact — e.g. one added during the final-letter phase).
+  const parkContactsFor = (park: string) =>
+    dedupePeople(
+      seed
+        .filter((e) => e.scope !== null && e.scope.some((sp) => parkKey(sp) === parkKey(park)))
+        .map((e) => personOf(e.person)),
+    );
   return {
     name: d.name,
-    parks: d.parks.map((park) => ({ name: park, contacts: contactsForPark(park) })),
+    districtContacts,
+    parks: d.parks.map((park) => ({ name: park, contacts: parkContactsFor(park) })),
     pool,
     defaultPrimaryId,
     seed,
   };
 });
+// Table groups: one row per park unit, with the district name and its contact(s)
+// in cells that ROWSPAN the whole district — so the district contact visibly
+// covers every park in its group rather than looking attached to the first row.
+const NO_DISTRICT_CONTACT =
+  '<span class="contact-cell__none t-body-01">No contact assigned</span>';
+const studyAreaGroups = studyAreaDistricts.map((d) => ({
+  district: d.name,
+  span: Math.max(d.parks.length, 1),
+  districtCell: contactCellHtml(d.districtContacts, NO_DISTRICT_CONTACT),
+  // No park-specific contact → the cell stays blank; the district contact spanning
+  // the group already covers that park.
+  parks: d.parks.map((p) => ({ name: p.name, parkCell: contactCellHtml(p.contacts) })),
+}));
+
 // Client hydration payload: per district, its resolved pool + seed entries so the
 // script can re-resolve recorded contacts (person ids) to names/emails per park.
 const studyAreaContactModel = studyAreaDistricts.map((d) => ({
@@ -271,12 +299,6 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           View amendment
         </cds-actionable-notification-button>
       </cds-actionable-notification>
-
-      <!-- Quiet confirmation the start was captured — filled + revealed by the
-           script once review has begun (who + when). Hidden until then. The
-           application is always accessible; starting is prompted inline on the
-           Overview tab, not by sealing the body. -->
-      <p id="review-started-note" class="review-started-note t-label-01" hidden></p>
 
       <!-- carbon-checked: .tabbar is NOT a tab component — the tabs are the stock
            cds-tabs/cds-tab below. It is only a full-bleed STICKY background layer
@@ -463,35 +485,51 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           <div class="panel cds--css-grid" data-panel="study-areas" role="tabpanel" aria-labelledby="tab-study-areas" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
               <PermitSection title="Authorized parks">
-                <p class="section-hint t-body-01">Parks where research and collection are authorized, each with the district contact assigned during review. A contact may cover a whole district or specific parks.</p>
+                <p class="section-hint t-body-01">Parks where research and collection are authorized, grouped by district. The district contact covers every park in that district; a park unit may also have its own contact assigned during review.</p>
                 <script type="application/json" id="study-area-contacts" set:html={JSON.stringify(studyAreaContactModel)}></script>
-                <cds-structured-list id="study-area-list">
-                  <cds-structured-list-head>
-                    <cds-structured-list-header-row>
-                      <cds-structured-list-header-cell>Park unit</cds-structured-list-header-cell>
-                      <cds-structured-list-header-cell>District</cds-structured-list-header-cell>
-                      <cds-structured-list-header-cell>District contact</cds-structured-list-header-cell>
-                    </cds-structured-list-header-row>
-                  </cds-structured-list-head>
-                  <cds-structured-list-body>
-                    {studyAreaDistricts.map((d) => d.parks.map((p) => (
-                      <cds-structured-list-row data-district={d.name} data-park={p.name}>
-                        <cds-structured-list-cell>{p.name}</cds-structured-list-cell>
-                        <cds-structured-list-cell>{d.name}</cds-structured-list-cell>
-                        <cds-structured-list-cell class="contact-cell">
-                          {p.contacts.length === 0 ? (
-                            <span class="contact-cell__none t-body-01">No contact assigned</span>
-                          ) : p.contacts.map((c) => (
-                            <span class="contact-cell__person">
-                              <span class="contact-cell__name">{c.name}</span>
-                              {c.email && <cds-link href={`mailto:${c.email}`}>{c.email}</cds-link>}
-                            </span>
-                          ))}
-                        </cds-structured-list-cell>
-                      </cds-structured-list-row>
-                    )))}
-                  </cds-structured-list-body>
-                </cds-structured-list>
+                <!-- carbon-checked: this table needs MERGED CELLS — one district
+                     contact spanning all of that district's park rows. Both
+                     cds-table and cds-structured-list fake table layout with
+                     `display: table-*` on custom elements, and rowspan is an HTML
+                     attribute that only exists on real <th>/<td> — so neither can
+                     express it (CSS has no rowspan equivalent). This is a REAL
+                     <table> wearing Carbon's own shipped .cds--data-table classes
+                     (the class-based flavor in @carbon/styles, which targets
+                     thead/tbody/tr/th/td), so the look is stock Carbon and the
+                     rowspan is native. No bespoke table CSS. -->
+                <div class="cds--data-table-content sa-table">
+                  <table class="cds--data-table cds--data-table--md" id="study-area-list">
+                    <thead>
+                      <tr>
+                        <th scope="col">District</th>
+                        <th scope="col">District contact</th>
+                        <th scope="col">Park unit</th>
+                        <th scope="col">Park contact</th>
+                      </tr>
+                    </thead>
+                    {/* Each district is its OWN <tbody> — a real row group. That
+                        makes scope="rowgroup" on the district cell accurate (it
+                        heads exactly this district's rows, not the whole table)
+                        and keeps the hover rule's sibling scope from leaking into
+                        the next district. */}
+                    {studyAreaGroups.map((g) => (
+                      <tbody class="sa-group" data-district={g.district}>
+                        {g.parks.map((p, i) => (
+                          <tr class="sa-row" data-district={g.district} data-park={p.name}>
+                            {i === 0 && (
+                              <Fragment>
+                                <th scope="rowgroup" rowspan={g.span} class="sa-cell--district">{g.district}</th>
+                                <td rowspan={g.span} class="contact-cell" set:html={g.districtCell} />
+                              </Fragment>
+                            )}
+                            <td>{p.name}</td>
+                            <td class="contact-cell" set:html={p.parkCell} />
+                          </tr>
+                        ))}
+                      </tbody>
+                    ))}
+                  </table>
+                </div>
               </PermitSection>
 
             </div>
@@ -636,6 +674,14 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
               </PermitSection>
 
               <PermitSection title="Uploaded files">
+                <cds-button slot="aside" id="download-all-docs" kind="tertiary" size="md">
+                  Download all
+                  <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                    <path d="M13 7 12.3 6.3 8.5 10.1 8.5 1 7.5 1 7.5 10.1 3.7 6.3 3 7 8 12z"/>
+                    <path d="M13,12v2H3v-2H2v2l0,0c0,0.6,0.4,1,1,1h10c0.6,0,1-0.4,1-1l0,0v-2H13z"/>
+                  </svg>
+                </cds-button>
+                <script type="application/json" id="all-docs-data" set:html={JSON.stringify(permit.additionalDocs.files.map((f) => ({ href: f.href, name: f.name })))}></script>
                 <cds-table>
                   <cds-table-head>
                     <cds-table-header-row>
@@ -702,22 +748,8 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
 <script>
   // Gate vs. body visibility is driven by the .review-started class the inline
-  // head script sets pre-paint from the flag; this only fills the quiet "you
-  // started" note (the flag carries who + when). Starting itself navigates to the
+  // head script sets pre-paint from the flag; starting itself navigates to the
   // wizard (PermitHeader.startReview), so there's no in-place reveal to run.
-  const gateBanner = document.getElementById('permit-banner');
-  const gatePermitId = gateBanner?.dataset.permitId ?? '';
-  const gateStartedKey = `permit-review-started-${gatePermitId}`;
-  const startedNote = document.getElementById('review-started-note');
-
-  let startedInfo: { by?: string; at?: string } | null = null;
-  try { startedInfo = JSON.parse(localStorage.getItem(gateStartedKey) || 'null'); } catch { startedInfo = null; }
-  if (startedInfo && startedNote) {
-    startedNote.textContent = startedInfo.at
-      ? `You started reviewing this application on ${startedInfo.at}.`
-      : 'You started reviewing this application.';
-    startedNote.hidden = false;
-  }
 
   // The "Start your review" prompt only makes sense for someone allowed to start.
   // PermitHeader hides the start button (.permit-start-review) for viewers who
@@ -739,12 +771,6 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   .start-review-prompt {
     max-inline-size: 100%;
     margin-block-end: var(--cds-spacing-06, 1.5rem);
-  }
-  /* Quiet capture confirmation, sitting above the tab strip once revealed. */
-  .review-started-note {
-    margin: 0;
-    padding-block: var(--cds-spacing-04, 0.75rem);
-    color: var(--cds-text-secondary, #525252);
   }
 </style>
 
@@ -1127,8 +1153,15 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
       if (!owned.length) return;
       rendered++;
       const item = document.createElement('cds-accordion-item');
-      item.setAttribute('title', owner.title);
       item.setAttribute('open', ''); // conditions are for reading — expanded by default
+      // Slot the title as heading-compact-01 (bold, same size as body) so the group
+      // header outranks the condition text — matching the review workflow's
+      // conditions accordion (final-letter), which slots the same t-heading-compact-01.
+      const title = document.createElement('span');
+      title.setAttribute('slot', 'title');
+      title.className = 't-heading-compact-01';
+      title.textContent = owner.title;
+      item.appendChild(title);
       const list = document.createElement('cds-contained-list');
       list.setAttribute('kind', 'on-page');
       owned.forEach((c) => {
@@ -1178,54 +1211,100 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
      step ② of the finalize wizard (final-letter.astro). The wizard persists a flat
      per-district list of { person, scope } entries under permit-final-${id}.contacts
      (scope null = covers all the district's parks) and any edited park set under
-     permit-parks-${id}; here we re-render one row per park with the contact(s)
-     covering it, so the detail page and the letter never disagree. -->
+     permit-parks-${id}; here we re-render the same table rows — one per park unit,
+     district + district contact printed on the group's first row only — so the
+     detail page and the letter never disagree. -->
 <script>
   import { parkKey } from '../data/parks';
+  import { contactCellHtml, dedupeContacts, type CellContact } from '../lib/contact-cell';
+  import { installEmailCopy } from '../lib/email-copy';
 
   const permitId = (document.getElementById('permit-banner') as HTMLElement | null)?.dataset.permitId || '';
   const model = JSON.parse(document.getElementById('study-area-contacts')?.textContent || '[]') as {
-    name: string; pool: { id: string; name: string; email: string }[];
+    name: string; pool: CellContact[];
     seed: { person: string; scope: string[] | null }[]; parks: string[];
   }[];
-  const body = document.querySelector('#study-area-list cds-structured-list-body');
+  const table = document.getElementById('study-area-list');
 
-  if (permitId && model.length && body) {
+  if (permitId && model.length && table) {
     let persisted: any = {};
     try { persisted = JSON.parse(localStorage.getItem(`permit-final-${permitId}`) || '{}'); } catch {}
     let editedParks: Record<string, string[]> = {};
     try { editedParks = JSON.parse(localStorage.getItem(`permit-parks-${permitId}`) || '{}'); } catch {}
     const recorded: Record<string, { person: string; scope: string[] | null }[]> = persisted.contacts || {};
-    const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const esc = (s: string) =>
+      String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-    const rows: string[] = [];
-    model.forEach((d) => {
+    // One <tbody> per district, mirroring the server render: a real row group, so
+    // scope="rowgroup" is accurate and the hover rule can't reach the next district.
+    const groups = model.map((d) => {
       const pool = new Map(d.pool.map((c) => [c.id, c]));
       const entries = recorded[d.name] || d.seed;
       const parkList = editedParks[d.name] || d.parks;
-      parkList.forEach((park) => {
-        const seen = new Set<string>();
-        const contacts = entries
-          .filter((e) => e.scope === null || (Array.isArray(e.scope) && e.scope.some((sp) => parkKey(sp) === parkKey(park))))
-          .map((e) => pool.get(e.person))
-          .filter((c): c is { id: string; name: string; email: string } => Boolean(c) && !seen.has(c!.id) && Boolean(seen.add(c!.id)));
-        const cell = contacts.length === 0
-          ? '<span class="contact-cell__none t-body-01">No contact assigned</span>'
-          : contacts.map((c) =>
-              `<span class="contact-cell__person"><span class="contact-cell__name">${esc(c.name)}</span>` +
-              (c.email ? `<cds-link href="mailto:${esc(c.email)}">${esc(c.email)}</cds-link>` : '') +
-              '</span>',
-            ).join('');
-        rows.push(
-          `<cds-structured-list-row data-district="${esc(d.name)}" data-park="${esc(park)}">` +
-            `<cds-structured-list-cell>${esc(park)}</cds-structured-list-cell>` +
-            `<cds-structured-list-cell>${esc(d.name)}</cds-structured-list-cell>` +
-            `<cds-structured-list-cell class="contact-cell">${cell}</cds-structured-list-cell>` +
-          '</cds-structured-list-row>',
+      const districtCell = contactCellHtml(
+        dedupeContacts(entries.filter((e) => e.scope === null).map((e) => pool.get(e.person))),
+        '<span class="contact-cell__none t-body-01">No contact assigned</span>',
+      );
+      const rows = parkList.map((park, i) => {
+        // A park's own contact is a scoped entry naming that park; none → blank cell.
+        const parkCell = contactCellHtml(
+          dedupeContacts(
+            entries
+              .filter((e) => Array.isArray(e.scope) && e.scope!.some((sp) => parkKey(sp) === parkKey(park)))
+              .map((e) => pool.get(e.person)),
+          ),
+        );
+        // The district name + contact are emitted ONCE per district, on its first
+        // row, spanning the group — same merged-cell shape as the server render.
+        const span = Math.max(parkList.length, 1);
+        const merged = i === 0
+          ? `<th scope="rowgroup" rowspan="${span}" class="sa-cell--district">${esc(d.name)}</th>` +
+            `<td rowspan="${span}" class="contact-cell">${districtCell}</td>`
+          : '';
+        return (
+          `<tr class="sa-row" data-district="${esc(d.name)}" data-park="${esc(park)}">` +
+            merged +
+            `<td>${esc(park)}</td>` +
+            `<td class="contact-cell">${parkCell}</td>` +
+          '</tr>'
         );
       });
+      return `<tbody class="sa-group" data-district="${esc(d.name)}">${rows.join('')}</tbody>`;
     });
-    body.innerHTML = rows.join('');
+    // Swap every row group at once, keeping <thead>. <table> is a valid insertion
+    // context for <tbody>, so the parser won't hoist the rows out of the table.
+    table.querySelectorAll('tbody').forEach((tb) => tb.remove());
+    table.insertAdjacentHTML('beforeend', groups.join(''));
+  }
+
+  // The copy-email buttons in the contact cells (server-rendered or re-rendered
+  // above) share the delegated handler — idempotent, so calling it here is safe
+  // even though AnalysisTeam already installs it on this page.
+  installEmailCopy();
+</script>
+
+<!-- Uploaded files: download every document. A static prototype has no server-side
+     zip, so trigger a download per file (staggered so the browser doesn't drop
+     simultaneous downloads) and confirm with a toast. -->
+<script>
+  import { showToast } from '../lib/toast';
+
+  const dlAll = document.getElementById('download-all-docs');
+  const dlData = document.getElementById('all-docs-data');
+  if (dlAll && dlData) {
+    const files = JSON.parse(dlData.textContent || '[]') as { href: string; name: string }[];
+    dlAll.addEventListener('click', () => {
+      files.forEach((f, i) => setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = f.href;
+        a.download = f.name;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, i * 300));
+      showToast('Downloading all documents', `${files.length} files`);
+    });
   }
 </script>
 
@@ -1397,14 +1476,60 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
     max-width: 44rem;
     color: var(--cds-text-secondary, #525252);
   }
-  /* Authorized-parks list — one row per park; the contact cell stacks each
-     assigned district contact as name over an email link. The cell content is
-     re-rendered client-side from the recorded contacts, so its children are
-     matched with :global() (injected nodes carry no scope attribute). */
+  /* Authorized parks — ONE table, one row per park unit: district, district
+     contact, park unit, park contact. A contact cell stacks each person as a name
+     over a mailto link + copy button. Rows are re-rendered client-side from the
+     recorded contacts, so descendants are matched with :global() (injected nodes
+     carry no scope attribute). */
   #study-area-list :global(.contact-cell__person) { display: block; }
   #study-area-list :global(.contact-cell__person + .contact-cell__person) { margin-top: 0.5rem; }
   #study-area-list :global(.contact-cell__name) { display: block; }
+  #study-area-list :global(.contact-cell__email) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    max-width: 100%;
+  }
   #study-area-list :global(.contact-cell__none) { color: var(--cds-text-secondary, #525252); }
+  /* The merged district cells sit at the TOP of their group rather than centred on
+     it — with an uneven number of parks a centred cell drifts away from the
+     district's first row and reads as belonging to whichever row it lands beside. */
+  #study-area-list :global(.sa-cell--district),
+  #study-area-list :global(.sa-cell--district + .contact-cell) { vertical-align: top; }
+  /* A district's merged cells stop the row rule from crossing them, so each group
+     reads as one block; a stronger rule opens each group after the first. */
+  #study-area-list :global(.sa-group + .sa-group .sa-row:first-child > *) {
+    border-top: 1px solid var(--cds-border-strong-01, #8d8d8d);
+  }
+  /* Row hover + merged cells. Carbon paints the hovered <tr>, which can't express
+     a merged cell: the district's cells are children of the group's FIRST row, so
+     every hover mapped wrong. Two rules restore the true relationship, which runs
+     BOTH ways — a park row depends on its district cells, and a district cell
+     covers every row it spans.
+
+     (a) Hovering a PARK row also paints that group's merged cells. Row one needs
+     `:hover` (Carbon paints the row, but the district <th> has its own opaque
+     background on top, so the row paint never reaches it); later rows need `~`,
+     which can't escape the group's own <tbody>. */
+  #study-area-list :global(.sa-group > .sa-row:first-child:is(:hover, :has(~ .sa-row:hover)) > [rowspan]) {
+    background-color: var(--cds-layer-hover, #e8e8e8);
+  }
+  /* (b) Hovering a MERGED cell paints the whole district group. Without this,
+     Carbon's tr:hover fires on row one alone — because that's the row the merged
+     cell is parented to — so pointing at the district contact highlighted the
+     FIRST park unit, re-implying the exact pairing the rowspan exists to deny. */
+  #study-area-list :global(.sa-group:has(> .sa-row > [rowspan]:hover) > .sa-row > *) {
+    background-color: var(--cds-layer-hover, #e8e8e8);
+  }
+  /* No overflow rule here on purpose. The table has NO fixed height — it sizes to
+     its content — and the wrapper's `.cds--data-table-content` (Carbon's own class)
+     already carries `overflow-x: auto`, so it scrolls sideways only when a narrow
+     viewport genuinely can't fit the four columns, and the page never scrolls
+     horizontally instead. The copy-button tooltips are `autoalign`ed
+     (see lib/contact-cell.ts) so they float OVER this wrapper rather than
+     extending its scroll area — note `overflow-x: auto` alone makes the wrapper a
+     scroll container on BOTH axes, since a non-visible value on one axis computes
+     the other to `auto`. That's what made hovering a button scroll the section. */
 
   /* Special conditions — read-only. A cds-accordion of owners; each item's body is
      the applied conditions' rich text. Layout only; look is cds-* + tokens. */
