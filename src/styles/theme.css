@@ -69,6 +69,31 @@ body {
   padding-top: var(--cds-spacing-09, 3rem);
 }
 
+/* ---- BOX-SIZING — repair Carbon's reset across shadow boundaries ----------
+   Carbon's reset is `html { box-sizing: border-box }` + `*, *::before, *::after
+   { box-sizing: inherit }`. That INHERIT chain silently breaks at every web
+   component: a document stylesheet can't reach into shadow DOM, so a shadow
+   wrapper keeps the initial `content-box`, and CSS inheritance for slotted
+   content follows the FLATTENED tree — so anything slotted into a cds-*
+   component inherits content-box from that shadow wrapper, not border-box from
+   its light-DOM parent.
+
+   That bites the app spine directly: every page is `main.page > cds-stack > …`,
+   so page content lands inside `div.cds--stack-scale-*` in cds-stack's shadow
+   root and turns content-box. A `.cds--css-grid` there then added its 16px
+   inline padding ON TOP of width:100% and overflowed the viewport by 32px,
+   scrolling the whole page sideways.
+
+   Setting border-box DIRECTLY (rather than inheriting it) is immune to shadow
+   boundaries. Only elements currently mis-inheriting content-box change — the
+   broken ones. This is the standard reset and what Carbon's own components
+   already assume. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 /* ---- TYPE SCALE ----------------------------------------------------------
    Carbon v11 type sets as font-only utility classes. The prebuilt CSS exposes
    these values only INSIDE component shadow styles, not as global tokens, so
