@@ -1,21 +1,31 @@
 ---
 // A single contact/entity rendered as a cds-tile: a role eyebrow, identity chip +
-// name, and quiet contact lines with the email as a cds-link. `kind="facility"`
-// swaps the person-initials chip for a building glyph. The tile provides the
+// name, and quiet contact lines with the email as a cds-link. `kind="organization"`
+// / `"facility"` swap the round person-initials chip for a square enterprise /
+// building glyph. The tile provides the
 // surface, padding, and border; the rules below only lay out its content.
 import type { Contact } from '../data/permit';
 import Avatar from './Avatar.astro';
+import EditButton from './EditButton.astro';
 interface Props {
-  role: string;
+  /** The contact's title — or several, when one person holds multiple roles
+   *  (each prints on its own line; see src/lib/team-cards.ts). */
+  role: string | string[];
   contact: Contact;
-  /** 'facility' shows a building glyph instead of person initials. */
-  kind?: 'person' | 'facility';
+  /** 'organization' / 'facility' show a glyph in a square chip instead of round
+   *  person initials, so entities read apart from people. */
+  kind?: 'person' | 'organization' | 'facility';
   /** When set, render a "View CV" action that opens this document (raw href, e.g.
    *  '/docs/cv-jun-2025.pdf') — the host page wires the [data-view-cv] click to its
    *  document viewer. */
   cvHref?: string;
+  /** Span every column of the parent card grid (a full-width row). */
+  wide?: boolean;
+  /** Application-record editing: the item key for an Edit button + the bindings
+   *  the shared edit modal re-renders (src/lib/record-edit.ts). */
+  editKey?: string;
 }
-const { role, contact, kind = 'person', cvHref } = Astro.props;
+const { role, contact, kind = 'person', cvHref, wide = false, editKey } = Astro.props;
 
 // Carbon `building` 20 glyph — marks a facility/place rather than a person.
 const buildingIcon =
@@ -23,21 +33,37 @@ const buildingIcon =
   '<path d="M28,2H16a2.002,2.002,0,0,0-2,2V14H4a2.002,2.002,0,0,0-2,2V30H30V4A2.0023,2.0023,0,0,0,28,2ZM9,28V21h4v7Zm19,0H15V20a1,1,0,0,0-1-1H8a1,1,0,0,0-1,1v8H4V16H16V4H28Z"/>' +
   '<path d="M18 8H20V10H18z"/><path d="M24 8H26V10H24z"/><path d="M18 14H20V16H18z"/>' +
   '<path d="M24 14H26V16H24z"/><path d="M18 20H20V22H18z"/><path d="M24 20H26V22H24z"/></svg>';
+
+// Carbon `enterprise` 32 glyph — marks an organization (institution, agency, firm).
+const enterpriseIcon =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">' +
+  '<path d="M8 8H10V12H8z"/><path d="M8 14H10V18H8z"/><path d="M14 8H16V12H14z"/><path d="M14 14H16V18H14z"/>' +
+  '<path d="M8 20H10V24H8z"/><path d="M14 20H16V24H14z"/>' +
+  '<path d="M30,14a2,2,0,0,0-2-2H22V4a2,2,0,0,0-2-2H4A2,2,0,0,0,2,4V30H30ZM4,4H20V28H4ZM22,28V14h6V28Z"/></svg>';
+
+const icon = kind === 'organization' ? enterpriseIcon : kind === 'facility' ? buildingIcon : undefined;
+const roles = Array.isArray(role) ? role : [role];
 ---
 
-<cds-tile class="contact">
-  <p class="contact__role t-label-01">{role}</p>
+<cds-tile class:list={['contact', wide && 'contact--wide']} data-edit-scope={editKey}>
+  <div class="contact__head">
+    <div class="contact__roles">
+      {roles.map((r) => <p class="contact__role t-label-01">{r}</p>)}
+    </div>
+    {editKey && <EditButton item={editKey} label={roles.join(' / ')} />}
+  </div>
   <div class="contact__id">
-    <Avatar name={contact.name} icon={kind === 'facility' ? buildingIcon : undefined} />
-    <p class="contact__name t-heading-compact-01">{contact.name}</p>
+    <Avatar name={contact.name} icon={icon} shape={icon ? 'square' : 'circle'} bindInitials={editKey && !icon ? 'name' : undefined} />
+    <p class="contact__name t-heading-compact-01" data-bind={editKey ? 'name' : undefined}>{contact.name}</p>
   </div>
   <div class="contact__meta t-body-01">
-    {contact.phone && <span>{contact.phone}</span>}
-    {contact.address && <span>{contact.address}</span>}
-    {contact.email && (
-      <span class="contact__email">
-        <cds-link href={`mailto:${contact.email}`}>{contact.email}</cds-link>
-        <cds-icon-button class="contact__copy" kind="ghost" size="sm" align="bottom" data-copy-email={contact.email}>
+    {/* Editable cards render every line (hidden when empty) so an edit can fill one in. */}
+    {(contact.phone || editKey) && <span data-bind={editKey ? 'phone' : undefined} data-bind-hide-empty={editKey ? '' : undefined} hidden={!contact.phone}>{contact.phone}</span>}
+    {(contact.address || editKey) && <span data-bind={editKey ? 'address' : undefined} data-bind-hide-empty={editKey ? '' : undefined} hidden={!contact.address}>{contact.address}</span>}
+    {(contact.email || editKey) && (
+      <span class="contact__email" data-show-if={editKey ? 'email' : undefined} hidden={!contact.email}>
+        <cds-link href={`mailto:${contact.email ?? ''}`} data-bind={editKey ? 'email' : undefined} data-bind-attr={editKey ? 'href=mailto:{email}' : undefined}>{contact.email}</cds-link>
+        <cds-icon-button class="contact__copy" kind="ghost" size="sm" align="bottom" data-copy-email={contact.email} data-bind-attr={editKey ? 'data-copy-email={email}' : undefined}>
           <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
             <path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/>
             <path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/>
@@ -59,8 +85,25 @@ const buildingIcon =
 
 <style>
   /* Surface/padding/border are the tile's — these rules lay out its content. */
-  .contact__role {
+  /* Full-width row inside the parent's card grid. */
+  .contact--wide { grid-column: 1 / -1; }
+  /* Role eyebrow, with the Edit button (when editable) pinned to the right. */
+  .contact__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
     margin: 0 0 0.625rem;
+  }
+  .contact__head :global(.record-edit-btn) { margin: -0.5rem -0.5rem 0 0; }
+  /* One line per title; a person holding several roles lists them stacked. */
+  .contact__roles {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .contact__role {
+    margin: 0;
     color: var(--cds-text-secondary, #525252);
   }
   .contact__id {
@@ -84,6 +127,9 @@ const buildingIcon =
     align-items: center;
     gap: 0.125rem;
   }
+  /* An editable card keeps an empty email line in the DOM (hidden) so an edit can
+     fill it; the display rule above would otherwise override [hidden]. */
+  .contact__email[hidden] { display: none; }
   /* "View CV" action — a ghost button pulled to the tile's start edge so it aligns
      with the content above rather than sitting inset. */
   .contact__actions {

@@ -12,10 +12,14 @@ interface Props {
   size?: 'sm' | 'md' | 'lg';
   /** Render this inline SVG instead of initials — for non-person entities. */
   icon?: string;
+  /** 'square' marks a non-person entity (organization, facility); people stay round. */
+  shape?: 'circle' | 'square';
+  /** Record editing: re-derive the initials from this edit field when it changes. */
+  bindInitials?: string;
 }
-const { name, size = 'md', icon } = Astro.props;
+const { name, size = 'md', icon, shape = 'circle', bindInitials } = Astro.props;
 ---
 
-<span class:list={['avatar', `avatar--${size}`]} aria-hidden="true">
+<span class:list={['avatar', `avatar--${size}`, shape === 'square' && 'avatar--square']} aria-hidden="true" data-bind-initials={bindInitials}>
   {icon ? <Fragment set:html={icon} /> : computeInitials(name)}
 </span>

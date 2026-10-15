@@ -11,6 +11,7 @@
 //   ls node_modules/@carbon/web-components/es/components/
 // ---------------------------------------------------------------------------
 import '@carbon/web-components/es/components/accordion/index.js';
+import '@carbon/web-components/es/components/badge-indicator/index.js';
 import '@carbon/web-components/es/components/breadcrumb/index.js';
 import '@carbon/web-components/es/components/button/index.js';
 import '@carbon/web-components/es/components/checkbox/index.js';
@@ -28,6 +29,7 @@ import '@carbon/web-components/es/components/icon-indicator/index.js';
 import '@carbon/web-components/es/components/inline-loading/index.js';
 import '@carbon/web-components/es/components/layer/index.js';
 import '@carbon/web-components/es/components/link/index.js';
+import '@carbon/web-components/es/components/list/index.js';
 import '@carbon/web-components/es/components/menu/index.js';
 import '@carbon/web-components/es/components/modal/index.js';
 import '@carbon/web-components/es/components/multi-select/index.js';

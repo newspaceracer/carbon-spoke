@@ -21,11 +21,16 @@ interface Props {
   requiredISO: string;
   requiredLabel: string;
   todayISO: string;
+  /** Legend/event name for the shaded window (default 'Permit period'). */
+  windowName?: string;
+  /** Optional project start/end, marked as single days. */
+  project?: { startISO: string; startLabel: string; endISO: string; endLabel: string };
 }
 
 const {
   windowStartISO, windowEndISO, windowStartLabel, windowEndLabel,
   fieldSessions, tentativeISO, tentativeLabel, requiredISO, requiredLabel, todayISO,
+  windowName = 'Permit period', project,
 } = Astro.props;
 
 // Categorical colors — validated dataviz palette; each carries a text color for legible
@@ -35,7 +40,8 @@ const {
 // year-view cells and never collapsed into "+N more" the way event chips are.
 const cats = [
   { id: 'field', name: 'Field investigation', color: '#2a78d6', bg: 'rgba(42, 120, 214, 0.68)' },
-  { id: 'permit', name: 'Permit period', color: '#4a3aa7', bg: 'rgba(74, 58, 167, 0.14)' },
+  { id: 'permit', name: windowName, color: '#4a3aa7', bg: 'rgba(74, 58, 167, 0.14)' },
+  ...(project ? [{ id: 'project', name: 'Project start / end', color: '#008a7e', bg: 'rgba(0, 138, 126, 0.68)' }] : []),
   { id: 'tentative', name: 'Report — tentative completion', color: '#eda100', bg: 'rgba(237, 161, 0, 0.72)' },
   { id: 'required', name: 'Report — required by', color: '#e34948', bg: 'rgba(227, 73, 72, 0.68)' },
   { id: 'today', name: 'Today', color: '#161616', bg: 'rgba(22, 22, 22, 0.62)' },
@@ -58,7 +64,11 @@ const bgEvent = (id: string, cat: string, title: string, startISO: string, endIS
 
 const events = [
   // Permit window: light shading across the whole period (context; not a click target).
-  bgEvent('permit', 'permit', 'Permit period', windowStartISO, addDay(windowEndISO), `${windowStartLabel} – ${windowEndLabel}`),
+  bgEvent('permit', 'permit', windowName, windowStartISO, addDay(windowEndISO), `${windowStartLabel} – ${windowEndLabel}`),
+  ...(project ? [
+    bgEvent('project-start', 'project', 'Project start', project.startISO, undefined, project.startLabel),
+    bgEvent('project-end', 'project', 'Project end', project.endISO, undefined, project.endLabel),
+  ] : []),
   ...fieldSessions.map((s, i) =>
     bgEvent(`field-${i}`, 'field', 'Field investigation', s.start, s.end ? addDay(s.end) : undefined, rangeLabel(s.start, s.end))),
   bgEvent('tentative', 'tentative', 'Annual report — tentative completion', tentativeISO, undefined, tentativeLabel),
@@ -77,6 +87,10 @@ const eachDay = (startISO: string, endExclusiveISO?: string) => {
   while (cur.toISOString().slice(0, 10) < stop) { out.push(cur.toISOString().slice(0, 10)); cur.setUTCDate(cur.getUTCDate() + 1); }
   return out;
 };
+if (project) {
+  dayIndex[project.startISO] = { title: 'Project start', body: project.startLabel };
+  dayIndex[project.endISO] = { title: 'Project end', body: project.endLabel };
+}
 for (const s of fieldSessions) for (const iso of eachDay(s.start, s.end ? addDay(s.end) : undefined)) dayIndex[iso] = { title: 'Field investigation', body: rangeLabel(s.start, s.end) };
 dayIndex[tentativeISO] = { title: 'Annual report — tentative completion', body: tentativeLabel };
 dayIndex[requiredISO] = { title: 'Annual report — required by', body: requiredLabel };

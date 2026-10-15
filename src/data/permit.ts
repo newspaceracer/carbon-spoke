@@ -27,6 +27,12 @@ export interface MetaRow {
   boolean?: boolean;
   /** Sub-values stacked within a single tile (e.g. Start over End dates). */
   entries?: { label: string; value: string }[];
+  /** Applicant's explanation behind a "Yes" answer (e.g. what the soil disturbance
+   *  is, which additional permit is required) — shown under the value. */
+  detail?: string;
+  /** For a yes/no fact: the answer phrased as a statement ("Does involve …" /
+   *  "Does NOT involve …"), so the label itself says the answer — no Yes/No. */
+  statements?: { yes: string; no: string };
 }
 
 export interface Contact {
@@ -63,6 +69,8 @@ export interface HistoryPhase {
   steps: HistoryStep[];
 }
 
+import { yesNo } from '../lib/yes-no';
+
 const invented = 'Invented for this prototype — not real contact information.';
 
 // The uploaded Study Proposal — several facts are "answered" there, so they link
@@ -83,6 +91,8 @@ const fieldSessions: FieldSession[] = [
   { start: '2026-10-27' },
   { start: '2026-11-25' },
   { start: '2026-12-09' },
+  // Winter low-tide series spanning the new year — exercises the cross-month/year label.
+  { start: '2026-12-30', end: '2027-01-02' },
   { start: '2027-01-22' },
   { start: '2027-02-19' },
   { start: '2027-03-19' },
@@ -116,9 +126,13 @@ export const permit = {
     { label: 'Multi-district', type: 'teal' },
     { label: 'Marine Aquatic Resources', type: 'purple' },
   ] as Badge[],
-  // Compliance flags (rendered with a warning icon). Only the ones that apply:
-  // soil disturbance = No and beyond-simple-use (drones/diving) = No here.
+  // Compliance flags (rendered with a warning icon). Only the ones that apply — this
+  // permit answers Yes to all three screening gates (see additionalDocs.facts), so it
+  // shows every flag: transect stakes (soil disturbance), SCUBA (beyond simple use),
+  // and the pending CDFW SCP (additional permit).
   flagTags: [
+    { label: 'Soil disturbance', type: 'high-contrast' },
+    { label: 'Beyond simple use', type: 'high-contrast' },
     { label: 'Additional permit required', type: 'high-contrast' },
   ] as Badge[],
 
@@ -244,10 +258,14 @@ export const permit = {
       { name: 'Helena Marsh', title: 'Laboratory technician', phone: '(510) 555-0128', email: 'hmarsh@humboldt.edu', comments: '' },
       { name: 'Marcus Webb', title: 'Undergraduate field assistant', phone: '(916) 555-0184', email: 'mwebb@humboldt.edu', comments: 'Field days only.' },
       { name: 'Fiona Blake', title: 'Herbarium curator', phone: '', email: 'fblake@humboldt.edu', comments: '' },
+      // Bare-minimum row (no title or phone) — exercises the sparse case. A community
+      // volunteer outside the university's coverage, which is why personnelInsured is No.
+      { name: 'Theo Lindqvist', email: 'tlindqvist@humboldt.edu', comments: 'Community volunteer — not covered by university insurance.' },
     ] as Participant[],
     // Whether every field-team member is employed or insured by the institution
-    // conducting the research (drives the liability-waiver requirement upstream).
-    personnelInsured: true,
+    // conducting the research. No → the applicant must upload a signed Liability
+    // waiver addendum (DPR65B); the review links to it (see additionalDocs.files).
+    personnelInsured: false,
   },
 
   projectInfo: {
@@ -266,6 +284,8 @@ export const permit = {
         { label: 'Required by', value: '09/30/2027' },
       ] },
     ] as MetaRow[],
+    // ISO pair for the 'Project dates' row above — drives the calendar's project markers.
+    projectWindow: { startISO: '2026-07-22', startLabel: 'Jul 22, 2026', endISO: '2027-07-22', endLabel: 'Jul 22, 2027' },
     purpose:
       'Coralline red algae are calcifying macroalgae found in every ocean basin and ' +
       'contribute substantially to carbon cycling, reef stability, and settlement ' +
@@ -374,7 +394,9 @@ export const permit = {
       { key: 'Laboratory — responsible official', value: 'Dr. Alena Reyes · (707) 555-0142 · areyes@humboldt.edu', contact: reyesContact },
       { key: 'Lab study window', value: 'Jul 22, 2026 – Jul 22, 2027' },
       { key: 'Study procedures', value: 'Answered in study proposal', href: proposalHref },
-      { key: 'Location of data & data products', value: 'Answered in study proposal', href: proposalHref },
+      // Typed answer (not deferred to the proposal) — shows the plain-value tile beside
+      // the "Answered in study proposal" link tiles.
+      { key: 'Location of data & data products', value: 'Vouchers at HSU Cryptogamic Herbarium; DNA sequences in GenBank; survey data on Dryad' },
     ] as MetaRow[],
     specimens: [
       { species: 'Bossiella chiloensis', quantity: '5', portion: 'single frond', condition: 'vegetative' },
@@ -403,11 +425,17 @@ export const permit = {
       'submitted, currently pending. Coastal collection of marine algae requires the CDFW SCP; the ' +
       'renewed permit will be provided to nrd.research@parks.ca.gov once issued.',
     facts: [
-      { key: 'Involves soil disturbance', value: 'No', boolean: true },
-      { key: 'Requires additional federal/state/local permits', value: 'Yes', boolean: true },
+      { key: 'Involves soil disturbance', value: 'Yes', boolean: true,
+        statements: yesNo.soilDisturbance,
+        detail: 'Up to 6 temporary wooden survey stakes (30 cm) placed in upper-beach sand to mark transect heads at each site; removed at the end of each field session.' },
+      { key: 'Requires additional federal/state/local permits', value: 'Yes', boolean: true,
+        statements: yesNo.additionalPermits,
+        detail: 'California Department of Fish & Wildlife Scientific Collecting Permit (SCP) — application submitted, currently pending.' },
       { key: 'Budget', value: 'Answered in study proposal', href: proposalHref },
       { key: 'Literature cited', value: 'Answered in study proposal', href: proposalHref },
-      { key: 'Activities beyond simple use (aircraft/drones, diving, trapping, etc.)', value: 'No', boolean: true },
+      { key: 'Activities beyond simple use (aircraft/drones, diving, trapping, etc.)', value: 'Yes', boolean: true,
+        statements: yesNo.beyondSimpleUse,
+        detail: 'SCUBA diving to 10 m for subtidal coralline surveys at Van Damme SP, led by an AAUS-certified scientific diver with a surface tender on shore.' },
     ] as MetaRow[],
     files: [
       { name: 'Coralline Diversity & Reproductive Systems Proposal.pdf', type: 'Study Proposal', size: '313 KB', pages: 4, by: 'A. Reyes', date: 'Jul 8, 2026', href: proposalHref },
@@ -415,7 +443,7 @@ export const permit = {
       { name: 'CV_Halvorsen.pdf', type: 'Submitter Resume', size: '117.84 KB', pages: 2, by: 'R. Halvorsen', date: 'Jun 12, 2025', href: '/docs/renata-halvorsen-cv.pdf' },
       { name: 'False Klamath Cove Study Area Map.pdf', type: 'Study Area Supporting Documentation', size: '132.45 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/false-klamath-cove-study-area-map.pdf' },
       { name: 'Additional-Permit-Details.pdf', type: 'Additional Permit Supporting Documentation', size: '103.65 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/additional-permit-details.pdf' },
-      { name: 'Liability-Waiver-Addendum-DPR65B.pdf', type: 'Optional Liability Waiver Addendum (DPR65B)', size: '90.99 KB', pages: 1, by: 'A. Reyes', date: 'Jul 14, 2026', href: '/docs/liability-waiver-addendum-dpr65b.pdf' },
+      { name: 'Liability-Waiver-Addendum-DPR65B.pdf', type: 'Liability Waiver Addendum (DPR65B)', size: '90.99 KB', pages: 1, by: 'A. Reyes', date: 'Jul 14, 2026', href: '/docs/liability-waiver-addendum-dpr65b.pdf' },
       { name: 'standard_conditions_agreement-signed.pdf', type: 'Standard Conditions Agreement Form', size: '100.59 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/standard-conditions-agreement-signed.pdf' },
       { name: 'waiver_and_indemnity_agreement-signed.pdf', type: 'Waiver and Indemnity Agreement Form', size: '94.66 KB', pages: 1, by: 'A. Reyes', date: 'Jul 9, 2026', href: '/docs/waiver-and-indemnity-agreement-signed.pdf' },
     ],

@@ -116,6 +116,8 @@ const adminMenuRoles = DISTRICT_ADMIN;
     <cds-search id="site-search" size="lg" label-text="Search permits" placeholder="Search permits, applicants, sites"></cds-search>
   </div>
 
+  <!-- Page-specific global actions (e.g. a Comments button + its cds-header-panel). -->
+  <slot name="actions" />
   <cds-header-global-action aria-label="Help" tooltip-text="Help" href="#">
     <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
       <path d="M16,2A14,14,0,1,0,30,16,14,14,0,0,0,16,2Zm0,26A12,12,0,1,1,28,16,12.0134,12.0134,0,0,1,16,28Z"/>

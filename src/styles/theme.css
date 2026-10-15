@@ -234,6 +234,9 @@ html.cds-modal-open body {
 .avatar--lg { width: 4rem;    height: 4rem;    font-size: 1.375rem; }
 /* Glyph variant (facility, etc.) — scale the supplied SVG to the chip. */
 .avatar svg { width: 55%; height: 55%; fill: currentColor; }
+/* Non-person entities (organization, facility) — square, so they read apart from
+   the round person chips at a glance. */
+.avatar--square { border-radius: 0.25rem; }
 
 /* NOTE: we intentionally do NOT override cds-header-nav's display here. Carbon
    hides the top nav below the lg breakpoint (1056px) and shows the hamburger +

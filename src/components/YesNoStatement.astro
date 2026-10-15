@@ -1,0 +1,42 @@
+---
+// A yes/no answer shown as a STATEMENT: Carbon's stock cds-icon-indicator (green
+// checkmark = yes, red circled × = no) whose label is the answer phrased as a
+// sentence ("Does involve …" / "Does NOT involve …"). Optional default slot = the
+// applicant's explanation, printed under the statement. Wording lives in
+// src/lib/yes-no.ts so every summary reads the same.
+//
+// Record editing (src/lib/record-edit.ts): `bind` names the yes/no edit field, so
+// the indicator re-renders after an edit; `bindDetail` names a text field for the
+// explanation; `detailWhen` says which answer the explanation belongs to.
+import type { YesNo } from '../lib/yes-no';
+interface Props {
+  value: boolean;
+  statements: YesNo;
+  bind?: string;
+  bindDetail?: string;
+  detailWhen?: 'yes' | 'no';
+}
+const { value, statements, bind, bindDetail, detailWhen = 'yes' } = Astro.props;
+const hasDetail = Astro.slots.has('default');
+// Show the explanation only for the answer it belongs to (re-evaluated on edit).
+const visibility = bind ? (detailWhen === 'no' ? { 'data-hide-if': bind } : { 'data-show-if': bind }) : {};
+const detailHidden = detailWhen === 'no' ? value : !value;
+---
+
+<div class="yn">
+  <!-- size="20" = Carbon's larger indicator, whose label is 16px — matching the
+       16px content text in the application record. -->
+  <cds-icon-indicator size="20" kind={value ? 'succeeded' : 'failed'} label={value ? statements.yes : statements.no}
+    data-bind-yesno={bind} data-yes={bind ? statements.yes : undefined} data-no={bind ? statements.no : undefined}></cds-icon-indicator>
+  {bindDetail ? (
+    <span class="yn__detail t-label-01" {...visibility} hidden={detailHidden}><span data-bind={bindDetail}><slot /></span></span>
+  ) : hasDetail && (
+    <span class="yn__detail t-label-01" {...visibility}><slot /></span>
+  )}
+</div>
+
+<style>
+  .yn { margin: 0; }
+  .yn__detail { display: block; margin-top: 0.375rem; color: var(--cds-text-secondary, #525252); }
+  .yn__detail[hidden] { display: none; }
+</style>

@@ -6,9 +6,9 @@
      spine:  main.page
                wiz-track  (grid, col 16) -> horizontal cds-progress-indicator, one per STEP
                page-head  (grid, col 16) -> Step N of M + title (JS-updated)
-               step 0     (grid) -> application record (col 8) + docked working panel
-                                    (col 8, sticky): a cds-tabs surface — Document viewer /
-                                    Special conditions / Comments / Analysis team (B3)
+               step 0     (grid) -> application record + Document viewer (col 8) + docked
+                                    working panel (col 8, sticky): a cds-tabs surface —
+                                    Comments / Special conditions (B3)
                step 1     (grid) -> letter-feeding fields (col 7) + live letter (col 9)
                step 2     (grid) -> the finished package + send (col 12, centered)
                wiz-actions(grid, col 8/7/12) -> Back / Cancel / role+step CTA
@@ -68,7 +68,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
 import ApplicationReview from '../components/ApplicationReview.astro';
-import AnalysisTeam from '../components/AnalysisTeam.astro';
 import ContactCard from '../components/ContactCard.astro';
 import DocumentViewer from '../components/DocumentViewer.astro';
 import { permit } from '../data/permit';
@@ -275,9 +274,6 @@ const documents = permit.additionalDocs.files.map((f) => ({
   type: f.type,
 }));
 
-// Analysis-team roster for the Team tab — rendered by the shared AnalysisTeam
-// component. `team` also feeds the tab's count badge.
-const team = permit.overview.analysisTeam;
 
 const letterData = {
   permitId: permit.id,
@@ -331,7 +327,21 @@ const letterData = {
 ---
 
 <BaseLayout title={`Finalize ${permit.id}`}>
-  <PermitNav slot="nav" />
+  <PermitNav slot="nav">
+    <!-- Comments overview for the inline-comments version (?comments=inline): a stock
+         UI Shell header action (count badge) that toggles a cds-header-panel holding
+         the full thread. Hidden in the default (tabbed) version. -->
+    <cds-header-global-action slot="actions" id="comments-global" aria-label="Comments" tooltip-text="Comments" panel-id="comments-panel" hidden>
+      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M8 10H24V12H8z"/><path d="M8 16H18V18H8z"/></svg>
+      <cds-badge-indicator id="comments-global-count" count="0"></cds-badge-indicator>
+    </cds-header-global-action>
+    <cds-header-panel slot="actions" id="comments-panel" aria-label="Comments">
+      <div class="comments-panel">
+        <h2 class="comments-panel__title t-heading-03">Comments</h2>
+        <div id="comments-panel-body"></div>
+      </div>
+    </cds-header-panel>
+  </PermitNav>
 
   <main class="page">
     <PermitHeader
@@ -378,39 +388,57 @@ const letterData = {
       </header>
     </div>
 
-    <!-- ① Review application ─ the record on the left, a single docked working
-         panel on the right (B3 · Docked documents): the document viewer, special
-         conditions, the comment thread, and the analysis team are TABS in one
+    <!-- ① Review application ─ the record (closing with the document viewer) on the
+         left, a single docked working panel on the right (B3 · Docked documents):
+         the comment thread and the special conditions are TABS in one
          surface the reviewer flips through in place. The record grows the page as
          its sections expand; the working panel is sticky so it stays in view. -->
     <section class="step cds--css-grid cds--css-grid--with-row-gap" data-step="0">
       <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
         <h3 class="pane-title t-heading-04">Application record</h3>
         <ApplicationReview collapsible />
+
+        <!-- Comment on a selection: appears beside text selected in the record. A stock
+             cds-button in a positioned host (the host only places it at the selection).
+             carbon-checked: Carbon has no selection-anchored action bar; the control
+             itself is a stock cds-button. -->
+        <div id="select-comment" class="select-comment" hidden>
+          <cds-button id="select-comment-btn" kind="primary" size="sm">
+            Comment
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M17 9 15 9 15 13 11 13 11 15 15 15 15 19 17 19 17 15 21 15 21 13 17 13 17 9z"/></svg>
+          </cds-button>
+        </div>
+
+        <!-- Document viewer — the embedded PDF + picker, closing out the record so the
+             submitted files read in line with the application. `slim` keeps its file
+             bar to one line. -->
+        <div class="record-docs" data-record-docs>
+          <div class="record-docs__head">
+            <h3 class="record-docs__title t-heading-03">Document viewer</h3>
+            <!-- Shown only after a "View CV" jump: returns to the exact spot you left. -->
+            <cds-button kind="ghost" size="sm" data-docs-return hidden>
+              <span data-docs-return-label>Back</span>
+              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16 4 6 14 7.41 15.41 15 7.83 15 28 17 28 17 7.83 24.59 15.41 26 14 16 4z"/></svg>
+            </cds-button>
+          </div>
+          <DocumentViewer documents={documents} docTitle={permit.name} slim />
+        </div>
       </div>
 
       <div class="col-main dock-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8" aria-label="Working panel">
         <h3 class="pane-title t-heading-04">Working panel</h3>
         <div class="dock" data-tab-scope>
-          <cds-tabs value="document" data-panels>
-            <cds-tab value="document">Document viewer <span class="tab-badge" data-tab-badge="document">{documents.length}</span></cds-tab>
-            <cds-tab value="conditions">Special conditions <span class="tab-badge" data-tab-badge="conditions" hidden></span></cds-tab>
+          <!-- Comments first (and open by default), then Special conditions. The
+               analysis team lives in the header's team modal (Manage team). -->
+          <cds-tabs value="comments" data-panels>
             <cds-tab value="comments">Comments <span class="tab-badge" data-tab-badge="comments" hidden></span></cds-tab>
-            <cds-tab value="team">Analysis team <span class="tab-badge" data-tab-badge="team">{team.length}</span></cds-tab>
+            <cds-tab value="conditions">Special conditions <span class="tab-badge" data-tab-badge="conditions" hidden></span></cds-tab>
           </cds-tabs>
 
-          <!-- Document viewer — the embedded PDF + picker, first tab. `slim`
-               collapses the file bar to one line so the panel spends its height on
-               the document, not the header. -->
-          <div class="rail-panel dock-doc" data-tabpanel="document">
-            <DocumentViewer documents={documents} docTitle={permit.name} slim />
-          </div>
-
           <!-- Special conditions — the SAME builder as before (HQ + each district,
-               reorder + continuous numbering, add / edit / remove), now a tab. -->
+               reorder + per-section numbering, add / edit / remove). -->
           <div class="rail-panel" data-tabpanel="conditions" hidden>
             <div class="dock-list">
-              <p class="rail__sub t-label-01">Standard conditions from headquarters and each district attach automatically. Add the conditional ones (e.g. Western Snowy Plover) from the catalog, or remove any that don't apply to this permit.</p>
               <div class="rail__tools">
                 <cds-button kind="tertiary" size="md" id="cond-collapse-all">Collapse all</cds-button>
                 <cds-button kind="tertiary" size="md" id="cond-expand-all">Expand all</cds-button>
@@ -421,10 +449,22 @@ const letterData = {
 
           <!-- Comments — the review thread, shared with the permit detail page.
                Composer first, then the thread (newest first). -->
-          <div class="rail-panel" data-tabpanel="comments" hidden>
+          <div class="rail-panel" data-tabpanel="comments">
             <div class="dock-composer">
+              <!-- The passage this comment is about (set by selecting text in the
+                   record → Comment). Saved with the comment as a highlight anchor. -->
+              <div id="comments-quote" class="comment-quote" hidden>
+                <div class="comment-quote__body">
+                  <p class="comment-quote__label t-label-01">Commenting on</p>
+                  <blockquote id="comments-quote-text" class="comment-quote__text t-body-01"></blockquote>
+                </div>
+                <cds-icon-button id="comments-quote-clear" kind="ghost" size="sm" align="left">
+                  <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.4141 16 24 9.4141 22.5859 8 16 14.5859 9.4143 8 8 9.4141 14.5859 16 8 22.5859 9.4143 24 16 17.4141 22.5859 24 24 22.5859 17.4141 16z"/></svg>
+                  <span slot="tooltip-content">Remove quoted passage</span>
+                </cds-icon-button>
+              </div>
               <div class="mention-field">
-                <cds-textarea id="comments-input" label="Add a comment" placeholder="Note something for the team… type @ to mention someone (⌘/Ctrl+Enter to post)" rows="2"></cds-textarea>
+                <cds-textarea id="comments-input" label="Add a comment" helper-text="Tip: select text in the application record to comment on that passage." placeholder="Note something for the team… type @ to mention someone (⌘/Ctrl+Enter to post)" rows="2"></cds-textarea>
                 <ul id="comments-mention-menu" class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
               </div>
               <cds-button id="comments-add" kind="primary" size="md">Add comment</cds-button>
@@ -432,15 +472,6 @@ const letterData = {
             <p class="comments-note t-label-01">Shared with the permit's review thread. Newest first.</p>
             <ul id="comments-thread" class="dock-thread"></ul>
             <script type="application/json" id="mention-directory" set:html={JSON.stringify(userDirectory.map((u) => ({ id: u.id, name: u.name, detail: u.detail ?? u.role })))}></script>
-          </div>
-
-          <!-- Analysis team — the SHARED roster component, identical to the permit
-               detail page (same permit-team storage). Lead can add / remove / email
-               all; an assistant sees it read-only. -->
-          <div class="rail-panel" data-tabpanel="team" hidden>
-            <div class="dock-list">
-              <AnalysisTeam permitId={permit.id} team={team} directory={userDirectory} />
-            </div>
           </div>
         </div>
       </div>
@@ -792,6 +823,8 @@ const letterData = {
     import { readIdentity } from '../lib/maintenance';
     import { readPermitRole } from '../lib/permissions';
     import { showToast } from '../lib/toast';
+    import { onRecordEdit, setRecordValues } from '../lib/record-edit';
+    import { anchorFromSelection, findAnchor, paintHighlight, paintLayered, type TextAnchor } from '../lib/text-anchors';
     import { renderMentionText, wireMentionTypeahead, type MentionUser } from '../lib/comment-mentions';
     import { directory, activeUser } from '../data/user';
     import { districtName } from '../data/district';
@@ -1001,14 +1034,42 @@ const letterData = {
       (el as any).value = state.fields[el.dataset.field!] ?? '';
       el.addEventListener('input', () => { state.fields[el.dataset.field!] = (el as any).value; persistFinal(); renderPreview(); });
     });
-    // Dropdowns keyed by data-field — category (step ①). Permit type is no longer
-    // an input; it's derived from the authorized parks (see refreshPermitType).
+    // Dropdowns keyed by data-field. Permit type is no longer an input; it's derived
+    // from the authorized parks (see refreshPermitType).
     document.querySelectorAll<HTMLElement>('cds-dropdown[data-field]').forEach((el) => {
       const field = el.dataset.field!;
       (el as any).value = state.fields[field];
       el.addEventListener('cds-dropdown-selected', (e: any) => {
         state.fields[field] = e.detail?.item?.value || state.fields[field]; persistFinal(); renderPreview();
       });
+    });
+
+    // ── Application-record edits that print on the letter ───────────────────────
+    // The record is edited through its shared Edit modal (src/lib/record-edit.ts).
+    // Title, category, the PI card, and the organization card feed letter fields;
+    // the letter's saved values are the source of truth for title/category, so they
+    // are pushed into the record on load.
+    setRecordValues('project-title', { title: state.fields.projectTitle });
+    setRecordValues('project-category', { category: state.fields.category });
+    onRecordEdit((key, v, spec) => {
+      const s = (x: unknown) => String(x ?? '').trim();
+      if (spec.role === 'letter-title') state.fields.projectTitle = s(v.title);
+      else if (spec.role === 'letter-category') state.fields.category = s(v.category);
+      else if (spec.role === 'letter-pi') {
+        // "Dr. Alena Reyes" → salutation + name (same split as the server seed).
+        const m = s(v.name).match(/^(Dr\.|Mr\.|Ms\.|Mrs\.)\s+(.*)$/);
+        if (m) { state.fields.salutation = m[1]; state.fields.piName = m[2]; } else state.fields.piName = s(v.name);
+      } else if (spec.role === 'letter-org') {
+        // "Institution — Department" + "Street, City, ST ZIP" (same split as the seed).
+        const [inst, dept] = s(v.name).split('—').map((x) => x.trim());
+        state.fields.institution = inst || s(v.name);
+        state.fields.department = dept ?? '';
+        const addr = s(v.address);
+        const comma = addr.indexOf(',');
+        state.fields.street = comma > -1 ? addr.slice(0, comma).trim() : addr;
+        state.fields.cityStateZip = comma > -1 ? addr.slice(comma + 1).trim() : '';
+      } else { flashSaved(); return; }
+      persistFinal(); renderPreview();
     });
 
     // ── Authorized parks ────────────────────────────────────────────────────────
@@ -1054,30 +1115,25 @@ const letterData = {
             </cds-table-row>`).join('');
       }
     };
-    // Step ① Study areas — GROUPED BY DISTRICT: a district header row over its parks
-    // (state.parks is already district-keyed). Districts in a stable order, parks
-    // sorted within each. (Step ②'s Authorized parks stays one flat list.)
+    // Step ① Study areas — a READ-ONLY list grouped by district (district label over
+    // its parks; state.parks is already district-keyed), districts in a stable order,
+    // parks sorted within each. Editing happens in the Study areas modal (below).
+    // (Step ②'s Authorized parks stays its own inline editor.)
+    const saCountText = (n: number) => (n ? `${n} park${n === 1 ? '' : 's'} selected` : 'No parks selected');
     const renderStudyAreas = () => {
       const names = selectedNames();
       if (saSelect) saSelect.value = names.join(',');
-      const count = $('sa-count'); if (count) count.textContent = names.length ? `(${names.length})` : '';
+      const count = $('sa-count'); if (count) count.textContent = saCountText(names.length);
       const empty = $('sa-empty') as HTMLElement | null; if (empty) empty.hidden = names.length > 0;
-      const body = $('sa-body'); if (!body) return;
-      body.innerHTML = districts
+      const list = $('sa-readonly'); if (!list) return;
+      list.innerHTML = districts
         .filter((d) => (state.parks[d.name] || []).length > 0)
         .map((d) => {
           const ps = (state.parks[d.name] || []).slice().sort((a, b) => a.localeCompare(b));
-          const head = `<cds-table-row class="sa-grouprow"><cds-table-cell class="sa-groupcell">${esc(d.name)} <span class="sa-groupcount">(${ps.length})</span></cds-table-cell><cds-table-cell class="sa-groupcell"></cds-table-cell></cds-table-row>`;
-          const rows = ps.map((name) => `
-            <cds-table-row>
-              <cds-table-cell class="sa-parkcell">${esc(name)}</cds-table-cell>
-              <cds-table-cell>
-                <cds-icon-button kind="ghost" size="sm" align="left" data-remove-park="${encodeURIComponent(name)}">
-                  ${trashIcon}<span slot="tooltip-content">Remove ${esc(name)}</span>
-                </cds-icon-button>
-              </cds-table-cell>
-            </cds-table-row>`).join('');
-          return head + rows;
+          return `<div class="narrative">
+            <p class="narrative__label t-label-01">${esc(d.name)} (${ps.length})</p>
+            <cds-unordered-list>${ps.map((name) => `<cds-list-item>${esc(name)}</cds-list-item>`).join('')}</cds-unordered-list>
+          </div>`;
         }).join('');
     };
     const renderFbParks = () => renderParkList(fbSelect, $('fb-parks-body'), $('fb-parks-count'), $('fb-parks-empty') as HTMLElement | null);
@@ -1250,8 +1306,29 @@ const letterData = {
       // flips the permit to multi-district (confirmed in requestParksChange).
       requestParksChange(groupNames(names));
     };
-    saSelect?.addEventListener('cds-multi-select-selected', () => onParksSelected(saSelect));
     fbSelect?.addEventListener('cds-multi-select-selected', () => onParksSelected(fbSelect));
+
+    // Study areas modal (step ①) — STAGED editing: picking in the multi-select only
+    // updates the count; Save closes the modal, THEN applies the selection through
+    // requestParksChange (whose district add/drop confirmation therefore opens after
+    // this modal is gone — never modal-on-modal). Any other close discards the draft.
+    const saModal = $('study-areas-modal') as (HTMLElement & { open: boolean }) | null;
+    document.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).closest('[data-record-edit="study-areas"]')) return;
+      renderStudyAreas(); // reset the draft to the committed parks
+      if (saModal) saModal.open = true;
+    });
+    saSelect?.addEventListener('cds-multi-select-selected', () => {
+      const v = (saSelect.value ?? '') as string;
+      const count = $('sa-count'); if (count) count.textContent = saCountText(v ? v.split(',').filter(Boolean).length : 0);
+    });
+    $('sa-save')?.addEventListener('click', () => {
+      if (saModal) saModal.open = false;
+      onParksSelected(saSelect);
+    });
+    // On any close, re-sync the draft from committed state: after a Save that state
+    // already holds the new parks (or a pending district confirmation holds them).
+    saModal?.addEventListener('cds-modal-closed', () => renderStudyAreas());
 
     // Roster remove — either list. No district attribute; resolve it from the map.
     const onRosterRemove = (e: Event) => {
@@ -1264,7 +1341,6 @@ const letterData = {
       grouped[district] = grouped[district].filter((p) => p !== name);
       requestParksChange(grouped);
     };
-    $('sa-body')?.addEventListener('click', onRosterRemove);
     $('fb-parks-body')?.addEventListener('click', onRosterRemove);
 
     // ── District contacts (Working Panel tab, step ①) ────────────────────────────
@@ -1750,7 +1826,7 @@ const letterData = {
     // catalog label. So each applied condition shows its actual text (the analyst
     // sees what will print), with full control per scope: remove defaults, add
     // from the catalog, WRITE one from scratch, and REORDER — for HQ and each
-    // district. Numbers mirror the letter's continuous numbering exactly.
+    // district. Numbers restart per section, mirroring the letter exactly.
     const conditionsInput = $('conditions-input')!;
     const owners = ['hq', ...liveDistrictKeys()];
     // Which scope sections are expanded. Starts all-open (unchanged view), and
@@ -1774,17 +1850,14 @@ const letterData = {
     const editIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>';
 
     const renderConditionsInput = () => {
-      // Continuous letter numbering across HQ then each district, in owner order.
-      let running = 0;
-      const numById: Record<string, number> = {};
-      for (const owner of owners) for (const c of state.conditions.filter((x) => x.owner === owner)) numById[c.id] = ++running;
-
+      // Numbered by section: each scope (HQ, then each district) restarts at 1,
+      // matching the letter's per-section lists.
       conditionsInput.innerHTML = `<cds-accordion>${owners.map((owner) => {
         const applied = state.conditions.filter((c) => c.owner === owner);
         const cards = applied.map((c, i) => `
           <li class="cond">
             <div class="cond__bar">
-              <span class="cond__num">${numById[c.id]}</span>
+              <span class="cond__num">${i + 1}</span>
               <div class="cond__actions">
                 <cds-icon-button kind="ghost" size="sm" data-move-cond="${c.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''}>
                   ${chevronUp}<span slot="tooltip-content">Move up</span>
@@ -2112,11 +2185,10 @@ const letterData = {
       // Override-or-default for the three editable body paragraphs (see letterCopy).
       const defaultCopy = defaultLetterCopy();
       const copyFor = (k: string) => state.letterCopy[k] ?? defaultCopy[k];
-      // Standard (HQ) conditions numbered continuously, then district-specific
-      // sections that continue the numbering — as the template lays it out.
-      let n = 0;
+      // Standard (HQ) conditions, then district-specific sections — each section
+      // numbered from 1 (matching the conditions builder).
       const hqItems = state.conditions.filter((c) => c.owner === 'hq')
-        .map((c) => `<li value="${++n}">${conditionBody(c)}</li>`).join('');
+        .map((c, i) => `<li value="${i + 1}">${conditionBody(c)}</li>`).join('');
       // Story 8 — key the district condition blocks off the LIVE districts (those
       // that still have parks), not the original seed, so a dropped district no
       // longer prints "Special Conditions for …".
@@ -2124,7 +2196,7 @@ const letterData = {
         const applied = state.conditions.filter((c) => c.owner === key);
         if (!applied.length) return '';
         const name = districts.find((d) => d.key === key)?.name ?? ownerLabel(key);
-        const lis = applied.map((c) => `<li value="${++n}">${conditionBody(c)}</li>`).join('');
+        const lis = applied.map((c, i) => `<li value="${i + 1}">${conditionBody(c)}</li>`).join('');
         return `<p class="ltr__cond-owner t-label-01">Special Conditions for ${name}</p><ol class="ltr__conditions">${lis}</ol>`;
       }).join('');
 
@@ -2396,7 +2468,10 @@ const letterData = {
     // comments record the wizard step + any @-mentions. Typing "@" opens a typeahead
     // over the user directory; picking inserts "@Name", tokenizes it in the thread,
     // and notifies the mentioned people (simulated).
-    interface StoredComment { author: string; time: string; text: string; mentions?: string[] }
+    // `anchor` = the record passage a comment is about (comment-on-a-selection; see
+    // src/lib/text-anchors). The permit detail page shares this thread and simply
+    // ignores the field.
+    interface StoredComment { author: string; time: string; text: string; mentions?: string[]; anchor?: TextAnchor }
     const commentsKey = `permit-comments-${permitId}`;
     const thread = $('comments-thread')!;
     const commentInput = $('comments-input') as any;
@@ -2408,23 +2483,319 @@ const letterData = {
       catch { return []; }
     };
 
-    // A single "author · time" meta line, then the text (with @mentions tokenized).
-    const buildComment = (c: StoredComment): HTMLElement => {
+    // ── Comment on a selection (Google-Docs-style) ─────────────────────────────
+    // Select text in the application record → a "Comment" button appears beside it →
+    // the Comments tab opens with that passage quoted above the composer. The posted
+    // comment saves an ANCHOR (record item + quote + context) and the passage stays
+    // highlighted; "Show in record" on the comment scrolls to it and flashes it.
+    const recordRoot = document.querySelector<HTMLElement>('.app-review');
+    const quoteBox = $('comments-quote') as HTMLElement | null;
+    const quoteTextEl = $('comments-quote-text');
+    const selectHost = $('select-comment') as HTMLElement | null;
+    let pendingAnchor: TextAnchor | null = null;
+    let selectionAnchor: TextAnchor | null = null;
+    let selectionRange: Range | null = null;
+    const clipQuote = (s: string) => (s.length > 220 ? `${s.slice(0, 220).trimEnd()}…` : s);
+
+    // Saved comments whose passage is still in the record: { index in the stored
+    // list, comment, live range }.
+    const anchoredComments = () => (recordRoot ? loadComments() : [])
+      .map((c, i) => ({ i, c, range: c.anchor ? findAnchor(c.anchor, recordRoot!) : null }))
+      .filter((x): x is { i: number; c: StoredComment; range: Range } => !!x.range);
+
+    // ── Discoverability: comment markers + section counts ──────────────────────
+    // Each record item with comments gets a comment icon button with a count badge
+    // (stock cds-icon-button + cds-badge-indicator) beside its Edit button, and each
+    // section header gets a "N comments" tag — visible even when the section is
+    // collapsed. Markers are rebuilt with the record observer paused, so drawing them
+    // doesn't trigger a re-render loop.
+    const chatIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M8 10H24V12H8z"/><path d="M8 16H18V18H8z"/></svg>';
+    const plural = (n: number) => `${n} comment${n === 1 ? '' : 's'}`;
+    let pauseRecordObserver: (fn: () => void) => void = (fn) => fn();
+    const renderCommentMarkers = (found: ReturnType<typeof anchoredComments>) => {
+      if (!recordRoot) return;
+      pauseRecordObserver(() => {
+        recordRoot.querySelectorAll('.comment-marker, .rsec-comments').forEach((el) => el.remove());
+        const byItem = new Map<string, number[]>();
+        const bySection = new Map<Element, number>();
+        for (const f of found) {
+          const key = f.c.anchor!.item;
+          if (key) byItem.set(key, [...(byItem.get(key) || []), f.i]);
+          const sec = (f.range.startContainer.parentElement)?.closest('.rsec');
+          if (sec) bySection.set(sec, (bySection.get(sec) || 0) + 1);
+        }
+        byItem.forEach((idxs, key) => {
+          const scopeEl = recordRoot.querySelector(`[data-edit-scope="${CSS.escape(key)}"]`);
+          const edit = scopeEl?.querySelector<HTMLElement>(`[data-record-edit="${CSS.escape(key)}"]`);
+          if (!edit) return;
+          // Group the marker with the Edit button so layouts keep one action slot.
+          let actions = edit.parentElement?.classList.contains('item-actions') ? edit.parentElement : null;
+          if (!actions) {
+            actions = document.createElement('span');
+            actions.className = 'item-actions';
+            edit.replaceWith(actions);
+            actions.append(edit);
+          }
+          const marker = document.createElement('cds-icon-button');
+          marker.className = 'comment-marker';
+          marker.setAttribute('kind', 'ghost'); marker.setAttribute('size', 'sm'); marker.setAttribute('align', 'left');
+          marker.dataset.commentIndexes = idxs.join(',');
+          marker.innerHTML = `${chatIcon}<cds-badge-indicator count="${idxs.length}"></cds-badge-indicator><span slot="tooltip-content">Show ${plural(idxs.length)}</span>`;
+          actions.prepend(marker);
+        });
+        bySection.forEach((n, sec) => {
+          const toggle = sec.querySelector('.rsec__toggle');
+          if (!toggle) return;
+          const tag = document.createElement('cds-tag');
+          tag.className = 'rsec-comments'; tag.setAttribute('type', 'blue'); tag.setAttribute('size', 'sm');
+          tag.textContent = plural(n);
+          toggle.append(tag);
+        });
+      });
+    };
+
+    // Paint every saved passage, plus the one being commented on right now, and
+    // refresh the markers.
+    const refreshHighlights = () => {
+      if (!recordRoot) return;
+      const found = anchoredComments();
+      // Layered + translucent, so a passage inside another commented passage reads
+      // darker where they overlap (see paintLayered).
+      paintLayered('review-comment', found.map((f) => f.range));
+      const pending = pendingAnchor ? findAnchor(pendingAnchor, recordRoot) : null;
+      paintHighlight('review-comment-pending', pending ? [pending] : []);
+      renderCommentMarkers(found);
+    };
+
+    // Open the Comments tab on specific comments: scroll to the first, flash them,
+    // and flash their passages in the record.
+    const showComments = (indexes: number[]) => {
+      const tabs = document.querySelector('cds-tabs[data-panels]') as any;
+      if (tabs) { tabs.value = 'comments'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
+      requestAnimationFrame(() => {
+        const items = indexes.map((i) => thread.querySelector<HTMLElement>(`[data-comment-index="${i}"]`)).filter((x): x is HTMLElement => !!x);
+        items[0]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        items.forEach((li) => { li.classList.add('comment--flash'); setTimeout(() => li.classList.remove('comment--flash'), 2000); });
+        const ranges = anchoredComments().filter((f) => indexes.includes(f.i)).map((f) => f.range);
+        paintHighlight('review-comment-active', ranges);
+        setTimeout(() => paintHighlight('review-comment-active', []), 2000);
+      });
+    };
+    // Visual link, record → comments: hovering a marker lights up its comments.
+    const markerHover = (e: Event, on: boolean) => {
+      const marker = (e.target as HTMLElement).closest?.('.comment-marker') as HTMLElement | null;
+      if (!marker) return;
+      (marker.dataset.commentIndexes || '').split(',').forEach((i) =>
+        thread.querySelector(`[data-comment-index="${i}"]`)?.classList.toggle('comment--hover', on));
+    };
+    recordRoot?.addEventListener('mouseover', (e) => markerHover(e, true));
+    recordRoot?.addEventListener('mouseout', (e) => markerHover(e, false));
+    recordRoot?.addEventListener('click', (e) => {
+      // A comment marker → its comments.
+      const marker = (e.target as HTMLElement).closest<HTMLElement>('.comment-marker');
+      if (marker) { showComments((marker.dataset.commentIndexes || '').split(',').map(Number)); return; }
+      // A click (not a drag-select) inside highlighted text → that comment.
+      if (!window.getSelection()?.isCollapsed) return;
+      const caret = (document as any).caretPositionFromPoint?.(e.clientX, e.clientY);
+      const node: Node | null = caret ? caret.offsetNode : (document as any).caretRangeFromPoint?.(e.clientX, e.clientY)?.startContainer ?? null;
+      const offset: number = caret ? caret.offset : (document as any).caretRangeFromPoint?.(e.clientX, e.clientY)?.startOffset ?? 0;
+      if (!node) return;
+      const hit = anchoredComments().filter((f) => { try { return f.range.isPointInRange(node, offset); } catch { return false; } });
+      if (hit.length) showComments(hit.map((f) => f.i));
+    });
+
+    const setPendingAnchor = (a: TextAnchor | null) => {
+      pendingAnchor = a;
+      if (quoteBox) quoteBox.hidden = !a;
+      if (quoteTextEl) quoteTextEl.textContent = a ? clipQuote(a.quote) : '';
+      refreshHighlights();
+    };
+    $('comments-quote-clear')?.addEventListener('click', () => setPendingAnchor(null));
+
+    // Scroll the record to a passage and flash it (expanding its section if collapsed).
+    const jumpToAnchor = (a: TextAnchor) => {
+      if (!recordRoot) return;
+      const itemEl = a.item ? recordRoot.querySelector(`[data-edit-scope="${CSS.escape(a.item)}"]`) : null;
+      const body = itemEl?.closest<HTMLElement>('[data-section-body]');
+      if (body?.hidden) body.parentElement?.querySelector<HTMLElement>('[data-section-toggle]')?.click();
+      requestAnimationFrame(() => {
+        const range = findAnchor(a, recordRoot);
+        if (!range) { showToast('Passage not found', 'That text has changed since the comment was posted.', 'info'); return; }
+        const rect = range.getBoundingClientRect();
+        window.scrollTo({ top: window.scrollY + rect.top - window.innerHeight / 3, behavior: 'smooth' });
+        paintHighlight('review-comment-active', [range]);
+        setTimeout(() => paintHighlight('review-comment-active', []), 2200);
+      });
+    };
+
+    // ── Replies ────────────────────────────────────────────────────────────────
+    // Stored separately, keyed by the parent comment (author + time + text), so the
+    // seeded comments can be replied to as well — and the permit page, which shares
+    // the thread, is unaffected.
+    interface Reply { author: string; time: string; text: string; mentions?: string[] }
+    const repliesKey = `permit-comment-replies-${permitId}`;
+    const replyKey = (c: StoredComment) => `${c.author}|${c.time}|${c.text.slice(0, 80)}`;
+    const loadReplies = (): Record<string, Reply[]> => {
+      try { const o = JSON.parse(localStorage.getItem(repliesKey) || '{}'); return o && typeof o === 'object' ? o : {}; }
+      catch { return {}; }
+    };
+    const metaLine = (author: string, time: string) => {
+      const meta = document.createElement('p'); meta.className = 'comment__meta t-label-01';
+      const who = document.createElement('span'); who.className = 'comment__author'; who.textContent = author;
+      meta.append(who, document.createTextNode(` · ${time}`));
+      return meta;
+    };
+    // Inline reply composer under a comment: a stock cds-textarea (with the same
+    // @-mention typeahead as the main composer) + Cancel / Reply buttons.
+    const openReplyComposer = (li: HTMLElement, parent: StoredComment) => {
+      if (li.querySelector('.reply-composer')) { li.querySelector<any>('.reply-composer cds-textarea')?.focus?.(); return; }
+      const box = document.createElement('div'); box.className = 'reply-composer';
+      box.innerHTML = `
+        <div class="mention-field">
+          <cds-textarea label="Reply" placeholder="Write a reply… type @ to mention someone" rows="2"></cds-textarea>
+          <ul class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
+        </div>
+        <div class="reply-composer__actions">
+          <cds-button kind="ghost" size="sm" data-reply-cancel>Cancel</cds-button>
+          <cds-button kind="primary" size="sm" data-reply-post>Reply</cds-button>
+        </div>`;
+      li.querySelector('.comment__actions')?.before(box);
+      const input = box.querySelector('cds-textarea') as any;
+      const pickedReply = wireMentionTypeahead(input, box.querySelector('.mention-menu'), mentionDir);
+      const post = () => {
+        const text = (input.value ?? '').trim();
+        if (!text) { input.focus(); return; }
+        const mentioned = [...pickedReply.values()].filter((u) => text.includes(`@${u.name}`));
+        const time = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const all = loadReplies();
+        const k = replyKey(parent);
+        all[k] = [...(all[k] || []), { author: data.currentUser, time, text, mentions: mentioned.map((u) => u.name) }];
+        localStorage.setItem(repliesKey, JSON.stringify(all));
+        renderThread();
+        showToast('Reply posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
+      };
+      box.querySelector('[data-reply-post]')?.addEventListener('click', post);
+      box.querySelector('[data-reply-cancel]')?.addEventListener('click', () => box.remove());
+      input.addEventListener('keydown', (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); post(); } });
+      setTimeout(() => input.focus?.(), 30);
+    };
+
+    // A single "author · time" meta line, the quoted passage (if any), the text (with
+    // @mentions tokenized), its replies, then a Reply action.
+    const buildComment = (c: StoredComment, index?: number): HTMLElement => {
       const li = document.createElement('li'); li.className = 'comment';
+      if (index !== undefined) li.dataset.commentIndex = String(index);
       const meta = document.createElement('p'); meta.className = 'comment__meta t-label-01';
       const who = document.createElement('span'); who.className = 'comment__author'; who.textContent = c.author;
       meta.append(who, document.createTextNode(` · ${c.time}`));
+      li.append(meta);
+      if (c.anchor) {
+        const quote = document.createElement('div'); quote.className = 'comment__quote';
+        const bq = document.createElement('blockquote'); bq.className = 'comment__quote-text t-body-01';
+        bq.textContent = clipQuote(c.anchor.quote);
+        quote.append(bq);
+        if (recordRoot && findAnchor(c.anchor, recordRoot)) {
+          const jump = document.createElement('cds-button') as HTMLElement;
+          jump.setAttribute('kind', 'ghost'); jump.setAttribute('size', 'sm');
+          jump.innerHTML = 'Show in record<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M24.59 16.59 17 24.17 17 4 15 4 15 24.17 7.41 16.59 6 18 16 28 26 18 24.59 16.59z"/></svg>';
+          const anchor = c.anchor;
+          jump.addEventListener('click', () => jumpToAnchor(anchor));
+          quote.append(jump);
+        } else {
+          const gone = document.createElement('p'); gone.className = 'comment__quote-note t-label-01';
+          gone.textContent = 'This passage has changed since the comment was posted.';
+          quote.append(gone);
+        }
+        li.append(quote);
+      }
       const text = document.createElement('p'); text.className = 'comment__text t-body-01';
       text.appendChild(renderMentionText(c.text, c.mentions ?? []));
-      li.append(meta, text);
+      li.append(text);
+
+      const replies = loadReplies()[replyKey(c)] || [];
+      if (replies.length) {
+        const list = document.createElement('ul'); list.className = 'comment__replies';
+        for (const r of replies) {
+          const item = document.createElement('li'); item.className = 'comment__reply';
+          const body = document.createElement('p'); body.className = 'comment__text t-body-01';
+          body.appendChild(renderMentionText(r.text, r.mentions ?? []));
+          item.append(metaLine(r.author, r.time), body);
+          list.append(item);
+        }
+        li.append(list);
+      }
+      // Visual link, comment → record: hovering a quoted comment lights up its passage.
+      if (c.anchor && recordRoot) {
+        const anchor = c.anchor;
+        li.addEventListener('mouseenter', () => { const r = findAnchor(anchor, recordRoot); paintHighlight('review-comment-hover', r ? [r] : []); });
+        li.addEventListener('mouseleave', () => paintHighlight('review-comment-hover', []));
+      }
+      const actions = document.createElement('div'); actions.className = 'comment__actions';
+      const reply = document.createElement('cds-button') as HTMLElement;
+      reply.setAttribute('kind', 'ghost'); reply.setAttribute('size', 'sm');
+      reply.textContent = replies.length ? `Reply (${replies.length})` : 'Reply';
+      reply.addEventListener('click', () => openReplyComposer(li, c));
+      actions.append(reply);
+      li.append(actions);
       return li;
     };
     const renderThread = () => {
       thread.innerHTML = '';
-      const all = [...loadComments(), ...data.comments];
-      all.forEach((c) => thread.appendChild(buildComment(c)));
-      setTabBadge('comments', all.length);
+      const stored = loadComments();
+      stored.forEach((c, i) => thread.appendChild(buildComment(c, i)));
+      data.comments.forEach((c) => thread.appendChild(buildComment(c)));
+      setTabBadge('comments', stored.length + data.comments.length);
+      refreshHighlights();
     };
+
+    // Show the Comment button beside a selection in the record; hide it otherwise.
+    const placeSelectButton = () => {
+      if (!selectHost || !selectionRange) return;
+      const rect = selectionRange.getBoundingClientRect();
+      if (!rect.width && !rect.height) { selectHost.hidden = true; return; }
+      selectHost.style.top = `${Math.max(8, rect.top - 44)}px`;
+      selectHost.style.left = `${Math.min(window.innerWidth - 140, rect.left + rect.width / 2 - 50)}px`;
+    };
+    const onSelectionDone = () => {
+      if (!recordRoot || !selectHost) return;
+      const sel = window.getSelection();
+      selectionAnchor = anchorFromSelection(sel, recordRoot);
+      selectionRange = selectionAnchor && sel ? sel.getRangeAt(0).cloneRange() : null;
+      selectHost.hidden = !selectionAnchor;
+      placeSelectButton();
+    };
+    recordRoot?.addEventListener('mouseup', () => setTimeout(onSelectionDone, 0));
+    recordRoot?.addEventListener('keyup', (e: KeyboardEvent) => { if (e.shiftKey || e.key.startsWith('Arrow')) onSelectionDone(); });
+    document.addEventListener('selectionchange', () => {
+      if (selectHost && !selectHost.hidden && window.getSelection()?.isCollapsed) selectHost.hidden = true;
+    });
+    window.addEventListener('scroll', placeSelectButton, { passive: true });
+    // mousedown would otherwise clear the selection before the click lands.
+    selectHost?.addEventListener('mousedown', (e) => e.preventDefault());
+    $('select-comment-btn')?.addEventListener('click', () => {
+      if (!selectionAnchor) return;
+      setPendingAnchor(selectionAnchor);
+      if (selectHost) selectHost.hidden = true;
+      window.getSelection()?.removeAllRanges();
+      const tabs = document.querySelector('cds-tabs[data-panels]') as any;
+      if (tabs) { tabs.value = 'comments'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
+      setTimeout(() => commentInput?.focus?.(), 50);
+    });
+
+    // Record edits re-render text, which invalidates painted ranges: re-anchor
+    // (and refresh each comment's "passage changed" state) after any change.
+    let reanchorTimer: ReturnType<typeof setTimeout> | undefined;
+    if (recordRoot) {
+      const recordObserver = new MutationObserver(() => {
+        clearTimeout(reanchorTimer);
+        reanchorTimer = setTimeout(renderThread, 200);
+      });
+      const observeOpts = { subtree: true, childList: true, characterData: true };
+      recordObserver.observe(recordRoot, observeOpts);
+      // Comment markers are drawn into the record; pause the observer meanwhile.
+      pauseRecordObserver = (fn) => { recordObserver.disconnect(); try { fn(); } finally { recordObserver.takeRecords(); recordObserver.observe(recordRoot, observeOpts); } };
+      refreshHighlights();
+    }
 
     // @-mention typeahead — shared with the permit detail page (src/lib/comment-mentions),
     // so a mention works identically in both composers. `picked` records users
@@ -2438,9 +2809,10 @@ const letterData = {
       const mentioned = [...picked.values()].filter((u) => text.includes(`@${u.name}`));
       const time = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const list = loadComments();
-      list.unshift({ author: data.currentUser, time, text, mentions: mentioned.map((u) => u.name) });
+      list.unshift({ author: data.currentUser, time, text, mentions: mentioned.map((u) => u.name), ...(pendingAnchor ? { anchor: pendingAnchor } : {}) });
       localStorage.setItem(commentsKey, JSON.stringify(list));
       commentInput.value = ''; picked.clear();
+      setPendingAnchor(null);
       renderThread();
       commentInput.focus();
       showToast('Comment posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
@@ -2466,18 +2838,42 @@ const letterData = {
       syncTabs();
     });
 
-    // "View CV" (research-team PI tile) → open that document in the working panel:
-    // switch to the Document viewer tab and select the file in its picker (the
-    // DocumentViewer's own listener swaps the embed).
+    // Where the last "View CV" jump came from — read by the viewer's Back button.
+    let backTo: { y: number; trigger: HTMLElement } | null = null;
+    document.querySelectorAll<HTMLElement>('[data-docs-return]').forEach((back) => {
+      back.addEventListener('click', () => {
+        if (!backTo) return;
+        const { y, trigger } = backTo;
+        backTo = null;
+        back.hidden = true;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+        // Return keyboard focus to the control that started the jump.
+        trigger.focus({ preventScroll: true });
+      });
+    });
+
+    // "View CV" (research-team tile) and "Answered in study proposal" links → open
+    // that document in the record's Document viewer: scroll it into view and select
+    // the file in its picker (the DocumentViewer's own listener swaps the embed).
+    // The links' new-tab default is cancelled only when the viewer can take over.
     document.addEventListener('click', (e) => {
-      const trigger = (e.target as HTMLElement).closest('[data-view-cv]') as HTMLElement | null;
+      const trigger = (e.target as HTMLElement).closest('[data-view-cv], [data-view-doc]') as HTMLElement | null;
       if (!trigger) return;
-      const href = trigger.dataset.viewCv;
+      const href = trigger.dataset.viewCv ?? trigger.dataset.viewDoc;
       if (!href) return;
-      const scope = (trigger.closest('.step, .version') || document).querySelector('[data-tab-scope]');
-      if (!scope) return;
-      const tabs = scope.querySelector('cds-tabs[data-panels]') as any;
-      if (tabs) { tabs.value = 'document'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
+      const scope = (trigger.closest('.step, .version') || document).querySelector<HTMLElement>('[data-record-docs]');
+      if (!scope?.querySelector(`.pdfv__select cds-dropdown-item[value="${href}"]`)) return;
+      e.preventDefault();
+      // Remember where the reviewer was so the viewer's Back button can return them
+      // there — the exact scroll position, plus the trigger to restore focus to.
+      const back = scope.querySelector<HTMLElement>('[data-docs-return]');
+      if (back) {
+        const section = trigger.closest('.rsec')?.querySelector('.rsec__title')?.textContent?.trim();
+        backTo = { y: window.scrollY, trigger };
+        back.querySelector('[data-docs-return-label]')!.textContent = section ? `Back to ${section}` : 'Back';
+        back.hidden = false;
+      }
+      scope.scrollIntoView({ behavior: 'smooth', block: 'start' });
       const sel = scope.querySelector('.pdfv__select') as any;
       const item = sel?.querySelector(`cds-dropdown-item[value="${href}"]`) as HTMLElement | null;
       if (sel && item) {
@@ -2486,11 +2882,6 @@ const letterData = {
       }
     });
 
-    // ── Analysis team tab ──
-    // The roster + its add / remove / email-all / copy behavior live in the shared
-    // AnalysisTeam component (src/components/AnalysisTeam.astro) — identical to the
-    // permit detail page, same permit-team storage. It ships its own script and
-    // keeps the tab's count badge in step, so there's nothing to wire here.
 
     // ── Auto-save indicator (lead only — the assistant's record is read-only) ─────
     // The record persists every edit silently; surface it with Carbon's stock
@@ -2590,17 +2981,15 @@ const letterData = {
     /* Step ① column titles — record on the left, working panel on the right. */
     .pane-title { margin: 0 0 var(--cds-spacing-05, 1rem); }
 
-    /* Docked working panel (step ①, B3) — a single tabbed surface on a raised layer,
+    /* Docked working panel (step ①, B3) — a single tabbed surface directly on the
+       page (no layer background or frame; the tab strip gives it its structure),
        pinned so it stays in view while the record scrolls the page. */
     .dock-col { min-width: 0; }
-    .dock { background: var(--cds-layer-01, #f4f4f4); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
-    .rail-panel { padding: var(--cds-spacing-06, 1.5rem); }
+    .rail-panel { padding: var(--cds-spacing-06, 1.5rem) 0; }
     .rail-panel[hidden] { display: none; }
-    /* The document viewer fills its panel edge-to-edge (its own bar + embed). */
-    .dock-doc { padding: 0; }
     .dock-list { display: flex; flex-direction: column; }
 
-    /* Count badges on the working-panel tabs (X conditions / Y comments / Z team). */
+    /* Count badges on the working-panel tabs (Y comments / X conditions). */
     .tab-badge {
       display: inline-grid; place-items: center; min-inline-size: 1.25rem; block-size: 1.25rem;
       margin-inline-start: 0.375rem; padding: 0 0.375rem; border-radius: 0.75rem;
@@ -2627,12 +3016,13 @@ const letterData = {
       .dock-col .dock { flex: 1 1 auto; min-block-size: 0; display: flex; flex-direction: column; }
       .dock-col .dock cds-tabs { flex: 0 0 auto; }
       .dock-col .rail-panel:not([hidden]) { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; }
-      /* Document tab: the embed fills the available height (native PDF scroll),
-         instead of its tall fixed frame forcing an outer scrollbar. */
-      .dock-col .dock-doc:not([hidden]) { overflow-y: hidden; }
-      .dock-col .dock-doc :global(.pdfv) { block-size: 100%; }
-      .dock-col .dock-doc :global(.pdfv__frame) { block-size: auto; min-block-size: 0; flex: 1 1 auto; }
     }
+
+    /* Document viewer at the foot of the application record column. */
+    .record-docs { margin-top: var(--cds-spacing-09, 3rem); scroll-margin-top: 7.5rem; }
+    .record-docs__head { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-05, 1rem); margin: 0 0 var(--cds-spacing-05, 1rem); }
+    .record-docs__title { margin: 0; }
+    .record-docs__head [hidden] { display: none; }
 
     .rail__sub { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
     .rail__tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); margin: 0 0 var(--cds-spacing-05, 1rem); }
@@ -2642,8 +3032,6 @@ const letterData = {
        the cds-inline-loading itself; this sets layout, not the component's parts. */
     .appreview-savestate { margin-inline-end: auto; align-self: center; }
 
-    /* The analysis-team roster (team tab) is the shared AnalysisTeam component,
-       which carries its own styles. */
 
     /* Condition cards — the TEXT is the content, shown in full; a source pill and
        optional label caption it, reorder handles on the left, remove on the right. */
@@ -2843,6 +3231,50 @@ const letterData = {
     :global(.mention-menu__name) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; }
     :global(.mention-menu__detail) { color: var(--cds-text-secondary, #525252); font-size: 0.75rem; }
     :global(.mention) { color: var(--cds-link-primary, #0f62fe); font-weight: 600; }
+
+    /* ── Comment on a selection ──────────────────────────────────────────────
+       carbon-checked: Carbon ships no text-annotation / highlight component. The
+       controls are stock (cds-button, cds-icon-button); these rules only place the
+       selection button and style the quoted passage with --cds-* tokens. Highlights
+       are painted by the CSS Custom Highlight API (no DOM wrappers). */
+    /* Saved passages: four translucent layers of the interactive blue (a token mixed
+       toward transparent). One comment = a light tint; text inside two or three
+       commented passages stacks layers and reads progressively darker. */
+    :global(::highlight(review-comment-0)),
+    :global(::highlight(review-comment-1)),
+    :global(::highlight(review-comment-2)),
+    :global(::highlight(review-comment-3)) { background-color: color-mix(in srgb, var(--cds-interactive, #0f62fe) 16%, transparent); }
+    :global(::highlight(review-comment-pending)) { background-color: var(--cds-highlight, #d0e2ff); text-decoration: underline 2px var(--cds-border-interactive, #0f62fe); }
+    :global(::highlight(review-comment-active)),
+    :global(::highlight(review-comment-hover)) { background-color: var(--cds-support-warning, #f1c21b); }
+    .select-comment { position: fixed; z-index: 8000; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+    .select-comment[hidden] { display: none; }
+    /* The passage being commented on, above the composer: a token-colored rule +
+       quote, with a ghost "remove" button. */
+    .comment-quote { display: flex; align-items: flex-start; gap: var(--cds-spacing-03, 0.5rem); inline-size: 100%; padding: var(--cds-spacing-03, 0.5rem) 0 var(--cds-spacing-03, 0.5rem) var(--cds-spacing-04, 0.75rem); border-inline-start: 3px solid var(--cds-border-interactive, #0f62fe); background: var(--cds-layer-02, #fff); }
+    .comment-quote[hidden] { display: none; }
+    .comment-quote__body { flex: 1 1 auto; min-inline-size: 0; }
+    .comment-quote__label { margin: 0 0 0.25rem; color: var(--cds-text-secondary, #525252); }
+    .comment-quote__text { margin: 0; color: var(--cds-text-primary, #161616); font-style: italic; }
+    /* A posted comment's quoted passage (built in JS → :global). */
+    :global(.comment__quote) { margin: 0 0 var(--cds-spacing-03, 0.5rem); padding-inline-start: var(--cds-spacing-04, 0.75rem); border-inline-start: 3px solid var(--cds-highlight, #d0e2ff); }
+    :global(.comment__quote-text) { margin: 0; color: var(--cds-text-secondary, #525252); font-style: italic; }
+    :global(.comment__quote cds-button) { margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
+    :global(.comment__quote-note) { margin: 0.25rem 0 0; color: var(--cds-text-helper, #6f6f6f); }
+    /* Comment markers in the record (built in JS): the marker + Edit button share one
+       action slot; section headers carry a "N comments" tag. */
+    :global(.app-review .item-actions) { display: inline-flex; align-items: center; flex: 0 0 auto; }
+    :global(.app-review .rsec-comments) { margin-inline-start: var(--cds-spacing-03, 0.5rem); }
+    /* A comment brought into view from the record flashes with the highlight color. */
+    :global(.comment) { transition: background-color 0.4s ease; }
+    :global(.comment.comment--flash), :global(.comment.comment--hover) { background-color: var(--cds-highlight, #d0e2ff); }
+    /* Replies: indented under the comment, each with its own meta line; the reply
+       composer and the Reply action sit under the thread. */
+    :global(.comment__replies) { list-style: none; margin: var(--cds-spacing-03, 0.5rem) 0 0; padding: 0 0 0 var(--cds-spacing-05, 1rem); border-inline-start: 1px solid var(--cds-border-subtle-01, #e0e0e0); display: grid; gap: var(--cds-spacing-04, 0.75rem); }
+    :global(.comment__actions) { margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
+    :global(.reply-composer) { display: grid; gap: var(--cds-spacing-03, 0.5rem); margin-block-start: var(--cds-spacing-03, 0.5rem); padding-inline-start: var(--cds-spacing-05, 1rem); }
+    :global(.reply-composer cds-textarea) { display: block; inline-size: 100%; }
+    :global(.reply-composer__actions) { display: flex; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); }
 
     .dock-thread { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--cds-spacing-05, 1rem); align-content: start; }
     .comment { min-width: 0; }

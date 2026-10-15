@@ -4,21 +4,30 @@
 // Pass `tiles` to promote each fact onto its own cds-tile surface (a card grid)
 // where facts read better as discrete blocks than as a dense dl.
 // A row with `href` renders its value as a cds-link to that document (the answer
-// lives in an uploaded file) with a launch glyph.
+// lives in an uploaded file) with a launch glyph. The link carries `data-view-doc`,
+// so a page with an embedded DocumentViewer can open it there instead of a new tab.
 import type { MetaRow } from '../data/permit';
 import ContactCard from './ContactCard.astro';
+import YesNoStatement from './YesNoStatement.astro';
+import EditButton from './EditButton.astro';
 interface Props {
   rows: MetaRow[];
   /** Minimum column width; wider for long values (e.g. contact strings). */
   min?: string;
   /** Render each fact as its own cds-tile card instead of a plain dl row. */
   tiles?: boolean;
+  /** Application-record editing (tiles only): each tile gets an Edit button keyed
+   *  `${editPrefix}-${row index}` plus the bindings the shared edit modal re-renders
+   *  (src/lib/record-edit.ts). The host supplies the matching specs. */
+  editPrefix?: string;
 }
-const { rows, min = '15rem', tiles = false } = Astro.props;
+const { rows, min = '15rem', tiles = false, editPrefix } = Astro.props;
+const keyFor = (row: MetaRow) => (editPrefix ? `${editPrefix}-${rows.indexOf(row)}` : undefined);
 
-// Yes/no facts only surface when affirmative — a "No" row drops out entirely,
-// and a "Yes" row's tile states the label itself instead of showing "Yes".
-const visibleRows = rows.filter((r) => !(r.boolean && r.value !== 'Yes'));
+// Yes/no facts with statement phrasing ("Does / Does NOT …") always show, as a
+// YesNoStatement. Legacy yes/no rows without it only surface when affirmative —
+// a "No" row drops out, and a "Yes" row's tile states the label itself.
+const visibleRows = rows.filter((r) => !(r.boolean && !r.statements && r.value !== 'Yes'));
 
 // Carbon `launch` 16 glyph — signals the value opens an uploaded document.
 const launchIcon =
@@ -31,34 +40,48 @@ const launchIcon =
   <div class="factgrid factgrid--tiles" style={`--min:${min}`}>
     {visibleRows.map((row) => (
       row.contact ? (
-        <ContactCard role={row.key} contact={row.contact} kind={row.contactKind} />
+        <ContactCard role={row.key} contact={row.contact} kind={row.contactKind} editKey={keyFor(row)} />
+      ) : row.boolean && row.statements ? (
+        <cds-tile class="factgrid__item">
+          {row.value === 'Yes' && row.detail ? (
+            <YesNoStatement value={true} statements={row.statements}>{row.detail}</YesNoStatement>
+          ) : (
+            <YesNoStatement value={row.value === 'Yes'} statements={row.statements} />
+          )}
+        </cds-tile>
       ) : row.boolean ? (
         <cds-tile class="factgrid__item factgrid__item--flag">
           <p class="factgrid__flag t-body-01">{row.key}</p>
         </cds-tile>
       ) : row.entries ? (
-        <cds-tile class="factgrid__item">
+        <cds-tile class:list={['factgrid__item', keyFor(row) && 'factgrid__item--editable']} data-edit-scope={keyFor(row)}>
+          {keyFor(row) && <EditButton item={keyFor(row)!} label={row.key} />}
           <dl class="factgrid__pair">
             <dt class="factgrid__key t-label-01">{row.key}</dt>
-            {row.entries.map((e) => (
+            {row.entries.map((e, j) => (
               <dd class="factgrid__entry">
                 <span class="factgrid__entry-label t-label-01">{e.label}</span>
-                <span class="factgrid__entry-value t-heading-03">{e.value}</span>
+                <span class="factgrid__entry-value t-heading-03" data-bind={keyFor(row) ? `entry-${j}` : undefined}>{e.value}</span>
               </dd>
             ))}
           </dl>
         </cds-tile>
       ) : (
-        <cds-tile class="factgrid__item">
+        <cds-tile class:list={['factgrid__item', keyFor(row) && 'factgrid__item--editable']} data-edit-scope={keyFor(row)}>
+          {keyFor(row) && <EditButton item={keyFor(row)!} label={row.key} />}
           <dl class="factgrid__pair">
             <dt class="factgrid__key t-label-01">{row.key}</dt>
             <dd class="factgrid__val t-heading-03">
               {row.href ? (
-                <cds-link href={row.href} size="lg" target="_blank" rel="noopener">
-                  {row.linkLabel ?? row.value}
-                  <Fragment set:html={launchIcon} />
-                </cds-link>
-              ) : row.value}
+                <>
+                  {/* "Answered in study proposal" link; an editable tile can switch to a typed answer. */}
+                  <cds-link href={row.href} size="lg" target="_blank" rel="noopener" data-view-doc={row.href} data-show-if={keyFor(row) ? 'inProposal' : undefined}>
+                    {row.linkLabel ?? row.value}
+                    <Fragment set:html={launchIcon} />
+                  </cds-link>
+                  {keyFor(row) && <span data-bind="value" data-hide-if="inProposal" hidden></span>}
+                </>
+              ) : keyFor(row) ? <span data-bind="value">{row.value}</span> : row.value}
             </dd>
           </dl>
         </cds-tile>
@@ -72,7 +95,7 @@ const launchIcon =
         <dt class="factgrid__key t-label-01">{row.key}</dt>
         <dd class="factgrid__val t-body-01">
           {row.href ? (
-            <cds-link href={row.href} target="_blank" rel="noopener">
+            <cds-link href={row.href} target="_blank" rel="noopener" data-view-doc={row.href}>
               {row.linkLabel ?? row.value}
               <Fragment set:html={launchIcon} />
             </cds-link>
@@ -98,6 +121,14 @@ const launchIcon =
   .factgrid__pair {
     margin: 0;
   }
+  /* Record editing: the Edit button pins to the tile's top-right corner; the key
+     leaves room for it.
+     carbon-checked: layout only — positions a stock cds-icon-button inside a stock
+     cds-tile; no Carbon part is restyled. */
+  .factgrid__item--editable { position: relative; }
+  .factgrid__item--editable > :global(.record-edit-btn),
+  .factgrid__item--editable > :global(.item-actions) { position: absolute; inset-block-start: 0.5rem; inset-inline-end: 0.5rem; }
+  .factgrid__item--editable .factgrid__key { padding-inline-end: 2.5rem; }
   .factgrid__item {
     min-width: 0;
   }

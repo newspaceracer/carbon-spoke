@@ -30,6 +30,7 @@ import PermitHeader from '../components/PermitHeader.astro';
 import PermitSection from '../components/PermitSection.astro';
 import FactGrid from '../components/FactGrid.astro';
 import ContactCard from '../components/ContactCard.astro';
+import { teamCards } from '../lib/team-cards';
 import Avatar from '../components/Avatar.astro';
 import AnalysisTeam from '../components/AnalysisTeam.astro';
 import InternalOnlyFlag from '../components/InternalOnlyFlag.astro';
@@ -576,9 +577,13 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
               <PermitSection title="Research team">
                 <div class="contact-grid">
-                  <ContactCard role="Organization" contact={t.organization} />
-                  <ContactCard role="Principal investigator" contact={t.principalInvestigator} />
-                  <ContactCard role="Person in charge of field work" contact={t.fieldLead} />
+                  {teamCards([
+                    { role: 'Organization', contact: t.organization, kind: 'organization' },
+                    { role: 'Principal investigator', contact: t.principalInvestigator },
+                    { role: 'Person in charge of field work', contact: t.fieldLead },
+                  ]).map((c) => (
+                    <ContactCard role={c.roles} contact={c.contact} kind={c.kind} />
+                  ))}
                 </div>
                 <h3 class="subhead t-heading-01">Additional participants</h3>
                 <cds-table>

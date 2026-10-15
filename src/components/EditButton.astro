@@ -1,0 +1,18 @@
+---
+// The Edit affordance on an application-record item: a stock ghost cds-icon-button
+// (Carbon `edit` glyph) that opens the shared record-edit modal for `item`
+// (src/lib/record-edit.ts). Same icon + size as the conditions/specimen edit buttons.
+interface Props {
+  /** The item key — matches a spec in #record-edit-specs and a [data-edit-scope]. */
+  item: string;
+  /** What is being edited, for the tooltip / accessible name ("Edit {label}"). */
+  label: string;
+}
+const { item, label } = Astro.props;
+const editIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>';
+---
+
+<cds-icon-button class="record-edit-btn" kind="ghost" size="sm" align="left" data-record-edit={item}>
+  <Fragment set:html={editIcon} />
+  <span slot="tooltip-content">Edit {label}</span>
+</cds-icon-button>

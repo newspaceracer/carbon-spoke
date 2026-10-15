@@ -20,8 +20,11 @@
 // component — the identical helper ApplicationReview.astro uses — not a hand-rolled
 // table primitive. Collapsible sections are stock cds-accordion / cds-accordion-item.
 import ContactCard from './ContactCard.astro';
+import { teamCards } from '../lib/team-cards';
 import FactGrid from './FactGrid.astro';
-import { permit } from '../data/permit';
+import { permit, type MetaRow } from '../data/permit';
+import YesNoStatement from './YesNoStatement.astro';
+import { yesNo } from '../lib/yes-no';
 
 interface Props {
   /** Tighten layout density for a narrow column. Never drops content. */
@@ -80,10 +83,14 @@ const fileGlyph =
   <cds-accordion-item title="Research team" open={secOpen('research')}>
     <div class="subblock">
       <div class="contact-grid">
-        <ContactCard role="Organization" contact={org} />
-        <ContactCard role="Submitter" contact={submitter} />
-        <ContactCard role="Principal investigator" contact={pi} />
-        <ContactCard role="Person in direct charge of field work" contact={fieldLead} />
+        {teamCards([
+          { role: 'Organization', contact: org, kind: 'organization' },
+          { role: 'Principal investigator', contact: pi },
+          { role: 'Person in direct charge of field work', contact: fieldLead },
+          { role: 'Submitter', contact: submitter },
+        ]).map((c) => (
+          <ContactCard role={c.roles} contact={c.contact} kind={c.kind} />
+        ))}
       </div>
     </div>
 
@@ -120,12 +127,7 @@ const fileGlyph =
     </div>
 
     <div class="subblock">
-      <dl class="review">
-        <div class="review__row">
-          <dt class="review__label t-label-01">All personnel employed or insured by the institution</dt>
-          <dd class="review__value t-body-01">{t.personnelInsured ? 'Yes' : 'No'}</dd>
-        </div>
-      </dl>
+      <YesNoStatement value={!!t.personnelInsured} statements={yesNo.personnelInsured} />
     </div>
   </cds-accordion-item>
 
@@ -261,8 +263,13 @@ const fileGlyph =
   <!-- ── Additional documents ─────────────────────────────────────────────── -->
   <cds-accordion-item title="Additional documents" open={secOpen('docs')}>
     <div class="subblock">
+      <div class="yn-list">
+        {(ad.facts as readonly MetaRow[]).filter((r) => r.boolean && r.statements).map((r) => (
+          <YesNoStatement value={r.value === 'Yes'} statements={r.statements!} />
+        ))}
+      </div>
       <dl class="review">
-        {ad.facts.map((r) => (
+        {(ad.facts as readonly MetaRow[]).filter((r) => !(r.boolean && r.statements)).map((r) => (
           <div class="review__row">
             <dt class="review__label t-label-01">{r.key}</dt>
             <dd class="review__value t-body-01">{r.value}</dd>
@@ -404,4 +411,6 @@ const fileGlyph =
 
   /* carbon-checked: display modifier on a stock cds-table (see head comment). */
   .ro-table { display: block; }
+  /* Yes/no answers as statements (YesNoStatement), stacked above the other facts. */
+  .yn-list { display: grid; gap: 0.75rem; margin-bottom: 1rem; }
 </style>

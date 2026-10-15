@@ -14,6 +14,8 @@
 // (Submit stays disabled until the certification box is checked) are wired on the
 // page (apply.astro), which owns wizard navigation.
 import PermitSection from './PermitSection.astro';
+import YesNoStatement from './YesNoStatement.astro';
+import { yesNo } from '../lib/yes-no';
 import {
   applicantOrg,
   applicant,
@@ -217,12 +219,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <dl class="review">
-        <div class="review__row">
-          <dt class="review__label t-label-01">All personnel employed or insured by the institution</dt>
-          <dd class="review__value t-body-01">{researchTeam.personnelInsured ? 'Yes' : 'No'}</dd>
-        </div>
-      </dl>
+      <YesNoStatement value={!!researchTeam.personnelInsured} statements={yesNo.personnelInsured} />
     </div>
   </PermitSection>
 
@@ -368,12 +365,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </cds-button>
 
     <div class="subblock">
-      <dl class="review">
-        <div class="review__row">
-          <dt class="review__label t-label-01">Involves specimen collection</dt>
-          <dd class="review__value t-body-01">{dc.collectsSpecimens ? 'Yes' : 'No'}</dd>
-        </div>
-      </dl>
+      <YesNoStatement value={!!dc.collectsSpecimens} statements={yesNo.specimenCollection} />
 
       {dc.collectsSpecimens && (
         <div class="nested">
@@ -445,12 +437,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <dl class="review">
-        <div class="review__row">
-          <dt class="review__label t-label-01">Involves laboratory work</dt>
-          <dd class="review__value t-body-01">{dc.labWork ? 'Yes' : 'No'}</dd>
-        </div>
-      </dl>
+      <YesNoStatement value={!!dc.labWork} statements={yesNo.labWork} />
       {dc.labWork && (
         <div class="nested">
           <dl class="review">
@@ -494,12 +481,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </cds-button>
 
     <div class="subblock">
-      <dl class="review">
-        <div class="review__row">
-          <dt class="review__label t-label-01">Involves soil disturbance</dt>
-          <dd class="review__value t-body-01">{ad.soilDisturbance ? 'Yes' : 'No'}</dd>
-        </div>
-      </dl>
+      <YesNoStatement value={!!ad.soilDisturbance} statements={yesNo.soilDisturbance} />
       {ad.soilDisturbance && (
         <div class="nested">
           <div class="narrative">
@@ -524,12 +506,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <dl class="review">
-        <div class="review__row">
-          <dt class="review__label t-label-01">Requires additional permits</dt>
-          <dd class="review__value t-body-01">{ad.additionalPermits ? 'Yes' : 'No'}</dd>
-        </div>
-      </dl>
+      <YesNoStatement value={!!ad.additionalPermits} statements={yesNo.additionalPermits} />
       {ad.additionalPermits && (
         <div class="nested">
           <div class="narrative">
@@ -619,12 +596,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
     </div>
 
     <div class="subblock">
-      <dl class="review">
-        <div class="review__row">
-          <dt class="review__label t-label-01">Conducts activities beyond simple use</dt>
-          <dd class="review__value t-body-01">{ad.beyondSimpleUse ? 'Yes' : 'No'}</dd>
-        </div>
-      </dl>
+      <YesNoStatement value={!!ad.beyondSimpleUse} statements={yesNo.beyondSimpleUse} />
       {ad.beyondSimpleUse && (
         <div class="nested">
           <div class="narrative">
