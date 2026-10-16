@@ -1,0 +1,267 @@
+---
+// The review layer of the application-record prototype — everything a reviewer
+// does on the record, wired by src/lib/review-workspace.ts:
+//
+//   • mark ISSUES for the researcher (per section, or on a selected passage),
+//   • leave COMMENTS for other reviewers and answer them (replies, resolve),
+//   • decide: Approve (→ the permit-letter step), Return to researcher (sends the
+//     issues), or Reject (with a reason).
+//
+// Markup here: a pinned review bar (status + counts + decisions), the selection
+// toolbar, and the modals (add/edit a note, and one per decision). Each section's
+// issue/comment list and the Comments overview are built at runtime from the
+// shared stores (src/lib/review-thread.ts) — hence the :global styles below.
+//
+// mode="view" (the detail page) mounts only the read-only parts: the status
+// notice, the gated sections, the read-only comment list, and the header's Start
+// review / Open review action. The bar, toolbar, and modals are review-only.
+//
+// carbon-checked: every control is a stock cds-* component (button, modal,
+// textarea, inline-notification, icon-indicator, tag, icon-button). The review bar
+// and the selection toolbar are positioned hosts for stock cds-buttons — Carbon
+// ships no page action bar or selection-anchored toolbar.
+import { permit } from '../../data/permit';
+import { userDirectory } from '../../data/user';
+import { withBase } from '../../lib/base';
+
+interface Props {
+  mode: 'view' | 'review';
+  recordUrl: string;
+  reviewUrl: string;
+}
+const { mode, recordUrl, reviewUrl } = Astro.props;
+const review = mode === 'review';
+---
+
+<div
+  class="rw"
+  data-review-workspace
+  data-permit-id={permit.id}
+  data-permit-name={permit.name}
+  data-seed-status={permit.status.label}
+  data-permit-type={permit.studyAreas.districts.length > 1 ? 'multi' : 'single'}
+  data-letter-url={withBase('/final-letter')}
+  data-mode={mode}
+  data-record-url={recordUrl}
+  data-review-url={reviewUrl}
+>
+  <script type="application/json" data-rw-seed-comments set:html={JSON.stringify(permit.overview.comments)}></script>
+  <script type="application/json" data-rw-directory set:html={JSON.stringify(userDirectory.map((u) => ({ id: u.id, name: u.name, detail: u.detail ?? u.role })))}></script>
+
+  {review && (
+  <Fragment>
+  <!-- Selection toolbar: appears beside text selected in a reviewable section. -->
+  <div class="rw-select" data-rw-select hidden>
+    <cds-button kind="primary" size="sm" data-rw-select-add="issue">Issue</cds-button>
+    <cds-button kind="secondary" size="sm" data-rw-select-add="comment">Comment</cds-button>
+  </div>
+
+  <!-- Pinned review bar: where the review stands + the decisions. Dark zone so it
+       reads as chrome, not content. -->
+  <div class="rw-bar cds--g100" data-rw-bar hidden>
+    <div class="rw-bar__inner">
+      <p class="rw-bar__status t-body-compact-01" data-rw-bar-status aria-live="polite"></p>
+      <div class="rw-bar__actions">
+        <cds-button kind="primary" size="lg" data-rw-action="start">Start review</cds-button>
+        <cds-button kind="danger-ghost" size="lg" data-rw-action="reject">Reject</cds-button>
+        <cds-button kind="secondary" size="lg" data-rw-action="return">Return to researcher</cds-button>
+        <cds-button kind="primary" size="lg" data-rw-action="approve">Approve</cds-button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / edit a note (an issue for the researcher, or a comment for reviewers). -->
+  <cds-modal size="sm" data-rw-note-modal>
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label data-rw-note-label></cds-modal-label>
+      <cds-modal-heading data-rw-note-heading></cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <p class="rw-modal__lede t-body-01" data-rw-note-lede></p>
+      <figure class="rw-quote" data-rw-note-quote hidden>
+        <figcaption class="t-label-01">On this passage</figcaption>
+        <blockquote class="t-body-01" data-rw-note-quote-text></blockquote>
+      </figure>
+      <div class="rw-mention-field">
+        <cds-textarea data-rw-note-input rows="4"></cds-textarea>
+        <ul class="rw-mention-menu" role="listbox" aria-label="Mention a user" data-rw-note-menu hidden></ul>
+      </div>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" data-rw-note-save></cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Return to researcher — sends the issues. -->
+  <cds-modal size="md" data-rw-return-modal>
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Permit {permit.id}</cds-modal-label>
+      <cds-modal-heading>Return to researcher</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <p class="rw-modal__lede t-body-01">The researcher is emailed these issues and can resubmit once they're addressed.</p>
+      <div data-rw-return-issues></div>
+      <cds-inline-notification
+        data-rw-return-none
+        kind="info"
+        low-contrast
+        hide-close-button
+        title="No issues marked"
+        subtitle="Add a message so the researcher knows what to change."
+      ></cds-inline-notification>
+      <cds-textarea data-rw-return-message label="Message to the researcher (optional)" rows="3"></cds-textarea>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" data-rw-return-confirm>Return application</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Approve — continues to the permit-letter step (the app's approval path). -->
+  <cds-modal size="sm" data-rw-approve-modal>
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Permit {permit.id}</cds-modal-label>
+      <cds-modal-heading>Approve this application?</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <p class="rw-modal__lede t-body-01">Next, you'll check the permit letter, then send it for signature.</p>
+      <cds-inline-notification
+        data-rw-approve-drafts
+        kind="warning"
+        low-contrast
+        hide-close-button
+        title="Your issues won't be sent"
+      ></cds-inline-notification>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" data-rw-approve-confirm>Approve and continue</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+
+  <!-- Reject — closes the application; a reason is required. -->
+  <cds-modal size="sm" alert data-rw-reject-modal>
+    <cds-modal-header>
+      <cds-modal-close-button></cds-modal-close-button>
+      <cds-modal-label>Permit {permit.id}</cds-modal-label>
+      <cds-modal-heading>Reject this application?</cds-modal-heading>
+    </cds-modal-header>
+    <cds-modal-body>
+      <p class="rw-modal__lede t-body-01">Rejecting closes the application. The researcher is notified and must submit a new application to reapply. This can't be undone.</p>
+      <cds-textarea data-rw-reject-reason label="Reason, sent to the researcher" rows="3" invalid-text="Enter a reason for the researcher."></cds-textarea>
+    </cds-modal-body>
+    <cds-modal-footer>
+      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+      <cds-modal-footer-button kind="danger" data-rw-reject-confirm>Reject application</cds-modal-footer-button>
+    </cds-modal-footer>
+  </cds-modal>
+  </Fragment>
+  )}
+</div>
+
+<script>
+  import { initReviewWorkspace } from '../../lib/review-workspace';
+  initReviewWorkspace();
+</script>
+
+<style>
+  /* Layout only — controls are cds-*, color from --cds-* tokens. Runtime-built
+     pieces (section notes, the comments overview, menus) are :global. */
+
+  /* Selection toolbar — floats beside the selection (positioned by the script). */
+  .rw-select { position: absolute; z-index: 40; display: flex; gap: 1px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .rw-select[hidden] { display: none; }
+
+  /* Review bar — pinned to the viewport bottom, full width. */
+  .rw-bar {
+    position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 30;
+    background: var(--cds-background, #161616);
+    border-block-start: 1px solid var(--cds-border-subtle-01, #393939);
+  }
+  .rw-bar[hidden] { display: none; }
+  .rw-bar__inner {
+    max-inline-size: 99rem; margin-inline: auto;
+    padding-inline: var(--cds-grid-margin, 1rem);
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-07, 2rem);
+    padding-block: var(--cds-spacing-03, 0.5rem);
+  }
+  .rw-bar__status { margin: 0; color: var(--cds-text-primary, #f4f4f4); }
+  .rw-bar__actions { display: flex; flex-wrap: wrap; gap: 1px; }
+  @media (max-width: 42rem) {
+    .rw-bar__actions { inline-size: 100%; }
+    .rw-bar__actions > * { flex: 1 1 auto; }
+  }
+
+  .rw-modal__lede { margin: 0 0 var(--cds-spacing-05, 1rem); }
+  .rw-quote { margin: 0 0 var(--cds-spacing-05, 1rem); }
+  .rw-quote[hidden] { display: none; }
+  .rw-quote figcaption { color: var(--cds-text-secondary, #525252); margin-bottom: var(--cds-spacing-02, 0.25rem); }
+  [data-rw-return-none], [data-rw-approve-drafts] { margin-bottom: var(--cds-spacing-05, 1rem); max-inline-size: none; }
+
+  /* ── Runtime-built: shared quote + mention styles ───────────────────────── */
+  :global(.rw-quote blockquote), :global(.rw-note__quote) {
+    margin: 0; padding-inline-start: var(--cds-spacing-04, 0.75rem);
+    border-inline-start: 3px solid var(--cds-border-strong-01, #8d8d8d);
+    color: var(--cds-text-secondary, #525252);
+  }
+  :global(.rw-mention-field) { position: relative; }
+  :global(.rw-mention-field cds-textarea) { display: block; inline-size: 100%; }
+  :global(.rw-mention-menu) {
+    position: absolute; inset-inline: 0; top: calc(100% + 0.25rem); z-index: 100;
+    margin: 0; padding: 0; list-style: none; max-block-size: 14rem; overflow-y: auto;
+    background: var(--cds-layer-02, #fff); border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  }
+  :global(.rw-mention-menu[hidden]) { display: none; }
+  :global(.mention-menu__item) {
+    display: flex; flex-direction: column; gap: 0.0625rem; cursor: pointer;
+    padding: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem);
+    border-block-end: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+  :global(.mention-menu__item:last-child) { border-block-end: none; }
+  :global(.mention-menu__item.is-active), :global(.mention-menu__item:hover) { background: var(--cds-layer-hover-02, #e8e8e8); }
+  :global(.mention-menu__name) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; }
+  :global(.mention-menu__detail) { color: var(--cds-text-secondary, #525252); font-size: 0.75rem; }
+  :global(.mention) { color: var(--cds-link-primary, #0f62fe); font-weight: 600; }
+
+  /* ── Runtime-built: a section's review notes ────────────────────────────── */
+  :global(.rw-sec) { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); margin-block-end: var(--cds-spacing-07, 2rem); }
+  :global(.rw-sec:empty) { display: none; }
+  :global(.rw-issues) { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+
+  /* One note (issue or comment): a quiet field-colored block on the white section. */
+  :global(.rw-note) {
+    display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem);
+    padding: var(--cds-spacing-04, 0.75rem) var(--cds-spacing-05, 1rem);
+    background: var(--cds-background, #f4f4f4);
+  }
+  :global(.rw-note__head) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-04, 0.75rem); }
+  :global(.rw-note__meta) { margin: 0; color: var(--cds-text-secondary, #525252); }
+  :global(.rw-note__meta b) { color: var(--cds-text-primary, #161616); font-weight: 600; }
+  :global(.rw-note__tools) { margin-inline-start: auto; display: flex; align-items: center; gap: var(--cds-spacing-02, 0.25rem); }
+  :global(.rw-note__text) { margin: 0; white-space: pre-wrap; }
+  :global(.rw-note--resolved) { opacity: 0.7; }
+  :global(.rw-note__actions) { display: flex; flex-wrap: wrap; gap: 0; margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
+
+  /* Replies sit indented under their comment. */
+  :global(.rw-replies) { list-style: none; margin: 0; padding: 0 0 0 var(--cds-spacing-05, 1rem); display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); border-inline-start: 1px solid var(--cds-border-subtle-01, #c6c6c6); }
+  :global(.rw-reply-composer) { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+  :global(.rw-reply-composer__actions) { display: flex; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); }
+
+  :global(.rw-thread) { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+  :global(.rw-thread[hidden]) { display: none; }
+
+  /* Return modal — issues grouped by section. */
+  :global(.rw-return-group) { margin-block-end: var(--cds-spacing-05, 1rem); }
+  :global(.rw-return-group h3) { margin: 0 0 var(--cds-spacing-03, 0.5rem); }
+  :global(.rw-return-group ol) { margin: 0; padding-inline-start: 1.25rem; list-style: decimal; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+  :global(.rw-return-group li p) { margin: 0; }
+
+  /* Space under the page so the pinned bar never covers the last section. */
+  :global(body.rw-has-bar) { padding-block-end: 5rem; }
+</style>

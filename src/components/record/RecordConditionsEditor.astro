@@ -1,0 +1,66 @@
+---
+// Special conditions on the application-REVIEW page: the shared conditions editor
+// (ConditionsEditor + lib/conditions-editor.ts — the same one the review wizard
+// uses) over the permit's applied set (permit-conditions-${id}, shared with the
+// wizard, the permit page, and the detail page). Editable while the review is
+// under way by the Responsible / Supporting analyst or an Admin; read-only
+// otherwise, with a line saying why. Changes save as they're made.
+import ConditionsEditor from '../ConditionsEditor.astro';
+---
+
+<div class="rce" data-record-conditions>
+  <p class="rce__note t-body-01" data-rce-note hidden></p>
+  <ConditionsEditor />
+</div>
+
+<script>
+  import { mountConditionsEditor } from '../../lib/conditions-editor';
+  import { loadAppliedConditions, saveAppliedConditions, permitDistricts } from '../../lib/permit-conditions';
+  import { permit } from '../../data/permit';
+  import { readIdentity } from '../../lib/maintenance';
+  import { activeUser } from '../../data/user';
+  import { normalizeStatus, readPermitRole } from '../../lib/permissions';
+
+  const root = document.querySelector<HTMLElement>('[data-record-conditions]');
+  const host = root?.querySelector<HTMLElement>('[data-conditions-editor]');
+  if (root && host) {
+    const identity = readIdentity();
+    const status = () => {
+      const preview = new URLSearchParams(location.search).get('status');
+      try { return preview || localStorage.getItem(`permit-status-${permit.id}`) || permit.status.label; } catch { return permit.status.label; }
+    };
+    const onTeam = () => identity === 'admin' || ['responsible', 'supporting'].includes(readPermitRole(permit.id));
+    const canEdit = () => normalizeStatus(status()) === 'under-review' && onTeam();
+
+    let list = loadAppliedConditions();
+    const editor = mountConditionsEditor(host, {
+      owners: ['hq', ...permitDistricts.map((d) => d.key)],
+      get: () => list,
+      set: (next) => { list = next; saveAppliedConditions(next); },
+      currentUser: activeUser(identity)?.name || 'You',
+      addedAt: 'In review',
+      canEdit,
+    });
+
+    const note = root.querySelector<HTMLElement>('[data-rce-note]')!;
+    const paint = () => {
+      editor.render();
+      const s = normalizeStatus(status());
+      let why = '';
+      if (!canEdit()) {
+        if (s === 'waiting-for-review') why = 'Start the review to add or change conditions.';
+        else if (s === 'under-review') why = 'Only the responsible or supporting analyst can change conditions.';
+        else why = 'The review is decided, so these conditions can no longer change here.';
+      }
+      note.textContent = why;
+      note.hidden = !why;
+    };
+    paint();
+    window.addEventListener('permit-status-changed', paint);
+  }
+</script>
+
+<style>
+  .rce__note { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
+  .rce__note[hidden] { display: none; }
+</style>

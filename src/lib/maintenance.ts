@@ -224,6 +224,8 @@ const ROUTE_ACCESS: { route: string; roles: Identity[] }[] = [
   { route: '/special-conditions', roles: INTERNAL_ROLES },
   { route: '/manage-district', roles: DISTRICT_ADMIN_ROLES },
   { route: '/district', roles: INTERNAL_ROLES }, // district detail is an internal directory
+  { route: '/prototypes/application-record', roles: INTERNAL_ROLES }, // reviewer's view of an application
+  { route: '/prototypes/application-review', roles: INTERNAL_ROLES }, // reviewing an application
   { route: '/admin/dashboard', roles: ADMIN_ROLES },
   { route: '/users', roles: ADMIN_ROLES },
   { route: '/admin/templates', roles: ADMIN_ROLES },

@@ -1,0 +1,76 @@
+---
+// The permit's applied special conditions, READ-ONLY — grouped by owner in a stock
+// cds-accordion (the app's collapse pattern): Headquarters first, then each
+// district on the permit, in the permit's own district order. Curation (add / edit
+// / remove) happens in the review workflow (final-letter); this only reads the
+// shared permit-conditions-${id} localStorage set the workflow writes, so every
+// view agrees on what will print. Used by the permit detail page and the
+// application-record prototype.
+---
+
+<div class="pc" data-permit-conditions>
+  <cds-accordion size="lg" data-pc-accordion></cds-accordion>
+  <p class="pc__empty t-body-01" data-pc-empty hidden>No special conditions on this permit yet.</p>
+</div>
+
+<script>
+  import { loadAppliedConditions, permitDistricts as districts } from '../lib/permit-conditions';
+
+  const conditions = loadAppliedConditions();
+  const owners: { key: string; title: string }[] = [
+    { key: 'hq', title: 'Headquarters conditions' },
+    ...districts.map((d) => ({ key: d.key, title: d.name })),
+  ];
+
+  document.querySelectorAll<HTMLElement>('[data-permit-conditions]').forEach((root) => {
+    const acc = root.querySelector('[data-pc-accordion]');
+    const empty = root.querySelector<HTMLElement>('[data-pc-empty]');
+    if (!acc) return;
+    let rendered = 0;
+    owners.forEach((owner) => {
+      const owned = conditions.filter((c) => c.owner === owner.key);
+      if (!owned.length) return;
+      rendered++;
+      const item = document.createElement('cds-accordion-item');
+      item.setAttribute('open', ''); // conditions are for reading — expanded by default
+      // Slot the title as heading-compact-01 (bold, same size as body) so the group
+      // header outranks the condition text — matching the review workflow's
+      // conditions accordion (final-letter), which slots the same t-heading-compact-01.
+      const title = document.createElement('span');
+      title.setAttribute('slot', 'title');
+      title.className = 't-heading-compact-01';
+      title.textContent = owner.title;
+      item.appendChild(title);
+      const list = document.createElement('cds-contained-list');
+      list.setAttribute('kind', 'on-page');
+      owned.forEach((c) => {
+        const li = document.createElement('cds-contained-list-item');
+        const body = document.createElement('div');
+        body.className = 'cond__body';
+        body.innerHTML = c.body; // our own sanitized seeds / authored-sanitized text
+        li.appendChild(body);
+        list.appendChild(li);
+      });
+      item.appendChild(list);
+      acc.appendChild(item);
+    });
+    if (empty) empty.hidden = rendered > 0;
+  });
+</script>
+
+<style>
+  /* Layout only; look is cds-* + tokens. Each item's body is the applied
+     condition's rich text (JS-built, hence :global). */
+  .pc__empty[hidden] { display: none; }
+  .pc__empty { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
+  :global(.cond__body) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; line-height: 1.28572; }
+  :global(.cond__body p) { margin: 0 0 0.375rem; font-size: 0.875rem; }
+  :global(.cond__body p:last-child) { margin-bottom: 0; }
+  :global(.cond__body ul), :global(.cond__body ol) { margin: 0 0 0.375rem; padding-left: 1.5rem; }
+  :global(.cond__body ul) { list-style: disc; }
+  :global(.cond__body ol) { list-style: decimal; }
+  :global(.cond__body h1), :global(.cond__body h2), :global(.cond__body h3) { font-size: 1rem; font-weight: 600; margin: 0 0 0.375rem; }
+  :global(.cond__body blockquote) { margin: 0 0 0.375rem; padding-left: 0.75rem; border-left: 3px solid var(--cds-border-subtle-01, #e0e0e0); color: var(--cds-text-secondary, #525252); }
+  :global(.cond__body code) { font-family: var(--cds-code-01-font-family, 'IBM Plex Mono', monospace); background: var(--cds-layer-accent-01, #e0e0e0); padding: 0.05rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; }
+  :global(.cond__body a) { color: var(--cds-link-primary, #0f62fe); }
+</style>

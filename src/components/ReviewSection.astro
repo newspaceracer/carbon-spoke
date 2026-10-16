@@ -20,6 +20,8 @@
 // body. Carbon ships no sticky-header accordion; this is a documented exception,
 // not a reinvented lego.
 import PermitSection from './PermitSection.astro';
+import FlagTag from './FlagTag.astro';
+import type { Badge } from '../data/permit';
 
 interface Props {
   title: string;
@@ -29,8 +31,14 @@ interface Props {
   open?: boolean;
   /** Visual position — drives CSS `order` and the sticky-stack offset. */
   orderIndex?: number;
+  /** The permit's header badges that come from this section — its classification
+   *  tags and its compliance flags — shown in the header so they read even while
+   *  the section is collapsed. */
+  tags?: Badge[];
+  flags?: Badge[];
 }
-const { title, collapsible = false, open = true, orderIndex = 0 } = Astro.props;
+const { title, collapsible = false, open = true, orderIndex = 0, tags = [], flags = [] } = Astro.props;
+const hasBadges = tags.length + flags.length > 0;
 ---
 
 {collapsible ? (
@@ -42,7 +50,15 @@ const { title, collapsible = false, open = true, orderIndex = 0 } = Astro.props;
     <h2 class="rsec__head">
       <button type="button" class="rsec__toggle" aria-expanded={open ? 'true' : 'false'} data-section-toggle>
         <svg class="rsec__chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 11L3 6 3.7 5.3 8 9.6 12.3 5.3 13 6z"></path></svg>
-        <span class="rsec__title t-heading-03">{title}</span>
+        <span class="rsec__label">
+          <span class="rsec__title t-heading-03">{title}</span>
+          {hasBadges && (
+            <span class="rsec__badges">
+              {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+              {flags.map((tag) => <FlagTag tag={tag} />)}
+            </span>
+          )}
+        </span>
       </button>
     </h2>
     <div class="rsec__body" data-section-body hidden={!open}>
@@ -51,6 +67,12 @@ const { title, collapsible = false, open = true, orderIndex = 0 } = Astro.props;
   </section>
 ) : (
   <PermitSection title={title}>
+    {hasBadges && (
+      <Fragment slot="aside">
+        {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+        {flags.map((tag) => <FlagTag tag={tag} />)}
+      </Fragment>
+    )}
     <slot />
   </PermitSection>
 )}
@@ -104,6 +126,15 @@ const { title, collapsible = false, open = true, orderIndex = 0 } = Astro.props;
   }
 
   .rsec__title { margin: 0; }
+
+  /* Title + badges (classification tags, compliance flags): badges sit beside the
+     title, and wrap as a row UNDER it (aligned with the title, not the chevron)
+     when the header is narrow. */
+  .rsec__label {
+    display: flex; flex-wrap: wrap; align-items: center;
+    column-gap: 0.75rem; row-gap: 0.25rem; min-inline-size: 0;
+  }
+  .rsec__badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
 
   .rsec__chevron {
     flex: 0 0 auto;

@@ -1,0 +1,93 @@
+---
+// The application record's "at a glance" band: fact tiles (who · where · what —
+// the dates live in the page header) that answer most of a first read, then "Needs a closer look" — every
+// item a reviewer must check, each linking to the passage in the record that
+// explains it. Composes stock cds-tile surfaces on a Carbon subgrid — place it
+// directly in a grid column (it inherits that column's span as its column count).
+import Avatar from '../Avatar.astro';
+
+interface Fact {
+  /** Small label over the value, e.g. "Principal investigator". */
+  label: string;
+  /** The headline value — a name, a count, a range. */
+  value: string;
+  /** Supporting lines under the value. */
+  lines?: string[];
+  /** Show an initials avatar for this person beside the value (a name sets one
+   *  step smaller than a count, so it fits the tile on one line). */
+  person?: string;
+}
+interface Attention {
+  title: string;
+  detail: string;
+  /** In-page anchor of the passage that explains it. */
+  href: string;
+  linkLabel: string;
+}
+interface Props {
+  facts: Fact[];
+  attention: Attention[];
+}
+const { facts, attention } = Astro.props;
+// Tiles share the 12-column content subgrid evenly at lg (3 tiles → 4 cols each).
+const lgSpan = Math.max(3, Math.floor(12 / Math.max(1, facts.length)));
+---
+
+<section class="glance" aria-labelledby="glance-title">
+  <h2 id="glance-title" class="cds--visually-hidden">At a glance</h2>
+  <div class="cds--subgrid cds--subgrid--wide glance__grid">
+    {facts.map((f) => (
+      <div class={`cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-${lgSpan}`}>
+        <cds-tile class="glance__tile">
+          <p class="glance__label t-label-01">{f.label}</p>
+          <div class="glance__value-row">
+            {f.person && <Avatar name={f.person} size="md" />}
+            <p class:list={['glance__value', f.person ? 't-heading-03' : 't-heading-04']}>{f.value}</p>
+          </div>
+          {f.lines?.map((l) => <p class="glance__line t-body-compact-01">{l}</p>)}
+        </cds-tile>
+      </div>
+    ))}
+  </div>
+
+  {attention.length > 0 && (
+    <div class="attention">
+      <div class="attention__head">
+        <cds-icon-indicator kind="caution-major" label={`Needs a closer look · ${attention.length}`} size="20"></cds-icon-indicator>
+      </div>
+      <ul class="attention__list">
+        {attention.map((a) => (
+          <li class="attention__item">
+            <p class="attention__title t-heading-compact-01">{a.title}</p>
+            <p class="attention__detail t-body-compact-01">{a.detail}</p>
+            <cds-link href={a.href} size="sm">{a.linkLabel}</cds-link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
+</section>
+
+<style>
+  /* Layout only — surfaces are stock cds-tile (layer-01), type from the t-* scale. */
+  .glance { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
+  .glance__grid { row-gap: var(--cds-spacing-05, 1rem); }
+  .glance__tile { block-size: 100%; }
+  .glance__label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
+  .glance__value-row { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); margin-bottom: var(--cds-spacing-03, 0.5rem); }
+  .glance__value { margin: 0; }
+  .glance__line { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .glance__line + .glance__line { margin-top: var(--cds-spacing-01, 0.125rem); }
+
+  /* "Needs a closer look" — one raised surface, items laid out as columns. */
+  .attention { background: var(--cds-layer-01, #ffffff); padding: var(--cds-spacing-06, 1.5rem); }
+  .attention__head { margin-bottom: var(--cds-spacing-05, 1rem); }
+  .attention__list {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; gap: var(--cds-spacing-06, 1.5rem);
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  }
+  .attention__item { display: flex; flex-direction: column; gap: var(--cds-spacing-02, 0.25rem); align-items: flex-start; }
+  .attention__title, .attention__detail { margin: 0; }
+  .attention__detail { color: var(--cds-text-secondary, #525252); }
+</style>

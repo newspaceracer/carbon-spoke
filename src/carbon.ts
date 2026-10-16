@@ -31,6 +31,7 @@ import '@carbon/web-components/es/components/layer/index.js';
 import '@carbon/web-components/es/components/link/index.js';
 import '@carbon/web-components/es/components/list/index.js';
 import '@carbon/web-components/es/components/menu/index.js';
+import '@carbon/web-components/es/components/menu-button/index.js';
 import '@carbon/web-components/es/components/modal/index.js';
 import '@carbon/web-components/es/components/multi-select/index.js';
 import '@carbon/web-components/es/components/notification/index.js';

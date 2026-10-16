@@ -1,0 +1,78 @@
+---
+// One section of the application-record prototype: a raised surface (layer-01 on
+// the page's g10 field) with an h2, the section's header badges (the same tags and
+// compliance flags the banner shows, so a section explains its own badges), and an
+// optional one-line summary that answers "how much is in here?" before you read.
+// `id` is the in-page anchor the table of contents tracks. `gate` marks a section
+// the page shows only to some viewers: 'internal' (staff only — also labeled
+// "Internal only") or 'approved' (only once the permit is approved); the page
+// script applies it. `reviewable` gives the section an "Add" menu (an issue for
+// the researcher, or a comment for reviewers) and a slot under its header where
+// the review workspace lists that section's issues and comments.
+import FlagTag from '../FlagTag.astro';
+import InternalOnlyFlag from '../InternalOnlyFlag.astro';
+import type { Badge } from '../../data/permit';
+
+interface Props {
+  id: string;
+  title: string;
+  /** One line under the title, e.g. "7 people · 1 organization". */
+  summary?: string;
+  tags?: Badge[];
+  flags?: Badge[];
+  gate?: 'internal' | 'approved';
+  reviewable?: boolean;
+}
+const { id, title, summary, tags = [], flags = [], gate, reviewable = false } = Astro.props;
+---
+
+<section class="rs" id={id} aria-labelledby={`${id}-title`} data-record-section data-gate={gate}>
+  <header class="rs__head">
+    <div class="rs__title-row">
+      <h2 class="rs__title t-heading-04" id={`${id}-title`}>{title}</h2>
+      {tags.length + flags.length > 0 && (
+        <div class="rs__badges">
+          {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+          {flags.map((tag) => <FlagTag tag={tag} />)}
+        </div>
+      )}
+      {gate === 'internal' && <InternalOnlyFlag />}
+      {reviewable && (
+        <cds-menu-button class="rs__add" label="Add" kind="tertiary" size="md" menu-alignment="bottom-end" data-add-menu={id}>
+          <cds-menu>
+            <cds-menu-item label="Issue for the researcher" data-add="issue"></cds-menu-item>
+            <cds-menu-item label="Comment for reviewers" data-add="comment"></cds-menu-item>
+          </cds-menu>
+        </cds-menu-button>
+      )}
+    </div>
+    {summary && <p class="rs__summary t-body-01">{summary}</p>}
+  </header>
+  {reviewable && <div class="rs__review" data-section-review={id}></div>}
+  <div data-section-content={id}>
+    <slot />
+  </div>
+</section>
+
+<style>
+  /* Layout + surface only — type from the t-* scale, color from --cds-* tokens. */
+  .rs {
+    background: var(--cds-layer-01, #ffffff);
+    padding: var(--cds-spacing-07, 2rem);
+    /* Land below the sticky app header when jumped to from the contents. */
+    scroll-margin-top: 4rem;
+  }
+  @media (max-width: 42rem) {
+    .rs { padding: var(--cds-spacing-06, 1.5rem) var(--cds-spacing-05, 1rem); }
+  }
+  .rs__head { margin-bottom: var(--cds-spacing-07, 2rem); }
+  .rs__title-row {
+    display: flex; flex-wrap: wrap; align-items: center;
+    column-gap: var(--cds-spacing-05, 1rem); row-gap: var(--cds-spacing-03, 0.5rem);
+  }
+  .rs__title { margin: 0; }
+  /* The Add menu sits at the far end of the title row. */
+  .rs__add { margin-inline-start: auto; }
+  .rs__badges { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-02, 0.25rem); }
+  .rs__summary { margin: var(--cds-spacing-02, 0.25rem) 0 0; color: var(--cds-text-secondary, #525252); }
+</style>

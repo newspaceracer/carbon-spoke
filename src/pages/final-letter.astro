@@ -69,8 +69,9 @@ import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
 import ApplicationReview from '../components/ApplicationReview.astro';
 import ContactCard from '../components/ContactCard.astro';
+import ConditionsEditor from '../components/ConditionsEditor.astro';
 import DocumentViewer from '../components/DocumentViewer.astro';
-import { permit } from '../data/permit';
+import { permit, permitInfoTags } from '../data/permit';
 import { parks, parkKey } from '../data/parks';
 import { derivePermitActivities } from '../data/activities';
 import { derivePermitSensitiveSpecies, derivePermitRegions, derivePermitAssociatedPermits } from '../data/scope';
@@ -94,11 +95,6 @@ const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight)
 
 // ── Permit header props ─── mirror the permit detail page so the finalize view
 // carries the identical header (same classification badges + at-a-glance facts).
-const involvementTags = [
-  ...(permit.dataCollection.involvesCollection ? [{ label: 'Specimen collection', type: 'blue' }] : []),
-  ...(permit.dataCollection.involvesLaboratory ? [{ label: 'Laboratory work', type: 'blue' }] : []),
-];
-const headerInfoTags = [...permit.infoTags, ...involvementTags];
 const headerStats = [
   { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
   { label: 'Submitted', value: 'Jul 9, 2026' },
@@ -296,7 +292,7 @@ const letterData = {
   // The reviewer comment thread — SHARED with the permit detail page (same
   // storage key + seed), so the analyst reads the team's existing comments and
   // adds to the same conversation from anywhere in the wizard.
-  comments: permit.overview.comments.map((c) => ({ author: c.author, time: c.time, text: c.text })),
+  comments: permit.overview.comments.map((c) => ({ author: c.author, time: c.time, text: c.text, section: c.section })),
   currentUser: responsibleAnalyst?.name ?? 'You',
   // Specimen seed — the authorized taxa/quantities, editable on step ① and
   // printed on the letter as the authorized collection.
@@ -328,19 +324,33 @@ const letterData = {
 
 <BaseLayout title={`Finalize ${permit.id}`}>
   <PermitNav slot="nav">
-    <!-- Comments overview for the inline-comments version (?comments=inline): a stock
-         UI Shell header action (count badge) that toggles a cds-header-panel holding
-         the full thread. Hidden in the default (tabbed) version. -->
-    <cds-header-global-action slot="actions" id="comments-global" aria-label="Comments" tooltip-text="Comments" panel-id="comments-panel" hidden>
+    <!-- Anchored-comments version (?comments=anchored): a stock UI Shell header
+         action (open-comment count) that toggles a cds-header-panel listing every
+         thread, grouped by record section, plus general comments. Hidden (inline
+         display — it sets :host display) unless the flag is on. Wrapped in a Fragment
+         so slot routing doesn't leave slot="actions" on the elements (cds-header has
+         no such slot, so they'd render 0×0). -->
+    <Fragment slot="actions">
+    <cds-header-global-action id="comments-global" aria-label="Comments" tooltip-text="Comments" panel-id="comments-panel" style="display:none">
       <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M8 10H24V12H8z"/><path d="M8 16H18V18H8z"/></svg>
       <cds-badge-indicator id="comments-global-count" count="0"></cds-badge-indicator>
     </cds-header-global-action>
-    <cds-header-panel slot="actions" id="comments-panel" aria-label="Comments">
-      <div class="comments-panel">
+    <cds-header-panel id="comments-panel" class="comments-panel" aria-label="Comments" style="display:none">
+      <div class="comments-panel__inner">
         <h2 class="comments-panel__title t-heading-03">Comments</h2>
-        <div id="comments-panel-body"></div>
+        <p class="comments-panel__summary t-body-01" id="comments-panel-summary"></p>
+        <div id="comments-panel-groups" class="comments-panel__groups"></div>
+        <!-- General comments: not about one section. The panel is their home. -->
+        <div class="comments-panel__general">
+          <div class="mention-field">
+            <cds-textarea id="general-comment-input" label="General comment" placeholder="Not about one section? Comment here… type @ to mention someone" rows="2"></cds-textarea>
+            <ul id="general-comment-menu" class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
+          </div>
+          <cds-button id="general-comment-submit" kind="primary" size="sm">Add comment</cds-button>
+        </div>
       </div>
     </cds-header-panel>
+    </Fragment>
   </PermitNav>
 
   <main class="page">
@@ -349,7 +359,7 @@ const letterData = {
       name={permit.name}
       organization={permit.researchTeam.organization.name}
       status={permit.status}
-      infoTags={headerInfoTags}
+      infoTags={permitInfoTags}
       flagTags={permit.flagTags}
       stats={headerStats}
       requestedWindow={permit.activeWindow}
@@ -394,8 +404,15 @@ const letterData = {
          surface the reviewer flips through in place. The record grows the page as
          its sections expand; the working panel is sticky so it stays in view. -->
     <section class="step cds--css-grid cds--css-grid--with-row-gap" data-step="0">
-      <div class="col-main cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
-        <h3 class="pane-title t-heading-04">Application record</h3>
+      <div class="col-main record-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
+        <div class="pane-head">
+          <h3 class="pane-title t-heading-04">Application record</h3>
+          <!-- Shown only while the working panel is hidden (record goes full width). -->
+          <cds-button class="js-panel-show" kind="tertiary" size="md" style="display: none">
+            Show working panel
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="m2,6v20c0,1.1045.8955,2,2,2h24c1.1045,0,2-.8955,2-2V6c0-1.1045-.8955-2-2-2H4c-1.1045,0-2,.8955-2,2Zm20,0h6v20h-6V6Zm-18,0h16v9h-10.1699s3.5798-3.5898,3.5798-3.5898l-1.4099-1.4102-6,6,6,6,1.4099-1.4102-3.5798-3.5898h10.1699v9H4V6Z"/></svg>
+          </cds-button>
+        </div>
         <ApplicationReview collapsible />
 
         <!-- Comment on a selection: appears beside text selected in the record. A stock
@@ -408,6 +425,42 @@ const letterData = {
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M17 9 15 9 15 13 11 13 11 15 15 15 15 19 17 19 17 15 21 15 21 13 17 13 17 9z"/></svg>
           </cds-button>
         </div>
+
+        <!-- Anchored-comments version (?comments=anchored): cloned to the top of each
+             record section's body by the page script — the section's own thread,
+             toggled by a ghost button, with a composer that quotes a selected
+             passage. Kept in this page's markup so it carries its scoped styles. -->
+        <template id="rsec-thread-template">
+          <div class="rsec-thread" role="region">
+            <cds-button class="rsec-thread__toggle" kind="ghost" size="sm">
+              <span class="rsec-thread__label">Comment on this section</span>
+              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M8 10H24V12H8z"/><path d="M8 16H18V18H8z"/></svg>
+            </cds-button>
+            <div class="rsec-thread__panel" hidden>
+              <ul class="dock-thread rsec-thread__list"></ul>
+              <p class="rsec-thread__empty t-body-01">No comments on this section yet.</p>
+              <cds-button class="rsec-thread__resolved-toggle" kind="ghost" size="sm"></cds-button>
+              <ul class="dock-thread rsec-thread__list rsec-thread__list--resolved" hidden></ul>
+              <div class="dock-composer rsec-thread__composer">
+                <div class="comment-quote rsec-thread__quote" hidden>
+                  <div class="comment-quote__body">
+                    <p class="comment-quote__label t-label-01">Commenting on</p>
+                    <blockquote class="comment-quote__text rsec-thread__quote-text t-body-01"></blockquote>
+                  </div>
+                  <cds-icon-button class="rsec-thread__quote-clear" kind="ghost" size="sm" align="left">
+                    <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.4141 16 24 9.4141 22.5859 8 16 14.5859 9.4143 8 8 9.4141 14.5859 16 8 22.5859 9.4143 24 16 17.4141 22.5859 24 24 22.5859 17.4141 16z"/></svg>
+                    <span slot="tooltip-content">Remove quoted passage</span>
+                  </cds-icon-button>
+                </div>
+                <div class="mention-field">
+                  <cds-textarea class="rsec-thread__input" helper-text="Tip: select text in this section to comment on that passage." placeholder="Type @ to mention someone (⌘/Ctrl+Enter to post)" rows="2"></cds-textarea>
+                  <ul class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
+                </div>
+                <cds-button class="rsec-thread__submit" kind="primary" size="md">Add comment</cds-button>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <!-- Document viewer — the embedded PDF + picker, closing out the record so the
              submitted files read in line with the application. `slim` keeps its file
@@ -426,7 +479,13 @@ const letterData = {
       </div>
 
       <div class="col-main dock-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8" aria-label="Working panel">
-        <h3 class="pane-title t-heading-04">Working panel</h3>
+        <div class="pane-head">
+          <h3 class="pane-title t-heading-04">Working panel</h3>
+          <cds-icon-button class="js-panel-hide" kind="ghost" size="sm" align="left">
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="m2,6v20c0,1.1045.8955,2,2,2h24c1.1045,0,2-.8955,2-2V6c0-1.1045-.8955-2-2-2H4c-1.1045,0-2,.8955-2,2Zm20,0h6v20h-6V6Zm-18,0h16v20H4v-9h10.1699s-3.5801,3.5898-3.5801,3.5898l1.4102,1.4102,6-6-6-6-1.4102,1.4102,3.5801,3.5898H4V6Z"/></svg>
+            <span slot="tooltip-content">Hide working panel</span>
+          </cds-icon-button>
+        </div>
         <div class="dock" data-tab-scope>
           <!-- Comments first (and open by default), then Special conditions. The
                analysis team lives in the header's team modal (Manage team). -->
@@ -439,11 +498,7 @@ const letterData = {
                reorder + per-section numbering, add / edit / remove). -->
           <div class="rail-panel" data-tabpanel="conditions" hidden>
             <div class="dock-list">
-              <div class="rail__tools">
-                <cds-button kind="tertiary" size="md" id="cond-collapse-all">Collapse all</cds-button>
-                <cds-button kind="tertiary" size="md" id="cond-expand-all">Expand all</cds-button>
-              </div>
-              <div id="conditions-input"></div>
+              <ConditionsEditor />
             </div>
           </div>
 
@@ -594,7 +649,6 @@ const letterData = {
     <section class="step cds--css-grid cds--css-grid--with-row-gap" data-step="2" hidden>
       <div class="col-package cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12 cds--lg:col-start-3">
         <section class="pkg-recap">
-          <h3 class="pkg-recap__title t-heading-03">What you're issuing</h3>
           <div id="package-recap" class="recap"></div>
         </section>
 
@@ -653,56 +707,6 @@ const letterData = {
     <cds-modal-footer>
       <cds-modal-footer-button kind="secondary" data-modal-close>Keep park</cds-modal-footer-button>
       <cds-modal-footer-button kind="danger" id="drop-district-confirm">Remove park</cds-modal-footer-button>
-    </cds-modal-footer>
-  </cds-modal>
-
-  <!-- Add / edit a special condition — the same modal pattern as the permit
-       detail page (src/pages/permit.astro): one dialog per scope that adds catalog
-       picks and/or a written-from-scratch condition, and edits an existing one.
-       The rich-text body IS the condition that prints; the title is an optional
-       label for the builder list. -->
-  <cds-modal id="cond-modal" size="md">
-    <cds-modal-header>
-      <cds-modal-close-button></cds-modal-close-button>
-      <cds-modal-label id="cond-modal-owner">Headquarters</cds-modal-label>
-      <cds-modal-heading id="cond-modal-heading">Add condition</cds-modal-heading>
-    </cds-modal-header>
-    <cds-modal-body>
-      <cds-stack gap="6">
-        <!-- Add mode only: pull a saved condition from the catalog, or write a
-             new one. Same switcher as the Add-member and permit condition modals —
-             one path at a time, not both stacked. -->
-        <div id="cond-mode-wrap">
-          <p class="cond-mode-label t-label-01" id="cond-mode-label">Pull a saved condition, or write a new one.</p>
-          <cds-content-switcher id="cond-mode" value="catalog">
-            <cds-content-switcher-item value="catalog" selected>From catalog</cds-content-switcher-item>
-            <cds-content-switcher-item value="manual">Write manually</cds-content-switcher-item>
-          </cds-content-switcher>
-        </div>
-
-        <!-- From catalog: attach saved conditions, never retype them. -->
-        <div id="cond-catalog">
-          <cds-multi-select
-            id="cond-pick"
-            title-text="Saved conditions"
-            label="Select saved conditions"
-            filterable
-          ></cds-multi-select>
-        </div>
-
-        <!-- Write manually: type a new condition, optionally save it for reuse. -->
-        <div id="cond-manual" hidden>
-          <div>
-            <p class="cond-field-label t-label-01">Condition text</p>
-            <sc-rich-text id="cond-body" placeholder="The exact wording that will print on the permit. Use the toolbar for bold, italics, lists, or a link…"></sc-rich-text>
-          </div>
-          <cds-checkbox id="cond-save-catalog" label-text="Also save to the catalog for reuse"></cds-checkbox>
-        </div>
-      </cds-stack>
-    </cds-modal-body>
-    <cds-modal-footer>
-      <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-      <cds-modal-footer-button kind="primary" id="cond-modal-save">Save condition</cds-modal-footer-button>
     </cds-modal-footer>
   </cds-modal>
 
@@ -816,9 +820,9 @@ const letterData = {
 
   <script>
     import {
-      loadPermitConditions, savePermitConditions, loadInventory, saveInventory,
-      ownerLabel, newConditionId, plainText,
-      type PermitCondition, type ConditionOwner,
+      loadPermitConditions, savePermitConditions,
+      ownerLabel, plainText,
+      type PermitCondition,
     } from '../data/conditions';
     import { readIdentity } from '../lib/maintenance';
     import { readPermitRole } from '../lib/permissions';
@@ -833,6 +837,7 @@ const letterData = {
     // Same rich-text condition editor the permit detail page uses in its
     // add/edit-condition modal — registered here so <sc-rich-text> upgrades.
     import '../components/sc-rich-text.ts';
+    import { mountConditionsEditor } from '../lib/conditions-editor';
 
     interface ContactOption {
       id: string; name: string; role: string; email: string; phone: string;
@@ -872,7 +877,7 @@ const letterData = {
       originallySingle: boolean; soleDistrict: string | null;
       pages: { id: string; label: string; secondaryLabel: string }[];
       permitUrl: string;
-      comments: { author: string; time: string; text: string }[];
+      comments: { author: string; time: string; text: string; section?: string }[];
       currentUser: string;
       specimens: Specimen[];
       signerOptions: SignerOption[];
@@ -1822,249 +1827,26 @@ const letterData = {
     });
 
     // ── Conditions builder ───────────────────────────────────────────────────────
-    // A condition is fundamentally the TEXT that prints — the title is only a
-    // catalog label. So each applied condition shows its actual text (the analyst
-    // sees what will print), with full control per scope: remove defaults, add
-    // from the catalog, WRITE one from scratch, and REORDER — for HQ and each
-    // district. Numbers restart per section, mirroring the letter exactly.
-    const conditionsInput = $('conditions-input')!;
-    const owners = ['hq', ...liveDistrictKeys()];
-    // Which scope sections are expanded. Starts all-open (unchanged view), and
-    // survives the innerHTML rebuilds in renderConditionsInput so collapsing a
-    // section sticks across add / edit / remove / reorder.
-    const openGroups = new Set(owners);
-
-    const chevronUp = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 5 13 10 12.3 10.7 8 6.4 3.7 10.7 3 10z"/></svg>';
-    const chevronDown = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 11 3 6 3.7 5.3 8 9.6 12.3 5.3 13 6z"/></svg>';
-
-    // Text preview of a condition — resolves the summary-report date the same way
-    // the letter does, so the builder and the letter agree. The HQ reporting
-    // condition (hq-c04) carries a "[Month, Day], 2027" placeholder; fill it from
-    // the finalize step's report date.
-    const condDisplayHtml = (c: PermitCondition) =>
-      c.inventoryId === 'hq-c04'
-        ? c.body.replace('[Month, Day], 2027', fmt(state.reportISO))
-        : c.body;
-    const condPreview = (c: PermitCondition) => plainText(condDisplayHtml(c));
-
+    // The shared special-conditions editor (components/ConditionsEditor.astro +
+    // lib/conditions-editor.ts): HQ + each district, add from the catalog or write
+    // one, edit, remove, reorder — numbered per section, mirroring the letter.
     const editIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>';
-
+    const conditionsEditor = mountConditionsEditor(document.querySelector<HTMLElement>('[data-conditions-editor]')!, {
+      owners: ['hq', ...liveDistrictKeys()],
+      get: () => state.conditions,
+      set: (list) => { state.conditions = list; persistConditions(); },
+      currentUser: data.currentUser,
+      addedAt: 'Finalizing',
+      // The HQ reporting condition (hq-c04) carries a "[Month, Day], 2027"
+      // placeholder; show it filled from the finalize step's report date, as the
+      // letter does.
+      displayHtml: (c) => (c.inventoryId === 'hq-c04' ? c.body.replace('[Month, Day], 2027', fmt(state.reportISO)) : c.body),
+      onChange: () => { setTabBadge('conditions', state.conditions.length); renderPreview(); },
+    });
     const renderConditionsInput = () => {
-      // Numbered by section: each scope (HQ, then each district) restarts at 1,
-      // matching the letter's per-section lists.
-      conditionsInput.innerHTML = `<cds-accordion>${owners.map((owner) => {
-        const applied = state.conditions.filter((c) => c.owner === owner);
-        const cards = applied.map((c, i) => `
-          <li class="cond">
-            <div class="cond__bar">
-              <span class="cond__num">${i + 1}</span>
-              <div class="cond__actions">
-                <cds-icon-button kind="ghost" size="sm" data-move-cond="${c.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''}>
-                  ${chevronUp}<span slot="tooltip-content">Move up</span>
-                </cds-icon-button>
-                <cds-icon-button kind="ghost" size="sm" data-move-cond="${c.id}" data-dir="1" ${i === applied.length - 1 ? 'disabled' : ''}>
-                  ${chevronDown}<span slot="tooltip-content">Move down</span>
-                </cds-icon-button>
-                <cds-icon-button kind="ghost" size="sm" data-edit-cond="${c.id}">
-                  ${editIcon}<span slot="tooltip-content">Edit condition</span>
-                </cds-icon-button>
-                <cds-icon-button kind="ghost" size="sm" data-remove-cond="${c.id}">
-                  ${trashIcon}<span slot="tooltip-content">Remove condition</span>
-                </cds-icon-button>
-              </div>
-            </div>
-            <p class="cond__text t-body-01">${esc(condPreview(c))}</p>
-          </li>`).join('');
-        return `
-          <cds-accordion-item data-cond-group="${owner}" ${openGroups.has(owner) ? 'open' : ''}>
-            <div slot="title" class="cond-acc__title">
-              <span class="subgroup__name t-heading-compact-01">${ownerLabel(owner)}</span>
-              <cds-tag type="gray" size="sm">${applied.length}</cds-tag>
-            </div>
-            <ul class="cond-list">${cards || '<li class="cond cond--empty t-label-01">No conditions applied.</li>'}</ul>
-            <cds-button kind="tertiary" size="md" data-add-cond="${owner}">Add condition</cds-button>
-          </cds-accordion-item>`;
-      }).join('')}</cds-accordion>`;
+      conditionsEditor.render();
       setTabBadge('conditions', state.conditions.length);
     };
-
-    // Reorder WITHIN an owner scope (a district condition can't jump into HQ).
-    const moveCondition = (id: string, dir: number) => {
-      const item = state.conditions.find((c) => c.id === id);
-      if (!item) return;
-      const group = state.conditions.filter((c) => c.owner === item.owner);
-      const gi = group.findIndex((c) => c.id === id);
-      const ni = gi + dir;
-      if (ni < 0 || ni >= group.length) return;
-      [group[gi], group[ni]] = [group[ni], group[gi]];
-      // Write the reordered group back into the slots it already occupied.
-      let g = 0;
-      state.conditions = state.conditions.map((c) => (c.owner === item.owner ? group[g++] : c));
-      persistConditions(); renderConditionsInput(); renderPreview();
-    };
-
-    // ── Add / edit modal ─ the SAME pattern as the permit detail page: ONE dialog
-    // per scope that adds catalog picks and/or a written-from-scratch condition,
-    // and edits an existing one. Catalog picker + save-to-catalog show only when
-    // adding. A condition IS its text — the rich-text body is the whole thing.
-    const condModal = $('cond-modal') as any;
-    const modeEl = () => $('cond-mode') as any;
-    const pickEl = () => $('cond-pick') as any;
-    const bodyModalEl = () => $('cond-body') as any;
-    const saveCatalogEl = () => $('cond-save-catalog') as any;
-    const ownerLabelEl = $('cond-modal-owner');
-    const headingEl = $('cond-modal-heading');
-    let modalOwner: ConditionOwner = 'hq';
-    let editingId: string | null = null;
-
-    // Add mode offers two paths — pull from the catalog, or write a new condition —
-    // shown one at a time via the content switcher (like the Add-member modal).
-    const currentMode = (): 'catalog' | 'manual' => (modeEl()?.value === 'manual' ? 'manual' : 'catalog');
-    const applyMode = () => {
-      const mode = currentMode();
-      const cat = $('cond-catalog');
-      const man = $('cond-manual');
-      if (cat) cat.hidden = mode !== 'catalog';
-      if (man) man.hidden = mode !== 'manual';
-    };
-
-    // A short plain-text preview identifies a catalog item in the picker.
-    const previewText = (html: string) => { const s = plainText(html); return s.length > 90 ? `${s.slice(0, 89)}…` : s; };
-
-    // The owner's saved catalog items not already applied to this permit.
-    const buildPicker = (owner: ConditionOwner) => {
-      const el = pickEl();
-      if (!el) return;
-      const appliedInvIds = new Set(state.conditions.filter((c) => c.inventoryId).map((c) => c.inventoryId));
-      const available = loadInventory(owner)
-        .filter((it) => !appliedInvIds.has(it.id))
-        .sort((a, b) => plainText(a.body).localeCompare(plainText(b.body)));
-      el.innerHTML = available.map((it) => `<cds-multi-select-item value="${it.id}">${esc(previewText(it.body))}</cds-multi-select-item>`).join('');
-    };
-
-    const openConditionModal = (owner: ConditionOwner, id: string | null) => {
-      modalOwner = owner;
-      editingId = id;
-      const editing = id !== null;
-      const c = editing ? state.conditions.find((x) => x.id === id) ?? null : null;
-      if (headingEl) headingEl.textContent = editing ? 'Edit condition' : 'Add condition';
-      if (ownerLabelEl) ownerLabelEl.textContent = ownerLabel(owner);
-
-      const modeWrap = $('cond-mode-wrap');
-      const catalogBlock = $('cond-catalog');
-      const manualBlock = $('cond-manual');
-      if (editing) {
-        // Editing an existing condition: text only — no catalog path, no switcher.
-        if (modeWrap) modeWrap.hidden = true;
-        if (catalogBlock) catalogBlock.hidden = true;
-        if (manualBlock) manualBlock.hidden = false;
-        if (saveCatalogEl()) saveCatalogEl().hidden = true;
-      } else {
-        // Adding: choose the catalog or the manual path via the switcher.
-        if (modeWrap) modeWrap.hidden = false;
-        if (modeEl()) modeEl().value = 'catalog';
-        buildPicker(owner);
-        if (saveCatalogEl()) { saveCatalogEl().hidden = false; saveCatalogEl().checked = false; }
-        applyMode();
-      }
-
-      if (bodyModalEl()) bodyModalEl().value = c?.body ?? '';
-      if (condModal) condModal.open = true;
-    };
-
-    const selectedInventoryIds = (): string[] => {
-      const el = pickEl();
-      if (!el) return [];
-      return Array.from(el.querySelectorAll('cds-multi-select-item'))
-        .filter((i: any) => i.selected)
-        .map((i: any) => i.getAttribute('value') || '')
-        .filter(Boolean);
-    };
-
-    const saveFromModal = () => {
-      const body = (bodyModalEl()?.value ?? '').toString().trim();
-
-      // Edit mode — update the existing condition's text in place.
-      if (editingId !== null) {
-        if (body) {
-          state.conditions = state.conditions.map((c) => (c.id === editingId ? { ...c, body } : c));
-          persistConditions();
-        }
-        if (condModal) condModal.open = false;
-        renderConditionsInput(); renderPreview();
-        return;
-      }
-
-      // Add mode — honor the active path: either catalog picks OR a written one.
-      const additions: PermitCondition[] = [];
-      if (currentMode() === 'catalog') {
-        const inventory = loadInventory(modalOwner);
-        selectedInventoryIds().forEach((invId) => {
-          const it = inventory.find((x) => x.id === invId);
-          if (it && !state.conditions.some((c) => c.inventoryId === invId)) {
-            additions.push({ id: newConditionId(modalOwner === 'hq' ? 'hq' : modalOwner), owner: modalOwner,
-              source: 'inventory', inventoryId: it.id, body: it.body,
-              addedBy: data.currentUser, addedAt: 'Finalizing' });
-          }
-        });
-      } else if (body) {
-        additions.push({ id: newConditionId(modalOwner === 'hq' ? 'hq' : modalOwner), owner: modalOwner,
-          source: 'custom', body, addedBy: data.currentUser, addedAt: 'Finalizing' });
-        if (saveCatalogEl()?.checked) {
-          const inv = loadInventory(modalOwner);
-          inv.push({ id: newConditionId(modalOwner === 'hq' ? 'hq' : modalOwner), owner: modalOwner,
-            body, isDefault: false });
-          saveInventory(modalOwner, inv);
-        }
-      }
-      if (!additions.length) return;
-      state.conditions = [...state.conditions, ...additions];
-      persistConditions();
-      if (condModal) condModal.open = false;
-      renderConditionsInput(); renderPreview();
-    };
-    $('cond-modal-save')?.addEventListener('click', saveFromModal);
-    modeEl()?.addEventListener('cds-content-switcher-selected', applyMode);
-
-    conditionsInput.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      const rm = target.closest?.('[data-remove-cond]') as HTMLElement | null;
-      if (rm) {
-        state.conditions = state.conditions.filter((c) => c.id !== rm.dataset.removeCond);
-        persistConditions(); renderConditionsInput(); renderPreview();
-        return;
-      }
-      const mv = target.closest?.('[data-move-cond]') as HTMLElement | null;
-      if (mv) { moveCondition(mv.dataset.moveCond!, Number(mv.dataset.dir)); return; }
-      const ed = target.closest?.('[data-edit-cond]') as HTMLElement | null;
-      if (ed) {
-        const c = state.conditions.find((x) => x.id === ed.dataset.editCond);
-        if (c) openConditionModal(c.owner, c.id);
-        return;
-      }
-      const ad = target.closest?.('[data-add-cond]') as HTMLElement | null;
-      if (ad) { openConditionModal(ad.dataset.addCond!, null); return; }
-    });
-
-    // Remember which scope sections are collapsed so a rebuild doesn't reopen them.
-    conditionsInput.addEventListener('cds-accordion-item-toggled', (e: any) => {
-      const owner = (e.target as HTMLElement)?.dataset?.condGroup;
-      if (!owner) return;
-      if (e.detail.open) openGroups.add(owner);
-      else openGroups.delete(owner);
-    });
-
-    // Collapse all / Expand all — fold or unfold every scope section at once, and
-    // keep openGroups in step so the state sticks across rebuilds.
-    const setAllGroups = (open: boolean) => {
-      conditionsInput.querySelectorAll('cds-accordion-item[data-cond-group]').forEach((it) => {
-        const owner = (it as HTMLElement).dataset.condGroup;
-        if (owner) open ? openGroups.add(owner) : openGroups.delete(owner);
-        (it as any).open = open;
-      });
-    };
-    $('cond-collapse-all')?.addEventListener('click', () => setAllGroups(false));
-    $('cond-expand-all')?.addEventListener('click', () => setAllGroups(true));
 
     // ── Date pickers ──────────────────────────────────────────────────────────────
     const windowPicker = $('fb-window') as any;
@@ -2471,7 +2253,15 @@ const letterData = {
     // `anchor` = the record passage a comment is about (comment-on-a-selection; see
     // src/lib/text-anchors). The permit detail page shares this thread and simply
     // ignores the field.
-    interface StoredComment { author: string; time: string; text: string; mentions?: string[]; anchor?: TextAnchor }
+    interface StoredComment { author: string; time: string; text: string; mentions?: string[]; anchor?: TextAnchor; section?: string }
+    // ?comments=anchored — design study: no Comments tab. Each record section carries
+    // its own thread (top of its body); the header panel is the overview. Comments
+    // gain an optional `section` (record-section slug) and can be resolved.
+    const anchoredMode = new URLSearchParams(location.search).get('comments') === 'anchored';
+    const resolvedKey = `permit-comment-resolved-${permitId}`;
+    const resolvedSet = (): Set<string> => {
+      try { const a = JSON.parse(localStorage.getItem(resolvedKey) || '[]'); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); }
+    };
     const commentsKey = `permit-comments-${permitId}`;
     const thread = $('comments-thread')!;
     const commentInput = $('comments-input') as any;
@@ -2499,9 +2289,12 @@ const letterData = {
 
     // Saved comments whose passage is still in the record: { index in the stored
     // list, comment, live range }.
-    const anchoredComments = () => (recordRoot ? loadComments() : [])
-      .map((c, i) => ({ i, c, range: c.anchor ? findAnchor(c.anchor, recordRoot!) : null }))
-      .filter((x): x is { i: number; c: StoredComment; range: Range } => !!x.range);
+    const anchoredComments = () => {
+      const done = anchoredMode ? resolvedSet() : null;
+      return (recordRoot ? loadComments() : [])
+        .map((c, i) => ({ i, c, range: c.anchor && !done?.has(replyKey(c)) ? findAnchor(c.anchor, recordRoot!) : null }))
+        .filter((x): x is { i: number; c: StoredComment; range: Range } => !!x.range);
+    };
 
     // ── Discoverability: comment markers + section counts ──────────────────────
     // Each record item with comments gets a comment icon button with a count badge
@@ -2570,6 +2363,7 @@ const letterData = {
     // Open the Comments tab on specific comments: scroll to the first, flash them,
     // and flash their passages in the record.
     const showComments = (indexes: number[]) => {
+      if (anchoredMode) { showInSections(indexes); return; }
       const tabs = document.querySelector('cds-tabs[data-panels]') as any;
       if (tabs) { tabs.value = 'comments'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
       requestAnimationFrame(() => {
@@ -2736,6 +2530,20 @@ const letterData = {
       reply.textContent = replies.length ? `Reply (${replies.length})` : 'Reply';
       reply.addEventListener('click', () => openReplyComposer(li, c));
       actions.append(reply);
+      if (anchoredMode) {
+        const isDone = resolvedSet().has(replyKey(c));
+        const resolve = document.createElement('cds-button') as HTMLElement;
+        resolve.setAttribute('kind', 'ghost'); resolve.setAttribute('size', 'sm');
+        resolve.textContent = isDone ? 'Reopen' : 'Resolve';
+        resolve.addEventListener('click', () => {
+          const set = resolvedSet();
+          if (isDone) set.delete(replyKey(c)); else set.add(replyKey(c));
+          localStorage.setItem(resolvedKey, JSON.stringify([...set]));
+          renderThread();
+          showToast(isDone ? 'Comment reopened' : 'Comment resolved');
+        });
+        actions.append(resolve);
+      }
       li.append(actions);
       return li;
     };
@@ -2746,7 +2554,206 @@ const letterData = {
       data.comments.forEach((c) => thread.appendChild(buildComment(c)));
       setTabBadge('comments', stored.length + data.comments.length);
       refreshHighlights();
+      if (anchoredMode) renderAnchored();
     };
+
+    // ── Anchored comments (?comments=anchored) ───────────────────────────────────
+    // Which record section a comment belongs to: its passage's section, else its
+    // stored `section` slug (the permit detail page's finer section keys map onto
+    // the record's five), else none → General (header panel only).
+    const slug = (t: string) => t.trim().toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const permitSectionAlias: Record<string, string> = {
+      'research-team': 'research-team', 'project-details': 'project-information', schedule: 'project-information',
+      'authorized-parks': 'study-areas', collection: 'data-collection', laboratory: 'data-collection',
+      specimens: 'data-collection', compliance: 'additional-documents', 'uploaded-files': 'additional-documents',
+    };
+    const recordSections = (): HTMLElement[] => anchoredMode && recordRoot ? Array.from(recordRoot.querySelectorAll<HTMLElement>('.rsec')) : [];
+    const secSlug = (sec: Element) => slug(sec.querySelector('.rsec__title')?.textContent || '');
+    const secTitle = (sec: Element) => sec.querySelector('.rsec__title')?.textContent?.trim() || '';
+    interface Placed { c: StoredComment; i?: number; done: boolean; sec: string | null }
+    const placeAll = (): Placed[] => {
+      const done = resolvedSet();
+      const known = new Set(recordSections().map(secSlug));
+      const place = (c: StoredComment, i?: number): Placed => {
+        let sec: string | null = null;
+        const r = c.anchor && recordRoot ? findAnchor(c.anchor, recordRoot) : null;
+        const host = r?.startContainer.parentElement?.closest('.rsec');
+        if (host && !host.closest('.rsec-thread')) sec = secSlug(host);
+        else if (c.section) {
+          const k = permitSectionAlias[c.section] ?? c.section;
+          if (known.has(k)) sec = k;
+        }
+        return { c, i, done: done.has(replyKey(c)), sec };
+      };
+      return [...loadComments().map((c, i) => place(c, i)), ...data.comments.map((c) => place(c))];
+    };
+    const openSecs = new Set<string>();
+    const showResolvedSecs = new Set<string>();
+    const threadFor = (sec: HTMLElement) => sec.querySelector<HTMLElement>(':scope > .rsec__body > .rsec-thread');
+    const threadTpl = $('rsec-thread-template') as HTMLTemplateElement | null;
+
+    // Mount each section's thread once (composers keep their typing across renders).
+    const mountThreads = () => {
+      if (!threadTpl) return;
+      recordSections().forEach((sec) => {
+        if (threadFor(sec)) return;
+        const key = secSlug(sec);
+        const title = secTitle(sec);
+        const region = threadTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+        region.setAttribute('aria-label', `Comments on ${title}`);
+        sec.querySelector(':scope > .rsec__body')?.prepend(region);
+        const input = region.querySelector('.rsec-thread__input') as any;
+        input.setAttribute('label', `Comment on ${title.charAt(0).toLowerCase()}${title.slice(1)}`);
+        const pickedSec = wireMentionTypeahead(input, region.querySelector('.mention-menu'), mentionDir);
+        region.querySelector('.rsec-thread__toggle')?.addEventListener('click', () => {
+          if (openSecs.has(key)) openSecs.delete(key); else openSecs.add(key);
+          renderAnchored();
+          if (openSecs.has(key)) setTimeout(() => input.focus?.(), 30);
+        });
+        region.querySelector('.rsec-thread__resolved-toggle')?.addEventListener('click', () => {
+          if (showResolvedSecs.has(key)) showResolvedSecs.delete(key); else showResolvedSecs.add(key);
+          renderAnchored();
+        });
+        region.querySelector('.rsec-thread__quote-clear')?.addEventListener('click', () => { setPendingAnchor(null); renderAnchored(); });
+        const submit = () => {
+          const text = (input.value ?? '').trim();
+          if (!text) { input.focus(); return; }
+          const mentioned = [...pickedSec.values()].filter((u) => text.includes(`@${u.name}`));
+          const time = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          // A pending passage only attaches when it lives in THIS section.
+          const pendingHere = pendingAnchor && findAnchor(pendingAnchor, recordRoot!)?.startContainer.parentElement?.closest('.rsec') === sec;
+          const list = loadComments();
+          list.unshift({ author: data.currentUser, time, text, mentions: mentioned.map((u) => u.name), section: key, ...(pendingHere ? { anchor: pendingAnchor! } : {}) });
+          localStorage.setItem(commentsKey, JSON.stringify(list));
+          input.value = ''; pickedSec.clear();
+          setPendingAnchor(null);
+          renderThread();
+          input.focus();
+          showToast('Comment posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
+        };
+        region.querySelector('.rsec-thread__submit')?.addEventListener('click', submit);
+        input.addEventListener('keydown', (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); submit(); } });
+      });
+    };
+
+    const renderPanel = (placed: Placed[]) => {
+      const open = placed.filter((p) => !p.done);
+      const doneCount = placed.length - open.length;
+      const summary = $('comments-panel-summary');
+      if (summary) summary.textContent = open.length
+        ? `${open.length} open${doneCount ? ` · ${doneCount} resolved` : ''}`
+        : doneCount ? `All ${doneCount} resolved` : 'No comments yet.';
+      $('comments-global-count')?.setAttribute('count', String(open.length));
+      const groupsEl = $('comments-panel-groups');
+      if (!groupsEl) return;
+      const secs = recordSections();
+      const groups = [
+        { label: 'General', sec: null as HTMLElement | null, items: open.filter((p) => !p.sec) },
+        ...secs.map((sec) => ({ label: secTitle(sec), sec, items: open.filter((p) => p.sec === secSlug(sec)) })),
+      ];
+      groupsEl.replaceChildren(...groups.filter((g) => g.items.length).map((g) => {
+        const cl = document.createElement('cds-contained-list');
+        cl.setAttribute('label', g.label); cl.setAttribute('kind', 'on-page');
+        for (const p of g.items) {
+          const item = document.createElement('cds-contained-list-item');
+          if (g.sec) item.setAttribute('clickable', '');
+          const who = document.createElement('strong'); who.textContent = `${p.c.author} · ${p.c.time}`;
+          const text = document.createElement('span'); text.className = 'comments-panel__text';
+          text.textContent = p.c.anchor ? `On “${clipQuote(p.c.anchor.quote).slice(0, 60)}…” — ${p.c.text}` : p.c.text;
+          item.append(who, document.createElement('br'), text);
+          if (g.sec) {
+            const sec = g.sec;
+            item.addEventListener('cds-contained-list-item-click', () => {
+              const panel = $('comments-panel'); const btn = $('comments-global') as any;
+              panel?.removeAttribute('expanded'); if (btn) btn.active = false;
+              openSection(sec, { flashKey: replyKey(p.c), anchor: p.c.anchor });
+            });
+          }
+          cl.append(item);
+        }
+        return cl;
+      }));
+    };
+
+    function renderAnchored() {
+      mountThreads();
+      const placed = placeAll();
+      pauseRecordObserver(() => {
+        recordSections().forEach((sec) => {
+          const region = threadFor(sec);
+          if (!region) return;
+          const key = secSlug(sec);
+          const mine = placed.filter((p) => p.sec === key);
+          const open = mine.filter((p) => !p.done);
+          const done = mine.filter((p) => p.done);
+          const isOpen = openSecs.has(key);
+          const panel = region.querySelector<HTMLElement>('.rsec-thread__panel')!;
+          panel.hidden = !isOpen;
+          const label = region.querySelector('.rsec-thread__label')!;
+          label.textContent = isOpen ? 'Hide comments' : open.length ? `${open.length} comment${open.length === 1 ? '' : 's'}` : 'Comment on this section';
+          const build = (p: Placed) => { const li = buildComment(p.c, p.i); li.dataset.commentKey = replyKey(p.c); return li; };
+          const list = region.querySelector<HTMLElement>('.rsec-thread__list:not(.rsec-thread__list--resolved)')!;
+          const doneList = region.querySelector<HTMLElement>('.rsec-thread__list--resolved')!;
+          list.replaceChildren(...open.map(build));
+          doneList.replaceChildren(...done.map(build));
+          list.hidden = !open.length;
+          doneList.hidden = !(done.length && showResolvedSecs.has(key));
+          region.querySelector<HTMLElement>('.rsec-thread__empty')!.hidden = open.length > 0;
+          const rt = region.querySelector<HTMLElement>('.rsec-thread__resolved-toggle')!;
+          rt.style.display = done.length ? '' : 'none';
+          rt.textContent = showResolvedSecs.has(key) ? `Hide resolved (${done.length})` : `Show resolved (${done.length})`;
+          // The pending passage shows in the composer of the section it came from.
+          const pr = pendingAnchor && recordRoot ? findAnchor(pendingAnchor, recordRoot) : null;
+          const here = !!pr && pr.startContainer.parentElement?.closest('.rsec') === sec;
+          region.querySelector<HTMLElement>('.rsec-thread__quote')!.hidden = !here;
+          region.querySelector('.rsec-thread__quote-text')!.textContent = here ? clipQuote(pendingAnchor!.quote) : '';
+          // The header's "N comments" tag counts every OPEN comment in the section
+          // (not just passage comments), so it matches the thread.
+          const toggle = sec.querySelector('.rsec__toggle');
+          let tag = toggle?.querySelector<HTMLElement>('.rsec-comments') ?? null;
+          if (open.length && toggle && !tag) {
+            tag = document.createElement('cds-tag');
+            tag.className = 'rsec-comments'; tag.setAttribute('type', 'blue'); tag.setAttribute('size', 'sm');
+            toggle.append(tag);
+          }
+          if (tag) { if (open.length) tag.textContent = plural(open.length); else tag.remove(); }
+        });
+      });
+      renderPanel(placed);
+    }
+
+    // Open a section's thread (expanding the section), scroll it into view, and
+    // optionally flash one comment + its passage.
+    function openSection(sec: HTMLElement, opts: { focus?: boolean; flashKey?: string; anchor?: TextAnchor } = {}) {
+      const key = secSlug(sec);
+      const body = sec.querySelector<HTMLElement>(':scope > .rsec__body');
+      if (body?.hidden) sec.querySelector<HTMLElement>('[data-section-toggle]')?.click();
+      openSecs.add(key);
+      renderAnchored();
+      requestAnimationFrame(() => {
+        const region = threadFor(sec);
+        const target = (opts.flashKey && region?.querySelector<HTMLElement>(`[data-comment-key="${CSS.escape(opts.flashKey)}"]`)) || region;
+        target?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        if (opts.flashKey && target && target !== region) {
+          target.classList.add('comment--flash'); setTimeout(() => target.classList.remove('comment--flash'), 2000);
+        }
+        if (opts.anchor && recordRoot) {
+          const r = findAnchor(opts.anchor, recordRoot);
+          paintHighlight('review-comment-active', r ? [r] : []);
+          setTimeout(() => paintHighlight('review-comment-active', []), 2000);
+        }
+        if (opts.focus) setTimeout(() => (region?.querySelector('.rsec-thread__input') as any)?.focus?.(), 50);
+      });
+    }
+
+    // A record marker (stored-comment indexes) → open the section(s) holding them.
+    function showInSections(indexes: number[]) {
+      const stored = loadComments();
+      const first = stored[indexes[0]];
+      const p = first ? placeAll().find((x) => x.i === indexes[0]) : null;
+      const sec = p?.sec ? recordSections().find((s) => secSlug(s) === p.sec) : null;
+      if (sec) openSection(sec, { flashKey: replyKey(first), anchor: first.anchor });
+    }
 
     // Show the Comment button beside a selection in the record; hide it otherwise.
     const placeSelectButton = () => {
@@ -2759,6 +2766,8 @@ const letterData = {
     const onSelectionDone = () => {
       if (!recordRoot || !selectHost) return;
       const sel = window.getSelection();
+      // Text inside a section's own comment thread is not part of the record.
+      if (sel?.anchorNode && (sel.anchorNode.parentElement ?? (sel.anchorNode as Element)).closest?.('.rsec-thread')) { selectHost.hidden = true; return; }
       selectionAnchor = anchorFromSelection(sel, recordRoot);
       selectionRange = selectionAnchor && sel ? sel.getRangeAt(0).cloneRange() : null;
       selectHost.hidden = !selectionAnchor;
@@ -2774,6 +2783,14 @@ const letterData = {
     selectHost?.addEventListener('mousedown', (e) => e.preventDefault());
     $('select-comment-btn')?.addEventListener('click', () => {
       if (!selectionAnchor) return;
+      if (anchoredMode) {
+        const sec = selectionRange?.startContainer.parentElement?.closest<HTMLElement>('.rsec') ?? null;
+        setPendingAnchor(selectionAnchor);
+        if (selectHost) selectHost.hidden = true;
+        window.getSelection()?.removeAllRanges();
+        if (sec) openSection(sec, { focus: true });
+        return;
+      }
       setPendingAnchor(selectionAnchor);
       if (selectHost) selectHost.hidden = true;
       window.getSelection()?.removeAllRanges();
@@ -2786,7 +2803,11 @@ const letterData = {
     // (and refresh each comment's "passage changed" state) after any change.
     let reanchorTimer: ReturnType<typeof setTimeout> | undefined;
     if (recordRoot) {
-      const recordObserver = new MutationObserver(() => {
+      const recordObserver = new MutationObserver((records) => {
+        // Section threads (anchored mode) live inside the record; their own churn
+        // (mention menu, reply composers) isn't a record edit — don't re-render on it.
+        const inThread = (n: Node) => !!(n instanceof Element ? n : n.parentElement)?.closest('.rsec-thread');
+        if (records.every((r) => inThread(r.target))) return;
         clearTimeout(reanchorTimer);
         reanchorTimer = setTimeout(renderThread, 200);
       });
@@ -2821,6 +2842,41 @@ const letterData = {
     commentInput?.addEventListener('keydown', (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); addComment(); }
     });
+    // Anchored mode: the Comments tab goes (the working panel opens on Special
+    // conditions); the header action + panel come in; general comments post there.
+    if (anchoredMode) {
+      const dockTabs = document.querySelector('cds-tabs[data-panels]') as any;
+      if (dockTabs) {
+        // Set pre-upgrade (attribute) AND after upgrade — cds-tabs re-reads its
+        // value on upgrade, so the attribute alone doesn't stick.
+        dockTabs.setAttribute('value', 'conditions');
+        customElements.whenDefined('cds-tabs').then(async () => {
+          await dockTabs.updateComplete;
+          dockTabs.value = 'conditions';
+          dockTabs.dispatchEvent(new CustomEvent('cds-tabs-selected'));
+        });
+      }
+      (document.querySelector('cds-tab[value="comments"]') as HTMLElement | null)?.style.setProperty('display', 'none');
+      document.querySelector<HTMLElement>('[data-tabpanel="comments"]')?.setAttribute('hidden', '');
+      $('comments-global')?.style.removeProperty('display');
+      $('comments-panel')?.style.removeProperty('display');
+      const gInput = $('general-comment-input') as any;
+      const gPicked = wireMentionTypeahead(gInput, $('general-comment-menu'), mentionDir);
+      const postGeneral = () => {
+        const text = (gInput?.value ?? '').trim();
+        if (!text) { gInput?.focus(); return; }
+        const mentioned = [...gPicked.values()].filter((u) => text.includes(`@${u.name}`));
+        const time = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const list = loadComments();
+        list.unshift({ author: data.currentUser, time, text, mentions: mentioned.map((u) => u.name) });
+        localStorage.setItem(commentsKey, JSON.stringify(list));
+        gInput.value = ''; gPicked.clear();
+        renderThread();
+        showToast('Comment posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
+      };
+      $('general-comment-submit')?.addEventListener('click', postGeneral);
+      gInput?.addEventListener('keydown', (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); postGeneral(); } });
+    }
     renderThread();
 
     // ── Working-panel tabs ───────────────────────────────────────────────────────
@@ -2939,6 +2995,34 @@ const letterData = {
     renderPreview();
     render(false);
 
+    // ── Collapsible working panel (step ①) ────────────────────────────────────────
+    // Hiding the panel centers the record column (8 of 16 cols, offset 4); "Show working
+    // panel" (in the record's header) brings it back. Remembered per viewer. Any
+    // jump into the panel (comment on a selection, a record comment marker) re-opens it.
+    {
+      const PANEL_KEY = 'final-letter-panel-hidden';
+      const recordCol = document.querySelector('.step[data-step="0"] .record-col') as HTMLElement | null;
+      const dockCol = document.querySelector('.step[data-step="0"] .dock-col') as HTMLElement | null;
+      const showBtn = document.querySelector('.js-panel-show') as HTMLElement | null;
+      const hideBtn = document.querySelector('.js-panel-hide') as HTMLElement | null;
+      const setPanelHidden = (hidden: boolean, { focus = false } = {}) => {
+        if (!recordCol || !dockCol) return;
+        recordCol.classList.toggle('cds--lg:col-start-5', hidden);
+        dockCol.style.display = hidden ? 'none' : '';
+        if (showBtn) showBtn.style.display = hidden ? '' : 'none';
+        try { hidden ? localStorage.setItem(PANEL_KEY, '1') : localStorage.removeItem(PANEL_KEY); } catch {}
+        if (focus) (hidden ? showBtn : hideBtn)?.focus();
+      };
+      hideBtn?.addEventListener('click', () => setPanelHidden(true, { focus: true }));
+      showBtn?.addEventListener('click', () => setPanelHidden(false, { focus: true }));
+      document.querySelector('cds-tabs[data-panels]')?.addEventListener('cds-tabs-selected', () => {
+        if (dockCol?.style.display === 'none') setPanelHidden(false);
+      });
+      let startHidden = false;
+      try { startHidden = localStorage.getItem(PANEL_KEY) === '1'; } catch {}
+      if (startHidden) setPanelHidden(true);
+    }
+
     // ── Assistant read-only application (matrix: form update = RA/Admin only) ─────
     // Applied AFTER the record renders so dynamically-added rows (specimens, parks)
     // are covered. The conditions + comments tabs stay interactive. The record's
@@ -2952,7 +3036,7 @@ const letterData = {
         record.querySelectorAll('cds-button').forEach((el) => {
           // Keep the read-only affordances: Expand/Collapse-all and "View CV" (viewing
           // a document is a read action available to an assistant).
-          if (!el.matches('.js-appreview-expand, .js-appreview-collapse, [data-view-cv]')) (el as HTMLElement).style.display = 'none';
+          if (!el.matches('.js-appreview-expand, .js-appreview-collapse, .js-panel-show, [data-view-cv]')) (el as HTMLElement).style.display = 'none';
         });
       }
     }
@@ -2979,7 +3063,11 @@ const letterData = {
     .col-main, .col-fields, .col-package { min-width: 0; }
 
     /* Step ① column titles — record on the left, working panel on the right. */
-    .pane-title { margin: 0 0 var(--cds-spacing-05, 1rem); }
+    .pane-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--cds-spacing-05, 1rem); margin-block: 0 var(--cds-spacing-05, 1rem);
+    }
+    .pane-title { margin: 0; }
 
     /* Docked working panel (step ①, B3) — a single tabbed surface directly on the
        page (no layer background or frame; the tab strip gives it its structure),
@@ -3012,7 +3100,7 @@ const letterData = {
         block-size: calc(100vh - 5rem);
         display: flex; flex-direction: column;
       }
-      .dock-col .pane-title { flex: 0 0 auto; }
+      .dock-col .pane-head { flex: 0 0 auto; }
       .dock-col .dock { flex: 1 1 auto; min-block-size: 0; display: flex; flex-direction: column; }
       .dock-col .dock cds-tabs { flex: 0 0 auto; }
       .dock-col .rail-panel:not([hidden]) { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; }
@@ -3033,38 +3121,7 @@ const letterData = {
     .appreview-savestate { margin-inline-end: auto; align-self: center; }
 
 
-    /* Condition cards — the TEXT is the content, shown in full; a source pill and
-       optional label caption it, reorder handles on the left, remove on the right. */
-    /* Conditions cards are built in the client script via innerHTML, so they never
-       carry Astro's scope attribute — style them through :global under the stable
-       #conditions-input host (same pattern as the .sheet :global(.ltr__*) rules). */
-    #conditions-input :global(.cond-list) { list-style: none; margin: 0 0 var(--cds-spacing-04, 0.75rem); padding: 0; display: grid; gap: var(--cds-spacing-03, 0.5rem); }
-    #conditions-input :global(.cond) { display: block; padding: var(--cds-spacing-03, 0.5rem); background: var(--cds-layer-02, #fff); border: 1px solid var(--cds-border-subtle-02, #e0e0e0); }
-    #conditions-input :global(.cond--empty) { color: var(--cds-text-secondary, #525252); background: none; border: 0; padding: var(--cds-spacing-02, 0.25rem) 0; }
-    #conditions-input :global(.cond__bar) { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); margin: 0 0 var(--cds-spacing-02, 0.25rem); }
-    #conditions-input :global(.cond__num) { display: inline-grid; place-items: center; min-inline-size: 1.25rem; block-size: 1.25rem; padding: 0 0.25rem; border-radius: 0.25rem; background: var(--cds-layer-accent-01, #e0e0e0); color: var(--cds-text-primary, #161616); font-weight: 600; }
-    #conditions-input :global(.cond__text) { margin: 0; color: var(--cds-text-primary, #161616); }
-    #conditions-input :global(.cond__actions) { display: flex; margin-inline-start: auto; }
-    /* Scope sections are collapsible cds-accordion-items; the header title slot
-       carries the scope name + count tag inline, filling the toggle's width. */
-    #conditions-input :global(.cond-acc__title) { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); inline-size: 100%; }
-    #conditions-input :global(.cond-acc__title .subgroup__name) { margin-inline-end: auto; }
-    /* Carbon caps accordion content with a wide responsive RIGHT padding (~48px) for
-       prose line-length — right for prose, but it insets these condition cards and
-       leaves an odd gutter narrower than the panel. Match the left gutter so the cards
-       fill the width (::part(content) is Carbon's sanctioned hook; same fix as
-       ReviewConditions). The accordion-item is built at runtime (innerHTML) so it
-       carries no Astro scope attr — the part hook must be :global, like the .cond
-       rules above. */
-    #conditions-input :global(cds-accordion-item::part(content)) { padding-inline-end: var(--cds-spacing-05, 1rem); }
-
-    /* Add/edit modal — catalog / manual switcher, one path at a time.
-       cds-* set :host display, so a scoped [hidden] must force display:none. */
-    .cond-mode-label { margin: 0; color: var(--cds-text-secondary, #525252); }
-    #cond-mode-wrap { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
-    #cond-manual { display: flex; flex-direction: column; gap: var(--cds-spacing-06, 1.25rem); }
-    #cond-mode-wrap[hidden], #cond-catalog[hidden], #cond-manual[hidden], #cond-save-catalog[hidden] { display: none; }
-    .cond-field-label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
+    /* Condition cards + the add/edit dialog: styled by ConditionsEditor. */
 
     .field-group { display: grid; gap: var(--cds-spacing-04, 0.75rem); margin-bottom: var(--cds-spacing-07, 2rem); }
     .field-group__title { margin: 0; padding-bottom: var(--cds-spacing-02, 0.25rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
@@ -3159,12 +3216,11 @@ const letterData = {
 
     /* Package step (③) — recap of what's issued, then the letter. */
     .pkg-recap { margin-top: var(--cds-spacing-06, 1.5rem); }
-    .pkg-recap__title { margin: 0 0 var(--cds-spacing-05, 1rem); }
     .pkg-letter { margin-top: var(--cds-spacing-08, 2.5rem); }
-    /* "What you're issuing" — grouped recap. The markup is injected via innerHTML
-       (see renderRecap), so it never gets Astro's scoped data-attribute — these
-       selectors MUST be :global() or they won't match. Surfaces come from
-       cds-tile; only layout tracks and the muted/emphasis type colors live here. */
+    /* Grouped recap. The markup is injected via innerHTML (see renderRecap), so
+       it never gets Astro's scoped data-attribute — these selectors MUST be
+       :global() or they won't match. Surfaces come from cds-tile; only layout
+       tracks and the muted/emphasis type colors live here. */
     :global(.issue) { display: grid; gap: var(--cds-spacing-06, 1.5rem); }
 
     /* Identity — permit kind + category, above a rule. */
@@ -3275,6 +3331,30 @@ const letterData = {
     :global(.reply-composer) { display: grid; gap: var(--cds-spacing-03, 0.5rem); margin-block-start: var(--cds-spacing-03, 0.5rem); padding-inline-start: var(--cds-spacing-05, 1rem); }
     :global(.reply-composer cds-textarea) { display: block; inline-size: 100%; }
     :global(.reply-composer__actions) { display: flex; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); }
+
+    /* Anchored comments (?comments=anchored) — layout only; controls are cds-*.
+       The section's thread opens on the next layer up at the top of its body. */
+    .rsec-thread { margin-block-end: var(--cds-spacing-05, 1rem); }
+    .rsec-thread__toggle { margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
+    .rsec-thread__panel { display: grid; gap: var(--cds-spacing-05, 1rem); margin-block-start: var(--cds-spacing-03, 0.5rem); padding: var(--cds-spacing-05, 1rem); background: var(--cds-layer-01, #f4f4f4); }
+    .rsec-thread__panel[hidden], .rsec-thread__list[hidden], .rsec-thread__empty[hidden] { display: none; }
+    .rsec-thread__resolved-toggle { justify-self: start; margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
+    .rsec-thread__list--resolved { opacity: 0.75; }
+    .rsec-thread__empty { margin: 0; color: var(--cds-text-secondary, #525252); }
+    .rsec-thread__composer cds-textarea { display: block; inline-size: 100%; }
+    .rsec-thread__composer { margin-block-end: 0; }
+    :global(.rsec-thread .comment__meta) { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
+    :global(.rsec-thread .comment__author) { font-weight: 600; color: var(--cds-text-primary, #161616); }
+    :global(.rsec-thread .comment__text) { margin: 0; }
+    /* Header comments panel — wider than the 16rem default only while open. */
+    .comments-panel[expanded] { inline-size: min(26rem, 100vw); }
+    .comments-panel__inner { block-size: 100%; overflow-y: auto; padding: var(--cds-spacing-05, 1rem); display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
+    .comments-panel__title, .comments-panel__summary { margin: 0; }
+    .comments-panel__summary { color: var(--cds-text-secondary, #525252); }
+    .comments-panel__groups { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
+    :global(.comments-panel__text) { color: var(--cds-text-secondary, #525252); }
+    .comments-panel__general { display: grid; gap: var(--cds-spacing-03, 0.5rem); justify-items: end; padding-block-start: var(--cds-spacing-05, 1rem); border-block-start: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+    .comments-panel__general cds-textarea { display: block; inline-size: 100%; }
 
     .dock-thread { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--cds-spacing-05, 1rem); align-content: start; }
     .comment { min-width: 0; }

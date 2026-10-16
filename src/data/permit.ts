@@ -173,11 +173,13 @@ export const permit = {
     ],
     tags: ['Priority', 'Awaiting external permit'],
 
-    // Internal review comments (invented).
+    // Internal review comments (invented). `section` names the permit-detail
+    // section a comment is about — read only by the anchored-comments version of
+    // permit.astro (?comments=anchored); every other view ignores it.
     comments: [
-      { author: 'M. Santos', time: 'Jul 12, 2026', text: 'Study area is within Del Norte Coast Redwoods SP intertidal — confirm collection stays outside the marine reserve boundary at False Klamath Cove.' },
-      { author: 'J. Okafor', time: 'Jul 10, 2026', text: 'Additional-permit flag set: applicant references a separate collecting authorization (GM-2333...). Awaiting confirmation it is in hand before approval.' },
-      { author: 'Dr. L. Cheng', time: 'Jul 9, 2026', text: 'Species list and quantities are proportionate for a diversity survey; the 50-frond Corallina vancouveriensis allotment supports the reproductive case study.' },
+      { author: 'M. Santos', time: 'Jul 12, 2026', text: 'Study area is within Del Norte Coast Redwoods SP intertidal — confirm collection stays outside the marine reserve boundary at False Klamath Cove.', section: 'authorized-parks' },
+      { author: 'J. Okafor', time: 'Jul 10, 2026', text: 'Additional-permit flag set: applicant references a separate collecting authorization (GM-2333...). Awaiting confirmation it is in hand before approval.', section: 'compliance' },
+      { author: 'Dr. L. Cheng', time: 'Jul 9, 2026', text: 'Species list and quantities are proportionate for a diversity survey; the 50-frond Corallina vancouveriensis allotment supports the reproductive case study.', section: 'specimens' },
     ],
 
     // Application lifecycle, grouped into phases. Each step's `state` drives the
@@ -451,3 +453,35 @@ export const permit = {
 
   _dataNote: invented,
 } as const;
+
+// Header classification badges, in display order: the application's own info tags
+// (district scope, category) + the activities it involves — derived from the SAME
+// Data-collection flags the record shows, so badge and answer always agree. One list
+// for the PermitHeader banner on every page AND the record sections each tag comes
+// from (ApplicationReview), so they never drift.
+export const permitInfoTags: Badge[] = [
+  ...permit.infoTags,
+  ...(permit.dataCollection.involvesCollection ? [{ label: 'Specimen collection', type: 'blue' }] : []),
+  ...(permit.dataCollection.involvesLaboratory ? [{ label: 'Laboratory work', type: 'blue' }] : []),
+];
+
+// The application record's five sections, and which section each header badge
+// comes from — so a record section can carry the same badges as the banner
+// (visible even while collapsed): district scope → Study areas, the category →
+// Project information, the activities → Data collection. The compliance flags are
+// all screening gates answered in Additional documents. Read by every record view
+// (ApplicationReview, the application-record prototype).
+export type RecordSection = 'project' | 'team' | 'study' | 'data' | 'docs';
+const BADGE_SECTION: Record<string, RecordSection> = {
+  'Multi-district': 'study',
+  [permit.category]: 'project',
+  'Specimen collection': 'data',
+  'Laboratory work': 'data',
+  'Soil disturbance': 'docs',
+  'Beyond simple use': 'docs',
+  'Additional permit required': 'docs',
+};
+export const badgesForSection = (sec: RecordSection): { tags: Badge[]; flags: Badge[] } => ({
+  tags: permitInfoTags.filter((b) => BADGE_SECTION[b.label] === sec),
+  flags: (permit.flagTags as readonly Badge[]).filter((b) => BADGE_SECTION[b.label] === sec),
+});

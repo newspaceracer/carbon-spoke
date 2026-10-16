@@ -1,0 +1,104 @@
+---
+// In-page contents for the application-record prototype: one link per section,
+// pinned while the record scrolls, with the section in view marked current
+// (aria-current="location"). A section holding compliance flags shows a warning
+// glyph + count, so "where do I need to look?" is answered from the contents too.
+//
+// carbon-checked: Carbon web components ship no in-page table of contents /
+// scroll-spy (cds-side-nav is app navigation, cds-tabs swaps panels rather than
+// scrolling one document). This is a semantic <nav> + list of anchors — the
+// links are plain in-page anchors, styled from --cds-* tokens only.
+interface Item {
+  id: string;
+  label: string;
+  /** Compliance flags in this section — shown as a warning count. */
+  flags?: number;
+}
+interface Props {
+  items: Item[];
+}
+const { items } = Astro.props;
+---
+
+<nav class="toc" aria-label="On this page" data-record-toc>
+  <p class="toc__label t-label-01">On this page</p>
+  <ul class="toc__list">
+    {items.map((it) => (
+      <li data-toc-item={it.id}>
+        <a class="toc__link t-body-compact-01" href={`#${it.id}`} data-toc-link={it.id}>
+          <span>{it.label}</span>
+          {it.flags ? (
+            <span class="toc__flag" title={`${it.flags} to check`}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d="M14.5,14h-13c-0.2,0-0.3-0.1-0.4-0.2c-0.1-0.2-0.1-0.3,0-0.5l6.5-12C7.7,1,8,0.9,8.2,1.1c0.1,0,0.2,0.1,0.2,0.2l6.5,12 c0.1,0.2,0.1,0.3,0,0.5C14.9,13.9,14.7,14,14.5,14z M2.3,13h11.3L8,2.5L2.3,13z"/>
+                <path d="M7.5 6H8.5V9.5H7.5z"/>
+                <path d="M8,10.8c-0.4,0-0.8,0.3-0.8,0.8s0.3,0.8,0.8,0.8c0.4,0,0.8-0.3,0.8-0.8S8.4,10.8,8,10.8z"/>
+              </svg>
+              <span class="toc__flag-count">{it.flags}<span class="cds--visually-hidden"> to check</span></span>
+            </span>
+          ) : null}
+        </a>
+      </li>
+    ))}
+  </ul>
+</nav>
+
+<script>
+  // Scroll-spy: the section whose top has most recently crossed the upper third of
+  // the viewport is "current". Recomputed on scroll (rAF-throttled) rather than via
+  // IntersectionObserver, so a short final section still becomes current when the
+  // page bottoms out.
+  const toc = document.querySelector<HTMLElement>('[data-record-toc]');
+  if (toc) {
+    const links = [...toc.querySelectorAll<HTMLAnchorElement>('[data-toc-link]')];
+    const sections = links
+      .map((a) => document.getElementById(a.dataset.tocLink!))
+      .filter((s): s is HTMLElement => !!s);
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const line = window.innerHeight / 3;
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+      // Sections a viewer can't see (gated off by the page) don't take part.
+      const shown = sections.filter((s) => s.style.display !== 'none');
+      let current = shown[0];
+      for (const s of shown) if (s.getBoundingClientRect().top <= line) current = s;
+      if (atBottom) current = shown[shown.length - 1];
+      links.forEach((a) => {
+        if (a.dataset.tocLink === current?.id) a.setAttribute('aria-current', 'location');
+        else a.removeAttribute('aria-current');
+      });
+    };
+    window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+    window.addEventListener('resize', update);
+    // The page re-runs this after gating sections in or out.
+    toc.addEventListener('record-toc-refresh', update);
+    update();
+  }
+</script>
+
+<style>
+  .toc__label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
+  .toc__list { list-style: none; margin: 0; padding: 0; border-inline-start: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+  .toc__link {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem);
+    min-block-size: 2rem;
+    padding: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-05, 1rem);
+    margin-inline-start: -1px;
+    border-inline-start: 2px solid transparent;
+    color: var(--cds-text-secondary, #525252);
+    text-decoration: none;
+  }
+  .toc__link:hover { color: var(--cds-text-primary, #161616); background: var(--cds-layer-hover-01, #e8e8e8); }
+  .toc__link:focus-visible { outline: 2px solid var(--cds-focus, #0f62fe); outline-offset: -2px; }
+  /* Current section — Carbon's selected-nav treatment: weight + interactive edge. */
+  .toc__link[aria-current] {
+    color: var(--cds-text-primary, #161616);
+    font-weight: 600;
+    border-inline-start-color: var(--cds-border-interactive, #0f62fe);
+  }
+  .toc__flag { display: inline-flex; align-items: center; gap: 0.125rem; color: var(--cds-text-primary, #161616); font-weight: 400; }
+  @media (prefers-reduced-motion: no-preference) {
+    .toc__link { transition: background-color 110ms, color 110ms; }
+  }
+</style>

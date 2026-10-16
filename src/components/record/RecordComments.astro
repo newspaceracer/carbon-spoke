@@ -1,0 +1,47 @@
+---
+// The Comments overview for the application-record prototype — INTERNAL ONLY.
+// A composer for a general comment, then EVERY comment on the application (general
+// and section-specific, each labeled with its section), newest first, with replies
+// and resolve. Same thread as the permit detail page and the review wizard. The
+// list and the composer are wired by the review workspace
+// (src/lib/review-workspace.ts), which renders section threads the same way.
+// `readonly` (the detail page): the list only — no composer, no reply/resolve.
+import Avatar from '../Avatar.astro';
+
+interface Props {
+  readonly?: boolean;
+}
+const { readonly = false } = Astro.props;
+---
+
+<div class="rc">
+  {!readonly && (
+  <div class="rc__composer">
+    <Avatar name="You" size="sm" />
+    <div class="rc__field">
+      <div class="rw-mention-field">
+        <cds-textarea
+          data-rw-general-input
+          label="Add a comment"
+          placeholder="Note something for the team… type @ to mention someone (⌘/Ctrl+Enter to post)"
+          rows="2"
+        ></cds-textarea>
+        <ul class="rw-mention-menu" role="listbox" aria-label="Mention a user" data-rw-general-menu hidden></ul>
+      </div>
+      <div class="rc__actions">
+        <cds-button data-rw-general-submit kind="primary" size="md" type="button">Comment</cds-button>
+      </div>
+    </div>
+  </div>
+  )}
+  <ul class="rw-thread" data-rw-overview></ul>
+</div>
+
+<style>
+  /* Layout only — the field and button are Carbon legos. Comment lines keep a
+     readable measure. */
+  .rc { max-inline-size: 48rem; }
+  .rc__composer { display: flex; align-items: flex-start; gap: var(--cds-spacing-04, 0.75rem); margin-bottom: var(--cds-spacing-07, 2rem); }
+  .rc__field { flex: 1 1 auto; min-inline-size: 0; }
+  .rc__actions { display: flex; justify-content: flex-end; margin-top: var(--cds-spacing-03, 0.5rem); }
+</style>

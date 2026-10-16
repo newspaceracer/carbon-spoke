@@ -1,0 +1,24 @@
+---
+/* Application record — DETAIL page (design prototype). Read-only: an at-a-glance
+   summary, the full record, the permit conditions once approved, and the review
+   team's comments (read-only). Reviewing happens on its own page
+   (/prototypes/application-review), reached by the header's Start review /
+   Open review action — the same split as permit.astro vs the review wizard. */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PermitNav from '../../components/PermitNav.astro';
+import ApplicationRecord from '../../components/record/ApplicationRecord.astro';
+import { permit } from '../../data/permit';
+
+export const prototype = {
+  title: 'Application record (new)',
+  summary:
+    'A fresh, read-only detail page for an application: an at-a-glance summary and ' +
+    'everything to check up top, then the full record with a scroll-tracking contents rail.',
+  tag: 'Design study',
+};
+---
+
+<BaseLayout title={`Application record — ${permit.id}`}>
+  <PermitNav slot="nav" />
+  <ApplicationRecord mode="view" />
+</BaseLayout>

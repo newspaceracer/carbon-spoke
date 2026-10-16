@@ -35,7 +35,8 @@ import Avatar from '../components/Avatar.astro';
 import AnalysisTeam from '../components/AnalysisTeam.astro';
 import InternalOnlyFlag from '../components/InternalOnlyFlag.astro';
 import PermitCalendar from '../components/PermitCalendar.astro';
-import { permit } from '../data/permit';
+import PermitConditions from '../components/PermitConditions.astro';
+import { permit, permitInfoTags } from '../data/permit';
 import { userDirectory, findUser } from '../data/user';
 import { district as districtRecord } from '../data/district';
 import { parkKey } from '../data/parks';
@@ -74,14 +75,6 @@ const stats = [
 const permitType: 'single' | 'multi' =
   permit.studyAreas.districts.length > 1 ? 'multi' : 'single';
 
-// Activities this permit involves. The Data-collection sections that used to
-// state these are now gated (hidden when not involved), so surface them as
-// header classification badges — derived from the SAME flags, so they agree.
-const involvementTags = [
-  ...(permit.dataCollection.involvesCollection ? [{ label: 'Specimen collection', type: 'blue' }] : []),
-  ...(permit.dataCollection.involvesLaboratory ? [{ label: 'Laboratory work', type: 'blue' }] : []),
-];
-const infoTags = [...permit.infoTags, ...involvementTags];
 
 // The signed-in reviewer (the highlighted analysis-team member) authors new comments.
 const currentUser = permit.overview.analysisTeam.find((m) => m.highlight)?.name ?? 'You';
@@ -226,7 +219,37 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 ---
 
 <BaseLayout title={`${permit.id} — ${permit.name}`}>
-  <PermitNav slot="nav" />
+  <PermitNav slot="nav">
+    <!-- Anchored-comments version (?comments=anchored): a stock UI Shell header
+         action with an open-comment count that toggles a cds-header-panel listing
+         every thread, grouped by the section it's about. Hidden (inline display —
+         it sets :host display) unless the flag is on. Wrapped in a Fragment so the
+         slot routing doesn't leave a slot="actions" attribute on the elements
+         (cds-header has no such slot, so they'd never render). -->
+    <Fragment slot="actions">
+    <cds-header-global-action id="comments-global" aria-label="Comments" tooltip-text="Comments" panel-id="comments-panel" style="display:none">
+      <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M8 10H24V12H8z"/><path d="M8 16H18V18H8z"/></svg>
+      <cds-badge-indicator id="comments-global-count" count="0"></cds-badge-indicator>
+    </cds-header-global-action>
+    <cds-header-panel id="comments-panel" class="comments-panel" aria-label="Comments" style="display:none">
+      <div class="comments-panel__inner">
+        <h2 class="comments-panel__title t-heading-03">Comments</h2>
+        <p class="comments-panel__summary t-body-01" id="comments-panel-summary"></p>
+        <div id="comments-panel-groups" class="comments-panel__groups"></div>
+        <!-- General comments: not about one section. The panel is their home. -->
+        <div class="comments-panel__general">
+          <div class="mention-field">
+            <cds-textarea id="general-comment-input" label="General comment" placeholder="Not about one section? Comment here… type @ to mention someone" rows="2"></cds-textarea>
+            <ul id="general-comment-menu" class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
+          </div>
+          <div class="composer__actions">
+            <cds-button id="general-comment-submit" size="sm" type="button">Comment</cds-button>
+          </div>
+        </div>
+      </div>
+    </cds-header-panel>
+    </Fragment>
+  </PermitNav>
 
   <main class="page">
     <!-- No-flash: set the review-started class on <html> synchronously, before
@@ -264,7 +287,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
         name={permit.name}
         organization={permit.researchTeam.organization.name}
         status={permit.status}
-        infoTags={infoTags}
+        infoTags={permitInfoTags}
         flagTags={permit.flagTags}
         stats={stats}
         requestedWindow={permit.activeWindow}
@@ -437,6 +460,47 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                   </li>
                 </template>
               </PermitSection>
+
+              <!-- ── Anchored-comments templates (?comments=anchored) ──────────
+                   Cloned into each commentable PermitSection by the page script.
+                   Kept in this page's markup so they carry its scoped styles. -->
+              <script type="application/json" id="seed-comments" set:html={JSON.stringify(permit.overview.comments)}></script>
+              <template id="sec-comments-btn-template">
+                <cds-button class="sec-comments-btn" kind="ghost" size="md" type="button">
+                  <span class="sec-comments-btn__label">Comment</span>
+                  <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M8 10H24V12H8z"/><path d="M8 16H18V18H8z"/></svg>
+                </cds-button>
+              </template>
+              <template id="sec-thread-template">
+                <div class="sec-thread" role="region" hidden>
+                  <ul class="thread sec-thread__list"></ul>
+                  <p class="sec-thread__empty t-body-01">No comments on this section yet.</p>
+                  <cds-button class="sec-thread__resolved-toggle" kind="ghost" size="sm" type="button"></cds-button>
+                  <ul class="thread sec-thread__list sec-thread__list--resolved" hidden></ul>
+                  <div class="sec-thread__composer">
+                    <div class="mention-field">
+                      <cds-textarea class="sec-thread__input" placeholder="Type @ to mention someone (⌘/Ctrl+Enter to post)" rows="2"></cds-textarea>
+                      <ul class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
+                    </div>
+                    <div class="composer__actions">
+                      <cds-button class="sec-thread__submit" size="md" type="button">Comment</cds-button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template id="anchored-comment-template">
+                <li class="comment">
+                  <Avatar name="?" size="sm" />
+                  <div class="comment__body">
+                    <p class="comment__meta t-label-01"><span class="comment__author"></span> · <span class="comment__time"></span></p>
+                    <p class="comment__text t-body-01"></p>
+                    <ul class="comment__replies"></ul>
+                    <div class="comment__actions">
+                      <cds-button class="comment__resolve" kind="ghost" size="sm" type="button">Resolve</cds-button>
+                    </div>
+                  </div>
+                </li>
+              </template>
               </div>
 
               <aside class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-5">
@@ -485,7 +549,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           <!-- ── Study areas ──────────────────────────────────────────── -->
           <div class="panel cds--css-grid" data-panel="study-areas" role="tabpanel" aria-labelledby="tab-study-areas" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Authorized parks">
+              <PermitSection title="Authorized parks" commentKey="authorized-parks">
                 <p class="section-hint t-body-01">Parks where research and collection are authorized, grouped by district. The district contact covers every park in that district; a park unit may also have its own contact assigned during review.</p>
                 <script type="application/json" id="study-area-contacts" set:html={JSON.stringify(studyAreaContactModel)}></script>
                 <!-- carbon-checked: this table needs MERGED CELLS — one district
@@ -555,19 +619,17 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                 subtitle="This permit is approved — its special conditions are now part of the permit and can no longer be changed."
               ></cds-inline-notification>
 
-              <!-- Read-only conditions, grouped by owner in a standard cds-accordion
-                   (the app's collapse pattern) — Headquarters first, then each district
-                   on the permit. Built client-side from the applied set (localStorage),
-                   so it reflects what the review has curated. -->
-              <cds-accordion id="sc-accordion" size="lg"></cds-accordion>
-              <p class="sc-empty t-body-01" id="sc-empty" hidden>No special conditions on this permit yet.</p>
+              <!-- Read-only conditions, grouped by owner (shared PermitConditions:
+                   Headquarters first, then each district), built client-side from
+                   the applied set, so it reflects what the review has curated. -->
+              <PermitConditions />
             </div>
           </div>
 
           <!-- ── Project information ──────────────────────────────────── -->
           <div class="panel cds--css-grid" data-panel="project-information" role="tabpanel" aria-labelledby="tab-project-information" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Project details">
+              <PermitSection title="Project details" commentKey="project-details">
                 <FactGrid rows={permit.projectInfo.details} tiles />
                 <h3 class="subhead t-heading-01">Project purpose</h3>
                 <p class="lede t-body-02">{permit.projectInfo.purpose}</p>
@@ -575,7 +637,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                 <p class="lede t-body-02">{permit.projectInfo.benefits}</p>
               </PermitSection>
 
-              <PermitSection title="Research team">
+              <PermitSection title="Research team" commentKey="research-team">
                 <div class="contact-grid">
                   {teamCards([
                     { role: 'Organization', contact: t.organization, kind: 'organization' },
@@ -608,7 +670,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                 </cds-table>
               </PermitSection>
 
-              <PermitSection title="Schedule">
+              <PermitSection title="Schedule" commentKey="schedule">
                 <PermitCalendar
                   windowStartISO={permit.activeWindow.startISO}
                   windowEndISO={permit.activeWindow.endISO}
@@ -635,18 +697,18 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           <div class="panel cds--css-grid" data-panel="data-collection" role="tabpanel" aria-labelledby="tab-data-collection" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
               {permit.dataCollection.involvesCollection && (
-                <PermitSection title="Collection & curation">
+                <PermitSection title="Collection & curation" commentKey="collection">
                   <FactGrid rows={permit.dataCollection.collection} min="20rem" tiles />
                 </PermitSection>
               )}
 
               {permit.dataCollection.involvesLaboratory && (
-                <PermitSection title="Laboratory & analysis">
+                <PermitSection title="Laboratory & analysis" commentKey="laboratory">
                   <FactGrid rows={permit.dataCollection.laboratory} min="20rem" tiles />
                 </PermitSection>
               )}
 
-              <PermitSection title="Specimens to be collected">
+              <PermitSection title="Specimens to be collected" commentKey="specimens">
                 <cds-table>
                   <cds-table-head>
                     <cds-table-header-row>
@@ -674,11 +736,11 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           <!-- ── Additional documentation ─────────────────────────────── -->
           <div class="panel cds--css-grid" data-panel="additional-documentation" role="tabpanel" aria-labelledby="tab-additional-documentation" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Compliance">
+              <PermitSection title="Compliance" commentKey="compliance">
                 <FactGrid rows={permit.additionalDocs.facts} min="20rem" tiles />
               </PermitSection>
 
-              <PermitSection title="Uploaded files">
+              <PermitSection title="Uploaded files" commentKey="uploaded-files">
                 <cds-button slot="aside" id="download-all-docs" kind="tertiary" size="md">
                   Download all
                   <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -813,7 +875,9 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   // ── Viewer class: internal reviewer · researcher owner · public (Stories 11–12) ─
   const hideSec = (sel: string) =>
     (document.querySelector(sel)?.closest('.sec') as HTMLElement | null)?.style.setProperty('display', 'none');
+  let internalReviewHidden = false; // set for researcher/public viewers — no internal comments
   const hideInternalReview = () => {
+    internalReviewHidden = true;
     document.documentElement.classList.add('review-started'); // hide the "Start your review" prompt for non-reviewers
     hideSec('#permit-tag-select');   // Tags
     hideSec('#comment-composer');    // Comments / internal notes
@@ -989,6 +1053,233 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
     }
   }
 
+  // ── Anchored comments (?comments=anchored) ─────────────────────────────────
+  // Design study: no Comments section. Each commentable PermitSection (commentKey)
+  // gets a comment control in its head and a thread below it; a header panel lists
+  // every open thread grouped by section, plus general comments that aren't about
+  // one section. Same permit-comments-${id} thread as the review wizard — a comment
+  // just gains an optional `section` field. Resolved state is stored separately
+  // (keyed like the wizard's replies) so other views are unaffected.
+  const anchoredMode = new URLSearchParams(location.search).get('comments') === 'anchored';
+  if (anchoredMode && !internalReviewHidden) {
+    interface AComment { author: string; time: string; text: string; mentions?: string[]; section?: string; anchor?: { quote?: string } }
+    interface AReply { author: string; time: string; text: string; mentions?: string[] }
+    const pid = thePermitId || (composer?.dataset.storageKey || '').replace('permit-comments-', '');
+    const commentsKey = `permit-comments-${pid}`;
+    const repliesKey = `permit-comment-replies-${pid}`;
+    const resolvedKey = `permit-comment-resolved-${pid}`;
+    const keyOf = (c: AComment) => `${c.author}|${c.time}|${c.text.slice(0, 80)}`;
+    const readJSON = <T,>(k: string, fallback: T): T => {
+      try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v ?? fallback; } catch { return fallback; }
+    };
+
+    let seeds: AComment[] = [];
+    try { seeds = JSON.parse(document.getElementById('seed-comments')?.textContent || '[]'); } catch { seeds = []; }
+    let mentionDir: MentionUser[] = [];
+    try { mentionDir = JSON.parse(document.getElementById('comment-mention-directory')?.textContent || '[]'); } catch { mentionDir = []; }
+    const author = activeUser(readIdentity())?.name || composer?.dataset.author || 'You';
+    const todayLabel = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const initials = (name: string) =>
+      name.replace(/^(Dr\.?|Prof\.?)\s+/i, '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+
+    // Stored comments are newest-first and newer than every seed.
+    const allComments = (): AComment[] => {
+      const stored = readJSON<AComment[]>(commentsKey, []);
+      return [...(Array.isArray(stored) ? stored : []), ...seeds];
+    };
+    const resolvedSet = () => new Set(readJSON<string[]>(resolvedKey, []));
+    const setResolved = (c: AComment, on: boolean) => {
+      const set = resolvedSet();
+      if (on) set.add(keyOf(c)); else set.delete(keyOf(c));
+      localStorage.setItem(resolvedKey, JSON.stringify([...set]));
+    };
+    const post = (text: string, section: string | undefined, mentions: string[]) => {
+      const list = readJSON<AComment[]>(commentsKey, []);
+      list.unshift({ author, time: todayLabel(), text, mentions, ...(section ? { section } : {}) });
+      localStorage.setItem(commentsKey, JSON.stringify(list));
+    };
+
+    // Swap the flat Comments section out; reveal the header action + panel.
+    hideSec('#comment-composer');
+    const globalBtn = document.getElementById('comments-global') as any;
+    const panel = document.getElementById('comments-panel') as HTMLElement | null;
+    globalBtn?.style.removeProperty('display');
+    panel?.style.removeProperty('display');
+    const closePanel = () => { panel?.removeAttribute('expanded'); if (globalBtn) globalBtn.active = false; };
+
+    const btnTpl = document.getElementById('sec-comments-btn-template') as HTMLTemplateElement;
+    const threadTpl = document.getElementById('sec-thread-template') as HTMLTemplateElement;
+    const commentTpl = document.getElementById('anchored-comment-template') as HTMLTemplateElement;
+
+    interface Target { key: string; label: string; tab: string; tabLabel: string; sec: HTMLElement; btn: any; region: HTMLElement; showResolved: boolean }
+    const targets: Target[] = [];
+
+    const buildItem = (c: AComment, isResolved: boolean, onChange: () => void): HTMLElement => {
+      const li = commentTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      li.querySelector('.avatar')!.textContent = initials(c.author);
+      li.querySelector('.comment__author')!.textContent = c.author;
+      li.querySelector('.comment__time')!.textContent = c.time;
+      const textEl = li.querySelector('.comment__text')!;
+      textEl.textContent = '';
+      textEl.appendChild(renderMentionText(c.text, c.mentions ?? []));
+      // Replies are written in the review wizard; shown here read-only.
+      const replies = readJSON<Record<string, AReply[]>>(repliesKey, {})[keyOf(c)] || [];
+      const repliesEl = li.querySelector('.comment__replies') as HTMLElement;
+      if (!replies.length) repliesEl.remove();
+      for (const r of replies) {
+        const rli = document.createElement('li');
+        const meta = document.createElement('p'); meta.className = 'comment__meta t-label-01';
+        const who = document.createElement('span'); who.className = 'comment__author'; who.textContent = r.author;
+        meta.append(who, document.createTextNode(` · ${r.time}`));
+        const body = document.createElement('p'); body.className = 'comment__text t-body-01';
+        body.appendChild(renderMentionText(r.text, r.mentions ?? []));
+        rli.append(meta, body);
+        repliesEl.append(rli);
+      }
+      const resolveBtn = li.querySelector('.comment__resolve') as HTMLElement;
+      resolveBtn.textContent = isResolved ? 'Reopen' : 'Resolve';
+      resolveBtn.addEventListener('click', () => {
+        setResolved(c, !isResolved);
+        onChange();
+        showToast(isResolved ? 'Comment reopened' : 'Comment resolved');
+      });
+      return li;
+    };
+
+    const renderTarget = (t: Target) => {
+      const resolved = resolvedSet();
+      const mine = allComments().filter((c) => c.section === t.key);
+      const open = mine.filter((c) => !resolved.has(keyOf(c)));
+      const done = mine.filter((c) => resolved.has(keyOf(c)));
+      const list = t.region.querySelector('.sec-thread__list:not(.sec-thread__list--resolved)') as HTMLElement;
+      const doneList = t.region.querySelector('.sec-thread__list--resolved') as HTMLElement;
+      const toggle = t.region.querySelector('.sec-thread__resolved-toggle') as HTMLElement;
+      const rerender = () => renderAll();
+      list.replaceChildren(...open.map((c) => buildItem(c, false, rerender)));
+      doneList.replaceChildren(...done.map((c) => buildItem(c, true, rerender)));
+      (t.region.querySelector('.sec-thread__empty') as HTMLElement).hidden = open.length > 0;
+      list.hidden = !open.length;
+      doneList.hidden = !(done.length && t.showResolved);
+      toggle.style.display = done.length ? '' : 'none';
+      toggle.textContent = t.showResolved ? `Hide resolved (${done.length})` : `Show resolved (${done.length})`;
+      const label = t.btn.querySelector('.sec-comments-btn__label') as HTMLElement;
+      label.textContent = !t.region.hidden ? 'Hide comments'
+        : open.length ? `${open.length} comment${open.length === 1 ? '' : 's'}` : 'Comment';
+    };
+
+    const renderPanel = () => {
+      const resolved = resolvedSet();
+      const all = allComments();
+      const openAll = all.filter((c) => !resolved.has(keyOf(c)));
+      const groupsEl = document.getElementById('comments-panel-groups')!;
+      const summary = document.getElementById('comments-panel-summary')!;
+      const doneCount = all.length - openAll.length;
+      summary.textContent = openAll.length
+        ? `${openAll.length} open${doneCount ? ` · ${doneCount} resolved` : ''}`
+        : doneCount ? `All ${doneCount} resolved` : 'No comments yet.';
+      document.getElementById('comments-global-count')?.setAttribute('count', String(openAll.length));
+      const known = new Set(targets.map((t) => t.key));
+      const groups: { label: string; target?: Target; items: AComment[] }[] = [
+        // General = no section, or a section this page doesn't show (e.g. a
+        // passage comment from the review wizard). Listed first.
+        { label: 'General', items: openAll.filter((c) => !c.section || !known.has(c.section)) },
+        ...targets.map((t) => ({ label: `${t.label} · ${t.tabLabel}`, target: t, items: openAll.filter((c) => c.section === t.key) })),
+      ];
+      groupsEl.replaceChildren(...groups.filter((g) => g.items.length).map((g) => {
+        const cl = document.createElement('cds-contained-list') as any;
+        cl.setAttribute('label', g.label);
+        cl.setAttribute('kind', 'on-page');
+        for (const c of g.items) {
+          const item = document.createElement('cds-contained-list-item') as any;
+          if (g.target) item.setAttribute('clickable', '');
+          const who = document.createElement('strong'); who.textContent = `${c.author} · ${c.time}`;
+          const text = document.createElement('span'); text.className = 'comments-panel__text';
+          text.textContent = c.anchor?.quote ? `On “${c.anchor.quote.slice(0, 60)}…” — ${c.text}` : c.text;
+          item.append(who, document.createElement('br'), text);
+          if (g.target) {
+            const t = g.target;
+            item.addEventListener('cds-contained-list-item-click', () => { closePanel(); jumpTo(t); });
+          }
+          cl.append(item);
+        }
+        return cl;
+      }));
+    };
+
+    const renderAll = () => { targets.forEach(renderTarget); renderPanel(); };
+
+    const setOpen = (t: Target, open: boolean) => {
+      t.region.hidden = !open;
+      renderTarget(t);
+      if (open) setTimeout(() => (t.region.querySelector('.sec-thread__input') as any)?.focus?.(), 30);
+    };
+
+    const jumpTo = (t: Target) => {
+      if (tabsEl && tabsEl.value !== t.tab) { tabsEl.value = t.tab; }
+      showPanel(t.tab);
+      setOpen(t, true);
+      t.sec.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    };
+
+    document.querySelectorAll<HTMLElement>('[data-comment-section]').forEach((sec) => {
+      const key = sec.dataset.commentSection!;
+      const label = sec.dataset.commentLabel || key;
+      const panelEl = sec.closest<HTMLElement>('.panel');
+      const tab = panelEl?.dataset.panel || 'overview';
+      const tabLabel = document.getElementById(`tab-${tab}`)?.textContent?.trim() || '';
+      const btn = btnTpl.content.firstElementChild!.cloneNode(true) as any;
+      sec.querySelector('.sec__aside')?.prepend(btn);
+      const region = threadTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      region.setAttribute('aria-label', `Comments on ${label}`);
+      sec.querySelector('.sec__head')?.after(region);
+      const input = region.querySelector('.sec-thread__input') as any;
+      input.setAttribute('label', `Comment on ${label.charAt(0).toLowerCase()}${label.slice(1)}`);
+      const picked = wireMentionTypeahead(input, region.querySelector('.mention-menu'), mentionDir);
+      const t: Target = { key, label, tab, tabLabel, sec, btn, region, showResolved: false };
+      targets.push(t);
+
+      btn.addEventListener('click', () => setOpen(t, region.hasAttribute('hidden')));
+      region.querySelector('.sec-thread__resolved-toggle')?.addEventListener('click', () => {
+        t.showResolved = !t.showResolved; renderTarget(t);
+      });
+      const submit = () => {
+        const text = (input.value ?? '').trim();
+        if (!text) { input.focus(); return; }
+        const mentioned = [...picked.values()].filter((u) => text.includes(`@${u.name}`));
+        post(text, key, mentioned.map((u) => u.name));
+        input.value = '';
+        picked.clear();
+        renderAll();
+        input.focus();
+        showToast('Comment posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
+      };
+      region.querySelector('.sec-thread__submit')?.addEventListener('click', submit);
+      input.addEventListener('keydown', (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); submit(); }
+      });
+    });
+
+    // General comments, posted from the header panel.
+    const gInput = document.getElementById('general-comment-input') as any;
+    const gPicked = wireMentionTypeahead(gInput, document.getElementById('general-comment-menu'), mentionDir);
+    const postGeneral = () => {
+      const text = (gInput?.value ?? '').trim();
+      if (!text) { gInput?.focus(); return; }
+      const mentioned = [...gPicked.values()].filter((u) => text.includes(`@${u.name}`));
+      post(text, undefined, mentioned.map((u) => u.name));
+      gInput.value = '';
+      gPicked.clear();
+      renderPanel();
+      showToast('Comment posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
+    };
+    document.getElementById('general-comment-submit')?.addEventListener('click', postGeneral);
+    gInput?.addEventListener('keydown', (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); postGeneral(); }
+    });
+
+    renderAll();
+  }
+
   // ── Analysis team ──
   // The roster + its add / remove / email-all / copy behavior live in the shared
   // AnalysisTeam component (src/components/AnalysisTeam.astro), so this page and
@@ -1114,74 +1405,13 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
      shared permit-conditions-${id} localStorage set. -->
 <script>
   import { permit } from '../data/permit';
-  import {
-    districtKey,
-    loadPermitConditions,
-    permitStatusKey,
-    type PermitCondition,
-  } from '../data/conditions';
-  import { parkKey } from '../data/parks';
-  import { derivePermitActivities } from '../data/activities';
-  import { derivePermitSensitiveSpecies, derivePermitRegions, derivePermitAssociatedPermits } from '../data/scope';
+  import { permitStatusKey } from '../data/conditions';
 
-  // Special conditions are READ-ONLY on the permit detail page — curation (add /
-  // edit / remove) happens in the review workflow (final-letter). This just shows
-  // the applied set, grouped by owner in a standard cds-accordion (the app's
-  // collapse pattern), reading the SAME permit-conditions-${id} localStorage the
-  // review workflow writes, so the two always agree on what will print.
+  // The conditions themselves render in the shared PermitConditions component
+  // (read-only; curation lives in the review workflow). This script only keeps the
+  // "Conditions are final" notice in step with the permit's status.
   const $ = (id: string) => document.getElementById(id);
   const permitId = permit.id;
-  const districts = permit.studyAreas.districts.map((d) => ({ name: d.name, key: districtKey(d.name) }));
-
-  const conditions: PermitCondition[] = loadPermitConditions(permitId, {
-    districtKeys: districts.map((d) => d.key),
-    parkKeys: permit.studyAreas.districts.flatMap((d) => d.parks.map(parkKey)),
-    activityKeys: derivePermitActivities(permit),
-    speciesKeys: derivePermitSensitiveSpecies(permit),
-    regionKeys: derivePermitRegions(permit),
-    agencyKeys: derivePermitAssociatedPermits(permit),
-  });
-
-  // One accordion item per owner that has conditions — Headquarters first, then each
-  // district on the permit, in the permit's own district order.
-  const owners: { key: string; title: string }[] = [
-    { key: 'hq', title: 'Headquarters conditions' },
-    ...districts.map((d) => ({ key: d.key, title: d.name })),
-  ];
-
-  const acc = $('sc-accordion');
-  const empty = $('sc-empty') as HTMLElement | null;
-  if (acc) {
-    let rendered = 0;
-    owners.forEach((owner) => {
-      const owned = conditions.filter((c) => c.owner === owner.key);
-      if (!owned.length) return;
-      rendered++;
-      const item = document.createElement('cds-accordion-item');
-      item.setAttribute('open', ''); // conditions are for reading — expanded by default
-      // Slot the title as heading-compact-01 (bold, same size as body) so the group
-      // header outranks the condition text — matching the review workflow's
-      // conditions accordion (final-letter), which slots the same t-heading-compact-01.
-      const title = document.createElement('span');
-      title.setAttribute('slot', 'title');
-      title.className = 't-heading-compact-01';
-      title.textContent = owner.title;
-      item.appendChild(title);
-      const list = document.createElement('cds-contained-list');
-      list.setAttribute('kind', 'on-page');
-      owned.forEach((c) => {
-        const li = document.createElement('cds-contained-list-item');
-        const body = document.createElement('div');
-        body.className = 'cond__body';
-        body.innerHTML = c.body; // our own sanitized seeds / authored-sanitized text
-        li.appendChild(body);
-        list.appendChild(li);
-      });
-      item.appendChild(list);
-      acc.appendChild(item);
-    });
-    if (empty) empty.hidden = rendered > 0;
-  }
 
   // Approved / signed permits: note that the conditions are now final (part of the
   // permit). Kept in sync if the status changes while the page is open.
@@ -1474,6 +1704,41 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   .comment__author { font-weight: 600; color: var(--cds-text-primary, #161616); }
   .comment__text { margin: 0; }
 
+  /* Anchored comments (?comments=anchored) — layout only; controls are cds-*.
+     A section's thread sits on the next layer up, directly under its head, so it
+     reads as "about this section" without competing with the content. */
+  .sec-thread {
+    display: flex; flex-direction: column; gap: 1rem; align-items: flex-start;
+    margin-block-end: 1.5rem; padding: 1rem;
+    background: var(--cds-layer-01, #f4f4f4);
+  }
+  .sec-thread[hidden] { display: none; }
+  .sec-thread .thread[hidden] { display: none; }
+  .sec-thread__empty { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .sec-thread__empty[hidden] { display: none; }
+  .sec-thread__list--resolved { opacity: 0.75; }
+  .sec-thread__composer { inline-size: 100%; max-inline-size: 44rem; }
+  .comment__replies {
+    list-style: none; margin: 0.5rem 0 0; padding-inline-start: 0.75rem;
+    border-inline-start: 2px solid var(--cds-border-subtle-01, #e0e0e0);
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .comment__actions { margin-block-start: 0.25rem; margin-inline-start: -1rem; }
+
+  /* Header comments panel: wider than the 16rem default so threads stay legible. */
+  .comments-panel[expanded] { inline-size: min(26rem, 100vw); }
+  /* A jump from the panel lands the section below the sticky header + tab strip. */
+  :global([data-comment-section]) { scroll-margin-block-start: 10rem; }
+  .comments-panel__inner {
+    block-size: 100%; overflow-y: auto; padding: 1rem;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .comments-panel__title, .comments-panel__summary { margin: 0; }
+  .comments-panel__summary { color: var(--cds-text-secondary, #525252); }
+  .comments-panel__groups { display: flex; flex-direction: column; gap: 1rem; }
+  :global(.comments-panel__text) { color: var(--cds-text-secondary, #525252); }
+  .comments-panel__general { border-block-start: 1px solid var(--cds-border-subtle-01, #e0e0e0); padding-block-start: 1rem; }
+
 
   /* Section intro line above a list/table. */
   .section-hint {
@@ -1536,20 +1801,8 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
      scroll container on BOTH axes, since a non-visible value on one axis computes
      the other to `auto`. That's what made hovering a button scroll the section. */
 
-  /* Special conditions — read-only. A cds-accordion of owners; each item's body is
-     the applied conditions' rich text. Layout only; look is cds-* + tokens. */
-  #sc-locked-notice[hidden], .sc-empty[hidden] { display: none; }
-  .sc-empty { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
-  :global(.cond__body) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; line-height: 1.28572; }
-  :global(.cond__body p) { margin: 0 0 0.375rem; font-size: 0.875rem; }
-  :global(.cond__body p:last-child) { margin-bottom: 0; }
-  :global(.cond__body ul), :global(.cond__body ol) { margin: 0 0 0.375rem; padding-left: 1.5rem; }
-  :global(.cond__body ul) { list-style: disc; }
-  :global(.cond__body ol) { list-style: decimal; }
-  :global(.cond__body h1), :global(.cond__body h2), :global(.cond__body h3) { font-size: 1rem; font-weight: 600; margin: 0 0 0.375rem; }
-  :global(.cond__body blockquote) { margin: 0 0 0.375rem; padding-left: 0.75rem; border-left: 3px solid var(--cds-border-subtle-01, #e0e0e0); color: var(--cds-text-secondary, #525252); }
-  :global(.cond__body code) { font-family: var(--cds-code-01-font-family, 'IBM Plex Mono', monospace); background: var(--cds-layer-accent-01, #e0e0e0); padding: 0.05rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; }
-  :global(.cond__body a) { color: var(--cds-link-primary, #0f62fe); }
+  /* Special conditions — read-only (rendered by PermitConditions). */
+  #sc-locked-notice[hidden] { display: none; }
 
   /* Research team — lead contacts as a card grid (ContactCard = cds-tile);
      participants render below as a cds-table (its own chrome, no tile). */

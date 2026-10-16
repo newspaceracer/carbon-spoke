@@ -24,7 +24,7 @@ import ReviewAppSummary from '../components/ReviewAppSummary.astro';
 import ApplicationReview from '../components/ApplicationReview.astro';
 import DocumentViewer from '../components/DocumentViewer.astro';
 import ReviewConditions from '../components/ReviewConditions.astro';
-import { permit } from '../data/permit';
+import { permit, permitInfoTags } from '../data/permit';
 import { userDirectory } from '../data/user';
 import { withBase } from '../lib/base';
 import { districtKey, seedInventory, plainText } from '../data/conditions';
@@ -41,11 +41,6 @@ export const prototype = {
 // ── PermitHeader props — mirror final-letter.astro so the studies carry the exact
 // same identity banner as the real wizard. ──────────────────────────────────────
 const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight);
-const involvementTags = [
-  ...(permit.dataCollection.involvesCollection ? [{ label: 'Specimen collection', type: 'blue' }] : []),
-  ...(permit.dataCollection.involvesLaboratory ? [{ label: 'Laboratory work', type: 'blue' }] : []),
-];
-const headerInfoTags = [...permit.infoTags, ...involvementTags];
 const headerStats = [
   { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
   { label: 'Submitted', value: 'Jul 9, 2026' },
@@ -168,7 +163,7 @@ const cancelHref = withBase('/final-letter');
       name={permit.name}
       organization={permit.researchTeam.organization.name}
       status={permit.status}
-      infoTags={headerInfoTags}
+      infoTags={permitInfoTags}
       flagTags={permit.flagTags}
       stats={headerStats}
       requestedWindow={permit.activeWindow}

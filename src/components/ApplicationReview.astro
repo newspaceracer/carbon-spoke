@@ -24,7 +24,7 @@ import YesNoStatement from './YesNoStatement.astro';
 import { yesNo } from '../lib/yes-no';
 import EditButton from './EditButton.astro';
 import type { EditField, EditSpec } from '../lib/record-edit';
-import { permit, type MetaRow, type Contact } from '../data/permit';
+import { permit, badgesForSection, type MetaRow, type Contact } from '../data/permit';
 import { parks } from '../data/parks';
 
 interface Props {
@@ -241,7 +241,7 @@ const fileGlyph =
   )}
 
   <!-- ── Research team ────────────────────────────────────────────────────── -->
-  <ReviewSection title="Research team" collapsible={collapsible} orderIndex={ORDER.team}>
+  <ReviewSection title="Research team" collapsible={collapsible} orderIndex={ORDER.team} {...badgesForSection('team')}>
     <div class="subblock">
       <div class="contact-grid">
         {team.map((c, i) => (
@@ -302,7 +302,7 @@ const fileGlyph =
   </ReviewSection>
 
   <!-- ── Project information ──────────────────────────────────────────────── -->
-  <ReviewSection title="Project information" collapsible={collapsible} orderIndex={ORDER.project}>
+  <ReviewSection title="Project information" collapsible={collapsible} orderIndex={ORDER.project} {...badgesForSection('project')}>
     <!-- Label-over-value items, each with its Edit button. Title + category print on
          the letter (the page listens for their edits). -->
     <div class="subblock">
@@ -348,7 +348,7 @@ const fileGlyph =
   </ReviewSection>
 
   <!-- ── Study areas ──────────────────────────────────────────────────────── -->
-  <ReviewSection title="Study areas" collapsible={collapsible} orderIndex={ORDER.study}>
+  <ReviewSection title="Study areas" collapsible={collapsible} orderIndex={ORDER.study} {...badgesForSection('study')}>
     <!-- Read-only: the authorized parks grouped by district (district = label, parks =
          a list). Editing happens in the Study areas modal (below), opened by Edit.
          The page script re-renders #sa-readonly from its parks state. -->
@@ -372,7 +372,7 @@ const fileGlyph =
   </ReviewSection>
 
   <!-- ── Data collection ──────────────────────────────────────────────────── -->
-  <ReviewSection title="Data collection" collapsible={collapsible} orderIndex={ORDER.data}>
+  <ReviewSection title="Data collection" collapsible={collapsible} orderIndex={ORDER.data} {...badgesForSection('data')}>
     <!-- Two parts, each led by its gate answer as a statement (same read as
          Additional documents): specimen collection → Specimens + Collection &
          curation; laboratory work → Laboratory & analysis. A "Does NOT" answer
@@ -444,7 +444,7 @@ const fileGlyph =
   </ReviewSection>
 
   <!-- ── Additional documents ─────────────────────────────────────────────── -->
-  <ReviewSection title="Additional documents" collapsible={collapsible} orderIndex={ORDER.docs}>
+  <ReviewSection title="Additional documents" collapsible={collapsible} orderIndex={ORDER.docs} {...badgesForSection('docs')}>
     <!-- Screening answers as statements ("Does / Does NOT …"), then the remaining
          label-over-value facts. -->
     <div class="subblock">

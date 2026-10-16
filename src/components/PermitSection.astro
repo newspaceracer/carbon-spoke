@@ -7,13 +7,18 @@
 // Story 15: the old per-section "Make changes" ghost button is gone — reviewers
 // edit live in the review wizard, gated by the IR permission matrix (Story 9), so
 // a dead per-section edit stub no longer fits the model.
+//
+// `commentKey` makes the section a comment target in the anchored-comments
+// version of permit.astro (?comments=anchored): the page injects a per-section
+// comment control into the head and a thread below it. Inert everywhere else.
 interface Props {
   title: string;
+  commentKey?: string;
 }
-const { title } = Astro.props;
+const { title, commentKey } = Astro.props;
 ---
 
-<section class="sec">
+<section class="sec" data-comment-section={commentKey} data-comment-label={commentKey ? title : undefined}>
   <div class="sec__head">
     <h2 class="sec__title t-heading-03">{title}</h2>
     <div class="sec__aside">

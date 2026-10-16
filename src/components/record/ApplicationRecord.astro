@@ -1,0 +1,649 @@
+---
+/* The application record, shared by the two application-record prototype pages
+   (design prototype; the shipping record is ApplicationReview.astro):
+
+     mode="view"   — the DETAIL page (/prototypes/application-record): read-only.
+                     Comments show as a read-only list; one header action, Start
+                     review / Open review, goes to the review page.
+     mode="review" — the REVIEW page (/prototypes/application-review): the same
+                     record plus the review workspace — issues for the researcher,
+                     comments for reviewers (replies, resolve), and the decision
+                     (Approve, Return to researcher, Reject).
+
+   Summary-first: a band of fact tiles + "Needs a closer look" answers who / where /
+   when / what / what to check in seconds, then the full record follows on raised
+   surfaces with a pinned, scroll-tracking contents rail.
+
+   manifest:
+     spine: PermitNav › main.page › PageHeader (g100 banner) › g10 field ›
+            cds--css-grid [ contents rail lg:3 | content lg:12 ]
+     sections:
+       - identity banner    -> PageHeader (slot: id + cds-icon-indicator + cds-tag/FlagTag)
+       - contents rail      -> record/RecordToc.astro (nav + scroll-spy; hidden < lg)
+       - at a glance        -> record/RecordGlance.astro (cds-tile × 4 on a subgrid
+                               + "Needs a closer look" list, cds-icon-indicator + cds-link)
+       - project info       -> record/RecordSection + prose + dl + cds-tag (sessions)
+       - research team      -> record/RecordSection + person cards (Avatar, cds-link,
+                               cds-icon-button copy) + cds-table + cds-inline-notification
+       - study areas        -> record/RecordSection + district cards + cds-table (sites)
+       - data collection    -> record/RecordSection + cds-table (specimens) + dl facts
+       - additional docs    -> record/RecordSection + screening answers (FlagTag)
+                               + cds-table (files, cds-link)
+       - conditions         -> view: record/RecordSection gate=approved + PermitConditions
+                               (read-only, shown only once the permit is approved);
+                               review: "Special conditions" + RecordConditionsEditor
+                               (the shared ConditionsEditor — add / edit / reorder)
+       - comments           -> record/RecordSection gate=internal + RecordComments
+                               (cds-textarea + cds-button + thread) — staff only
+       - review workspace   -> (review mode) record/ReviewWorkspace.astro: per-section "Add" menu
+                               (cds-menu-button) + issue/comment lists, selection
+                               toolbar, pinned review bar (cds-button), decision
+                               cds-modals; logic in lib/review-workspace.ts
+
+   carbon-checked: every control is a stock cds-* component (tile, tag, link,
+   icon-indicator, icon-button, table, inline-notification, breadcrumb). The page
+   CSS is layout only (grid placement, sticky rail, card borders, prose measure). */
+import PageHeader from '../PageHeader.astro';
+import Avatar from '../Avatar.astro';
+import FlagTag from '../FlagTag.astro';
+import RecordGlance from './RecordGlance.astro';
+import RecordSection from './RecordSection.astro';
+import RecordToc from './RecordToc.astro';
+import RecordComments from './RecordComments.astro';
+import ReviewWorkspace from './ReviewWorkspace.astro';
+import PermitConditions from '../PermitConditions.astro';
+import RecordConditionsEditor from './RecordConditionsEditor.astro';
+import { permit, permitInfoTags, badgesForSection, type Contact, type MetaRow } from '../../data/permit';
+import { withBase } from '../../lib/base';
+
+interface Props {
+  mode: 'view' | 'review';
+}
+const { mode } = Astro.props;
+const review = mode === 'review';
+const recordUrl = withBase('/prototypes/application-record');
+const reviewUrl = withBase('/prototypes/application-review');
+const crumbs = review
+  ? [{ label: 'Permits', href: '/permits' }, { label: permit.id, href: '/permit' }, { label: 'Application record', href: '/prototypes/application-record' }, { label: 'Review' }]
+  : [{ label: 'Permits', href: '/permits' }, { label: permit.id, href: '/permit' }, { label: 'Application record' }];
+
+const t = permit.researchTeam;
+const pj = permit.projectInfo;
+const sa = permit.studyAreas;
+const dc = permit.dataCollection;
+const ad = permit.additionalDocs;
+
+// ── Derived counts (all from the record, so the summary never disagrees with it) ──
+const parkCount = sa.districts.reduce((n, d) => n + d.parks.length, 0);
+const specimenTotal = dc.specimens.reduce((n, s) => n + Number(s.quantity), 0);
+const piIsFieldLead = t.principalInvestigator.name === t.fieldLead.name;
+const facts = (rows: readonly MetaRow[]) => rows as readonly MetaRow[];
+const curation = facts(dc.collection).find((r) => r.key === 'Curation facility');
+const labFacility = facts(dc.laboratory).find((r) => r.key === 'Laboratory facility');
+
+// People on the application: PI (+ field lead when the same person), submitter,
+// then the additional participants.
+const people = 1 + (piIsFieldLead ? 0 : 1) + 1 + t.participants.length;
+const orgShort = t.organization.name.split(' — ')[0];
+
+// Screening answers that raised a header flag, keyed to the flag they explain.
+// Each gets an anchor so "Needs a closer look" can jump straight to it.
+const FLAG_FACT: Record<string, { key: string; id: string }> = {
+  'Soil disturbance': { key: 'Involves soil disturbance', id: 'answer-soil' },
+  'Beyond simple use': { key: 'Activities beyond simple use (aircraft/drones, diving, trapping, etc.)', id: 'answer-beyond' },
+  'Additional permit required': { key: 'Requires additional federal/state/local permits', id: 'answer-permits' },
+};
+const screening = facts(ad.facts).filter((r) => r.boolean);
+const proposalRows = facts(ad.facts).filter((r) => !r.boolean);
+const answerId = (r: MetaRow) => Object.values(FLAG_FACT).find((f) => f.key === r.key)?.id;
+const flagFor = (r: MetaRow) => permit.flagTags.find((f) => FLAG_FACT[f.label]?.key === r.key);
+
+const waiver = ad.files.find((f) => /DPR65B/i.test(f.type));
+const attention = [
+  ...permit.flagTags.map((f) => {
+    const fact = screening.find((r) => r.key === FLAG_FACT[f.label]?.key);
+    return { title: f.label, detail: fact?.detail ?? '', href: `#${FLAG_FACT[f.label]?.id}`, linkLabel: 'Go to the answer' };
+  }),
+  ...(!t.personnelInsured ? [{
+    title: 'Not all personnel insured',
+    detail: `At least one team member isn't employed or insured by the institution.${waiver ? ' A signed liability waiver addendum (DPR65B) is attached.' : ''}`,
+    href: '#team-insurance',
+    linkLabel: 'Go to the research team',
+  }] : []),
+];
+
+const glanceFacts = [
+  {
+    label: piIsFieldLead ? 'Principal investigator · field lead' : 'Principal investigator',
+    value: t.principalInvestigator.name, person: t.principalInvestigator.name,
+    lines: [orgShort, t.principalInvestigator.email ?? ''],
+  },
+  {
+    label: 'Where',
+    value: `${parkCount} parks`,
+    lines: sa.districts.map((d) => d.name),
+  },
+  {
+    label: 'What',
+    value: `${specimenTotal} specimens`,
+    lines: [`${dc.specimens.length} taxa`, ...(curation ? [`Curated at ${curation.value}`] : [])],
+  },
+];
+
+// Header facts — the same at-a-glance strip every permit header carries
+// (requested window · submitted · responsible analyst), plus the annual report
+// due date. (Every permit runs 12 months, so no duration.)
+const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight);
+const headerStats = [
+  { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
+  { label: 'Submitted', value: 'Jul 9, 2026' },
+  { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
+  { label: 'Annual report due', value: pj.annualReport.requiredLabel },
+];
+
+const sections = [
+  { id: 'project-information', label: 'Project information', key: 'project' },
+  { id: 'research-team', label: 'Research team', key: 'team' },
+  { id: 'study-areas', label: 'Study areas', key: 'study' },
+  { id: 'data-collection', label: 'Data collection', key: 'data' },
+  { id: 'additional-documents', label: 'Additional documents', key: 'docs' },
+  { id: 'comments', label: 'Comments', key: null },
+] as const;
+const tocItems = sections.map((s) => ({ id: s.id, label: s.label, flags: s.key ? badgesForSection(s.key).flags.length : 0 }));
+
+// Person cards for the research team.
+const teamCards: { roles: string; contact: Contact; org?: boolean }[] = [
+  { roles: piIsFieldLead ? 'Principal investigator · Field lead' : 'Principal investigator', contact: t.principalInvestigator },
+  ...(piIsFieldLead ? [] : [{ roles: 'Field lead', contact: t.fieldLead }]),
+  { roles: 'Submitter', contact: t.submitter },
+  { roles: 'Organization', contact: t.organization, org: true },
+];
+
+const keyDates = [
+  { label: 'Project dates', value: `${pj.projectWindow.startLabel} – ${pj.projectWindow.endLabel}` },
+  { label: 'Permit requested', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
+  { label: 'Annual report target', value: pj.annualReport.tentativeLabel },
+  { label: 'Annual report due', value: pj.annualReport.requiredLabel },
+];
+
+const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/><path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/></svg>';
+---
+
+<main class="page">
+    <PageHeader
+      title={permit.name}
+      eyebrow={t.organization.name}
+      crumbs={crumbs}
+    >
+      <div class="id-row">
+        <span class="t-heading-03">{permit.id}</span>
+        <cds-icon-indicator data-status-indicator kind={permit.status.kind} label={permit.status.label} size="20"></cds-icon-indicator>
+        {!review && (
+          <!-- The one action on the detail page: go review it (label + visibility set
+               by the workspace script from the status and the viewer's role). -->
+          <cds-button class="head-action" size="md" data-rw-open-review href={reviewUrl} style="display: none">Open review</cds-button>
+        )}
+      </div>
+      <div class="banner-tags">
+        {permitInfoTags.map((tag) => <cds-tag type={tag.type} size="lg">{tag.label}</cds-tag>)}
+        {permit.flagTags.map((tag) => <FlagTag tag={tag} size="lg" />)}
+      </div>
+      <dl class="banner-stats">
+        {headerStats.map((st) => (
+          <div class="banner-stat">
+            <dt class="banner-stat__label t-label-01">{st.label}</dt>
+            <dd class="banner-stat__value t-body-01">{st.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </PageHeader>
+
+    <div class="field cds--g10">
+      <div class="cds--css-grid">
+        <!-- Where the review stands once decided (returned / rejected / approved). -->
+        <div class="notice cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" data-rw-notice></div>
+
+        <!-- Two contexts, one at a time: the application, and the conditions. On the
+             detail page the conditions tab exists only once the permit is approved
+             (data-gate); with one tab left, the strip hides. -->
+        <div class="tabs-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" data-record-tabs-wrap>
+          <cds-tabs value="application" data-record-tabs>
+            <cds-tab value="application">Application</cds-tab>
+            <cds-tab value="conditions" data-gate={review ? undefined : 'approved'}>{review ? 'Special conditions' : 'Permit conditions'}</cds-tab>
+          </cds-tabs>
+        </div>
+
+        <aside class="rail cds--css-grid-column cds--sm:col-span-0 cds--md:col-span-0 cds--lg:col-span-3" data-record-rail>
+          <div class="rail__sticky">
+            <RecordToc items={tocItems} />
+          </div>
+        </aside>
+
+        <div class="content cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12 cds--lg:col-start-5" data-record-panel="application">
+          <RecordGlance facts={glanceFacts} attention={attention} />
+
+          <!-- ── Project information ─────────────────────────────────────────── -->
+          <RecordSection id="project-information" reviewable={review} title="Project information" {...badgesForSection('project')}>
+            <div class="prose">
+              <h3 class="sub t-heading-02">Purpose</h3>
+              <p class="t-body-02">{pj.purpose}</p>
+              <h3 class="sub t-heading-02">Benefits to State Parks</h3>
+              <p class="t-body-02">{pj.benefits}</p>
+            </div>
+
+            <h3 class="sub t-heading-02">Key dates</h3>
+            <dl class="facts facts--4">
+              {keyDates.map((d) => (
+                <div class="fact">
+                  <dt class="fact__label t-label-01">{d.label}</dt>
+                  <dd class="fact__value t-body-compact-02">{d.value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <h3 class="sub t-heading-02">Field sessions</h3>
+            <ul class="chips" aria-label="Field session dates">
+              {pj.fieldOccurrences.map((d) => <li><cds-tag type="gray" size="md">{d}</cds-tag></li>)}
+            </ul>
+          </RecordSection>
+
+          <!-- ── Research team ───────────────────────────────────────────────── -->
+          <RecordSection id="research-team" reviewable={review} title="Research team" summary={`${people} people · ${orgShort}`} {...badgesForSection('team')}>
+            <ul class="cards cards--3">
+              {teamCards.map((c) => (
+                <li class="card">
+                  <div class="card__id">
+                    <Avatar name={c.contact.name} size="md" shape={c.org ? 'square' : 'circle'} />
+                    <div>
+                      <p class="card__role t-label-01">{c.roles}</p>
+                      <p class="card__name t-heading-compact-02">{c.contact.name}</p>
+                    </div>
+                  </div>
+                  <ul class="card__lines">
+                    {c.contact.email && (
+                      <li class="card__email">
+                        <cds-link href={`mailto:${c.contact.email}`} size="sm">{c.contact.email}</cds-link>
+                        <cds-icon-button kind="ghost" size="sm" align="bottom" data-copy-email={c.contact.email}>
+                          <Fragment set:html={copyIcon} />
+                          <span slot="tooltip-content">Copy email</span>
+                        </cds-icon-button>
+                      </li>
+                    )}
+                    {c.contact.phone && <li class="t-body-compact-01">{c.contact.phone}</li>}
+                    {c.contact.address && <li class="card__muted t-body-compact-01">{c.contact.address}</li>}
+                  </ul>
+                  {c.contact.cvHref && (
+                    <cds-link href={withBase(c.contact.cvHref)} target="_blank" size="sm">View CV</cds-link>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <h3 class="sub t-heading-02">Additional participants <span class="count t-body-01">{t.participants.length}</span></h3>
+            <cds-table size="md">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Name</cds-table-header-cell>
+                  <cds-table-header-cell>Contact</cds-table-header-cell>
+                  <cds-table-header-cell>Notes</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body>
+                {t.participants.map((p) => (
+                  <cds-table-row>
+                    <cds-table-cell>
+                      <span class="stack__primary">{p.name}</span>
+                      {p.title && <span class="stack__secondary t-label-01">{p.title}</span>}
+                    </cds-table-cell>
+                    <cds-table-cell>
+                      <span class="stack__primary">{p.email}</span>
+                      {p.phone && <span class="stack__secondary t-label-01">{p.phone}</span>}
+                    </cds-table-cell>
+                    <cds-table-cell>{p.comments || '—'}</cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+
+            <div id="team-insurance" class="anchor-target">
+              {t.personnelInsured ? (
+                <cds-inline-notification kind="success" low-contrast hide-close-button
+                  title="All personnel insured"
+                  subtitle="Every team member is employed or insured by the institution."></cds-inline-notification>
+              ) : (
+                <cds-inline-notification kind="warning" low-contrast hide-close-button
+                  title="Not all personnel insured"
+                  subtitle={`At least one team member isn't employed or insured by the institution.${waiver ? ' A signed liability waiver addendum (DPR65B) is attached under Additional documents.' : ''}`}></cds-inline-notification>
+              )}
+            </div>
+          </RecordSection>
+
+          <!-- ── Study areas ─────────────────────────────────────────────────── -->
+          <RecordSection id="study-areas" reviewable={review} title="Study areas" summary={`${parkCount} parks in ${sa.districts.length} districts · ${sa.sites.length} survey sites`} {...badgesForSection('study')}>
+            <ul class="cards cards--2">
+              {sa.districts.map((d) => (
+                <li class="card">
+                  <div>
+                    <p class="card__role t-label-01">District</p>
+                    <h3 class="card__name t-heading-compact-02">{d.name}</h3>
+                  </div>
+                  <div>
+                    <p class="card__label t-label-01">Parks · {d.parks.length}</p>
+                    <ul class="card__parks">
+                      {d.parks.map((p) => <li class="t-body-compact-01">{p}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <p class="card__label t-label-01">Research coordinator</p>
+                    <p class="t-body-compact-01">{d.coordinator.name}</p>
+                    <cds-link href={`mailto:${d.coordinator.email}`} size="sm">{d.coordinator.email}</cds-link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <h3 class="sub t-heading-02">Survey sites <span class="count t-body-01">{sa.sites.length}</span></h3>
+            <cds-table size="md">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Site</cds-table-header-cell>
+                  <cds-table-header-cell>Coordinates</cds-table-header-cell>
+                  <cds-table-header-cell>Why this site</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body>
+                {sa.sites.map((s) => (
+                  <cds-table-row>
+                    <cds-table-cell>{s.name}</cds-table-cell>
+                    <cds-table-cell>{s.coords}</cds-table-cell>
+                    <cds-table-cell>{s.note}</cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+          </RecordSection>
+
+          <!-- ── Data collection ─────────────────────────────────────────────── -->
+          <RecordSection id="data-collection" reviewable={review} title="Data collection" summary={`${specimenTotal} specimens across ${dc.specimens.length} taxa${dc.involvesLaboratory ? ' · laboratory analysis' : ''}`} {...badgesForSection('data')}>
+            {dc.involvesCollection && (
+              <>
+                <h3 class="sub sub--first t-heading-02">Specimens</h3>
+                <cds-table size="md">
+                  <cds-table-head>
+                    <cds-table-header-row>
+                      <cds-table-header-cell>Species</cds-table-header-cell>
+                      <cds-table-header-cell>Quantity</cds-table-header-cell>
+                      <cds-table-header-cell>Portion</cds-table-header-cell>
+                      <cds-table-header-cell>Condition</cds-table-header-cell>
+                    </cds-table-header-row>
+                  </cds-table-head>
+                  <cds-table-body>
+                    {dc.specimens.map((s) => (
+                      <cds-table-row>
+                        <cds-table-cell><em>{s.species}</em></cds-table-cell>
+                        <cds-table-cell>{s.quantity}</cds-table-cell>
+                        <cds-table-cell>{s.portion}</cds-table-cell>
+                        <cds-table-cell>{s.condition}</cds-table-cell>
+                      </cds-table-row>
+                    ))}
+                  </cds-table-body>
+                </cds-table>
+              </>
+            )}
+
+            <div class="split">
+              {[
+                { title: 'Collection & curation', rows: dc.involvesCollection ? facts(dc.collection) : [] },
+                { title: 'Laboratory & analysis', rows: dc.involvesLaboratory ? facts(dc.laboratory) : [] },
+              ].filter((g) => g.rows.length).map((g) => (
+                <div>
+                  <h3 class="sub t-heading-02">{g.title}</h3>
+                  <dl class="facts">
+                    {g.rows.map((r) => (
+                      <div class="fact">
+                        <dt class="fact__label t-label-01">{r.key}</dt>
+                        <dd class="fact__value t-body-compact-02">
+                          {r.href ? (
+                            <cds-link href={withBase(r.href)} target="_blank" size="md">Answered in study proposal</cds-link>
+                          ) : r.contact ? (
+                            <>
+                              <span class="stack__primary">{r.contact.name}</span>
+                              <span class="stack__secondary t-label-01">{[r.contact.address, r.contact.phone, r.contact.email].filter(Boolean).join(' · ')}</span>
+                            </>
+                          ) : r.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
+            </div>
+          </RecordSection>
+
+          <!-- ── Additional documents ────────────────────────────────────────── -->
+          <RecordSection id="additional-documents" reviewable={review} title="Additional documents" summary={`${screening.filter((r) => r.value === 'Yes').length} screening answers to check · ${ad.files.length} files`} {...badgesForSection('docs')}>
+            <h3 class="sub sub--first t-heading-02">Screening answers</h3>
+            <ul class="answers">
+              {screening.map((r) => {
+                const flag = flagFor(r);
+                const yes = r.value === 'Yes';
+                return (
+                  <li class="answer anchor-target" id={answerId(r)}>
+                    <div class="answer__head">
+                      <p class="answer__statement t-heading-compact-02">{yes ? r.statements?.yes : r.statements?.no}</p>
+                      {yes && flag && <FlagTag tag={flag} />}
+                    </div>
+                    {yes && r.detail && <p class="answer__detail t-body-01">{r.key === FLAG_FACT['Additional permit required'].key ? ad.additionalPermitsDetails : r.detail}</p>}
+                  </li>
+                );
+              })}
+            </ul>
+
+            <dl class="facts facts--4">
+              {proposalRows.map((r) => (
+                <div class="fact">
+                  <dt class="fact__label t-label-01">{r.key}</dt>
+                  <dd class="fact__value t-body-compact-02">
+                    {r.href ? <cds-link href={withBase(r.href)} target="_blank" size="md">Answered in study proposal</cds-link> : r.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
+            <h3 class="sub t-heading-02">Files <span class="count t-body-01">{ad.files.length}</span></h3>
+            <cds-table size="md">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Document</cds-table-header-cell>
+                  <cds-table-header-cell>Pages</cds-table-header-cell>
+                  <cds-table-header-cell>Size</cds-table-header-cell>
+                  <cds-table-header-cell>Uploaded</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body>
+                {ad.files.map((f) => (
+                  <cds-table-row>
+                    <cds-table-cell>
+                      <cds-link href={withBase(f.href)} target="_blank" size="md">{f.name}</cds-link>
+                      <span class="stack__secondary t-label-01">{f.type}</span>
+                    </cds-table-cell>
+                    <cds-table-cell>{f.pages}</cds-table-cell>
+                    <cds-table-cell>{f.size}</cds-table-cell>
+                    <cds-table-cell>
+                      <span class="stack__primary">{f.date}</span>
+                      <span class="stack__secondary t-label-01">{f.by}</span>
+                    </cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+          </RecordSection>
+
+          <!-- ── Comments (internal only) ────────────────────────────────────── -->
+          <RecordSection id="comments" title="Comments" summary={review ? 'Review team notes. Applicants and the public never see these.' : 'Review team notes. To add or answer a comment, open the review.'} gate="internal">
+            <RecordComments readonly={!review} />
+          </RecordSection>
+        </div>
+
+        <!-- ── Conditions tab ──────────────────────────────────────────────────── -->
+        <div class="content cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" data-record-panel="conditions" style="display: none">
+          {review ? (
+            <!-- ── Special conditions (review: add, edit, remove, reorder) ───────── -->
+            <RecordSection id="conditions" title="Special conditions" summary="These print on the permit letter. Add from a catalog or write your own.">
+              <RecordConditionsEditor />
+            </RecordSection>
+          ) : (
+            <!-- ── Permit conditions (detail: read-only, after approval) ──────────── -->
+            <RecordSection id="conditions" title="Permit conditions" summary="Part of the approved permit. The permit holder must follow every condition." gate="approved">
+              <PermitConditions />
+            </RecordSection>
+          )}
+        </div>
+      </div>
+    </div>
+</main>
+
+<ReviewWorkspace mode={mode} recordUrl={recordUrl} reviewUrl={reviewUrl} />
+
+<script>
+  // Application / conditions tabs. cds-tabs only renders the strip; showing the
+  // panel is ours (inline display — a plain [hidden] div can lose to author CSS).
+  // The contents rail belongs to the application, so it hides with it. The URL
+  // hash keeps the tab: #conditions opens the conditions; any in-page link to the
+  // application (contents, "Go to the answer") switches back first.
+  const tabs = document.querySelector('[data-record-tabs]') as any;
+  const panels = [...document.querySelectorAll<HTMLElement>('[data-record-panel]')];
+  const rail = document.querySelector<HTMLElement>('[data-record-rail]');
+  const show = (value: string, { scrollTo }: { scrollTo?: string } = {}) => {
+    panels.forEach((p) => { p.style.display = p.dataset.recordPanel === value ? '' : 'none'; });
+    if (rail) rail.style.display = value === 'application' ? '' : 'none';
+    if (tabs && tabs.value !== value) tabs.value = value;
+    document.querySelector('[data-record-toc]')?.dispatchEvent(new Event('record-toc-refresh'));
+    if (scrollTo) document.getElementById(scrollTo)?.scrollIntoView();
+  };
+  const panelFor = (id: string) =>
+    document.getElementById(id)?.closest<HTMLElement>('[data-record-panel]')?.dataset.recordPanel;
+  const fromHash = () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (id === 'conditions') { show('conditions'); return; }
+    const panel = id ? panelFor(id) : null;
+    show(panel ?? 'application', panel ? { scrollTo: id } : {});
+  };
+  tabs?.addEventListener('cds-tabs-selected', () => {
+    show(tabs.value);
+    history.replaceState(null, '', tabs.value === 'conditions' ? '#conditions' : location.pathname + location.search);
+    window.scrollTo({ top: (document.querySelector('[data-record-tabs-wrap]') as HTMLElement)?.offsetTop - 64 || 0 });
+  });
+  window.addEventListener('hashchange', fromHash);
+  // Wait for the strip to upgrade before setting its value.
+  customElements.whenDefined('cds-tabs').then(async () => { await tabs?.updateComplete; fromHash(); });
+  fromHash();
+</script>
+
+<script>
+  // Copy-email buttons on the team cards — the app's shared delegated handler.
+  import { installEmailCopy } from '../../lib/email-copy';
+  installEmailCopy();
+</script>
+
+<style>
+  /* Page-level LAYOUT only — every control is a stock cds-* component; color and
+     type come from --cds-* tokens and the t-* scale. */
+  .page { padding-block: 0; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html) { scroll-behavior: smooth; }
+  }
+
+  /* Banner extras (slotted into PageHeader). */
+  .id-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-spacing-05, 1rem); margin-top: var(--cds-spacing-03, 0.5rem); }
+  .head-action { margin-inline-start: auto; }
+  /* Header facts strip — mirrors PermitHeader's: a divider, then label-over-value. */
+  .banner-stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: var(--cds-spacing-06, 1.5rem);
+    margin: var(--cds-spacing-07, 2rem) 0 0;
+    padding-top: var(--cds-spacing-06, 1.5rem);
+    border-top: 1px solid var(--cds-border-subtle-01, #393939);
+  }
+  .banner-stat { min-inline-size: 0; }
+  .banner-stat__label { margin: 0; color: var(--cds-text-secondary, #c6c6c6); }
+  .banner-stat__value { margin: var(--cds-spacing-02, 0.25rem) 0 0; color: var(--cds-text-primary, #f4f4f4); }
+  .banner-tags { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-03, 0.5rem); margin-top: var(--cds-spacing-05, 1rem); }
+
+  /* The record sits on a full-bleed g10 field so its white surfaces lift off it. */
+  .field {
+    background: var(--cds-background, #f4f4f4);
+    margin-inline: calc(50% - 50vw);
+    padding-block: var(--cds-spacing-07, 2rem) var(--cds-spacing-10, 4rem);
+  }
+  .rail__sticky { position: sticky; top: 5rem; }
+  .notice:empty { display: none; }
+  .tabs-col { margin-block-end: var(--cds-spacing-05, 1rem); }
+  .notice cds-inline-notification { max-inline-size: none; }
+  .content { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); min-inline-size: 0; }
+
+  /* Sub-headings + counts inside a section. */
+  .sub { display: flex; align-items: baseline; gap: var(--cds-spacing-03, 0.5rem); margin: var(--cds-spacing-07, 2rem) 0 var(--cds-spacing-04, 0.75rem); }
+  .sub:first-child, .sub--first { margin-top: 0; }
+  .count { color: var(--cds-text-secondary, #525252); }
+
+  /* Long-form answers keep a readable measure. */
+  .prose { max-inline-size: 44rem; }
+  .prose p { margin: 0; }
+
+  /* Label-over-value facts. */
+  .facts { display: grid; gap: var(--cds-spacing-05, 1rem) var(--cds-spacing-07, 2rem); margin: 0; }
+  .facts--4 { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); margin-top: var(--cds-spacing-07, 2rem); }
+  .sub + .facts--4 { margin-top: 0; }
+  .fact { min-inline-size: 0; }
+  .fact__label { color: var(--cds-text-secondary, #525252); margin-bottom: var(--cds-spacing-02, 0.25rem); }
+  .fact__value { margin: 0; }
+
+  .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--cds-spacing-02, 0.25rem); }
+
+  /* Card lists (team members, districts) — bordered blocks on the section surface. */
+  .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--cds-spacing-05, 1rem); }
+  .cards--3 { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+  .cards--2 { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
+  .card {
+    display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); align-items: flex-start;
+    padding: var(--cds-spacing-05, 1rem);
+    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    min-inline-size: 0;
+  }
+  .card p { margin: 0; }
+  .card__id { display: flex; align-items: center; gap: var(--cds-spacing-04, 0.75rem); }
+  .card__role, .card__label { color: var(--cds-text-secondary, #525252); }
+  .card .card__label { margin-bottom: var(--cds-spacing-02, 0.25rem); }
+  .card__name { margin: 0; }
+  .card__lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-02, 0.25rem); min-inline-size: 0; }
+  .card__email { display: flex; align-items: center; gap: var(--cds-spacing-02, 0.25rem); min-inline-size: 0; overflow-wrap: anywhere; }
+  .card__muted { color: var(--cds-text-secondary, #525252); }
+  .card__parks { margin: 0; padding-inline-start: 1.125rem; list-style: disc; }
+
+  /* Two stacked lines in a table cell / fact. */
+  .stack__primary, .stack__secondary { display: block; }
+  .stack__secondary { color: var(--cds-text-secondary, #525252); }
+
+  #team-insurance { margin-top: var(--cds-spacing-06, 1.5rem); }
+  #team-insurance cds-inline-notification { max-inline-size: none; }
+  .anchor-target { scroll-margin-top: 6rem; }
+
+  .split { display: grid; gap: 0 var(--cds-spacing-09, 3rem); grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
+
+  /* Screening answers — a statement, its flag, and the applicant's explanation. */
+  .answers { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+  .answer { padding-block: var(--cds-spacing-05, 1rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+  .answer__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem); }
+  .answer__statement { margin: 0; }
+  .answer__detail { margin: var(--cds-spacing-03, 0.5rem) 0 0; max-inline-size: 44rem; color: var(--cds-text-secondary, #525252); }
+  /* A jumped-to answer flashes once so the eye lands on it. */
+  @media (prefers-reduced-motion: no-preference) {
+    .answer:target, #team-insurance:target { animation: target-flash 1.6s ease-out; }
+  }
+  @keyframes target-flash {
+    from { background: var(--cds-highlight, #d0e2ff); }
+    to { background: transparent; }
+  }
+</style>

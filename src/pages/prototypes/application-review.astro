@@ -1,0 +1,23 @@
+---
+/* Application review — REVIEW page (design prototype). The same record as the
+   detail page (/prototypes/application-record), with the review workspace on it:
+   mark issues for the researcher, comment for reviewers and answer comments, then
+   Approve, Return to researcher, or Reject. */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PermitNav from '../../components/PermitNav.astro';
+import ApplicationRecord from '../../components/record/ApplicationRecord.astro';
+import { permit } from '../../data/permit';
+
+export const prototype = {
+  title: 'Application review (new)',
+  summary:
+    'Review an application on its record: mark issues for the researcher, comment ' +
+    'for other reviewers, then approve, return, or reject.',
+  tag: 'Design study',
+};
+---
+
+<BaseLayout title={`Review — ${permit.id}`}>
+  <PermitNav slot="nav" />
+  <ApplicationRecord mode="review" />
+</BaseLayout>
