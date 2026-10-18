@@ -49,9 +49,12 @@ const { id, title, summary, tags = [], flags = [], gate, reviewable = false } = 
     {summary && <p class="rs__summary t-body-01">{summary}</p>}
   </header>
   {reviewable && <div class="rs__review" data-section-review={id}></div>}
-  <div data-section-content={id}>
+  <!-- The panel is a raised (layer-01) surface, so its content sits one layer
+       deeper: cds-layer level 1 steps tiles, fields, tags, and borders inside to
+       their layer-02 values (e.g. gray cards on the white panel). -->
+  <cds-layer level="1" class="rs__content" data-section-content={id}>
     <slot />
-  </div>
+  </cds-layer>
 </section>
 
 <style>
@@ -74,5 +77,6 @@ const { id, title, summary, tags = [], flags = [], gate, reviewable = false } = 
   /* The Add menu sits at the far end of the title row. */
   .rs__add { margin-inline-start: auto; }
   .rs__badges { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-02, 0.25rem); }
+  .rs__content { display: block; }
   .rs__summary { margin: var(--cds-spacing-02, 0.25rem) 0 0; color: var(--cds-text-secondary, #525252); }
 </style>

@@ -70,11 +70,13 @@ const orgRows = [
   { label: 'Address', value: fmtAddress(applicantOrg.address) },
 ];
 
+// The PI is the submitter, or the person named on the application.
+const piPerson = researchTeam.piIsSubmitter ? applicant : researchTeam.pi;
 const piRows = [
-  { label: 'Name', value: fullName(applicant.firstName, applicant.lastName) },
-  { label: 'Title', value: applicant.title },
-  { label: 'Phone', value: formatDisplay(applicant.phone) },
-  { label: 'Email', value: applicant.email },
+  { label: 'Name', value: fullName(piPerson.firstName, piPerson.lastName) },
+  { label: 'Title', value: piPerson.title },
+  { label: 'Phone', value: formatDisplay(piPerson.phone) },
+  { label: 'Email', value: piPerson.email },
 ];
 
 // The person in direct charge of field work resolves from the two gate answers.

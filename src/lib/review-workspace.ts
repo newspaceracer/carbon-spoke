@@ -29,8 +29,9 @@ import { sectionAccessor, normalizeStatus, readPermitRole } from './permissions'
 import { sendEmail } from './notifications';
 import {
   reviewStore, RECORD_SECTIONS, sectionTitle, sectionOf, commentKey, todayLabel,
-  type ReviewComment, type ReviewIssue,
+  issueState, returnToResearcher, type ReviewComment,
 } from './review-thread';
+import { buildIssueCard, openIssueModal } from './issue-ui';
 
 const INTERNAL = ['admin', 'hq-technical', 'district-lead', 'district-assistant'];
 const APPROVED = ['out-for-signature', 'waiting-for-annual-report', 'active', 'expired'];
@@ -41,8 +42,6 @@ const STATUS_KIND: Record<string, string> = {
   'Active': 'succeeded', 'Expired': 'unknown', 'Rejected': 'failed', 'Withdrawn': 'undefined',
 };
 
-const PENCIL = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8 0 0 0 0 0 0l-3.6-3.6c-.8-.8-2-.8-2.8 0 0 0 0 0 0 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7 20.4 4zM6 22v-3.6l10-10 3.6 3.6-10 10H6z"/></svg>';
-const TRASH = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>';
 
 const el = <K extends string>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElement => {
   const n = document.createElement(tag);
@@ -96,7 +95,9 @@ export function initReviewWorkspace(): void {
 
   // ── Data views ────────────────────────────────────────────────────────────
   const allComments = (): ReviewComment[] => [...store.comments(), ...seeds];
-  const draftIssues = () => store.issues().filter((i) => !i.sentAt);
+  const draftIssues = () => store.issues().filter((i) => issueState(i, store.returned()) === 'draft');
+  // Resubmitted changes waiting on a reviewer: resolve each, or ask again.
+  const toCheck = () => store.issues().filter((i) => ['addressed', 'not-addressed'].includes(issueState(i, store.returned())));
   const openComments = () => { const done = store.resolved(); return allComments().filter((c) => !done.has(commentKey(c))); };
 
   // ── Building notes ────────────────────────────────────────────────────────
@@ -118,43 +119,18 @@ export function initReviewWorkspace(): void {
     p.append(renderMentionText(text, mentions));
     return p;
   };
-  const iconButton = (svg: string, tip: string, onClick: () => void) => {
-    const b = el('cds-icon-button', { kind: 'ghost', size: 'sm', align: 'left' });
-    b.innerHTML = `${svg}<span slot="tooltip-content"></span>`;
-    b.querySelector('[slot="tooltip-content"]')!.textContent = tip;
-    b.addEventListener('click', onClick);
-    return b;
-  };
   const ghost = (label: string, onClick: () => void) => {
     const b = el('cds-button', { kind: 'ghost', size: 'sm' }, label);
     b.addEventListener('click', onClick);
     return b;
   };
 
-  const buildIssue = (i: ReviewIssue, withSection = false): HTMLElement => {
-    const li = el('li', { class: 'rw-note', 'data-issue': i.id });
-    const h = head(i.author, i.time);
-    h.prepend(el('cds-icon-indicator', { kind: 'caution-minor', label: 'For the researcher', size: '16' }));
-    if (withSection) h.append(el('cds-link', { href: `#${i.section}`, size: 'sm' }, sectionTitle(i.section)));
-    const tools = el('div', { class: 'rw-note__tools' });
-    if (i.sentAt) {
-      tools.append(el('cds-tag', { type: 'gray', size: 'md' }, `Sent ${i.sentAt}`));
-    } else if (canFlag()) {
-      tools.append(
-        iconButton(PENCIL, 'Edit issue', () => openNote({ kind: 'issue', section: i.section, quote: i.quote, issue: i })),
-        iconButton(TRASH, 'Remove issue', () => {
-          store.saveIssues(store.issues().filter((x) => x.id !== i.id));
-          render();
-          showToast('Issue removed');
-        }),
-      );
-    }
-    h.append(tools);
-    li.append(h);
-    const q = quoteEl(i.quote); if (q) li.append(q);
-    li.append(textEl(i.text));
-    return li;
-  };
+  // Issue cards come from the shared builder (lib/issue-ui) — the review wizard
+  // renders the very same card.
+  const buildIssue = (i: Parameters<typeof buildIssueCard>[0], withSection = false) =>
+    buildIssueCard(i, { permitId, canEdit: canFlag(), withSection, onChange: render, author: me });
+  const openIssue = (section: string, quote?: string) =>
+    openIssueModal({ permitId, section, quote, author: me, onSaved: render });
 
   const buildComment = (c: ReviewComment, withSection = false): HTMLElement => {
     const done = store.resolved().has(commentKey(c));
@@ -279,6 +255,15 @@ export function initReviewWorkspace(): void {
         title: `Returned to researcher${r ? ` · ${r.at}` : ''}`,
         subtitle: `${plural(sent, 'issue')} sent${r?.message ? ` with a message: “${r.message}”` : ''}. The researcher can resubmit once they're addressed.`,
       });
+    } else if (p === 'under-review' && store.returned()?.resubmittedAt && toCheck().length) {
+      const r = store.returned()!;
+      const all = store.issues().filter((i) => r.issueIds.includes(i.id));
+      const addressed = all.filter((i) => i.response?.addressed).length;
+      n = el('cds-inline-notification', {
+        kind: 'info', 'low-contrast': '', 'hide-close-button': '',
+        title: `Resubmitted by the researcher · ${r.resubmittedAt}`,
+        subtitle: `${addressed} of ${plural(all.length, 'requested change')} marked addressed. Check each one in its section, then resolve it or ask again.`,
+      });
     } else if (p === 'rejected') {
       const r = store.rejected();
       n = el('cds-inline-notification', {
@@ -318,14 +303,20 @@ export function initReviewWorkspace(): void {
     }
     const issues = draftIssues().length;
     const open = openComments().length;
-    statusEl.textContent = `${plural(issues, 'issue')} for the researcher · ${plural(open, 'open comment')}`
+    const check = toCheck().length;
+    statusEl.textContent = `${plural(issues, 'issue')} for the researcher`
+      + (check ? ` · ${plural(check, 'resubmitted change')} to check` : '')
+      + ` · ${plural(open, 'open comment')}`
       + (canDecide() ? '' : ' · The responsible analyst makes the decision.');
     show('start', false);
     ['reject', 'return', 'approve'].forEach((a) => show(a, canDecide()));
   };
 
   const gates = () => {
-    const show: Record<string, boolean> = { internal: isInternal, approved: APPROVED.includes(phase()) };
+    // A final report is on file once the researcher submits one; `?report=1`
+    // previews the mock report without saving anything.
+    const hasReport = new URLSearchParams(location.search).get('report') === '1' || !!ls(`permit-final-report-${permitId}`);
+    const show: Record<string, boolean> = { internal: isInternal, approved: APPROVED.includes(phase()), report: hasReport };
     document.querySelectorAll<HTMLElement>('[data-record-section][data-gate]').forEach((sec) => {
       const visible = show[sec.dataset.gate!] ?? true;
       // Inline display (not [hidden]) so no author display rule resurrects it.
@@ -393,25 +384,23 @@ export function initReviewWorkspace(): void {
   const noteInput = root.querySelector('[data-rw-note-input]') as any;
   const noteSave = root.querySelector<HTMLElement>('[data-rw-note-save]');
   const notePicked = wireMentionTypeahead(noteInput, root.querySelector('[data-rw-note-menu]'), dir);
-  let pending: { kind: 'issue' | 'comment'; section: string; quote?: string; issue?: ReviewIssue } | null = null;
+  // The note dialog is for COMMENTS (issues use the shared issue dialog).
+  let pending: { section: string; quote?: string } | null = null;
 
   function openNote(p: NonNullable<typeof pending>) {
     pending = p;
-    const isIssue = p.kind === 'issue';
     root!.querySelector('[data-rw-note-label]')!.textContent = sectionTitle(p.section);
-    root!.querySelector('[data-rw-note-heading]')!.textContent = isIssue ? (p.issue ? 'Edit issue' : 'Add an issue for the researcher') : 'Add a comment for reviewers';
-    root!.querySelector('[data-rw-note-lede]')!.textContent = isIssue
-      ? 'The researcher sees this when you return the application. Say what to change or provide.'
-      : 'Only reviewers see comments. Type @ to mention someone.';
+    root!.querySelector('[data-rw-note-heading]')!.textContent = 'Add a comment for reviewers';
+    root!.querySelector('[data-rw-note-lede]')!.textContent = 'Only reviewers see comments. Type @ to mention someone.';
     const quote = root!.querySelector<HTMLElement>('[data-rw-note-quote]')!;
     quote.hidden = !p.quote;
     root!.querySelector('[data-rw-note-quote-text]')!.textContent = p.quote ?? '';
-    noteInput.label = isIssue ? 'What needs to change?' : 'Comment';
-    noteInput.value = p.issue?.text ?? '';
+    noteInput.label = 'Comment';
+    noteInput.value = '';
     noteInput.invalid = false;
-    noteInput.invalidText = isIssue ? 'Describe what the researcher needs to change.' : 'Write a comment.';
+    noteInput.invalidText = 'Write a comment.';
     notePicked.clear();
-    if (noteSave) noteSave.textContent = isIssue ? (p.issue ? 'Save issue' : 'Add issue') : 'Add comment';
+    if (noteSave) noteSave.textContent = 'Add comment';
     noteModal.open = true;
     setTimeout(() => noteInput.focus?.(), 60);
   }
@@ -420,26 +409,14 @@ export function initReviewWorkspace(): void {
     if (!pending) return;
     const text = (noteInput.value ?? '').trim();
     if (!text) { noteInput.invalid = true; noteInput.focus?.(); return; }
-    if (pending.kind === 'issue') {
-      const list = store.issues();
-      if (pending.issue) {
-        const it = list.find((x) => x.id === pending!.issue!.id);
-        if (it) it.text = text;
-      } else {
-        list.push({ id: `iss-${Date.now().toString(36)}`, section: pending.section, quote: pending.quote, text, author: me, time: todayLabel() });
-      }
-      store.saveIssues(list);
-      showToast(pending.issue ? 'Issue updated' : 'Issue added', `${sectionTitle(pending.section)} · sent when you return the application.`);
-    } else {
-      const mentioned = [...notePicked.values()].filter((u) => text.includes(`@${u.name}`));
-      store.addComment({
-        author: me, time: todayLabel(), text, section: pending.section,
-        mentions: mentioned.map((u) => u.name),
-        ...(pending.quote ? { anchor: { quote: pending.quote } } : {}),
-      });
-      openThreads.add(pending.section);
-      showToast('Comment posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
-    }
+    const mentioned = [...notePicked.values()].filter((u) => text.includes(`@${u.name}`));
+    store.addComment({
+      author: me, time: todayLabel(), text, section: pending.section,
+      mentions: mentioned.map((u) => u.name),
+      ...(pending.quote ? { anchor: { quote: pending.quote } } : {}),
+    });
+    openThreads.add(pending.section);
+    showToast('Comment posted', mentioned.length ? `Notified ${mentioned.map((u) => u.name).join(', ')} of your mention.` : undefined);
     noteModal.open = false;
     pending = null;
     render();
@@ -450,7 +427,8 @@ export function initReviewWorkspace(): void {
     const item = (e.target as HTMLElement).closest?.('[data-add]') as HTMLElement | null;
     if (!item || item.hasAttribute('disabled')) return;
     const slug = item.closest<HTMLElement>('[data-add-menu]')?.dataset.addMenu;
-    if (slug) openNote({ kind: item.dataset.add === 'issue' ? 'issue' : 'comment', section: slug });
+    if (!slug) return;
+    if (item.dataset.add === 'issue') openIssue(slug); else openNote({ section: slug });
   });
 
   // ── Selection toolbar: Issue / Comment on a selected passage ──────────────
@@ -482,7 +460,7 @@ export function initReviewWorkspace(): void {
     const s = selection;
     hideSel();
     window.getSelection()?.removeAllRanges();
-    openNote({ kind: b.dataset.rwSelectAdd === 'issue' ? 'issue' : 'comment', section: s.section, quote: s.quote });
+    if (b.dataset.rwSelectAdd === 'issue') openIssue(s.section, s.quote); else openNote({ section: s.section, quote: s.quote });
   }));
 
   // ── General comment (Comments overview composer) ──────────────────────────
@@ -550,11 +528,10 @@ export function initReviewWorkspace(): void {
     const issues = draftIssues();
     const message = (returnMsg.value ?? '').trim();
     if (!issues.length && !message) { returnMsg.invalid = true; returnMsg.focus?.(); return; }
-    const at = todayLabel();
-    store.saveIssues(store.issues().map((i) => (i.sentAt ? i : { ...i, sentAt: at })));
-    store.setReturned({ by: me, at, message, issueIds: issues.map((i) => i.id) });
+    returnToResearcher(permitId, me, message);
     returnModal.open = false;
-    setStatus('Changes requested');
+    previewStatus = null;
+    render();
     sendEmail('EM-D', emailVars());
     showToast('Returned to researcher', `${plural(issues.length, 'issue')} sent. They'll be emailed now.`);
     window.scrollTo({ top: 0 });

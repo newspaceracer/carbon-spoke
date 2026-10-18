@@ -1,0 +1,70 @@
+---
+// "Final permit letter" tab of the application-record prototype: the letter
+// EXACTLY as it was sent for signature. The review wizard (final-letter.astro)
+// freezes the rendered letter into permit-letter-${id} when it sends; this shows
+// that copy (an approved letter must never re-derive from later edits), with the
+// signature status (permit-signatures-${id}, written by PermitHeader). No copy on
+// file — e.g. a status preview — says so rather than inventing a letter.
+import { permit } from '../../data/permit';
+import '../../styles/permit-letter.css';
+---
+
+<div class="rl" data-record-letter data-permit-id={permit.id}>
+  <cds-inline-notification
+    data-rl-empty
+    kind="info"
+    low-contrast
+    hide-close-button
+    title="No letter on file yet"
+    subtitle="The letter appears here once it's finalized and sent for signature."
+    style="display: none"
+  ></cds-inline-notification>
+
+  <div data-rl-doc style="display: none">
+    <dl class="rl__meta">
+      <div><dt class="t-label-01">Sent for signature</dt><dd class="t-body-01" data-rl-sent></dd></div>
+      <div><dt class="t-label-01">First signature</dt><dd class="t-body-01"><cds-icon-indicator data-rl-sig="first" size="16"></cds-icon-indicator></dd></div>
+      <div><dt class="t-label-01">Second signature</dt><dd class="t-body-01"><cds-icon-indicator data-rl-sig="second" size="16"></cds-icon-indicator></dd></div>
+    </dl>
+    <article class="rl__sheet ltr-sheet cds--white" aria-label={`Final permit letter for ${permit.id}`} data-rl-sheet></article>
+  </div>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-record-letter]');
+  if (root) {
+    const id = root.dataset.permitId!;
+    const read = (k: string) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
+    const paint = () => {
+      const letter = read(`permit-letter-${id}`) as { html: string; sentAt: string; sentBy?: string } | null;
+      (root.querySelector('[data-rl-empty]') as HTMLElement).style.display = letter ? 'none' : '';
+      (root.querySelector('[data-rl-doc]') as HTMLElement).style.display = letter ? '' : 'none';
+      if (!letter) return;
+      root.querySelector('[data-rl-sheet]')!.innerHTML = letter.html; // our own rendered letter
+      root.querySelector('[data-rl-sent]')!.textContent = letter.sentBy ? `${letter.sentAt} by ${letter.sentBy}` : letter.sentAt;
+      const sigs = read(`permit-signatures-${id}`) || {};
+      root.querySelectorAll<HTMLElement>('[data-rl-sig]').forEach((el) => {
+        const s = sigs[el.dataset.rlSig!];
+        el.setAttribute('kind', s ? 'succeeded' : 'pending');
+        el.setAttribute('label', s ? `Signed ${s.at}` : 'Waiting');
+      });
+    };
+    paint();
+    window.addEventListener('permit-status-changed', paint);
+  }
+</script>
+
+<style>
+  /* Layout only — the letter's own styles come from permit-letter.css. */
+  .rl__meta { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-05, 1rem) var(--cds-spacing-09, 3rem); margin: 0 0 var(--cds-spacing-06, 1.5rem); }
+  .rl__meta dt { color: var(--cds-text-secondary, #525252); margin-bottom: var(--cds-spacing-02, 0.25rem); }
+  .rl__meta dd { margin: 0; }
+  .rl__sheet {
+    max-inline-size: 52rem;
+    background: var(--cds-background, #ffffff);
+    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    padding: var(--cds-spacing-09, 3rem);
+    color: var(--cds-text-primary, #161616);
+  }
+  @media (max-width: 42rem) { .rl__sheet { padding: var(--cds-spacing-05, 1rem); } }
+</style>

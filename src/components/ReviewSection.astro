@@ -36,8 +36,14 @@ interface Props {
    *  the section is collapsed. */
   tags?: Badge[];
   flags?: Badge[];
+  /** The section is painted as a raised (layer-01) panel by its host page, so its
+   *  content sits one layer deeper: wrapping it in cds-layer level 1 steps every
+   *  layer-aware control inside (tiles → layer-02, fields, tags, borders) the way
+   *  Carbon's layering model expects — e.g. gray contact cards on a white panel
+   *  in a g10 zone. Off by default (plain sections on the page background). */
+  layered?: boolean;
 }
-const { title, collapsible = false, open = true, orderIndex = 0, tags = [], flags = [] } = Astro.props;
+const { title, collapsible = false, open = true, orderIndex = 0, tags = [], flags = [], layered = false } = Astro.props;
 const hasBadges = tags.length + flags.length > 0;
 ---
 
@@ -62,7 +68,7 @@ const hasBadges = tags.length + flags.length > 0;
       </button>
     </h2>
     <div class="rsec__body" data-section-body hidden={!open}>
-      <slot />
+      {layered ? <cds-layer level="1" class="rsec__layer"><slot /></cds-layer> : <slot />}
     </div>
   </section>
 ) : (
@@ -150,4 +156,5 @@ const hasBadges = tags.length + flags.length > 0;
   /* Author element reset beats the UA [hidden] rule — restate it (see
      docs/…; the "hidden author-reset" gotcha) so a collapsed body truly collapses. */
   .rsec__body[hidden] { display: none; }
+  .rsec__layer { display: block; }
 </style>

@@ -42,6 +42,8 @@ import { applicationSteps, draft, applicant } from '../data/application';
 // the number, title, breadcrumb, and notice. Markup renders the new-application
 // case by default.
 
+import '../styles/review-notes.css';
+
 // Steps with a fully-built panel; the rest render an honest placeholder.
 const builtSteps = new Set([
   'research-team',
@@ -90,7 +92,7 @@ export const prototype = {
           <h1 id="app-title" class="banner__title t-heading-05">Scientific Research &amp; Collection Permit application</h1>
           <div class="banner__id-row">
             <span id="app-number" class="banner__number t-heading-03">{draft.id}</span>
-            <cds-icon-indicator size="16" kind="incomplete" label={draft.status}></cds-icon-indicator>
+            <cds-icon-indicator id="app-status-indicator" size="16" kind="incomplete" label={draft.status}></cds-icon-indicator>
             <!-- Persistent "this is an amendment" marker — a type label (neutral),
                  not a workflow status. Revealed by the client script. -->
             <cds-tag id="amend-tag" type="cool-gray" size="lg" hidden>Amendment</cds-tag>
@@ -108,7 +110,7 @@ export const prototype = {
           </div>
           <div class="stat">
             <dt class="stat__label t-label-01">Status</dt>
-            <dd class="stat__value t-body-01">{draft.status}</dd>
+            <dd id="app-status-value" class="stat__value t-body-01">{draft.status}</dd>
           </div>
           <div class="stat">
             <dt class="stat__label t-label-01">Started</dt>
@@ -163,6 +165,18 @@ export const prototype = {
           hide-close-button
           hidden
           subtitle="We've prefilled this form with the original permit's information. Update what's changed, then submit for review. Your amendment keeps the original number with an “-A” suffix."
+        ></cds-inline-notification>
+
+        <!-- Revise mode (/apply?revise=<permit>) — the application came back with
+             requested changes. Revealed + filled by the client script. -->
+        <cds-inline-notification
+          id="revise-note"
+          class="wizard-intro"
+          kind="warning"
+          low-contrast
+          hide-close-button
+          style="display: none"
+          title="Changes requested"
         ></cds-inline-notification>
 
         <!-- Application-wide guidance — the same on every page of the Draft. -->
@@ -253,10 +267,10 @@ export const prototype = {
         </svg>
         <h1 id="submitted-title" class="submitted__title t-heading-05">Application {draft.id} was submitted</h1>
         <div class="submitted__leads">
-          <p class="submitted__lead t-body-02">
+          <p id="submitted-lead-1" class="submitted__lead t-body-02">
             A confirmation email was sent to {applicant.email}.
           </p>
-          <p class="submitted__lead t-body-02">
+          <p id="submitted-lead-2" class="submitted__lead t-body-02">
             You'll be notified by email if additional information is needed, and again once a
             decision is made.
           </p>
@@ -320,6 +334,7 @@ export const prototype = {
 <script>
   import { applicationSteps, applicationIssues } from '../data/application';
   import { withBase } from '../lib/base';
+  import { reviewStore, resubmitApplication, sectionTitle, todayLabel, type ReviewIssue } from '../lib/review-thread';
 
   // DEV/TEST escape hatch: `?bypass` (or `#bypass`) on the URL lifts the two
   // validation gates so the whole workflow can be walked without filling every
@@ -375,7 +390,18 @@ export const prototype = {
     if (submittedTitle) submittedTitle.textContent = `Amendment ${amendNumber} was submitted`;
   }
   // Treat the draft as complete when bypassing; otherwise use the real issues.
-  const issues = bypassValidation ? [] : applicationIssues;
+  // Revise mode: the application was complete when submitted, so the completeness
+  // gate doesn't apply — the reviewers' requested changes do (see below).
+  const reviseOf = params.get('revise');
+  const issues = bypassValidation || reviseOf || amendOf ? [] : applicationIssues;
+  // A NEW application starts from the same answers with its one field-level gap
+  // (see applicationIssues): the anticipated annual-report date is still blank.
+  if (!reviseOf && !amendOf) {
+    customElements.whenDefined('cds-date-picker').then(() => {
+      const picker = document.getElementById('annual-report-date')?.closest('cds-date-picker') as any;
+      if (picker) picker.value = '';
+    });
+  }
 
   const steps = applicationSteps.map((s) => s.id);
   const progress = document.getElementById('wizard-progress') as any;
@@ -429,10 +455,11 @@ export const prototype = {
     // Actions: Back hidden on the first page; primary becomes Submit on the last.
     backBtn.hidden = current === 0;
     const last = current === steps.length - 1;
-    nextBtn.textContent = last ? 'Submit application' : 'Save and continue';
+    nextBtn.textContent = last ? (reviseOf ? 'Resubmit application' : 'Submit application') : 'Save and continue';
     // On the review step, Submit stays disabled until the applicant certifies the
-    // application; every other step's primary is always enabled.
-    nextBtn.disabled = last ? !(bypassValidation || certify?.checked) : false;
+    // application (and, when revising, has answered every requested change); every
+    // other step's primary is always enabled.
+    nextBtn.disabled = last ? !((bypassValidation || certify?.checked) && revisionReady()) : false;
     // The top of the step area is the useful scroll target when the page changes
     // (skipped on the initial load so we don't jump past the banner).
     if (scroll) {
@@ -547,6 +574,8 @@ export const prototype = {
       // Belt-and-suspenders: the button is disabled until certified, but guard the
       // handler too so a stray click can't submit an uncertified application.
       if (!bypassValidation && !certify?.checked) return;
+      if (!revisionReady()) return;
+      if (reviseOf) resubmitApplication(reviseOf);
       showSubmitted();
       return;
     }
@@ -608,6 +637,203 @@ export const prototype = {
     });
   });
 
+  // ── Revise mode: answer the reviewers' requested changes ──────────────────
+  // /apply?revise=<permit> opens the returned application (the form is already
+  // seeded with it). Each requested change (lib/review-thread — the issues sent
+  // with the return) appears at the top of the page it's about, with the quoted
+  // passage: the researcher fixes the answer, marks the change addressed, and can
+  // say what they changed. Answers save as they go; Resubmit unlocks once every
+  // change is marked addressed, and sends the application back for review.
+  function revisionReady() {
+    if (!reviseOf) return true;
+    return requested().every((i) => i.response?.addressed);
+  }
+  function requested(): ReviewIssue[] {
+    if (!reviseOf) return [];
+    const store = reviewStore(reviseOf);
+    const ids = new Set(store.returned()?.issueIds ?? []);
+    return store.issues().filter((i) => ids.has(i.id));
+  }
+  if (reviseOf) {
+    const store = reviewStore(reviseOf);
+    const ret = store.returned();
+    const SECTION_STEP: Record<string, string> = {
+      'research-team': 'research-team', 'project-information': 'project-info', 'study-areas': 'study-areas',
+      'data-collection': 'data-collection', 'additional-documents': 'additional-docs',
+    };
+    const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+    // Header + banner + copy reframed for a revision.
+    document.title = `Revise application ${reviseOf}`;
+    document.getElementById('app-number')!.textContent = reviseOf;
+    const crumb = document.getElementById('app-crumb');
+    if (crumb) crumb.textContent = 'Revise application';
+    const ind = document.getElementById('app-status-indicator');
+    ind?.setAttribute('kind', 'caution-minor');
+    ind?.setAttribute('label', 'Changes requested');
+    const statusValue = document.getElementById('app-status-value');
+    if (statusValue) statusValue.textContent = 'Changes requested';
+    if (withdrawBtn) withdrawBtn.style.display = 'none';
+    const note = document.getElementById('revise-note') as any;
+    if (note) {
+      const n = requested().length;
+      note.subtitle = `The review team asked for ${plural(n, 'change')}${ret ? ` on ${ret.at}` : ''}. Each one is shown at the top of the page it's about. Update your answers, mark each change addressed, then resubmit from the review page.${ret?.message ? ` Their message: “${ret.message}”` : ''}`;
+      note.style.display = '';
+    }
+    const intro = document.querySelector('.sum-intro') as any;
+    if (intro) {
+      intro.title = 'Review before you resubmit';
+      intro.subtitle = "Check each requested change above, review your answers below, and use Edit to fix anything. When it's all correct, confirm the statement at the bottom and choose Resubmit application.";
+    }
+    const t1 = document.getElementById('submitted-title');
+    if (t1) t1.textContent = `Changes to ${reviseOf} were resubmitted`;
+    const l1 = document.getElementById('submitted-lead-1');
+    if (l1) l1.textContent = 'The review team was notified and will check each change.';
+    const l2 = document.getElementById('submitted-lead-2');
+    if (l2) l2.textContent = "You'll be notified by email if anything else is needed, and again once a decision is made.";
+    const cta = document.getElementById('submitted-cta') as any;
+    if (cta) { cta.href = withBase('/permit'); cta.firstChild && (cta.firstChild.textContent = 'View your permit '); }
+
+    const save = (id: string, patch: Partial<NonNullable<ReviewIssue['response']>>) => {
+      store.saveIssues(store.issues().map((i) => (i.id === id
+        ? { ...i, response: { addressed: i.response?.addressed ?? false, note: i.response?.note, ...patch, at: todayLabel() } }
+        : i)));
+      paintProgress();
+      paintSummary();
+      render(false);
+    };
+
+    // One card per requested change: what the reviewer asked, the passage it's
+    // about, then the researcher's answer.
+    const card = (i: ReviewIssue) => {
+      const li = document.createElement('li');
+      li.className = 'rw-note revise-item';
+      const head = document.createElement('div');
+      head.className = 'rw-note__head';
+      const indicator = document.createElement('cds-icon-indicator');
+      indicator.setAttribute('size', '16');
+      const paintIndicator = (done: boolean) => {
+        indicator.setAttribute('kind', done ? 'succeeded' : 'caution-minor');
+        indicator.setAttribute('label', done ? 'Addressed' : 'To address');
+      };
+      paintIndicator(!!i.response?.addressed);
+      const meta = document.createElement('p');
+      meta.className = 'rw-note__meta t-label-01';
+      meta.textContent = `Requested ${i.sentAt ?? ''}`;
+      head.append(indicator, meta);
+      li.append(head);
+      if (i.quote) {
+        const q = document.createElement('blockquote');
+        q.className = 'rw-note__quote t-body-01';
+        q.textContent = i.quote;
+        li.append(q);
+      }
+      const text = document.createElement('p');
+      text.className = 'rw-note__text t-body-02';
+      text.textContent = i.text;
+      li.append(text);
+      const answer = document.createElement('div');
+      answer.className = 'revise-item__answer';
+      const noteField = document.createElement('cds-textarea') as any;
+      noteField.setAttribute('label', 'What did you change? (optional)');
+      noteField.setAttribute('helper-text', "If you can't make this change, explain why.");
+      noteField.setAttribute('rows', '2');
+      noteField.value = i.response?.note ?? '';
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      noteField.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => save(i.id, { note: (noteField.value ?? '').trim() || undefined }), 400);
+      });
+      const check = document.createElement('cds-checkbox') as any;
+      check.setAttribute('label-text', 'Mark as addressed');
+      if (i.response?.addressed) check.setAttribute('checked', '');
+      check.addEventListener('cds-checkbox-changed', (e: any) => {
+        const done = !!e.detail?.checked;
+        paintIndicator(done);
+        save(i.id, { addressed: done });
+      });
+      answer.append(noteField, check);
+      li.append(answer);
+      return li;
+    };
+
+    // Each step's changes, at the top of its page.
+    Object.entries(SECTION_STEP).forEach(([section, stepId]) => {
+      const mine = requested().filter((i) => i.section === section);
+      const panel = panels.get(stepId);
+      if (!mine.length || !panel) return;
+      const box = document.createElement('section');
+      box.className = 'revise-items';
+      box.setAttribute('aria-label', 'Requested changes on this page');
+      const h = document.createElement('h3');
+      h.className = 'revise-items__title t-heading-compact-02';
+      h.textContent = `Requested changes on this page · ${mine.length}`;
+      const ul = document.createElement('ul');
+      ul.className = 'rw-issues';
+      mine.forEach((i) => ul.append(card(i)));
+      box.append(h, ul);
+      panel.insertBefore(box, panel.firstChild);
+    });
+
+    // The progress rail names how many changes are still open on each page.
+    const progressSteps = Array.from(document.querySelectorAll<any>('#wizard-progress cds-progress-step'));
+    function paintProgress() {
+      const open = requested().filter((i) => !i.response?.addressed);
+      steps.forEach((stepId, idx) => {
+        const el = progressSteps[idx];
+        if (!el) return;
+        const section = Object.keys(SECTION_STEP).find((k) => SECTION_STEP[k] === stepId);
+        const total = requested().filter((i) => i.section === section).length;
+        if (!total) return;
+        const left = open.filter((i) => i.section === section).length;
+        el.secondaryLabel = left ? `${plural(left, 'change')} to address` : 'Changes addressed';
+      });
+    }
+
+    // The review page: every requested change, where it stands, and a way back.
+    const summaryPanel = panels.get('summary');
+    const summaryBox = document.createElement('section');
+    summaryBox.className = 'revise-summary';
+    summaryPanel?.insertBefore(summaryBox, summaryPanel.firstChild);
+    function paintSummary() {
+      const all = requested();
+      const done = all.filter((i) => i.response?.addressed).length;
+      summaryBox.replaceChildren();
+      const h = document.createElement('h3');
+      h.className = 'revise-items__title t-heading-compact-02';
+      h.textContent = `Requested changes · ${done} of ${all.length} addressed`;
+      summaryBox.append(h);
+      if (done < all.length) {
+        const warn = document.createElement('cds-inline-notification') as any;
+        warn.setAttribute('kind', 'warning'); warn.setAttribute('low-contrast', ''); warn.setAttribute('hide-close-button', '');
+        warn.setAttribute('title', 'Answer every change to resubmit');
+        warn.setAttribute('subtitle', "Mark each change addressed on its page. If you can't make one, explain why in its note and mark it addressed.");
+        summaryBox.append(warn);
+      }
+      const ul = document.createElement('ul');
+      ul.className = 'revise-summary__list';
+      all.forEach((i) => {
+        const li = document.createElement('li');
+        const ic = document.createElement('cds-icon-indicator');
+        ic.setAttribute('size', '16');
+        ic.setAttribute('kind', i.response?.addressed ? 'succeeded' : 'caution-minor');
+        ic.setAttribute('label', i.response?.addressed ? 'Addressed' : 'To address');
+        const txt = document.createElement('span');
+        txt.className = 't-body-01';
+        txt.textContent = `${sectionTitle(i.section)} — ${i.text}`;
+        const go = document.createElement('cds-link') as any;
+        go.href = '#';
+        go.textContent = 'Go to page';
+        go.addEventListener('click', (e: Event) => { e.preventDefault(); goTo(steps.indexOf(SECTION_STEP[i.section])); });
+        li.append(ic, txt, go);
+        ul.append(li);
+      });
+      summaryBox.append(ul);
+    }
+    customElements.whenDefined('cds-progress-step').then(paintProgress);
+    paintSummary();
+  }
+
   // Reflect the initial state on load (no scroll).
   render(false);
 </script>
@@ -618,6 +844,17 @@ export const prototype = {
   .page {
     padding-block: 0 6rem;
   }
+
+  /* Revise mode — requested changes, built at runtime (hence :global); the cards
+     reuse the shared review-note styles (styles/review-notes.css). */
+  :global(.revise-items), :global(.revise-summary) {
+    display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem);
+    margin-block-end: var(--cds-spacing-07, 2rem);
+  }
+  :global(.revise-items__title) { margin: 0; }
+  :global(.revise-item__answer) { display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); max-inline-size: 40rem; }
+  :global(.revise-summary__list) { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); }
+  :global(.revise-summary__list li) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem); }
 
   /* Identity banner — full-bleed dark g100 band, re-centered to the 2x Grid, the
      same construction as PermitHeader / profile so the headers read as one system. */

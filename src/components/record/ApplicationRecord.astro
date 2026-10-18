@@ -33,6 +33,10 @@
                                (read-only, shown only once the permit is approved);
                                review: "Special conditions" + RecordConditionsEditor
                                (the shared ConditionsEditor — add / edit / reorder)
+       - final letter tab   -> RecordLetter: the saved copy of the sent letter +
+                               signature status (cds-icon-indicator); gate=approved
+       - final report tab   -> RecordReport: summary, survey effort + collected vs
+                               permitted (cds-table), data products; gate=report
        - comments           -> record/RecordSection gate=internal + RecordComments
                                (cds-textarea + cds-button + thread) — staff only
        - review workspace   -> (review mode) record/ReviewWorkspace.astro: per-section "Add" menu
@@ -53,8 +57,11 @@ import RecordComments from './RecordComments.astro';
 import ReviewWorkspace from './ReviewWorkspace.astro';
 import PermitConditions from '../PermitConditions.astro';
 import RecordConditionsEditor from './RecordConditionsEditor.astro';
+import RecordLetter from './RecordLetter.astro';
+import RecordReport from './RecordReport.astro';
 import { permit, permitInfoTags, badgesForSection, type Contact, type MetaRow } from '../../data/permit';
 import { withBase } from '../../lib/base';
+import { FLAG_FACT, answerIdFor, recordAttention } from '../../lib/record-summary';
 
 interface Props {
   mode: 'view' | 'review';
@@ -86,31 +93,13 @@ const labFacility = facts(dc.laboratory).find((r) => r.key === 'Laboratory facil
 const people = 1 + (piIsFieldLead ? 0 : 1) + 1 + t.participants.length;
 const orgShort = t.organization.name.split(' — ')[0];
 
-// Screening answers that raised a header flag, keyed to the flag they explain.
-// Each gets an anchor so "Needs a closer look" can jump straight to it.
-const FLAG_FACT: Record<string, { key: string; id: string }> = {
-  'Soil disturbance': { key: 'Involves soil disturbance', id: 'answer-soil' },
-  'Beyond simple use': { key: 'Activities beyond simple use (aircraft/drones, diving, trapping, etc.)', id: 'answer-beyond' },
-  'Additional permit required': { key: 'Requires additional federal/state/local permits', id: 'answer-permits' },
-};
+// Screening answers + the shared "Needs a closer look" items (lib/record-summary).
 const screening = facts(ad.facts).filter((r) => r.boolean);
 const proposalRows = facts(ad.facts).filter((r) => !r.boolean);
-const answerId = (r: MetaRow) => Object.values(FLAG_FACT).find((f) => f.key === r.key)?.id;
+const answerId = (r: MetaRow) => answerIdFor(r.key);
 const flagFor = (r: MetaRow) => permit.flagTags.find((f) => FLAG_FACT[f.label]?.key === r.key);
-
 const waiver = ad.files.find((f) => /DPR65B/i.test(f.type));
-const attention = [
-  ...permit.flagTags.map((f) => {
-    const fact = screening.find((r) => r.key === FLAG_FACT[f.label]?.key);
-    return { title: f.label, detail: fact?.detail ?? '', href: `#${FLAG_FACT[f.label]?.id}`, linkLabel: 'Go to the answer' };
-  }),
-  ...(!t.personnelInsured ? [{
-    title: 'Not all personnel insured',
-    detail: `At least one team member isn't employed or insured by the institution.${waiver ? ' A signed liability waiver addendum (DPR65B) is attached.' : ''}`,
-    href: '#team-insurance',
-    linkLabel: 'Go to the research team',
-  }] : []),
-];
+const attention = recordAttention;
 
 const glanceFacts = [
   {
@@ -203,13 +192,17 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
         <!-- Where the review stands once decided (returned / rejected / approved). -->
         <div class="notice cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" data-rw-notice></div>
 
-        <!-- Two contexts, one at a time: the application, and the conditions. On the
-             detail page the conditions tab exists only once the permit is approved
-             (data-gate); with one tab left, the strip hides. -->
+        <!-- One context at a time: the application, the conditions, the final permit
+             letter, the final report. Gated tabs (data-gate) exist only when they
+             apply — the letter once approved, the report once one is on file, and on
+             the detail page the conditions once approved. With one tab left, the
+             strip hides. -->
         <div class="tabs-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" data-record-tabs-wrap>
           <cds-tabs value="application" data-record-tabs>
             <cds-tab value="application">Application</cds-tab>
             <cds-tab value="conditions" data-gate={review ? undefined : 'approved'}>{review ? 'Special conditions' : 'Permit conditions'}</cds-tab>
+            <cds-tab value="letter" data-gate="approved">Final permit letter</cds-tab>
+            <cds-tab value="report" data-gate="report">Final report</cds-tab>
           </cds-tabs>
         </div>
 
@@ -251,7 +244,7 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
           <RecordSection id="research-team" reviewable={review} title="Research team" summary={`${people} people · ${orgShort}`} {...badgesForSection('team')}>
             <ul class="cards cards--3">
               {teamCards.map((c) => (
-                <li class="card">
+                <li class="cards__item"><cds-tile class="card"><div class="card__body">
                   <div class="card__id">
                     <Avatar name={c.contact.name} size="md" shape={c.org ? 'square' : 'circle'} />
                     <div>
@@ -275,7 +268,7 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
                   {c.contact.cvHref && (
                     <cds-link href={withBase(c.contact.cvHref)} target="_blank" size="sm">View CV</cds-link>
                   )}
-                </li>
+                </div></cds-tile></li>
               ))}
             </ul>
 
@@ -322,7 +315,7 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
           <RecordSection id="study-areas" reviewable={review} title="Study areas" summary={`${parkCount} parks in ${sa.districts.length} districts · ${sa.sites.length} survey sites`} {...badgesForSection('study')}>
             <ul class="cards cards--2">
               {sa.districts.map((d) => (
-                <li class="card">
+                <li class="cards__item"><cds-tile class="card"><div class="card__body">
                   <div>
                     <p class="card__role t-label-01">District</p>
                     <h3 class="card__name t-heading-compact-02">{d.name}</h3>
@@ -338,7 +331,7 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
                     <p class="t-body-compact-01">{d.coordinator.name}</p>
                     <cds-link href={`mailto:${d.coordinator.email}`} size="sm">{d.coordinator.email}</cds-link>
                   </div>
-                </li>
+                </div></cds-tile></li>
               ))}
             </ul>
 
@@ -499,6 +492,20 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
             </RecordSection>
           )}
         </div>
+
+        <!-- ── Final permit letter tab ───────────────────────────────────────────── -->
+        <div class="content cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" data-record-panel="letter" style="display: none">
+          <RecordSection id="letter" title="Final permit letter" summary="The letter as it was sent for signature.">
+            <RecordLetter />
+          </RecordSection>
+        </div>
+
+        <!-- ── Final report tab ──────────────────────────────────────────────────── -->
+        <div class="content cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" data-record-panel="report" style="display: none">
+          <RecordSection id="report" title="Final report" summary="What the researcher reported once fieldwork was done.">
+            <RecordReport />
+          </RecordSection>
+        </div>
       </div>
     </div>
 </main>
@@ -509,8 +516,8 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
   // Application / conditions tabs. cds-tabs only renders the strip; showing the
   // panel is ours (inline display — a plain [hidden] div can lose to author CSS).
   // The contents rail belongs to the application, so it hides with it. The URL
-  // hash keeps the tab: #conditions opens the conditions; any in-page link to the
-  // application (contents, "Go to the answer") switches back first.
+  // hash keeps the tab: #conditions / #letter / #report open that tab; any
+  // in-page link to the application (contents, "Go to the answer") switches back.
   const tabs = document.querySelector('[data-record-tabs]') as any;
   const panels = [...document.querySelectorAll<HTMLElement>('[data-record-panel]')];
   const rail = document.querySelector<HTMLElement>('[data-record-rail]');
@@ -525,13 +532,13 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
     document.getElementById(id)?.closest<HTMLElement>('[data-record-panel]')?.dataset.recordPanel;
   const fromHash = () => {
     const id = decodeURIComponent(location.hash.slice(1));
-    if (id === 'conditions') { show('conditions'); return; }
+    if (panels.some((p) => p.dataset.recordPanel === id)) { show(id); return; }
     const panel = id ? panelFor(id) : null;
     show(panel ?? 'application', panel ? { scrollTo: id } : {});
   };
   tabs?.addEventListener('cds-tabs-selected', () => {
     show(tabs.value);
-    history.replaceState(null, '', tabs.value === 'conditions' ? '#conditions' : location.pathname + location.search);
+    history.replaceState(null, '', tabs.value === 'application' ? location.pathname + location.search : `#${tabs.value}`);
     window.scrollTo({ top: (document.querySelector('[data-record-tabs-wrap]') as HTMLElement)?.offsetTop - 64 || 0 });
   });
   window.addEventListener('hashchange', fromHash);
@@ -602,16 +609,16 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
 
   .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--cds-spacing-02, 0.25rem); }
 
-  /* Card lists (team members, districts) — bordered blocks on the section surface. */
+  /* Card lists (team members, districts) — stock cds-tiles. The section panel is a
+     raised layer, so its content sits in cds-layer level 1 (RecordSection) and the
+     tiles take layer-02: gray cards on the white panel, no border — Carbon's
+     layering model. Layout only here; the tile owns surface + padding. */
   .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--cds-spacing-05, 1rem); }
   .cards--3 { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
   .cards--2 { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
-  .card {
-    display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); align-items: flex-start;
-    padding: var(--cds-spacing-05, 1rem);
-    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-    min-inline-size: 0;
-  }
+  .cards__item { min-inline-size: 0; }
+  .card { display: block; block-size: 100%; }
+  .card__body { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); align-items: flex-start; min-inline-size: 0; }
   .card p { margin: 0; }
   .card__id { display: flex; align-items: center; gap: var(--cds-spacing-04, 0.75rem); }
   .card__role, .card__label { color: var(--cds-text-secondary, #525252); }

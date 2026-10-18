@@ -70,6 +70,10 @@ import PermitHeader from '../components/PermitHeader.astro';
 import ApplicationReview from '../components/ApplicationReview.astro';
 import ContactCard from '../components/ContactCard.astro';
 import ConditionsEditor from '../components/ConditionsEditor.astro';
+import RecordGlance from '../components/record/RecordGlance.astro';
+import IssueModal from '../components/IssueModal.astro';
+import { recordAttention } from '../lib/record-summary';
+import '../styles/permit-letter.css';
 import DocumentViewer from '../components/DocumentViewer.astro';
 import { permit, permitInfoTags } from '../data/permit';
 import { parks, parkKey } from '../data/parks';
@@ -403,7 +407,7 @@ const letterData = {
          the comment thread and the special conditions are TABS in one
          surface the reviewer flips through in place. The record grows the page as
          its sections expand; the working panel is sticky so it stays in view. -->
-    <section class="step cds--css-grid cds--css-grid--with-row-gap" data-step="0">
+    <section class="step step--record cds--g10 cds--css-grid cds--css-grid--with-row-gap" data-step="0">
       <div class="col-main record-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
         <div class="pane-head">
           <h3 class="pane-title t-heading-04">Application record</h3>
@@ -413,7 +417,12 @@ const letterData = {
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="m2,6v20c0,1.1045.8955,2,2,2h24c1.1045,0,2-.8955,2-2V6c0-1.1045-.8955-2-2-2H4c-1.1045,0-2,.8955-2,2Zm20,0h6v20h-6V6Zm-18,0h16v9h-10.1699s3.5798-3.5898,3.5798-3.5898l-1.4099-1.4102-6,6,6,6,1.4099-1.4102-3.5798-3.5898h10.1699v9H4V6Z"/></svg>
           </cds-button>
         </div>
-        <ApplicationReview collapsible />
+        <!-- What needs a closer look — the same list as the application-record page,
+             each item linking to the answer behind it (opening its section). -->
+        <div class="record-attention">
+          <RecordGlance facts={[]} attention={recordAttention} />
+        </div>
+        <ApplicationReview collapsible layered />
 
         <!-- Comment on a selection: appears beside text selected in the record. A stock
              cds-button in a positioned host (the host only places it at the selection).
@@ -424,6 +433,7 @@ const letterData = {
             Comment
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M17 9 15 9 15 13 11 13 11 15 15 15 15 19 17 19 17 15 21 15 21 13 17 13 17 9z"/></svg>
           </cds-button>
+          <cds-button id="select-issue-btn" kind="secondary" size="sm">Issue</cds-button>
         </div>
 
         <!-- Anchored-comments version (?comments=anchored): cloned to the top of each
@@ -641,7 +651,7 @@ const letterData = {
           <cds-button id="copy-reset" kind="ghost" size="sm" style="display:none">Restore default wording</cds-button>
         </div>
         <p class="preview__hint t-label-01">Click a body paragraph to edit its wording. The dates, parks, and conditions stay derived.</p>
-        <article class="sheet cds--white letter-host letter-host--editable" aria-label={`Final permit letter for ${permit.id}`}></article>
+        <article class="sheet ltr-sheet cds--white letter-host letter-host--editable" aria-label={`Final permit letter for ${permit.id}`}></article>
       </aside>
     </section>
 
@@ -654,7 +664,7 @@ const letterData = {
 
         <section class="pkg-letter">
           <p class="preview__label t-label-01">The letter</p>
-          <article class="sheet cds--white letter-host" aria-label={`Final permit letter for ${permit.id}`}></article>
+          <article class="sheet ltr-sheet cds--white letter-host" aria-label={`Final permit letter for ${permit.id}`}></article>
         </section>
       </div>
     </section>
@@ -713,6 +723,9 @@ const letterData = {
   <!-- Add / edit a specimen — the SAME construction as the application form's
        specimen dialog (src/components/DataCollectionStep.astro): four fields that
        add a row or edit one in place. -->
+  <!-- Add / edit an issue for the researcher (shared dialog, lib/issue-ui). -->
+  <IssueModal />
+
   <cds-modal id="specimen-modal" size="md">
     <cds-modal-header>
       <cds-modal-close-button></cds-modal-close-button>
@@ -838,6 +851,8 @@ const letterData = {
     // add/edit-condition modal — registered here so <sc-rich-text> upgrades.
     import '../components/sc-rich-text.ts';
     import { mountConditionsEditor } from '../lib/conditions-editor';
+    import { buildIssueCard, openIssueModal } from '../lib/issue-ui';
+    import { reviewStore, RECORD_SECTIONS } from '../lib/review-thread';
 
     interface ContactOption {
       id: string; name: string; role: string; email: string; phone: string;
@@ -2125,6 +2140,19 @@ const letterData = {
     const sendModal = $('send-modal') as any;
     $('send-confirm')?.addEventListener('click', () => {
       persistFinal(); persistParks(); persistConditions();
+      // Freeze the letter exactly as sent — the application record's "Final permit
+      // letter" tab shows this copy (an approved letter must not re-derive later).
+      const sentLetter = document.querySelector<HTMLElement>('.letter-host:not(.letter-host--editable)')
+        ?? document.querySelector<HTMLElement>('.letter-host');
+      if (sentLetter) {
+        try {
+          localStorage.setItem(`permit-letter-${permitId}`, JSON.stringify({
+            html: sentLetter.innerHTML,
+            sentAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            sentBy: data.currentUser,
+          }));
+        } catch {}
+      }
       // Sending sets status 'Out for signature', which is exactly what locks the
       // contact set (see isContactsLocked) — no separate lock flag needed.
       localStorage.setItem(statusKey, 'Out for signature');
@@ -2771,6 +2799,8 @@ const letterData = {
       selectionAnchor = anchorFromSelection(sel, recordRoot);
       selectionRange = selectionAnchor && sel ? sel.getRangeAt(0).cloneRange() : null;
       selectHost.hidden = !selectionAnchor;
+      const issueBtn = $('select-issue-btn') as HTMLElement | null;
+      if (issueBtn) issueBtn.style.display = canFlagIssues() ? '' : 'none';
       placeSelectButton();
     };
     recordRoot?.addEventListener('mouseup', () => setTimeout(onSelectionDone, 0));
@@ -2798,6 +2828,62 @@ const letterData = {
       if (tabs) { tabs.value = 'comments'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
       setTimeout(() => commentInput?.focus?.(), 50);
     });
+
+    // ── Issues for the researcher (shared with the application-review page) ─────
+    // Marked per record section — an "Add issue" at the top of each section, or
+    // "Issue" beside a text selection (quoting it). They go out when the
+    // application is returned (the header's Request changes); after the researcher
+    // resubmits, each card shows their answer to resolve or ask again.
+    const issueSlug = (sec: Element | null | undefined) => {
+      const title = sec?.querySelector('.rsec__title')?.textContent?.trim();
+      return RECORD_SECTIONS.find((r) => r.title === title)?.slug ?? null;
+    };
+    const canFlagIssues = () =>
+      canAccess && (localStorage.getItem(statusKey) || 'Under review') === 'Under review';
+    const renderIssues = () => {
+      const store = reviewStore(permitId);
+      recordRoot?.querySelectorAll<HTMLElement>('.rsec').forEach((sec) => {
+        const slug = issueSlug(sec);
+        const body = sec.querySelector<HTMLElement>(':scope > .rsec__body');
+        if (!slug || !body) return;
+        let host = body.querySelector<HTMLElement>(':scope > [data-wz-issues]');
+        if (!host) {
+          host = document.createElement('div');
+          host.className = 'rw-sec wz-issues';
+          host.dataset.wzIssues = slug;
+          body.prepend(host);
+        }
+        host.replaceChildren();
+        const mine = store.issues().filter((i) => i.section === slug);
+        if (mine.length) {
+          const ul = document.createElement('ul');
+          ul.className = 'rw-issues';
+          ul.setAttribute('aria-label', `Issues for the researcher in ${slug.replace(/-/g, ' ')}`);
+          mine.forEach((i) => ul.append(buildIssueCard(i, { permitId, canEdit: canFlagIssues(), onChange: renderIssues, author: data.currentUser })));
+          host.append(ul);
+        }
+        if (canFlagIssues()) {
+          const add = document.createElement('cds-button');
+          add.setAttribute('kind', 'ghost'); add.setAttribute('size', 'sm');
+          add.className = 'wz-add-issue';
+          add.textContent = 'Add issue for the researcher';
+          add.addEventListener('click', () => openIssueModal({ permitId, section: slug, author: data.currentUser, onSaved: renderIssues }));
+          const wrap = document.createElement('div');
+          wrap.append(add);
+          host.append(wrap);
+        }
+      });
+    };
+    $('select-issue-btn')?.addEventListener('click', () => {
+      if (!selectionAnchor) return;
+      const slug = issueSlug(selectionRange?.startContainer.parentElement?.closest('.rsec'));
+      const quote = selectionAnchor.quote;
+      if (selectHost) selectHost.hidden = true;
+      window.getSelection()?.removeAllRanges();
+      if (slug) openIssueModal({ permitId, section: slug, quote, author: data.currentUser, onSaved: renderIssues });
+    });
+    renderIssues();
+    window.addEventListener('permit-status-changed', renderIssues);
 
     // Record edits re-render text, which invalidates painted ranges: re-anchor
     // (and refresh each comment's "passage changed" state) after any change.
@@ -2985,6 +3071,20 @@ const letterData = {
       appRoot.querySelector('.js-appreview-collapse')?.addEventListener('click', () => sectionToggles.forEach((b) => setSectionOpen(b, false)));
     }
 
+    // "Needs a closer look" links (#answer-…, #team-insurance): open the record
+    // section holding the answer if it's collapsed, then bring it into view below
+    // the pinned section headers.
+    const revealAnswer = () => {
+      const target = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+      const sec = target?.closest('[data-review-section]');
+      if (!target || !sec) return;
+      const body = sec.querySelector<HTMLElement>('[data-section-body]');
+      if (body?.hidden) sec.querySelector<HTMLElement>('[data-section-toggle]')?.click();
+      requestAnimationFrame(() => target.scrollIntoView({ block: 'center' }));
+    };
+    window.addEventListener('hashchange', revealAnswer);
+    revealAnswer();
+
     refreshPermitType();
     renderStudyAreas();
     renderFbParks();
@@ -3032,11 +3132,14 @@ const letterData = {
       if (record) {
         record.querySelectorAll('cds-text-input, cds-dropdown, cds-multi-select, cds-textarea, cds-date-picker, cds-number-input')
           .forEach((el) => { (el as any).disabled = true; });
-        record.querySelectorAll('cds-icon-button').forEach((el) => ((el as HTMLElement).style.display = 'none'));
+        // Issue cards / Add issue and the selection toolbar stay live: a supporting
+        // analyst marks issues and comments even though the form is read-only.
+        const keepLive = (el: Element) => !!el.closest('.rw-sec, #select-comment');
+        record.querySelectorAll('cds-icon-button').forEach((el) => { if (!keepLive(el)) (el as HTMLElement).style.display = 'none'; });
         record.querySelectorAll('cds-button').forEach((el) => {
           // Keep the read-only affordances: Expand/Collapse-all and "View CV" (viewing
           // a document is a read action available to an assistant).
-          if (!el.matches('.js-appreview-expand, .js-appreview-collapse, .js-panel-show, [data-view-cv]')) (el as HTMLElement).style.display = 'none';
+          if (!el.matches('.js-appreview-expand, .js-appreview-collapse, .js-panel-show, [data-view-cv]') && !keepLive(el)) (el as HTMLElement).style.display = 'none';
         });
       }
     }
@@ -3061,6 +3164,23 @@ const letterData = {
     .step { margin-top: var(--cds-spacing-07, 2rem); }
     .step[hidden] { display: none; }
     .col-main, .col-fields, .col-package { min-width: 0; }
+
+    /* Step ① reads like the application-record page: a full-bleed gray (g10) field
+       with each record section on its own white panel. The field is painted with a
+       border-image outset (it bleeds sideways without adding scroll overflow) — NOT
+       a positioned/isolated pseudo-element, which would create a stacking context
+       and trap the record's edit modals under the app header and compact bar. */
+    .step--record {
+      padding-block: var(--cds-spacing-07, 2rem) var(--cds-spacing-09, 3rem);
+      border-image: conic-gradient(var(--cds-background, #f4f4f4) 0 0) fill 0 / 0 / 0 100vw;
+    }
+    .step--record[hidden] { display: none; }
+    .record-attention { margin-bottom: var(--cds-spacing-05, 1rem); }
+    /* Each collapsible section (head + body are siblings — ReviewSection dissolves
+       its box for the sticky stack) becomes a white panel with a gap above it. */
+    .record-col :global(.rsec__head) { background: var(--cds-layer-01, #ffffff); padding-inline: var(--cds-spacing-06, 1.5rem); margin-block-start: var(--cds-spacing-05, 1rem); border-bottom-color: var(--cds-border-subtle-01, #e0e0e0); }
+    .record-col :global(.rsec__body) { background: var(--cds-layer-01, #ffffff); padding-inline: var(--cds-spacing-06, 1.5rem); }
+    .record-col :global(.statement[id]) { scroll-margin-top: 12rem; }
 
     /* Step ① column titles — record on the left, working panel on the right. */
     .pane-head {
@@ -3303,7 +3423,7 @@ const letterData = {
     :global(::highlight(review-comment-pending)) { background-color: var(--cds-highlight, #d0e2ff); text-decoration: underline 2px var(--cds-border-interactive, #0f62fe); }
     :global(::highlight(review-comment-active)),
     :global(::highlight(review-comment-hover)) { background-color: var(--cds-support-warning, #f1c21b); }
-    .select-comment { position: fixed; z-index: 8000; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+    .select-comment { position: fixed; z-index: 8000; display: flex; gap: 1px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
     .select-comment[hidden] { display: none; }
     /* The passage being commented on, above the composer: a token-colored rule +
        quote, with a ghost "remove" button. */
@@ -3380,12 +3500,6 @@ const letterData = {
     .pkg-letter .sheet { max-height: none; overflow-y: visible; }
     @media (max-width: 66rem) { .sheet { max-height: none; } }
 
-    .sheet :global(.ltr__letterhead) { border-bottom: 2px solid var(--cds-border-strong-01, #8d8d8d); padding-bottom: var(--cds-spacing-04, 0.75rem); margin-bottom: var(--cds-spacing-06, 1.5rem); }
-    .sheet :global(.ltr__letterhead p) { margin: 0; }
-    .sheet :global(.ltr__dept) { margin: 0.125rem 0; }
-    .sheet :global(.ltr__date) { margin: 0 0 var(--cds-spacing-05, 1rem); }
-    .sheet :global(.ltr__to) { font-style: normal; line-height: 1.5; margin: 0 0 var(--cds-spacing-05, 1rem); }
-    .sheet :global(.ltr__body) { line-height: 1.6; margin: 0 0 var(--cds-spacing-05, 1rem); }
     /* Editable body paragraphs (step ②): a quiet click-to-edit affordance, a focus
        field, and a left accent once a paragraph carries a reviewer override. Only
        the editable host gets it; the step-③ read-through paragraphs stay plain. */
@@ -3393,26 +3507,7 @@ const letterData = {
     .letter-host--editable :global(.ltr__body--copy:hover) { background: var(--cds-field-02, #f4f4f4); }
     .letter-host--editable :global(.ltr__body--copy:focus) { outline: 2px solid var(--cds-focus, #0f62fe); outline-offset: -2px; background: var(--cds-field-02, #f4f4f4); }
     .letter-host--editable :global(.ltr__body--copy.is-edited) { box-shadow: inset 3px 0 0 var(--cds-border-interactive, #0f62fe); }
-    .sheet :global(.ltr__signer) { line-height: 1.5; margin: 0 0 var(--cds-spacing-05, 1rem); }
-    .sheet :global(.ltr__sig-line) { height: 2rem; width: 16rem; max-width: 100%; border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d); margin-bottom: var(--cds-spacing-03, 0.5rem); }
-    .sheet :global(.ltr__pagebreak) { border: 0; border-top: 1px dashed var(--cds-border-subtle-01, #c6c6c6); margin: var(--cds-spacing-07, 2rem) 0; }
-    .sheet :global(.ltr__h) { margin: 0 0 var(--cds-spacing-04, 0.75rem); }
-    .sheet :global(.ltr__conditions) { margin: 0 0 var(--cds-spacing-05, 1rem); padding-left: var(--cds-spacing-06, 1.5rem); display: grid; gap: var(--cds-spacing-03, 0.5rem); }
-    .sheet :global(.ltr__conditions p) { margin: 0; }
-    .sheet :global(.ltr__cond-owner) { margin: var(--cds-spacing-04, 0.75rem) 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); font-weight: 600; }
-    .sheet :global(.ltr__contact) { margin-bottom: var(--cds-spacing-05, 1rem); }
-    .sheet :global(.ltr__contact-head) { margin-bottom: var(--cds-spacing-02, 0.25rem); }
-    .sheet :global(.ltr__district-name) { margin: 0; }
-    .sheet :global(.ltr__coord) { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); }
-    .sheet :global(.ltr__coord-tag) { font-style: italic; }
-    .sheet :global(.ltr__parks) { margin: var(--cds-spacing-02, 0.25rem) 0 0; padding-left: var(--cds-spacing-06, 1.5rem); }
     /* Park-first contact list: each park unit heads its own set of contacts. */
-    .sheet :global(.ltr__park) { margin: var(--cds-spacing-03, 0.5rem) 0 0; padding-left: var(--cds-spacing-05, 1rem); }
-    .sheet :global(.ltr__park-name) { margin: 0; font-weight: 600; }
-    .sheet :global(.ltr__specimens) { width: 100%; border-collapse: collapse; margin: var(--cds-spacing-03, 0.5rem) 0 var(--cds-spacing-05, 1rem); }
-    .sheet :global(.ltr__specimens th), .sheet :global(.ltr__specimens td) { text-align: left; vertical-align: top; padding: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-04, 0.75rem) var(--cds-spacing-02, 0.25rem) 0; border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
-    .sheet :global(.ltr__specimens th) { font-weight: 600; border-bottom-color: var(--cds-border-strong-01, #8d8d8d); }
-    .sheet :global(.ltr__specimens td:first-child) { font-style: italic; }
 
     /* Add/edit-specimen modal — the 2-col field grid, mirroring the application
        form's specimen dialog (Species/Condition span both columns). */

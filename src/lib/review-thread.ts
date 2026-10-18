@@ -7,12 +7,21 @@
 //     under permit-comment-replies-${id} keyed by their parent, and resolved
 //     parents under permit-comment-resolved-${id}. A comment may carry the record
 //     `section` it's about and an `anchor` (a quoted passage).
-//   • ISSUES — researcher-facing: what the applicant must change or provide. Drafts
-//     until the application is returned; returning stamps them `sentAt` and records
-//     the return itself (who, when, an optional message).
+//   • ISSUES — researcher-facing: what the applicant must change or provide. The
+//     round trip:
+//       draft     → a reviewer marked it (a section, maybe a quoted passage)
+//       sent      → the application was returned with it (`sentAt`)
+//       addressed / not-addressed → the researcher resubmitted, having marked it
+//                   addressed or not (`response`, with an optional note)
+//       resolved  → a reviewer accepted the fix (`resolvedAt`); "Ask again" sends a
+//                   not-quite-fixed issue back to draft for the next return.
+//     Returning records the return itself (who, when, an optional message);
+//     resubmitting stamps it `resubmittedAt`.
 //
-// Read by the application-record prototype. (final-letter and permit.astro still
-// carry their own copies of the comment-store code; same keys, same shapes.)
+// Read by the application-record prototype, the review wizard, the permit header's
+// Request changes, and the researcher's revise flow (/apply?revise=…).
+// (final-letter and permit.astro still carry their own copies of the comment-store
+// code; same keys, same shapes.)
 
 export interface ReviewComment {
   author: string;
@@ -32,8 +41,21 @@ export interface ReviewIssue {
   time: string;
   /** Set when the application is returned with this issue. */
   sentAt?: string;
+  /** The researcher's answer, saved as they revise. */
+  response?: { addressed: boolean; note?: string; at: string };
+  /** Set when a reviewer accepts the fix. */
+  resolvedAt?: string;
 }
-export interface ReturnRecord { by: string; at: string; message: string; issueIds: string[] }
+export interface ReturnRecord { by: string; at: string; message: string; issueIds: string[]; resubmittedAt?: string }
+
+export type IssueState = 'draft' | 'sent' | 'addressed' | 'not-addressed' | 'resolved';
+/** Where an issue stands in the return → revise → resubmit round trip. */
+export const issueState = (i: ReviewIssue, ret: ReturnRecord | null): IssueState => {
+  if (i.resolvedAt) return 'resolved';
+  if (!i.sentAt) return 'draft';
+  if (ret?.resubmittedAt && ret.issueIds.includes(i.id)) return i.response?.addressed ? 'addressed' : 'not-addressed';
+  return 'sent';
+};
 export interface RejectRecord { by: string; at: string; reason: string }
 
 /** The record's five sections, by the slug every review surface shares. */
@@ -115,4 +137,29 @@ export function reviewStore(permitId: string) {
     rejected: () => read<RejectRecord | null>(k.rejected, null),
     setRejected: (r: RejectRecord) => write(k.rejected, r),
   };
+}
+
+/** Return the application to the researcher with every draft issue: stamps them
+ *  sent, records the return, and sets the status the rest of the app reads
+ *  ("Changes requested"). Callers notify the researcher. Returns what was sent. */
+export function returnToResearcher(permitId: string, by: string, message: string): ReviewIssue[] {
+  const store = reviewStore(permitId);
+  const at = todayLabel();
+  const drafts = store.issues().filter((i) => !i.sentAt && !i.resolvedAt);
+  const ids = new Set(drafts.map((i) => i.id));
+  store.saveIssues(store.issues().map((i) => (ids.has(i.id) ? { ...i, sentAt: at, response: undefined } : i)));
+  store.setReturned({ by, at, message, issueIds: drafts.map((i) => i.id) });
+  try { localStorage.setItem(`permit-status-${permitId}`, 'Changes requested'); } catch {}
+  window.dispatchEvent(new CustomEvent('permit-status-changed', { detail: { status: 'Changes requested' } }));
+  return drafts;
+}
+
+/** The researcher resubmits: stamps the return and puts the application back
+ *  under review. */
+export function resubmitApplication(permitId: string): void {
+  const store = reviewStore(permitId);
+  const ret = store.returned();
+  if (ret) store.setReturned({ ...ret, resubmittedAt: todayLabel() });
+  try { localStorage.setItem(`permit-status-${permitId}`, 'Under review'); } catch {}
+  window.dispatchEvent(new CustomEvent('permit-status-changed', { detail: { status: 'Under review' } }));
 }

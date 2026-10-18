@@ -237,7 +237,7 @@ export const publicRoleLabel = (value: string) =>
 // is the stalest. `name` is derived from firstName + lastName, like the internal
 // directory, so the two halves never drift.
 export const publicDirectory: PublicUser[] = ([
-  { id: 'applicant', firstName: 'Renata', lastName: 'Halvorsen', email: 'r.halvorsen@cascadiamarine.org', phone: '(415) 555-0173', role: 'public-user', lastSeen: 1_785_250_000_000 },
+  { id: 'applicant', firstName: 'Renata', lastName: 'Halvorsen', email: 'r.halvorsen@humboldt.edu', phone: '(707) 555-0176', role: 'public-user', lastSeen: 1_785_250_000_000 },
   { id: 'pub-aranda', firstName: 'Miguel', lastName: 'Aranda', email: 'm.aranda@cascadiamarine.org', phone: '(415) 555-0188', role: 'public-user', lastSeen: 1_785_180_000_000 },
   { id: 'pub-deshmukh', firstName: 'Priya', lastName: 'Deshmukh', email: 'p.deshmukh@cascadiamarine.org', phone: '(415) 555-0191', role: 'public-user', lastSeen: 1_784_700_000_000 },
   { id: 'pub-boone', firstName: 'Gregory', lastName: 'Boone', email: 'g.boone@bodegamarine.org', phone: '(707) 555-0206', role: 'public-user', lastSeen: 1_783_400_000_000 },

@@ -1,0 +1,90 @@
+---
+// "Final report" tab of the application-record prototype: what the researcher
+// reported once fieldwork was done — a summary, survey effort by park unit (the
+// HQ reporting condition's required fields), specimens collected against what the
+// permit allowed, and where the data products live. Mock data: data/final-report.ts.
+// The tab only exists when a report is on file (gated by the page).
+import { finalReport as r } from '../../data/final-report';
+
+const totalCollected = r.collected.reduce((n, t) => n + t.collected, 0);
+const totalPermitted = r.collected.reduce((n, t) => n + t.permitted, 0);
+const taxaCollected = r.collected.filter((t) => t.collected > 0).length;
+---
+
+<div class="rr">
+  <dl class="rr__meta">
+    <div><dt class="t-label-01">Submitted</dt><dd class="t-body-01">{r.submittedAt}</dd></div>
+    <div><dt class="t-label-01">Submitted by</dt><dd class="t-body-01">{r.submittedBy}</dd></div>
+    <div><dt class="t-label-01">Specimens collected</dt><dd class="t-body-01">{totalCollected} of {totalPermitted} permitted · {taxaCollected} taxa</dd></div>
+  </dl>
+
+  <h3 class="rr__sub t-heading-02">Summary</h3>
+  <p class="rr__prose t-body-02">{r.summary}</p>
+
+  <h3 class="rr__sub t-heading-02">Survey effort</h3>
+  <cds-table size="md">
+    <cds-table-head>
+      <cds-table-header-row>
+        <cds-table-header-cell>Park unit</cds-table-header-cell>
+        <cds-table-header-cell>Site</cds-table-header-cell>
+        <cds-table-header-cell>Dates</cds-table-header-cell>
+        <cds-table-header-cell>Method</cds-table-header-cell>
+        <cds-table-header-cell>Samples</cds-table-header-cell>
+      </cds-table-header-row>
+    </cds-table-head>
+    <cds-table-body>
+      {r.effort.map((e) => (
+        <cds-table-row>
+          <cds-table-cell>{e.park}</cds-table-cell>
+          <cds-table-cell>
+            <span class="rr__primary">{e.site}</span>
+            <span class="rr__secondary t-label-01">{e.coords}</span>
+          </cds-table-cell>
+          <cds-table-cell>{e.dates}</cds-table-cell>
+          <cds-table-cell>{e.method}</cds-table-cell>
+          <cds-table-cell>{e.samples}</cds-table-cell>
+        </cds-table-row>
+      ))}
+    </cds-table-body>
+  </cds-table>
+
+  <h3 class="rr__sub t-heading-02">Specimens collected</h3>
+  <cds-table size="md">
+    <cds-table-head>
+      <cds-table-header-row>
+        <cds-table-header-cell>Species</cds-table-header-cell>
+        <cds-table-header-cell>Permitted</cds-table-header-cell>
+        <cds-table-header-cell>Collected</cds-table-header-cell>
+      </cds-table-header-row>
+    </cds-table-head>
+    <cds-table-body>
+      {r.collected.map((t) => (
+        <cds-table-row>
+          <cds-table-cell><em>{t.species}</em></cds-table-cell>
+          <cds-table-cell>{t.permitted}</cds-table-cell>
+          <cds-table-cell>{t.collected}</cds-table-cell>
+        </cds-table-row>
+      ))}
+    </cds-table-body>
+  </cds-table>
+
+  <h3 class="rr__sub t-heading-02">Data products</h3>
+  <ul class="rr__products">
+    {r.dataProducts.map((d) => (
+      <li><span class="t-body-01">{d.name}</span><span class="rr__secondary t-label-01">{d.where}</span></li>
+    ))}
+  </ul>
+</div>
+
+<style>
+  /* Layout only — tables are cds-table, type from the t-* scale. */
+  .rr__meta { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-05, 1rem) var(--cds-spacing-09, 3rem); margin: 0 0 var(--cds-spacing-07, 2rem); }
+  .rr__meta dt { color: var(--cds-text-secondary, #525252); margin-bottom: var(--cds-spacing-02, 0.25rem); }
+  .rr__meta dd { margin: 0; }
+  .rr__sub { margin: var(--cds-spacing-07, 2rem) 0 var(--cds-spacing-04, 0.75rem); }
+  .rr__sub:first-of-type { margin-top: 0; }
+  .rr__prose { margin: 0; max-inline-size: 44rem; }
+  .rr__primary, .rr__secondary { display: block; }
+  .rr__secondary { color: var(--cds-text-secondary, #525252); }
+  .rr__products { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--cds-spacing-04, 0.75rem); }
+</style>

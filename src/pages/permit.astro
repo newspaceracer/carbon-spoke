@@ -306,6 +306,26 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
       </PermitHeader>
 
+      <!-- Changes requested (researcher owner, application returned) — revealed by the
+           client: how many changes the review team asked for, and the way into the
+           revise flow, where each change is shown on the page it's about. -->
+      <div class="cds--css-grid" id="changes-requested-row" style="display:none">
+        <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+          <cds-actionable-notification
+            id="changes-requested-banner"
+            style="display:none"
+            kind="warning"
+            low-contrast
+            inline
+            hide-close-button
+            title="Changes requested"
+            subtitle=""
+          >
+            <cds-actionable-notification-button slot="action" id="changes-requested-go">Review requested changes</cds-actionable-notification-button>
+          </cds-actionable-notification>
+        </div>
+      </div>
+
       <!-- Amendment link — revealed by the client script only once an amendment has
            been started from this permit. Names the amendment and links to it, so the
            relationship is traceable from the original, not just from the amendment. -->
@@ -857,6 +877,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
 <script>
   import { withBase } from '../lib/base';
+  import { reviewStore } from '../lib/review-thread';
   import { readIdentity } from '../lib/maintenance';
   import { activeUser } from '../data/user';
   import { sectionAccessor } from '../lib/permissions';
@@ -907,6 +928,21 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
       if (ownsIt && statusLabel !== 'Withdrawn') {
         // Story 11 — the owner reads their submitted application; IR is hidden (§6).
         hideInternalReview();
+        // Returned for changes → point the researcher at the revise flow.
+        if (statusLabel === 'Changes requested' || statusLabel === 'Returned to submitter') {
+          const ret = reviewStore(thePermitId).returned();
+          const n = ret?.issueIds.length ?? 0;
+          const cr = document.getElementById('changes-requested-banner') as any;
+          if (cr) {
+            cr.subtitle = `The review team asked for ${n === 1 ? '1 change' : `${n} changes`}${ret ? ` on ${ret.at}` : ''}. Each one is shown on the page of your application it's about.${ret?.message ? ` Their message: “${ret.message}”` : ''}`;
+            cr.style.display = '';
+            const row = document.getElementById('changes-requested-row');
+            if (row) row.style.display = '';
+          }
+          document.getElementById('changes-requested-go')?.addEventListener('click', () => {
+            location.href = withBase(`/apply?revise=${encodeURIComponent(thePermitId)}`);
+          });
+        }
       } else if (isPublicStatus) {
         // Story 12 — public view of an Active/Expired permit: summary only, no PII,
         // no Internal Review. Available to anon and any authenticated non-owner.

@@ -1,0 +1,41 @@
+/* Review notes — issue and comment cards, their threads, replies, and the
+   Return-to-researcher summary. Built at runtime (src/lib/issue-ui.ts,
+   src/lib/review-workspace.ts, the review wizard), so these are plain global rules.
+   Layout + tokens only; controls inside are cds-*. */
+.rw-note__quote {
+  margin: 0; padding-inline-start: var(--cds-spacing-04, 0.75rem);
+  border-inline-start: 3px solid var(--cds-border-strong-01, #8d8d8d);
+  color: var(--cds-text-secondary, #525252);
+}
+.rw-sec { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); margin-block-end: var(--cds-spacing-07, 2rem); }
+.rw-sec:empty { display: none; }
+.rw-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+/* One note (issue or comment): a quiet field-colored block on its white section. */
+.rw-note {
+  display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem);
+  padding: var(--cds-spacing-04, 0.75rem) var(--cds-spacing-05, 1rem);
+  background: var(--cds-background, #f4f4f4);
+}
+.rw-note__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-04, 0.75rem); }
+.rw-note__meta { margin: 0; color: var(--cds-text-secondary, #525252); }
+.rw-note__meta b { color: var(--cds-text-primary, #161616); font-weight: 600; }
+.rw-note__tools { margin-inline-start: auto; display: flex; align-items: center; gap: var(--cds-spacing-02, 0.25rem); }
+.rw-note__text { margin: 0; white-space: pre-wrap; }
+.rw-note--resolved { opacity: 0.7; }
+.rw-note__actions { display: flex; flex-wrap: wrap; gap: 0; margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
+/* Replies sit indented under their comment. */
+.rw-replies { list-style: none; margin: 0; padding: 0 0 0 var(--cds-spacing-05, 1rem); display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); border-inline-start: 1px solid var(--cds-border-subtle-01, #c6c6c6); }
+.rw-reply-composer { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+.rw-reply-composer__actions { display: flex; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); }
+.rw-thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+.rw-thread[hidden] { display: none; }
+.rw-return-group { margin-block-end: var(--cds-spacing-05, 1rem); }
+.rw-return-group h3 { margin: 0 0 var(--cds-spacing-03, 0.5rem); }
+.rw-return-group ol { margin: 0; padding-inline-start: 1.25rem; list-style: decimal; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+.rw-return-group li p { margin: 0; }
+
+/* An issue's researcher reply (after resubmission). */
+.rw-issue__response { padding: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-04, 0.75rem); background: var(--cds-layer-01, #ffffff); }
+.rw-issue__response p { margin: 0; }
+.rw-issue__response p.rw-issue__response-label { color: var(--cds-text-secondary, #525252); margin-bottom: var(--cds-spacing-02, 0.25rem); }
+.rw-issue--resolved { opacity: 0.75; }

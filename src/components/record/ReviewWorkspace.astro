@@ -23,6 +23,8 @@
 import { permit } from '../../data/permit';
 import { userDirectory } from '../../data/user';
 import { withBase } from '../../lib/base';
+import IssueModal from '../IssueModal.astro';
+import '../../styles/review-notes.css';
 
 interface Props {
   mode: 'view' | 'review';
@@ -159,6 +161,7 @@ const review = mode === 'review';
       <cds-modal-footer-button kind="danger" data-rw-reject-confirm>Reject application</cds-modal-footer-button>
     </cds-modal-footer>
   </cds-modal>
+  <IssueModal />
   </Fragment>
   )}
 </div>
@@ -203,12 +206,8 @@ const review = mode === 'review';
   .rw-quote figcaption { color: var(--cds-text-secondary, #525252); margin-bottom: var(--cds-spacing-02, 0.25rem); }
   [data-rw-return-none], [data-rw-approve-drafts] { margin-bottom: var(--cds-spacing-05, 1rem); max-inline-size: none; }
 
-  /* ── Runtime-built: shared quote + mention styles ───────────────────────── */
-  :global(.rw-quote blockquote), :global(.rw-note__quote) {
-    margin: 0; padding-inline-start: var(--cds-spacing-04, 0.75rem);
-    border-inline-start: 3px solid var(--cds-border-strong-01, #8d8d8d);
-    color: var(--cds-text-secondary, #525252);
-  }
+  /* ── Runtime-built: quote + mention styles (note cards: styles/review-notes.css) ── */
+  .rw-quote blockquote { margin: 0; padding-inline-start: var(--cds-spacing-04, 0.75rem); border-inline-start: 3px solid var(--cds-border-strong-01, #8d8d8d); color: var(--cds-text-secondary, #525252); }
   :global(.rw-mention-field) { position: relative; }
   :global(.rw-mention-field cds-textarea) { display: block; inline-size: 100%; }
   :global(.rw-mention-menu) {
@@ -229,38 +228,9 @@ const review = mode === 'review';
   :global(.mention-menu__detail) { color: var(--cds-text-secondary, #525252); font-size: 0.75rem; }
   :global(.mention) { color: var(--cds-link-primary, #0f62fe); font-weight: 600; }
 
-  /* ── Runtime-built: a section's review notes ────────────────────────────── */
-  :global(.rw-sec) { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); margin-block-end: var(--cds-spacing-07, 2rem); }
-  :global(.rw-sec:empty) { display: none; }
-  :global(.rw-issues) { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
 
-  /* One note (issue or comment): a quiet field-colored block on the white section. */
-  :global(.rw-note) {
-    display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem);
-    padding: var(--cds-spacing-04, 0.75rem) var(--cds-spacing-05, 1rem);
-    background: var(--cds-background, #f4f4f4);
-  }
-  :global(.rw-note__head) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-04, 0.75rem); }
-  :global(.rw-note__meta) { margin: 0; color: var(--cds-text-secondary, #525252); }
-  :global(.rw-note__meta b) { color: var(--cds-text-primary, #161616); font-weight: 600; }
-  :global(.rw-note__tools) { margin-inline-start: auto; display: flex; align-items: center; gap: var(--cds-spacing-02, 0.25rem); }
-  :global(.rw-note__text) { margin: 0; white-space: pre-wrap; }
-  :global(.rw-note--resolved) { opacity: 0.7; }
-  :global(.rw-note__actions) { display: flex; flex-wrap: wrap; gap: 0; margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
-
-  /* Replies sit indented under their comment. */
-  :global(.rw-replies) { list-style: none; margin: 0; padding: 0 0 0 var(--cds-spacing-05, 1rem); display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); border-inline-start: 1px solid var(--cds-border-subtle-01, #c6c6c6); }
-  :global(.rw-reply-composer) { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
-  :global(.rw-reply-composer__actions) { display: flex; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); }
-
-  :global(.rw-thread) { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
-  :global(.rw-thread[hidden]) { display: none; }
 
   /* Return modal — issues grouped by section. */
-  :global(.rw-return-group) { margin-block-end: var(--cds-spacing-05, 1rem); }
-  :global(.rw-return-group h3) { margin: 0 0 var(--cds-spacing-03, 0.5rem); }
-  :global(.rw-return-group ol) { margin: 0; padding-inline-start: 1.25rem; list-style: decimal; display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
-  :global(.rw-return-group li p) { margin: 0; }
 
   /* Space under the page so the pinned bar never covers the last section. */
   :global(body.rw-has-bar) { padding-block-end: 5rem; }

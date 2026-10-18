@@ -1,0 +1,34 @@
+---
+// The add / edit dialog for an issue for the researcher — opened by
+// openIssueModal (src/lib/issue-ui.ts) from the application-review prototype and
+// the review wizard. Include once per page. Also loads the shared review-note
+// card styles (styles/review-notes.css).
+import '../styles/review-notes.css';
+---
+
+<cds-modal size="sm" data-issue-modal>
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label data-issue-label></cds-modal-label>
+    <cds-modal-heading data-issue-heading>Add an issue for the researcher</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <p class="im__lede t-body-01">The researcher sees this when the application is returned. Say what to change or provide.</p>
+    <figure class="im__quote" data-issue-quote hidden>
+      <figcaption class="t-label-01">On this passage</figcaption>
+      <blockquote class="rw-note__quote t-body-01" data-issue-quote-text></blockquote>
+    </figure>
+    <cds-textarea data-issue-input label="What needs to change?" rows="4" invalid-text="Describe what the researcher needs to change."></cds-textarea>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" data-issue-save>Add issue</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<style>
+  .im__lede { margin: 0 0 var(--cds-spacing-05, 1rem); }
+  .im__quote { margin: 0 0 var(--cds-spacing-05, 1rem); }
+  .im__quote[hidden] { display: none; }
+  .im__quote figcaption { color: var(--cds-text-secondary, #525252); margin-bottom: var(--cds-spacing-02, 0.25rem); }
+</style>

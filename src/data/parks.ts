@@ -27,6 +27,7 @@ export interface Park {
 // reconciles the two conventions in the data — the directory + application picker
 // spell them out; some legacy permit records abbreviate — so condition scoping
 // matches either. Longest tokens first (SVRA before SRA); word-boundary anchored.
+import { permit } from './permit';
 const DESIGNATIONS: [RegExp, string][] = [
   [/\bSVRA\b/gi, 'State Vehicular Recreation Area'],
   [/\bSRA\b/gi, 'State Recreation Area'],
@@ -57,6 +58,7 @@ const byDistrict: Record<string, string[]> = {
     'Jedediah Smith Redwoods State Park',
     'Del Norte Coast Redwoods State Park',
     'Prairie Creek Redwoods State Park',
+    'Tolowa Dunes State Park',
     'Humboldt Redwoods State Park',
     'Grizzly Creek Redwoods State Park',
     'Richardson Grove State Park',
@@ -192,12 +194,7 @@ export const parks: Park[] = Object.entries(byDistrict)
 /** id → Park, for resolving a selected value back to its name/district. */
 export const parkById = new Map<string, Park>(parks.map((p) => [p.id, p]));
 
-// Seed selection so the Draft renders as work-in-progress (consistent with the
-// prefilled Project information step): the North Coast intertidal study already
-// names the parks its field work spans.
-export const seedStudyAreas: string[] = [
-  'Prairie Creek Redwoods State Park',
-  'Sonoma Coast State Park',
-  'Salt Point State Park',
-  'MacKerricher State Park',
-].map(slugify);
+// Seed selection for the application form — the parks permit 26-635-017 names
+// (data/permit.ts), so the form and the permit record agree. parkKey expands the
+// "SP" abbreviation to the directory's "State Park".
+export const seedStudyAreas: string[] = permit.studyAreas.districts.flatMap((d) => d.parks).map(slugify);

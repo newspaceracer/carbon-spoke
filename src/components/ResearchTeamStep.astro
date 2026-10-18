@@ -228,7 +228,7 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
 </cds-modal>
 
 <script>
-  import { applicant, seedParticipants } from '../data/application';
+  import { applicant, seedParticipants, researchTeam } from '../data/application';
   import type { Participant } from '../data/application';
   import { wireAddressFieldset } from '../lib/address-fields';
   import { wirePhoneField, formatDisplay } from '../lib/phone';
@@ -465,6 +465,39 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     a.download = doc.filename;
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  // ── Seed from the application on file ───────────────────────────────────
+  // The form opens with the application's own research-team answers
+  // (data/application, aligned with permit 26-635-017): who the PI is, their CV,
+  // who directs field work, and the insurance answer + waiver. Radio groups are
+  // set on the group AND the matching button, once the controls have upgraded.
+  const setRadio = (group: any, value: string) => {
+    if (!group) return;
+    group.value = value;
+    group.querySelectorAll('cds-radio-button').forEach((r: any) => { r.checked = r.value === value; });
+  };
+  Promise.all(['cds-text-input', 'cds-radio-button-group', 'cds-checkbox'].map((t) => customElements.whenDefined(t))).then(() => {
+    if (researchTeam.piIsSubmitter) {
+      if (piIsMe) piIsMe.checked = true;
+      setPiFields(true);
+    } else {
+      const pi = researchTeam.pi;
+      const fields: Record<string, string> = { 'pi-first': pi.firstName, 'pi-last': pi.lastName, 'pi-title': pi.title, 'pi-email': pi.email };
+      Object.entries(fields).forEach(([id, v]) => { const el = $(id) as any; if (el) el.value = v; });
+      piPhone?.setValue(pi.phone);
+      piAddr?.setValue(pi.address);
+    }
+    if (researchTeam.piResume) {
+      piResumeAttached = true;
+      renderFileItem('pi-resume-list', researchTeam.piResume, () => { piResumeAttached = false; syncSavePrompt(); });
+    }
+    setRadio(samePi, researchTeam.fieldCharge.sameAsPI ? 'yes' : 'no');
+    syncPicof();
+    setRadio(insured, researchTeam.personnelInsured ? 'yes' : 'no');
+    if (waiverWrap) waiverWrap.hidden = researchTeam.personnelInsured;
+    if (!researchTeam.personnelInsured && researchTeam.waiverFile) renderFileItem('waiver-list', researchTeam.waiverFile, () => {});
+    syncSavePrompt();
   });
 </script>
 

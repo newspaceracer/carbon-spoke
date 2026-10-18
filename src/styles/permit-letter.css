@@ -1,0 +1,29 @@
+/* The permit letter's document styles — the .ltr__* markup the review wizard
+   (final-letter.astro) renders, and the saved copy the application-record
+   prototype's "Final permit letter" tab shows. One stylesheet so both read the
+   same. Scope: any element with .ltr-sheet. Layout + tokens only. */
+.ltr-sheet .ltr__letterhead { border-bottom: 2px solid var(--cds-border-strong-01, #8d8d8d); padding-bottom: var(--cds-spacing-04, 0.75rem); margin-bottom: var(--cds-spacing-06, 1.5rem); }
+.ltr-sheet .ltr__letterhead p { margin: 0; }
+.ltr-sheet .ltr__dept { margin: 0.125rem 0; }
+.ltr-sheet .ltr__date { margin: 0 0 var(--cds-spacing-05, 1rem); }
+.ltr-sheet .ltr__to { font-style: normal; line-height: 1.5; margin: 0 0 var(--cds-spacing-05, 1rem); }
+.ltr-sheet .ltr__body { line-height: 1.6; margin: 0 0 var(--cds-spacing-05, 1rem); }
+.ltr-sheet .ltr__signer { line-height: 1.5; margin: 0 0 var(--cds-spacing-05, 1rem); }
+.ltr-sheet .ltr__sig-line { height: 2rem; width: 16rem; max-width: 100%; border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d); margin-bottom: var(--cds-spacing-03, 0.5rem); }
+.ltr-sheet .ltr__pagebreak { border: 0; border-top: 1px dashed var(--cds-border-subtle-01, #c6c6c6); margin: var(--cds-spacing-07, 2rem) 0; }
+.ltr-sheet .ltr__h { margin: 0 0 var(--cds-spacing-04, 0.75rem); }
+.ltr-sheet .ltr__conditions { margin: 0 0 var(--cds-spacing-05, 1rem); padding-left: var(--cds-spacing-06, 1.5rem); display: grid; gap: var(--cds-spacing-03, 0.5rem); }
+.ltr-sheet .ltr__conditions p { margin: 0; }
+.ltr-sheet .ltr__cond-owner { margin: var(--cds-spacing-04, 0.75rem) 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); font-weight: 600; }
+.ltr-sheet .ltr__contact { margin-bottom: var(--cds-spacing-05, 1rem); }
+.ltr-sheet .ltr__contact-head { margin-bottom: var(--cds-spacing-02, 0.25rem); }
+.ltr-sheet .ltr__district-name { margin: 0; }
+.ltr-sheet .ltr__coord { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); }
+.ltr-sheet .ltr__coord-tag { font-style: italic; }
+.ltr-sheet .ltr__parks { margin: var(--cds-spacing-02, 0.25rem) 0 0; padding-left: var(--cds-spacing-06, 1.5rem); }
+.ltr-sheet .ltr__park { margin: var(--cds-spacing-03, 0.5rem) 0 0; padding-left: var(--cds-spacing-05, 1rem); }
+.ltr-sheet .ltr__park-name { margin: 0; font-weight: 600; }
+.ltr-sheet .ltr__specimens { width: 100%; border-collapse: collapse; margin: var(--cds-spacing-03, 0.5rem) 0 var(--cds-spacing-05, 1rem); }
+.ltr-sheet .ltr__specimens th, .ltr-sheet .ltr__specimens td { text-align: left; vertical-align: top; padding: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-04, 0.75rem) var(--cds-spacing-02, 0.25rem) 0; border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+.ltr-sheet .ltr__specimens th { font-weight: 600; border-bottom-color: var(--cds-border-strong-01, #8d8d8d); }
+.ltr-sheet .ltr__specimens td:first-child { font-style: italic; }

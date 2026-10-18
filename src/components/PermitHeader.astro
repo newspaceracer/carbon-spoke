@@ -288,36 +288,24 @@ const rosterSections = [
     <cds-modal-heading>Request changes</cds-modal-heading>
   </cds-modal-header>
   <cds-modal-body>
-    <cds-stack gap="7">
-      <p class="t-body-01">
-        Return the application to the applicant with the items to address.
-        They’ll be notified and can resubmit once the requested changes are made.
-      </p>
-
-      <!-- Reasons are not mutually exclusive, so a checkbox group. -->
-      <cds-checkbox-group legend-text="What’s needed">
-        <cds-checkbox value="dpr65a" label-text="DPR65A form submission"></cds-checkbox>
-        <cds-checkbox value="dpr65b" label-text="DPR65B form submission"></cds-checkbox>
-        <cds-checkbox
-          value="missing-docs"
-          label-text="Additional documentation requested / missing documents"
-        ></cds-checkbox>
-        <cds-checkbox
-          value="other"
-          label-text="Other information or changes requested"
-        ></cds-checkbox>
-      </cds-checkbox-group>
-
-      <cds-textarea
-        label="Additional information"
-        placeholder="Describe what the applicant needs to change or provide…"
-        rows="4"
-      ></cds-textarea>
-    </cds-stack>
+    <!-- The issues reviewers marked on the record (shared store, lib/review-thread),
+         grouped by section, then an optional message. Returning sends them all; the
+         researcher sees each one on the page of their application it's about. -->
+    <p class="t-body-01 rc-lede">The researcher is emailed these issues and sees each one on the page of their application it's about. They can resubmit once they're addressed.</p>
+    <div id="request-issues"></div>
+    <cds-inline-notification
+      id="request-none"
+      kind="info"
+      low-contrast
+      hide-close-button
+      title="No issues marked"
+      subtitle="Mark issues on the application record, or add a message so the researcher knows what to change."
+    ></cds-inline-notification>
+    <cds-textarea id="request-message" label="Message to the researcher (optional)" rows="3" invalid-text="Add a message, or mark at least one issue."></cds-textarea>
   </cds-modal-body>
   <cds-modal-footer>
     <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-    <cds-modal-footer-button kind="primary" id="request-confirm" data-modal-close>Send request</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="request-confirm">Return application</cds-modal-footer-button>
   </cds-modal-footer>
 </cds-modal>
 
@@ -505,6 +493,9 @@ const rosterSections = [
 <script>
   import { readIdentity } from '../lib/maintenance';
   import { readPermitRole, sectionAccessor } from '../lib/permissions';
+  import { reviewStore, returnToResearcher, RECORD_SECTIONS } from '../lib/review-thread';
+  import { activeUser } from '../data/user';
+  import '../styles/review-notes.css';
   import { sendEmail } from '../lib/notifications';
   // ── Workflow state machine (prototype-local) ──
   // The permit moves through a small set of statuses; each has a cds-icon-indicator
@@ -667,12 +658,47 @@ const rosterSections = [
   // review" enters the wizard (letterUrl); on the wizard itself ("Approve permit")
   // the reviewer is already here, so it fires a `permit:approve` event the wizard
   // catches to jump to its Review & send step. The menu is identical either way.
+  // Request changes: list the draft issues (grouped by record section) so the
+  // reviewer sees exactly what goes back; a message is optional with issues and
+  // required without.
+  function openRequestChanges() {
+    const drafts = reviewStore(permitId).issues().filter((i) => !i.sentAt && !i.resolvedAt);
+    const host = document.getElementById('request-issues');
+    if (host) {
+      host.replaceChildren();
+      RECORD_SECTIONS.forEach((sec) => {
+        const mine = drafts.filter((i) => i.section === sec.slug);
+        if (!mine.length) return;
+        const g = document.createElement('div'); g.className = 'rw-return-group';
+        const h = document.createElement('h3'); h.className = 't-heading-compact-01'; h.textContent = sec.title;
+        const ol = document.createElement('ol');
+        mine.forEach((i) => {
+          const li = document.createElement('li');
+          if (i.quote) { const q = document.createElement('p'); q.className = 'rw-note__quote t-body-01'; q.textContent = i.quote; li.append(q); }
+          const t = document.createElement('p'); t.className = 't-body-01'; t.textContent = i.text; li.append(t);
+          ol.append(li);
+        });
+        g.append(h, ol);
+        host.append(g);
+      });
+    }
+    const none = document.getElementById('request-none') as HTMLElement | null;
+    if (none) none.style.display = drafts.length ? 'none' : '';
+    const msg = document.getElementById('request-message') as any;
+    if (msg) {
+      msg.value = '';
+      msg.invalid = false;
+      msg.label = drafts.length ? 'Message to the researcher (optional)' : 'Message to the researcher';
+    }
+    requestModal.open = true;
+  }
+
   document.querySelectorAll('.permit-open-review').forEach((combo) => {
     (combo as any).onClick = (e: Event) => {
       const item = (e.target as HTMLElement).closest?.('cds-menu-item');
       const label = item?.getAttribute('label');
       if (label === 'Reject permit') rejectModal.open = true;
-      else if (label === 'Request changes') requestModal.open = true;
+      else if (label === 'Request changes') openRequestChanges();
       else if (item) return; // other menu picks handled elsewhere
       else if (inFinalize) document.dispatchEvent(new CustomEvent('permit:approve'));
       else if (letterUrl) window.location.href = letterUrl; // primary "Open review"
@@ -703,7 +729,13 @@ const rosterSections = [
   // researcher (regulated EM-D / EM-E).
   document.getElementById('sign-confirm')?.addEventListener('click', applySecondSignature);
   document.getElementById('request-confirm')?.addEventListener('click', () => {
-    setStatus('Changes requested');
+    const drafts = reviewStore(permitId).issues().filter((i) => !i.sentAt && !i.resolvedAt);
+    const msg = document.getElementById('request-message') as any;
+    const message = (msg?.value ?? '').trim();
+    if (!drafts.length && !message) { if (msg) { msg.invalid = true; msg.focus?.(); } return; }
+    returnToResearcher(permitId, activeUser(gateIdentity)?.name || 'Responsible analyst', message);
+    requestModal.open = false;
+    paintStatus(currentStatus());
     sendEmail('EM-D', emailVars());
   });
   document.getElementById('reject-confirm')?.addEventListener('click', () => {
@@ -1233,6 +1265,9 @@ const rosterSections = [
   /* Only the action set for the current status is shown; the script toggles
      [hidden] on the rest. Custom elements don't honor the UA [hidden] rule
      reliably, so force it. */
+  .rc-lede { margin: 0 0 var(--cds-spacing-05, 1rem); }
+  #request-none { margin-bottom: var(--cds-spacing-05, 1rem); max-inline-size: none; }
+
   [data-when][hidden] {
     display: none;
   }

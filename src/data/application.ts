@@ -9,7 +9,34 @@
 // so the form, this seed, and the summary all speak one address model; `region`
 // carries the USPS code for US addresses (e.g. 'CA'), matched against `states`.
 import type { Address } from './address';
+import { permit, type MetaRow } from './permit';
 export type { Address };
+
+// ALIGNED WITH THE PERMIT: the application this flow edits IS permit 26-635-017's
+// application (data/permit.ts) — the same organization, team, project, parks,
+// specimens, and answers — so revising a returned application (/apply?revise=…)
+// or amending it (/apply?amend=…) shows exactly what the reviewers see. Values
+// are DERIVED from permit.ts wherever the shapes allow, so the two can't drift.
+// A brand-new application (no query) starts from the same answers with its one
+// deliberate gap cleared client-side (see applicationIssues).
+
+// "(707) 555-0142" → "+17075550142" — the form stores person phones as E.164.
+const e164 = (display?: string) => {
+  const digits = (display ?? '').replace(/\D/g, '');
+  return digits ? `+1${digits.slice(-10)}` : '';
+};
+// "1 Harpst St, Arcata, CA 95521" → the structured Address the form edits.
+const harpst: Address = { country: 'US', line1: '1 Harpst St', line2: '', city: 'Arcata', region: 'CA', postalCode: '95521' };
+const splitName = (full: string) => {
+  const parts = full.replace(/^(Dr\.?|Prof\.?)\s+/i, '').split(/\s+/);
+  return { firstName: parts.slice(0, -1).join(' ') || parts[0], lastName: parts.length > 1 ? parts[parts.length - 1] : '' };
+};
+const isoToMdy = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return `${m}/${d}/${y}`; };
+const rt = permit.researchTeam;
+const pj = permit.projectInfo;
+const pdc = permit.dataCollection;
+const pad = permit.additionalDocs;
+const fileOf = (re: RegExp) => pad.files.find((f) => re.test(f.type))?.name ?? '';
 
 /** One step in the application wizard, shown in the progress indicator. The
  *  first five are form pages; the last (`summary`) is a read-only review. */
@@ -43,17 +70,10 @@ export const draft = {
 // the research, distinct from any one person. Prefilled from the account so the
 // applicant confirms rather than retypes. INVENTED.
 export const applicantOrg = {
-  name: 'Cascadia Marine Research Institute',
-  phone: '(415) 555-0164',
-  email: 'permits@cascadiamarine.org',
-  address: {
-    country: 'US',
-    line1: '2200 Bridgeway Boulevard',
-    line2: 'Building C',
-    city: 'Sausalito',
-    region: 'CA',
-    postalCode: '94965',
-  } as Address,
+  name: rt.organization.name,
+  phone: rt.organization.phone ?? '',
+  email: rt.organization.email ?? '',
+  address: harpst,
 };
 
 // The signed-in PUBLIC user filling out the application — the submitter. Their
@@ -63,55 +83,45 @@ export const applicantOrg = {
 // `resumeOnFile` is null here on purpose: this applicant has NOT saved a résumé
 // to their profile yet, so once they upload one as the PI the flow offers to keep
 // it for future applications. (Set it to a filename to model a returning user.)
+// The department's sponsored-programs coordinator, who files on the PI's behalf
+// (the permit's submitter).
 export const applicant = {
-  firstName: 'Renata',
-  lastName: 'Halvorsen',
-  title: 'Senior Research Scientist',
-  email: 'r.halvorsen@cascadiamarine.org',
+  ...splitName(rt.submitter.name),
+  title: 'Sponsored Programs Coordinator',
+  email: rt.submitter.email ?? '',
   // Person phones are stored as E.164; forms render them formatted.
-  phone: '+14155550173',
-  address: {
-    country: 'US',
-    line1: '18 Nautilus Court',
-    line2: '',
-    city: 'Mill Valley',
-    region: 'CA',
-    postalCode: '94941',
-  } as Address,
+  phone: e164(rt.submitter.phone),
+  address: harpst,
   resumeOnFile: null as string | null,
 };
 
-// Research-team answers the step collects INTERACTIVELY and has no other seed
-// for — captured here so the Application summary can review them. The submitter
-// is the principal investigator; the person in direct charge of field work is
-// the certified scientific diver who leads the intertidal transects (a distinct
-// team member); and all personnel are insured through the institution (so no
-// separate waiver addendum is needed on this step — the diving risk is covered
-// by the insurance addendum on the Additional documents step). A filename is
-// DATA, not bytes, so it seeds cleanly even though the static prototype can't
-// persist the uploaded file itself. INVENTED, consistent with the persona.
+// Research-team answers. The submitter is NOT the PI here: the PI (and the person
+// in direct charge of field work) is the permit's principal investigator, and not
+// every participant is insured by the institution — so a signed liability waiver
+// addendum (DPR65B) is attached. Filenames are DATA, not bytes.
+const piName = splitName(rt.principalInvestigator.name);
 export const researchTeam = {
-  piIsSubmitter: true,
-  piResume: 'Halvorsen-CV-2026.pdf',
-  saveResumeToProfile: true,
-  fieldCharge: {
-    sameAsPI: false,
-    isSubmitter: false,
-    firstName: 'Miguel',
-    lastName: 'Aranda',
-    title: 'Field Technician',
-    email: 'm.aranda@cascadiamarine.org',
-    phone: '+14155550188',
-    address: {
-      country: 'US',
-      line1: '2200 Bridgeway Boulevard',
-      line2: 'Building C',
-      city: 'Sausalito',
-      region: 'CA',
-      postalCode: '94965',
-    } as Address,
+  piIsSubmitter: false,
+  pi: {
+    ...piName,
+    title: 'Associate Professor of Biological Sciences',
+    email: rt.principalInvestigator.email ?? '',
+    phone: e164(rt.principalInvestigator.phone),
+    address: harpst,
   },
-  personnelInsured: true,
+  piResume: fileOf(/Principal Investigator Resume/),
+  saveResumeToProfile: false,
+  fieldCharge: {
+    sameAsPI: rt.fieldLead.name === rt.principalInvestigator.name,
+    isSubmitter: false,
+    ...splitName(rt.fieldLead.name),
+    title: '',
+    email: rt.fieldLead.email ?? '',
+    phone: e164(rt.fieldLead.phone),
+    address: harpst,
+  },
+  personnelInsured: rt.personnelInsured,
+  waiverFile: fileOf(/DPR65B/),
 };
 
 /** One additional research participant added to the team roster. All fields are
@@ -132,35 +142,20 @@ export interface Participant {
 // the cds-date-picker directly. All INVENTED, domain-credible, deterministic.
 export const project = {
   category: 'marine-aquatic',
-  title: 'Intertidal Community Response to Marine Heatwaves along the North Coast',
-  purpose:
-    'This study examines how rocky intertidal invertebrate communities in North Coast ' +
-    'Redwoods parks are reshaped by successive marine heatwaves. Building on long-term ' +
-    'MARINe monitoring, we test whether thermal stress shifts competitive dominance from ' +
-    'California mussels (Mytilus californianus) toward more heat-tolerant algal turfs. ' +
-    'Objectives: (1) quantify post-heatwave recovery trajectories across three tidal ' +
-    'heights; (2) test the hypothesis that grazer density mediates recovery rate; ' +
-    '(3) establish a repeatable photo-quadrat baseline for future monitoring.',
-  benefits:
-    "California's rocky shores are among the state's most-visited and most climate-exposed " +
-    'natural features, and this work happens where park stewards can act on it. Findings ' +
-    'give the district an early-warning framework for detecting climate-driven regime ' +
-    'shifts in accessible tidepool zones, informing visitor-use management and ' +
-    'interpretive programming. The photo-quadrat baseline and data will be shared with the ' +
-    'Natural Resources Division to support long-term coastal monitoring across the district.',
+  title: permit.name,
+  purpose: pj.purpose,
+  benefits: pj.benefits,
   dates: {
-    projectStart: '2026-09-01',
-    projectEnd: '2028-08-31',
-    permitStart: '2026-09-15',
-    permitEnd: '2027-09-14',
-    // Left blank on purpose: this is one of the gaps `applicationIssues` reports
-    // (project-info). Empty here so the field's error state reads true — an empty
-    // required field, not a filled field falsely flagged.
-    annualReport: '',
+    projectStart: pj.projectWindow.startISO,
+    projectEnd: pj.projectWindow.endISO,
+    permitStart: permit.activeWindow.startISO,
+    permitEnd: permit.activeWindow.endISO,
+    // The anticipated annual-report date. A NEW application clears this field on
+    // load (apply.astro) — it's the gap `applicationIssues` reports there.
+    annualReport: pj.annualReport.tentativeISO,
   },
-  // Optional project-schedule attachment (a filename is DATA, not bytes). Provided
-  // here to show the "optional-but-attached" state on the summary.
-  scheduleFile: 'Field-schedule-2026-2028.pdf',
+  // Optional project-schedule attachment — none on this application.
+  scheduleFile: '',
 };
 
 // Optional GIS study-area files (step 3). Empty by default — the summary shows
@@ -175,32 +170,21 @@ export interface FieldOccurrence {
   end: string;
 }
 
-// Seed occurrences — two planned field windows already on the schedule. INVENTED.
-export const seedOccurrences: FieldOccurrence[] = [
-  { start: '9/16/2026', end: '9/27/2026' },
-  { start: '1/12/2027', end: '1/23/2027' },
-];
+// The permit's field sessions (single-day sessions start and end the same day).
+export const seedOccurrences: FieldOccurrence[] = pj.fieldSessions.map((f) => ({
+  start: isoToMdy(f.start),
+  end: isoToMdy(f.end ?? f.start),
+}));
 
-// Seed roster — two collaborators already added, so the list renders populated
-// (the applicant can add more or remove these). INVENTED.
-export const seedParticipants: Participant[] = [
-  {
-    firstName: 'Miguel',
-    lastName: 'Aranda',
-    title: 'Field Technician',
-    email: 'm.aranda@cascadiamarine.org',
-    phone: '+14155550188',
-    comments: 'Certified scientific diver; leads intertidal transect surveys.',
-  },
-  {
-    firstName: 'Priya',
-    lastName: 'Deshmukh',
-    title: 'Graduate Researcher',
-    email: 'p.deshmukh@cascadiamarine.org',
-    phone: '+14155550191',
-    comments: 'Handles specimen cataloging and sample chain-of-custody.',
-  },
-];
+// The permit's additional participants (phones normalized to E.164; a missing
+// title or phone stays empty — both are optional on the roster).
+export const seedParticipants: Participant[] = rt.participants.map((p) => ({
+  ...splitName(p.name),
+  title: p.title ?? '',
+  email: p.email ?? '',
+  phone: e164(p.phone),
+  comments: p.comments ?? '',
+}));
 
 // ── Data collection (step 4) ─────────────────────────────────────────────────
 
@@ -213,74 +197,52 @@ export interface SpecimenType {
   condition: string;
 }
 
-// Seed specimen list — the material the intertidal marine-heatwave study collects.
-// INVENTED but domain-credible.
-export const seedSpecimens: SpecimenType[] = [
-  {
-    species: 'California mussel (Mytilus californianus)',
-    quantity: '120',
-    size: '4–8 cm shell length',
-    condition: 'Live, whole; retained',
-  },
-  {
-    species: 'Turf algae assemblage (mixed Rhodophyta)',
-    quantity: '60',
-    size: '10 × 10 cm quadrat scrapes',
-    condition: 'Preserved in ethanol',
-  },
-  {
-    species: 'Ochre sea star (Pisaster ochraceus)',
-    quantity: '24',
-    size: '8–15 cm radius',
-    condition: 'Live; measured and released',
-  },
-];
+// The permit's specimen list (the form's "size" is the permit's portion).
+export const seedSpecimens: SpecimenType[] = pdc.specimens.map((sp) => ({
+  species: sp.species,
+  quantity: sp.quantity,
+  size: sp.portion,
+  condition: sp.condition,
+}));
 
 // Prefilled Data-collection answers so the Draft renders as work-in-progress
 // rather than a blank slate (consistent with the Project information step). The
 // `*InProposal` flags model the "Answered in study proposal" shortcut, which
 // disables the matching narrative field. INVENTED, deterministic.
+const factOf = (rows: readonly MetaRow[], key: string) => rows.find((r) => r.key === key);
+const coll = pdc.collection as readonly MetaRow[];
+const lab = pdc.laboratory as readonly MetaRow[];
+const official = (r?: MetaRow) => r?.contact;
 export const dataCollection = {
-  // Specimen collection
-  collectsSpecimens: true,
-  collectionRationaleInProposal: false,
-  // Left blank on purpose: the other gap `applicationIssues` reports (data-collection).
-  // Neither typed nor deferred to the proposal, so the field's error state reads true.
+  // Specimen collection — the rationale is answered in the study proposal.
+  collectsSpecimens: pdc.involvesCollection,
+  collectionRationaleInProposal: !!factOf(coll, 'Collection rationale')?.href,
   collectionRationale: '',
   curation: {
-    facility: 'Cascadia Marine Research Institute — Invertebrate Collection',
-    official: 'Dr. Lena Okafor',
-    phone: '(415) 555-0180',
-    email: 'collections@cascadiamarine.org',
+    facility: factOf(coll, 'Curation facility')?.value ?? '',
+    official: official(factOf(coll, 'Curation — responsible official'))?.name ?? '',
+    phone: official(factOf(coll, 'Curation — responsible official'))?.phone ?? '',
+    email: official(factOf(coll, 'Curation — responsible official'))?.email ?? '',
   },
 
   // Laboratory work
-  labWork: true,
+  labWork: pdc.involvesLaboratory,
   laboratory: {
-    facility: 'CMRI Coastal Ecophysiology Laboratory',
-    official: 'Dr. Theo Nakamura',
-    phone: '(415) 555-0185',
-    email: 't.nakamura@cascadiamarine.org',
-    startDate: '2026-10-01',
-    endDate: '2028-06-30',
+    facility: factOf(lab, 'Laboratory facility')?.value ?? '',
+    official: official(factOf(lab, 'Laboratory — responsible official'))?.name ?? '',
+    phone: official(factOf(lab, 'Laboratory — responsible official'))?.phone ?? '',
+    email: official(factOf(lab, 'Laboratory — responsible official'))?.email ?? '',
+    startDate: pj.projectWindow.startISO,
+    endDate: pj.projectWindow.endISO,
   },
 
-  // Additional information
-  studyProceduresInProposal: false,
-  studyProcedures:
-    'The study uses a stratified design across three tidal heights (low, mid, high) at each of ' +
-    'four sites, with fixed photo-quadrats and paired grazer-exclusion and control plots. Field ' +
-    'methods follow MARINe rocky-intertidal protocols; laboratory analyses include condition ' +
-    'indices, gonad staging, and HSP70 assays. Five replicate quadrats per stratum per site are ' +
-    'analyzed with linear mixed-effects models (site as a random effect). Power analyses ' +
-    '(power = 0.80, α = 0.05) justify the replicate count for the hypothesized effect sizes.',
-  // Left to the study proposal here, to demonstrate the disabled-field shortcut.
-  dataLocationInProposal: true,
-  dataLocation: '',
+  // Additional information — procedures are in the proposal; the data location is typed.
+  studyProceduresInProposal: !!factOf(lab, 'Study procedures')?.href,
+  studyProcedures: '',
+  dataLocationInProposal: false,
+  dataLocation: factOf(lab, 'Location of data & data products')?.value ?? '',
 
-  // Optional supporting-document attachments (filenames are DATA, not bytes). One
-  // is attached under the collection rationale; procedures rely on the proposal.
-  collectionDocs: ['Collection-power-analysis.pdf'] as string[],
+  collectionDocs: [] as string[],
   procedureDocs: [] as string[],
 };
 
@@ -292,70 +254,46 @@ export const dataCollection = {
 // forms, and a final gate that requires an insurance addendum when the project
 // goes "above and beyond simple use". Seeded so the Draft renders as
 // work-in-progress. All INVENTED, domain-credible, deterministic.
+const facts = pad.facts as readonly MetaRow[];
+const yes = (key: string) => factOf(facts, key)?.value === 'Yes';
 export const additionalDocs = {
-  // Name shown on the standard condition agreement the PI must sign. Matches the
-  // applicant persona (the submitter is the PI for this study).
-  principalInvestigator: `${applicant.firstName} ${applicant.lastName}`,
+  // Name on the standard condition agreement the PI signs.
+  principalInvestigator: rt.principalInvestigator.name,
 
-  // Soil disturbance — fixed grazer-exclusion plots are bolted into intertidal
-  // rock, so this study DOES disturb the ground.
-  soilDisturbance: true,
-  soilDisturbanceDetails:
-    'Fixed grazer-exclusion and control plots are secured with stainless-steel eyebolts set into ' +
-    'the rock bench at each of four sites (16 plots total, ~10 mm holes). Disturbance is limited to ' +
-    'bolt placement; no soil cores are taken. On permit completion, bolts are removed and holes ' +
-    'filled with marine epoxy to restore the surface. The 16-plot count follows a power analysis ' +
-    '(α = 0.05, power = 0.80) sized to detect a 20% treatment effect on turf cover.',
+  soilDisturbance: yes('Involves soil disturbance'),
+  soilDisturbanceDetails: factOf(facts, 'Involves soil disturbance')?.detail ?? '',
 
-  // Additional permits — coastal collection needs a CDFW SCP; diving needs no
-  // separate state permit but is disclosed under "beyond simple use" below.
-  // The Yes branch is satisfied by EITHER an upload OR this rationale (at least
-  // one). Here the SCP is still pending, so the applicant explains rather than
-  // uploads — which is exactly the "don't have all permits yet" case.
-  additionalPermits: true,
-  additionalPermitsDetails:
-    'California Department of Fish & Wildlife Scientific Collecting Permit (SCP) — application ' +
-    'submitted, pending. California Coastal Commission — coordinated through the district; no ' +
-    'separate coastal development permit required for non-structural monitoring.',
+  additionalPermits: yes('Requires additional federal/state/local permits'),
+  additionalPermitsDetails: pad.additionalPermitsDetails,
 
-  // Study supporting information — Budget and Literature cited are narrative text
-  // fields with the "Answered in study proposal" defer shortcut (same pattern as
-  // the Data collection narratives). Budget is typed here; Literature is deferred
-  // to the proposal, to demonstrate both states. The proposal itself is uploaded.
-  budgetInProposal: false,
-  budget:
-    'Funded by NOAA Climate Program Office (award pending) and CMRI internal reserves. Major ' +
-    'categories: field salaries and dive support ($48,000), laboratory assays incl. HSP70 and ' +
-    'condition indices ($22,000), consumables and permits ($6,500), and data management ($8,000). ' +
-    'Total requested: $84,500 over the two-year study period.',
-  literatureInProposal: true,
+  // Budget and literature are both answered in the study proposal.
+  budgetInProposal: !!factOf(facts, 'Budget')?.href,
+  budget: '',
+  literatureInProposal: !!factOf(facts, 'Literature cited')?.href,
   literature: '',
 
-  // Beyond simple use — the team includes a certified scientific diver, which is
-  // explicitly a "beyond simple use" activity and triggers the insurance addendum.
-  beyondSimpleUse: true,
+  beyondSimpleUse: yes('Activities beyond simple use (aircraft/drones, diving, trapping, etc.)'),
 
-  // Attachment filenames (DATA, not bytes) for the documents the complete
-  // application carries. The additional-permits rationale is used in place of an
-  // upload (the SCP is still pending), so that upload list stays empty. The two
-  // signed agreement forms and the insurance addendum are the required, signed
-  // uploads a submittable application must include.
-  soilDisturbanceMap: 'Soil-disturbance-areas-topo.pdf',
-  additionalPermitsDocs: [] as string[],
-  studyProposalFile: 'CMRI-intertidal-study-proposal.pdf',
-  conditionAgreementFile: 'Standard-condition-agreement-signed.pdf',
-  waiverIndemnityFile: 'Waiver-and-indemnity-agreement-signed.pdf',
-  insuranceAddendumFile: 'Insurance-addendum-signed.pdf',
+  // Attachment filenames — the permit's uploaded documents.
+  soilDisturbanceMap: fileOf(/Study Area Supporting/),
+  additionalPermitsDocs: [fileOf(/Additional Permit Supporting/)].filter(Boolean) as string[],
+  studyProposalFile: fileOf(/Study Proposal/),
+  conditionAgreementFile: fileOf(/Standard Conditions Agreement/),
+  waiverIndemnityFile: fileOf(/Waiver and Indemnity/),
+  // Diving goes beyond simple use; the signed liability waiver addendum covers it.
+  insuranceAddendumFile: fileOf(/DPR65B/),
 };
 
 // ── Application completeness (prototype) ─────────────────────────────────────
 // The permit can't advance to the review step until every required item is
-// provided. This models a Draft still missing items on four pages — attempting to
-// continue to review lists them in the "Application incomplete" modal, and each
+// provided. For a NEW application (apply.astro with no query) this models a Draft
+// still missing items: the annual-report date (cleared on load) and the two
+// signed agreement uploads (the upload lists start empty). Revise / amend start
+// from the complete, submitted answers, so they skip this gate. Attempting to
+// continue to review lists the gaps in the "Application incomplete" modal, and each
 // listed page shows an error banner naming exactly what to fix. `stepId` keys back
-// to `applicationSteps`, so the page label comes from there. Study Areas is absent
-// on purpose: it's complete. Deterministic; a real app would derive this from the
-// live answers. INVENTED but tied to real seeded gaps (e.g. no PI résumé on file).
+// to `applicationSteps`, so the page label comes from there. Deterministic; a real
+// app would derive this from the live answers.
 /** A missing requirement that maps to a single concrete cds-* input, so the field
  *  itself can carry Carbon's `invalid` state (red border + `invalid-text`) — not
  *  just the page banner. Requirements that are uploads, rosters, or "either/or"
@@ -379,33 +317,14 @@ export interface StepIssues {
 
 export const applicationIssues: StepIssues[] = [
   {
-    stepId: 'research-team',
-    missing: [
-      'Upload the Principal Investigator’s résumé.',
-      'Add a phone number for every additional research participant.',
-    ],
-  },
-  {
     stepId: 'project-info',
     missing: ['Enter the anticipated annual report due date.'],
     fields: [{ fieldId: 'annual-report-date', message: 'Required to submit.' }],
   },
   {
-    stepId: 'data-collection',
-    missing: [
-      'Provide a collection rationale, or mark it as answered in the study proposal.',
-    ],
-    fields: [
-      {
-        fieldId: 'collection-rationale',
-        message: 'Required to submit, or mark it as answered in the study proposal.',
-      },
-    ],
-  },
-  {
     stepId: 'additional-docs',
     missing: [
-      'Provide additional-permits documentation, or a rationale in its place.',
+      'Upload the signed standard condition agreement form.',
       'Upload the signed waiver and indemnity agreement form.',
     ],
   },

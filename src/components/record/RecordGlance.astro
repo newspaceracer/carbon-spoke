@@ -4,6 +4,7 @@
 // item a reviewer must check, each linking to the passage in the record that
 // explains it. Composes stock cds-tile surfaces on a Carbon subgrid — place it
 // directly in a grid column (it inherits that column's span as its column count).
+// Pass no facts for the attention list alone (the review wizard's narrow column).
 import Avatar from '../Avatar.astro';
 
 interface Fact {
@@ -35,6 +36,7 @@ const lgSpan = Math.max(3, Math.floor(12 / Math.max(1, facts.length)));
 
 <section class="glance" aria-labelledby="glance-title">
   <h2 id="glance-title" class="cds--visually-hidden">At a glance</h2>
+  {facts.length > 0 && (
   <div class="cds--subgrid cds--subgrid--wide glance__grid">
     {facts.map((f) => (
       <div class={`cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-4 cds--lg:col-span-${lgSpan}`}>
@@ -49,6 +51,7 @@ const lgSpan = Math.max(3, Math.floor(12 / Math.max(1, facts.length)));
       </div>
     ))}
   </div>
+  )}
 
   {attention.length > 0 && (
     <div class="attention">

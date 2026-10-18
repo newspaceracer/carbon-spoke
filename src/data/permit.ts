@@ -236,9 +236,9 @@ export const permit = {
       // The applicant persona (see data/application.ts) — so the Researcher identity
       // owns this permit as its submitter and Story 11's scoping has a positive path.
       name: 'Renata Halvorsen',
-      phone: '(415) 555-0173',
-      email: 'r.halvorsen@cascadiamarine.org',
-      address: '18 Nautilus Court, Mill Valley, CA 94941',
+      phone: '(707) 555-0176',
+      email: 'r.halvorsen@humboldt.edu',
+      address: '1 Harpst St, Arcata, CA 95521',
       cvHref: '/docs/renata-halvorsen-cv.pdf',
     } as Contact,
     principalInvestigator: {
