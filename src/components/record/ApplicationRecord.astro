@@ -127,7 +127,7 @@ const headerStats = [
   { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
   { label: 'Submitted', value: 'Jul 9, 2026' },
   { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
-  { label: 'Annual report due', value: pj.annualReport.requiredLabel },
+  { label: 'Final report due', value: pj.annualReport.requiredLabel },
 ];
 
 const sections = [
@@ -151,8 +151,8 @@ const teamCards: { roles: string; contact: Contact; org?: boolean }[] = [
 const keyDates = [
   { label: 'Project dates', value: `${pj.projectWindow.startLabel} – ${pj.projectWindow.endLabel}` },
   { label: 'Permit requested', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
-  { label: 'Annual report target', value: pj.annualReport.tentativeLabel },
-  { label: 'Annual report due', value: pj.annualReport.requiredLabel },
+  { label: 'Final report target', value: pj.annualReport.tentativeLabel },
+  { label: 'Final report due', value: pj.annualReport.requiredLabel },
 ];
 
 const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/><path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/></svg>';
@@ -187,7 +187,7 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
       </dl>
     </PageHeader>
 
-    <div class="field cds--g10">
+    <div class="field">
       <div class="cds--css-grid">
         <!-- Where the review stands once decided (returned / rejected / approved). -->
         <div class="notice cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" data-rw-notice></div>
@@ -578,7 +578,8 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
   .banner-stat__value { margin: var(--cds-spacing-02, 0.25rem) 0 0; color: var(--cds-text-primary, #f4f4f4); }
   .banner-tags { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-03, 0.5rem); margin-top: var(--cds-spacing-05, 1rem); }
 
-  /* The record sits on a full-bleed g10 field so its white surfaces lift off it. */
+  /* The record sits on a full-bleed field in the page's own theme (g10 by default,
+     g90 in dark mode — never forced) so its raised surfaces lift off it. */
   .field {
     background: var(--cds-background, #f4f4f4);
     margin-inline: calc(50% - 50vw);

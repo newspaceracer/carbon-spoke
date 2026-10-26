@@ -2,9 +2,12 @@
 // Step 1 (left column) of the finalize wizard — THE APPLICATION AS THE ANALYST
 // REVIEWS IT. Same read-back format the submitter saw at their summary step.
 //
-// EVERY item in the record is editable through ONE shared modal: each carries an
-// Edit button (EditButton) and the display bindings the modal re-renders. The
-// per-item field lists ("specs") are built below and handed to the client module
+// The record itself is five shared section components
+// (src/components/application/*) — the SAME sections the permit detail page
+// composes read-only inside its tabs, so the two surfaces can't drift. Here they
+// render EDITABLE: every item carries an Edit button (EditButton) and the display
+// bindings the shared modal re-renders. The per-item field lists ("specs") live in
+// src/lib/application-record.ts and are handed to the client module
 // src/lib/record-edit.ts, which builds the modal's Carbon controls, persists edits
 // in the browser, and notifies the page (final-letter feeds title / category / PI /
 // organization into the letter). Study-area parks (filterable multi-select +
@@ -13,216 +16,28 @@
 //
 // `collapsible` (opt-in, off by default so the finalize wizard is unchanged):
 // renders each section as a sticky, collapsible disclosure (via ReviewSection),
-// adds Expand/Collapse-all, and reorders Project information first. Used by the B2
-// review-layout study; the toggling is wired by that page's script.
-import ReviewSection from './ReviewSection.astro';
-import ContactCard from './ContactCard.astro';
-import FactGrid from './FactGrid.astro';
+// adds Expand/Collapse-all, and reorders Project information first. The toggling
+// is wired by the host page's script.
+import ResearchTeamSection from './application/ResearchTeamSection.astro';
+import ProjectInfoSection from './application/ProjectInfoSection.astro';
+import StudyAreasSection from './application/StudyAreasSection.astro';
+import DataCollectionSection from './application/DataCollectionSection.astro';
+import AdditionalDocsSection from './application/AdditionalDocsSection.astro';
 import PermitCalendar from './PermitCalendar.astro';
-import { teamCards } from '../lib/team-cards';
-import YesNoStatement from './YesNoStatement.astro';
-import { yesNo } from '../lib/yes-no';
-import EditButton from './EditButton.astro';
-import type { EditField, EditSpec } from '../lib/record-edit';
-import { permit, badgesForSection, type MetaRow, type Contact } from '../data/permit';
-import { parks } from '../data/parks';
-import { answerIdFor, INSURANCE_ANCHOR } from '../lib/record-summary';
+import { permit } from '../data/permit';
+import { editPayload, studyAreaOptions } from '../lib/application-record';
+import '../styles/application-record.css';
 
 interface Props {
-  /** Render sections as sticky, collapsible disclosures + reorder (B2 study). */
+  /** Render sections as sticky, collapsible disclosures + reorder (the wizard). */
   collapsible?: boolean;
   /** The host paints each section as a raised panel → content one layer deeper
    *  (see ReviewSection `layered`). */
   layered?: boolean;
 }
 const { collapsible = false, layered = false } = Astro.props;
-
-// Visual order used only in collapsible mode (CSS `order` + sticky-stack offset):
-// Project information leads, then the rest in reading order.
-const ORDER = { project: 0, team: 1, study: 2, data: 3, docs: 4 };
-
-// Project categories — the CA State Parks scientific-research classifications the
-// analyst can reclassify the permit into (invented, credible). The application's
-// own category is guaranteed present so the dropdown always has a valid seed.
-const categories = [
-  'Marine Aquatic Resources',
-  'Freshwater Aquatic Resources',
-  'Botanical Resources',
-  'Terrestrial Wildlife',
-  'Geology & Paleontology',
-  'Cultural & Archaeological Resources',
-];
-const categoryOptions = categories.includes(permit.category) ? categories : [permit.category, ...categories];
-
-const t = permit.researchTeam;
-const pi = t.principalInvestigator;
-const org = t.organization;
-const fieldLead = t.fieldLead;
-const submitter = t.submitter;
 const pj = permit.projectInfo;
-const dc = permit.dataCollection;
-const ad = permit.additionalDocs;
-const sa = permit.studyAreas;
-// When not all personnel are employed/insured, the application requires a signed
-// Liability waiver addendum (DPR65B) — find it among the uploads to link it.
-const waiverDoc = ad.files.find((f) => /DPR65B/i.test(f.type));
-// Yes/no screening facts that carry statement phrasing render as statements; the rest
-// (Budget, Literature cited …) stay label-over-value rows.
-const statementFacts = (ad.facts as readonly MetaRow[]).filter((r) => r.boolean && r.statements);
-const otherFacts = (ad.facts as readonly MetaRow[]).filter((r) => !(r.boolean && r.statements));
-
-// Requested dates as tiles — the same read as Data collection's "Lab study window"
-// (label over a heading-size range), built from the structured date labels. The two
-// annual-report dates aren't a range, so they stack as labeled entries in one tile.
-const requestedDates: MetaRow[] = [
-  { key: 'Project dates', value: `${pj.projectWindow.startLabel} – ${pj.projectWindow.endLabel}` },
-  { key: 'Permit requested dates', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
-  { key: 'Annual report', entries: [
-    { label: 'Tentative completion', value: pj.annualReport.tentativeLabel },
-    { label: 'Required by', value: pj.annualReport.requiredLabel },
-  ] },
-];
-
-// ── Record editing specs ─────────────────────────────────────────────────────
-// One entry per editable item, keyed to its Edit button + [data-edit-scope].
-// `values` are the seeds (saved edits override them client-side); `display` maps a
-// data-bind name to a template when the shown text is derived (date ranges, "—").
-const team = teamCards([
-  { role: 'Organization', contact: org, kind: 'organization' },
-  { role: 'Principal investigator', contact: pi, cvHref: pi.cvHref },
-  { role: 'Person in direct charge of field work', contact: fieldLead, cvHref: fieldLead.cvHref },
-  { role: 'Submitter', contact: submitter, cvHref: submitter.cvHref },
-]);
-const contactFields: EditField[] = [
-  { name: 'name', label: 'Name', type: 'text' },
-  { name: 'phone', label: 'Phone', type: 'text' },
-  { name: 'email', label: 'Email', type: 'text' },
-  { name: 'address', label: 'Address', type: 'text' },
-];
-const contactValues = (c: Contact) => ({ name: c.name, phone: c.phone ?? '', email: c.email ?? '', address: c.address ?? '' });
-// A fact answered either by pointing at the study proposal or by a typed answer.
-const answerFields = (label: string): EditField[] => [
-  { name: 'inProposal', label: 'Answered in study proposal', type: 'check' },
-  { name: 'value', label, type: 'textarea', showIf: '!inProposal' },
-];
-const factSpecs = (prefix: string, section: string, rows: readonly MetaRow[]) =>
-  Object.fromEntries(rows.map((r, i): [string, EditSpec] => [`${prefix}-${i}`,
-    r.contact
-      ? { section, title: r.key, fields: contactFields, values: contactValues(r.contact) }
-      : r.href
-        ? { section, title: r.key, fields: answerFields(r.key), values: { inProposal: true, value: '' } }
-        : { section, title: r.key, fields: [{ name: 'value', label: r.key, type: 'textarea' }], values: { value: r.value ?? '' } },
-  ]));
-
-const editSpecs: Record<string, EditSpec> = {
-  ...Object.fromEntries(team.map((c, i): [string, EditSpec] => [`team-${i}`, {
-    section: 'Research team', title: c.roles.join(' · '), fields: contactFields, values: contactValues(c.contact),
-    role: c.roles.includes('Organization') ? 'letter-org' : c.roles.includes('Principal investigator') ? 'letter-pi' : undefined,
-  }])),
-  ...Object.fromEntries(t.participants.map((p, i): [string, EditSpec] => [`participant-${i}`, {
-    section: 'Additional participants', title: p.name,
-    fields: [
-      { name: 'name', label: 'Name', type: 'text' },
-      { name: 'title', label: 'Title', type: 'text' },
-      { name: 'email', label: 'Email', type: 'text' },
-      { name: 'phone', label: 'Phone', type: 'text' },
-      { name: 'comments', label: 'Comments', type: 'textarea' },
-    ],
-    values: { name: p.name, title: p.title ?? '', email: p.email ?? '', phone: p.phone ?? '', comments: p.comments ?? '' },
-    display: { comments: '{comments|dash}' },
-  }])),
-  'personnel-insured': {
-    section: 'Research team', title: 'Personnel coverage',
-    fields: [{ name: 'value', label: 'Are all personnel employed or insured by the institution?', type: 'yesno', ...yesNo.personnelInsured }],
-    values: { value: t.personnelInsured },
-  },
-  'project-title': {
-    section: 'Project information', title: 'Project title', role: 'letter-title',
-    fields: [{ name: 'title', label: 'Project title', type: 'text' }], values: { title: permit.name },
-  },
-  'project-category': {
-    section: 'Project information', title: 'Category', role: 'letter-category',
-    fields: [{ name: 'category', label: 'Category', type: 'select', options: categoryOptions }], values: { category: permit.category },
-  },
-  'project-purpose': {
-    section: 'Project information', title: 'Project purpose',
-    fields: [{ name: 'text', label: 'Project purpose', type: 'textarea' }], values: { text: pj.purpose },
-  },
-  'project-benefits': {
-    section: 'Project information', title: 'Anticipated benefits',
-    fields: [{ name: 'text', label: 'Anticipated benefits to the California State Park System', type: 'textarea' }], values: { text: pj.benefits },
-  },
-  // Date windows use ONE range picker, exactly as the application's Project dates do.
-  'dates-0': {
-    section: 'Requested dates', title: 'Project dates',
-    fields: [{ name: 'range', label: 'Project dates', type: 'daterange', startLabel: 'Project start date', endLabel: 'Project end date' }],
-    values: { start: pj.projectWindow.startISO, end: pj.projectWindow.endISO }, display: { value: '{start|date} – {end|date}' },
-  },
-  'dates-1': {
-    section: 'Requested dates', title: 'Permit requested dates',
-    fields: [{ name: 'range', label: 'Permit requested dates', type: 'daterange', startLabel: 'Permit requested start date', endLabel: 'Permit requested end date' }],
-    values: { start: permit.activeWindow.startISO, end: permit.activeWindow.endISO }, display: { value: '{start|date} – {end|date}' },
-  },
-  'dates-2': {
-    section: 'Requested dates', title: 'Annual report',
-    fields: [{ name: 'tentative', label: 'Tentative completion', type: 'date' }, { name: 'required', label: 'Required by', type: 'date' }],
-    values: { tentative: pj.annualReport.tentativeISO, required: pj.annualReport.requiredISO },
-    display: { 'entry-0': '{tentative|date}', 'entry-1': '{required|date}' },
-  },
-  'field-occurrences': {
-    section: 'Project information', title: 'Field investigation occurrences',
-    // The application's roster pattern (range picker + Add occurrence + table), on
-    // the structured ISO sessions — not free text.
-    fields: [{ name: 'occurrences', label: 'Field investigation occurrences', type: 'occurrences',
-      helper: 'Each discrete window your team will be on-site. Add a start and end date for every occurrence.' }],
-    values: { occurrences: pj.fieldSessions.map((s) => ({ ...s })) },
-  },
-  'dc-collection': {
-    section: 'Data collection', title: 'Specimen collection',
-    fields: [{ name: 'value', label: 'Does the project involve specimen collection?', type: 'yesno', ...yesNo.specimenCollection }],
-    values: { value: dc.involvesCollection },
-  },
-  'dc-laboratory': {
-    section: 'Data collection', title: 'Laboratory work',
-    fields: [{ name: 'value', label: 'Does the project involve laboratory work?', type: 'yesno', ...yesNo.labWork }],
-    values: { value: dc.involvesLaboratory },
-  },
-  ...factSpecs('collection', 'Collection & curation', dc.collection),
-  ...factSpecs('laboratory', 'Laboratory & analysis', dc.laboratory),
-  ...Object.fromEntries((ad.facts as readonly MetaRow[]).map((r, i): [string, EditSpec] => [`doc-fact-${i}`,
-    r.boolean && r.statements
-      ? {
-          section: 'Additional documents', title: r.key,
-          fields: [
-            { name: 'value', label: r.key, type: 'yesno', ...r.statements },
-            { name: 'detail', label: 'Details', type: 'textarea', showIf: 'value' },
-          ],
-          values: { value: r.value === 'Yes', detail: r.detail ?? '' },
-        }
-      : r.href
-        ? { section: 'Additional documents', title: r.key, fields: answerFields(r.key), values: { inProposal: true, value: '' } }
-        : { section: 'Additional documents', title: r.key, fields: [{ name: 'value', label: r.key, type: 'textarea' }], values: { value: r.value ?? '' } },
-  ])),
-};
-const editPayload = { storageKey: `record-edits-${permit.id}`, specs: editSpecs };
-const factIndex = (r: MetaRow) => (ad.facts as readonly MetaRow[]).indexOf(r);
-
-// Study-area parks options for the filterable multi-select (same control as the
-// application's Study areas step). Scoped to this permit's districts: the state
-// parks directory for those districts, plus any already-selected units the
-// directory doesn't list, so the current selection is always representable.
-const permitDistrictNames = sa.districts.map((d) => d.name);
-const directoryParks = parks
-  .filter((p) => permitDistrictNames.includes(p.district))
-  .map((p) => ({ name: p.name, district: p.district }));
-const directoryNames = new Set(directoryParks.map((p) => p.name));
-const seededExtras = sa.districts.flatMap((d) =>
-  d.parks.filter((name) => !directoryNames.has(name)).map((name) => ({ name, district: d.name })),
-);
-const studyAreaOptions = [...directoryParks, ...seededExtras].sort((a, b) => a.name.localeCompare(b.name));
-
-const fileGlyph =
-  'M25.7 9.3l-7-7A1 1 0 0018 2H8a2 2 0 00-2 2v24a2 2 0 002 2h16a2 2 0 002-2V10a1 1 0 00-.3-.7zM18 4.4l5.6 5.6H18zM24 28H8V4h8v6a2 2 0 002 2h6z';
+const frame = { collapsible, layered };
 ---
 
 <div class:list={['app-review', collapsible && 'app-review--collapsible']}>
@@ -244,256 +59,11 @@ const fileGlyph =
     </div>
   )}
 
-  <!-- ── Research team ────────────────────────────────────────────────────── -->
-  <ReviewSection title="Research team" collapsible={collapsible} layered={layered} orderIndex={ORDER.team} {...badgesForSection('team')}>
-    <div class="subblock">
-      <div class="contact-grid">
-        {team.map((c, i) => (
-          <ContactCard role={c.roles} contact={c.contact} kind={c.kind} cvHref={c.cvHref} editKey={`team-${i}`}
-            wide={c.roles.includes('Organization') || c.roles.includes('Principal investigator')} />
-        ))}
-      </div>
-    </div>
-
-    <div class="subblock">
-      <h3 class="sub-head t-heading-02">Additional participants</h3>
-      {t.participants.length ? (
-        <cds-table class="ro-table">
-          <cds-table-head>
-            <cds-table-header-row>
-              <cds-table-header-cell>Name</cds-table-header-cell>
-              <cds-table-header-cell>Contact</cds-table-header-cell>
-              <cds-table-header-cell>Comments</cds-table-header-cell>
-              <cds-table-header-cell>Actions</cds-table-header-cell>
-            </cds-table-header-row>
-          </cds-table-head>
-          <cds-table-body>
-            {t.participants.map((p, i) => (
-              <cds-table-row data-edit-scope={`participant-${i}`}>
-                <cds-table-cell>
-                  <span class="stack__primary t-body-01" data-bind="name">{p.name}</span>
-                  <span class="stack__secondary t-label-01" data-bind="title" data-bind-hide-empty hidden={!p.title}>{p.title}</span>
-                </cds-table-cell>
-                <cds-table-cell>
-                  <span class="stack__primary t-body-01" data-bind="email">{p.email}</span>
-                  <span class="stack__secondary t-label-01" data-bind="phone" data-bind-hide-empty hidden={!p.phone}>{p.phone}</span>
-                </cds-table-cell>
-                <cds-table-cell><span data-bind="comments">{p.comments || '—'}</span></cds-table-cell>
-                <cds-table-cell><EditButton item={`participant-${i}`} label={p.name} /></cds-table-cell>
-              </cds-table-row>
-            ))}
-          </cds-table-body>
-        </cds-table>
-      ) : (
-        <p class="sub-note t-body-01">No additional participants added.</p>
-      )}
-    </div>
-
-    <!-- Yes/no answer phrased as a statement — the label IS the answer (no Yes/No). -->
-    <div class="subblock">
-      <ul class="statements">
-        <li class="statement" id={INSURANCE_ANCHOR} data-edit-scope="personnel-insured">
-          {/* The waiver line belongs to the "No" answer, so it shows/hides with edits. */}
-          <YesNoStatement value={t.personnelInsured} statements={yesNo.personnelInsured} bind="value" detailWhen="no">
-            {waiverDoc ? (
-              <>Signed liability waiver addendum on file: <cds-link href={waiverDoc.href} size="lg" target="_blank" rel="noopener" data-view-doc={waiverDoc.href}>{waiverDoc.name}</cds-link></>
-            ) : 'Signed liability waiver addendum (DPR65B) required — not uploaded.'}
-          </YesNoStatement>
-          <EditButton item="personnel-insured" label="personnel coverage" />
-        </li>
-      </ul>
-    </div>
-  </ReviewSection>
-
-  <!-- ── Project information ──────────────────────────────────────────────── -->
-  <ReviewSection title="Project information" collapsible={collapsible} layered={layered} orderIndex={ORDER.project} {...badgesForSection('project')}>
-    <!-- Label-over-value items, each with its Edit button. Title + category print on
-         the letter (the page listens for their edits). -->
-    <div class="subblock">
-      <h3 class="sub-head t-heading-02">Project</h3>
-      {[
-        { key: 'project-title', label: 'Project title', field: 'title', value: permit.name },
-        { key: 'project-category', label: 'Category', field: 'category', value: permit.category },
-        { key: 'project-purpose', label: 'Project purpose', field: 'text', value: pj.purpose },
-        { key: 'project-benefits', label: 'Anticipated benefits to the California State Park System', field: 'text', value: pj.benefits },
-      ].map((item) => (
-        <div class="narrative" data-edit-scope={item.key}>
-          <div class="item-head">
-            <p class="narrative__label t-label-01">{item.label}</p>
-            <EditButton item={item.key} label={item.label.toLowerCase()} />
-          </div>
-          <p class="narrative__body t-body-01" data-bind={item.field}>{item.value}</p>
-        </div>
-      ))}
-    </div>
-
-    <div class="subblock">
-      <div class="roster__head sub-head-row">
-        <h3 class="sub-head t-heading-02">Requested dates</h3>
-        <cds-button kind="ghost" size="sm" data-open-field-cal>View in calendar</cds-button>
-      </div>
-      <FactGrid rows={requestedDates} min="20rem" tiles editPrefix="dates" />
-    </div>
-
-    <div class="subblock" data-edit-scope="field-occurrences">
-      <div class="roster__head sub-head-row">
-        <h3 class="sub-head t-heading-02">Field investigation occurrences</h3>
-        <EditButton item="field-occurrences" label="field investigation occurrences" />
-      </div>
-      {/* `hidden` is spread in only when empty: on a custom element Astro would
-           render hidden={false} as hidden="false", which still hides it. */}
-      <cds-unordered-list data-bind-lines="occurrences" data-show-if="occurrences" {...(pj.fieldOccurrences.length ? {} : { hidden: true })}>
-        {pj.fieldOccurrences.map((o) => (
-          <cds-list-item>{o}</cds-list-item>
-        ))}
-      </cds-unordered-list>
-      <p class="sub-note t-body-01" data-hide-if="occurrences" hidden={pj.fieldOccurrences.length > 0}>No field investigation occurrences added.</p>
-    </div>
-  </ReviewSection>
-
-  <!-- ── Study areas ──────────────────────────────────────────────────────── -->
-  <ReviewSection title="Study areas" collapsible={collapsible} layered={layered} orderIndex={ORDER.study} {...badgesForSection('study')}>
-    <!-- Read-only: the authorized parks grouped by district (district = label, parks =
-         a list). Editing happens in the Study areas modal (below), opened by Edit.
-         The page script re-renders #sa-readonly from its parks state. -->
-    <div class="subblock">
-      <div class="roster__head sub-head-row">
-        <h3 class="sub-head t-heading-02">Study area parks</h3>
-        <EditButton item="study-areas" label="study area parks" />
-      </div>
-      <div id="sa-readonly" class="sa-readonly">
-        {sa.districts.filter((d) => d.parks.length).map((d) => (
-          <div class="narrative">
-            <p class="narrative__label t-label-01">{d.name} ({d.parks.length})</p>
-            <cds-unordered-list>
-              {[...d.parks].sort((a, b) => a.localeCompare(b)).map((name) => <cds-list-item>{name}</cds-list-item>)}
-            </cds-unordered-list>
-          </div>
-        ))}
-      </div>
-      <p id="sa-empty" class="sub-note t-body-01" hidden>No study area parks yet.</p>
-    </div>
-  </ReviewSection>
-
-  <!-- ── Data collection ──────────────────────────────────────────────────── -->
-  <ReviewSection title="Data collection" collapsible={collapsible} layered={layered} orderIndex={ORDER.data} {...badgesForSection('data')}>
-    <!-- Two parts, each led by its gate answer as a statement (same read as
-         Additional documents): specimen collection → Specimens + Collection &
-         curation; laboratory work → Laboratory & analysis. A "Does NOT" answer
-         collapses the content directly under it. -->
-    {[
-      { scope: 'dc-collection', on: dc.involvesCollection, statements: yesNo.specimenCollection, gateLabel: 'specimen collection',
-        heading: 'Collection & curation', prefix: 'collection', rows: dc.collection as readonly MetaRow[], specimens: true },
-      { scope: 'dc-laboratory', on: dc.involvesLaboratory, statements: yesNo.labWork, gateLabel: 'laboratory work',
-        heading: 'Laboratory & analysis', prefix: 'laboratory', rows: dc.laboratory as readonly MetaRow[], specimens: false },
-    ].map((part) => (
-      <div class="dc-part" data-edit-scope={part.scope}>
-        <ul class="statements dc-gate">
-          <li class="statement">
-            <YesNoStatement value={part.on} statements={part.statements} bind="value" />
-            <EditButton item={part.scope} label={part.gateLabel} />
-          </li>
-        </ul>
-        {part.specimens && (
-          <div class="subblock" data-show-if="value" hidden={!part.on}>
-            <div class="roster__head">
-              <h3 class="sub-head t-heading-02">Specimens</h3>
-              <cds-button id="add-specimen" kind="tertiary" size="md">Add specimen</cds-button>
-            </div>
-            <p class="sub-note t-body-01">The taxa and quantities authorized for collection. Add, edit, or remove a specimen. This list prints on the permit as the authorized collection.</p>
-            <cds-table id="specimen-table" class="ro-table">
-              <cds-table-head>
-                <cds-table-header-row>
-                  <cds-table-header-cell>Species</cds-table-header-cell>
-                  <cds-table-header-cell>Quantity</cds-table-header-cell>
-                  <cds-table-header-cell>Portion</cds-table-header-cell>
-                  <cds-table-header-cell>Condition</cds-table-header-cell>
-                  <cds-table-header-cell>Actions</cds-table-header-cell>
-                </cds-table-header-row>
-              </cds-table-head>
-              <cds-table-body id="specimen-body"></cds-table-body>
-            </cds-table>
-            <p id="specimen-empty" class="sub-note t-body-01" hidden>No specimens added yet.</p>
-          </div>
-        )}
-        <div class="subblock" data-show-if="value" hidden={!part.on}>
-          <h3 class="sub-head t-heading-02">{part.heading}</h3>
-          {/* Facilities + officials keep the app's common contact-card pattern. */}
-          <div class="contact-grid dc-contacts">
-            {part.rows.map((r, i) => r.contact && (
-              <ContactCard role={r.key} contact={r.contact} kind={r.contactKind} editKey={`${part.prefix}-${i}`} />
-            ))}
-          </div>
-          <dl class="review">
-            {part.rows.map((r, i) => !r.contact && (
-              <div class="review__row" data-edit-scope={`${part.prefix}-${i}`}>
-                <dt class="review__label t-label-01">{r.key}</dt>
-                <dd class="review__value review__value--editable t-body-01">
-                  <span class="review__answer">
-                    {r.href ? (
-                      <>
-                        <cds-link href={r.href} size="lg" target="_blank" rel="noopener" data-view-doc={r.href} data-show-if="inProposal">{r.linkLabel ?? r.value}</cds-link>
-                        <span data-bind="value" data-hide-if="inProposal" hidden></span>
-                      </>
-                    ) : <span data-bind="value">{r.value}</span>}
-                  </span>
-                  <EditButton item={`${part.prefix}-${i}`} label={r.key.toLowerCase()} />
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </div>
-    ))}
-  </ReviewSection>
-
-  <!-- ── Additional documents ─────────────────────────────────────────────── -->
-  <ReviewSection title="Additional documents" collapsible={collapsible} layered={layered} orderIndex={ORDER.docs} {...badgesForSection('docs')}>
-    <!-- Screening answers as statements ("Does / Does NOT …"), then the remaining
-         label-over-value facts. -->
-    <div class="subblock">
-      <ul class="statements">
-        {statementFacts.map((r) => (
-          <li class="statement" id={answerIdFor(r.key)} data-edit-scope={`doc-fact-${factIndex(r)}`}>
-            <YesNoStatement value={r.value === 'Yes'} statements={r.statements!} bind="value" bindDetail="detail">{r.detail}</YesNoStatement>
-            <EditButton item={`doc-fact-${factIndex(r)}`} label={r.key.toLowerCase()} />
-          </li>
-        ))}
-      </ul>
-      <dl class="review">
-        {otherFacts.map((r) => (
-          <div class="review__row" data-edit-scope={`doc-fact-${factIndex(r)}`}>
-            <dt class="review__label t-label-01">{r.key}</dt>
-            <dd class="review__value review__value--editable t-body-01">
-              <span class="review__answer">
-                {r.href ? (
-                  <>
-                    {/* size="lg" = Carbon's 16px link, matching the body-02 values. */}
-                    <cds-link href={r.href} size="lg" target="_blank" rel="noopener" data-view-doc={r.href} data-show-if="inProposal">{r.linkLabel ?? r.value}</cds-link>
-                    <span data-bind="value" data-hide-if="inProposal" hidden></span>
-                  </>
-                ) : <span data-bind="value">{r.value}</span>}
-                {r.detail && <span class="review__detail t-label-01">{r.detail}</span>}
-              </span>
-              <EditButton item={`doc-fact-${factIndex(r)}`} label={r.key.toLowerCase()} />
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-    <div class="subblock">
-      <h3 class="sub-head t-heading-02">Submitted files</h3>
-      <ul class="docs">
-        {ad.files.map((f) => (
-          <li class="doc">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d={fileGlyph}></path></svg>
-            <span class="t-body-01">{f.name}</span>
-            <span class="doc__type t-label-01">{f.type}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  </ReviewSection>
+  <ResearchTeamSection {...frame} />
+  <ProjectInfoSection {...frame} />
+  <StudyAreasSection {...frame} />
+  <DataCollectionSection {...frame} />
+  <AdditionalDocsSection {...frame} />
 </div>
 
 <!-- Every requested date in context (project + permit windows, annual report, field
@@ -555,7 +125,7 @@ const fileGlyph =
 </cds-modal>
 
 <!-- Record editing — ONE shared modal for every item's Edit button. Its controls are
-     built per item from the specs below by src/lib/record-edit.ts. -->
+     built per item from the specs by src/lib/record-edit.ts. -->
 <cds-modal id="record-edit-modal" size="md">
   <cds-modal-header>
     <cds-modal-close-button></cds-modal-close-button>
@@ -589,89 +159,8 @@ const fileGlyph =
 </script>
 
 <style>
-  .app-review { display: flex; flex-direction: column; gap: 2.75rem; }
-  /* Labels — the small text above values (field labels, tile keys, contact roles,
-     sub-labels) — use Carbon's label-02 (14px), the largest label on the Carbon type
-     scale, instead of label-01 (12px). Declared BEFORE the reading rule below so the
-     explanation lines (which also carry .t-label-01) still get the reading size. */
-  .app-review :global(:is(.t-label-01)) {
-    font-size: var(--cds-label-02-font-size, 0.875rem);
-    line-height: var(--cds-label-02-line-height, 1.28572);
-    letter-spacing: var(--cds-label-02-letter-spacing, 0.16px);
-  }
-
-  /* Content typography. The CONTENT under the labels — narratives, notes, values,
-     explanations, contact details, list items — uses Carbon's body-02 (16px / 1.5),
-     a step above the label-02 labels. `:is()` outranks the global .t-body-01 /
-     .t-label-01 utility classes these elements also carry. */
-  .app-review :global(:is(.narrative__body, .sub-note, .review__value, .yn__detail, .review__detail, .contact__meta, cds-list-item)) {
-    font-size: var(--cds-body-02-font-size, 1rem);
-    line-height: var(--cds-body-02-line-height, 1.5);
-    letter-spacing: var(--cds-body-02-letter-spacing, 0);
-  }
-  /* ONE content style across the record (house rule: every label + value reads like
-     "Literature cited" — label-02 over body-02). Tile values (formerly heading-03),
-     contact names (formerly heading-compact-01), and table body cells (Carbon's
-     14px default) all take body-02 at regular weight. */
-  .app-review :global(:is(.factgrid__val, .factgrid__entry-value, .contact__name, .stack__primary, cds-table-cell)) {
-    font-size: var(--cds-body-02-font-size, 1rem);
-    font-weight: var(--cds-body-02-font-weight, 400);
-    line-height: var(--cds-body-02-line-height, 1.5);
-    letter-spacing: var(--cds-body-02-letter-spacing, 0);
-    color: var(--cds-text-primary, #161616);
-  }
-
-  /* Readable line length (house guideline): desktop 45–75, tablet 40–65, mobile
-     30–50 characters. `ch` is the width of "0", wider than an average letter in IBM
-     Plex Sans (measured ≈ 0.73ch per character), so the caps are 55ch ≈ 75 chars,
-     45ch ≈ 65 chars, 35ch ≈ 50 chars (verified by measuring rendered lines). Each
-     element is capped in its OWN font. The cap is on TEXT elements only — never on
-     containers (narrative blocks, statement rows, value rows, tiles, lists): those
-     always fill the column, so Edit buttons and dividers reach the column edge while
-     the lines inside stay short. Breakpoints = Carbon md/lg. */
-  .app-review { --measure: 35ch; }
-  @media (min-width: 42rem) { .app-review { --measure: 45ch; } }
-  @media (min-width: 66rem) { .app-review { --measure: 55ch; } }
-  .app-review :global(:where(.narrative__label, .narrative__body, .sub-note, dt, .review__answer, .yn__detail, .review__detail, .stack__secondary)) { max-inline-size: var(--measure); }
-  .app-review__intro { display: block; }
-
-  /* Collapsible mode (B2 study): ReviewSection is display:contents, so every section
-     header + body is a direct flex item here — that's what lets the sticky headers
-     accumulate (each header's range spans this whole container, not one section).
-     `order` (set per section) puts Project information first while keeping intro +
-     tools on top. gap MUST be 0: with the headers/bodies as siblings, a flex gap
-     would push each header off its body — inter-section spacing comes from the
-     body's own bottom padding (ReviewSection) instead. */
-  .app-review--collapsible { gap: 0; }
-  .app-review__tools {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--cds-spacing-03, 0.5rem);
-    margin-bottom: var(--cds-spacing-05, 1rem);
-  }
-
-  .subblock + .subblock { margin-top: 2rem; }
-  .sub-head { margin: 0 0 0.75rem; color: var(--cds-text-primary, #161616); }
-  .sub-note { margin: 0 0 0.75rem; color: var(--cds-text-secondary, #525252); }
-  .sub-note:last-child { margin-bottom: 0; }
-
-  /* Editable letter-bound fields (project title + category), sitting in the review. */
-  /* Record editing — layout only: each item's label row (or statement / value) with
-     its stock Edit icon button at the end, and the shared modal's field stack. */
-  .item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-block-end: 0.25rem; }
-  .item-head .narrative__label { margin: 0; }
-  .statement { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
-  .review__value--editable { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
-  .review__answer { min-inline-size: 0; }
-  .review__line { display: block; }
-  /* Data collection parts are wrapped (for their show/hide gate), so they restate
-     the gap .subblock + .subblock gives elsewhere. */
-  .dc-part > .subblock { margin-top: 2rem; }
-  .dc-part + .dc-part { margin-top: 2.5rem; }
-  .dc-gate { margin: 0; }
-  .dc-contacts { margin-bottom: 1rem; }
-  .review__line[hidden], .subblock[hidden] { display: none; }
-  .sa-readonly { display: grid; gap: 1.25rem; }
+  /* The record's own read vocabulary lives in src/styles/application-record.css
+     (shared with the permit detail page). Only the modals' layout stays here. */
   .sa-modal__hint { margin: 0 0 1.5rem; color: var(--cds-text-secondary, #525252); }
   .sa-modal__count { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
   .record-edit__fields { display: grid; gap: var(--cds-spacing-06, 1.5rem); }
@@ -685,92 +174,4 @@ const fileGlyph =
      itself stays unclipped so the range picker's calendar isn't cut off. */
   .record-edit__fields :global(.rec-occ__roster) { display: block; max-block-size: max(8rem, calc(100vh - 27rem)); overflow-y: auto; }
   .record-edit__fields :global(.rec-occ__empty) { margin: 1rem 0 0; color: var(--cds-text-secondary, #525252); }
-
-  /* carbon-checked: label/value review metadata is a definition list (the
-     semantic primitive); this is layout CSS over a <dl>, matching SummaryStep. */
-  .review { margin: 0; }
-  /* Label stacked ABOVE its value (never side by side). */
-  .review__row { display: grid; grid-template-columns: 1fr; gap: 0.25rem; padding: 0.75rem 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
-  .review__row:first-child { border-top: 0; padding-top: 0; }
-  .review__label { margin: 0; color: var(--cds-text-secondary, #525252); }
-  .review__value { margin: 0; color: var(--cds-text-primary, #161616); overflow-wrap: anywhere; }
-  /* Yes/no answers as statements: icon + statement, explanation underneath. */
-  .statements { list-style: none; margin: 0 0 0.75rem; padding: 0; }
-  .statement { padding: 0.75rem 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
-  .statement:first-child { border-top: 0; padding-top: 0; }
-  .statements + .review .review__row:first-child { border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); padding-top: 0.75rem; }
-  /* Applicant's explanation behind a "Yes" answer, under the value. */
-  .review__detail { display: block; margin-top: 0.25rem; color: var(--cds-text-secondary, #525252); }
-  .narrative + .narrative { margin-top: 1.5rem; }
-  .narrative__label { margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
-  /* The Study areas list is rebuilt by the page script (no scope attribute), so
-     its district labels need the label color via :global. */
-  .sa-readonly :global(.narrative__label) { margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
-
-  /* ── Side-by-side variant (?labels=side) ─────────────────────────────────────
-     Label in a fixed left column, value to its right, Edit button at the far
-     right. Layout only — the same label-02 / body-02 type as the stacked version.
-     Rows: narrative items (title, category, purpose, benefits, district parks),
-     label/value rows (Budget …), and tiles (dates, collection, laboratory), which
-     go full-width so each reads as one label | value row. Contact cards, tables,
-     and yes/no statements have no separate label, so they stay as they are. */
-  .app-review--side { --side-label: minmax(9rem, 14rem); }
-  .app-review--side :global(.narrative) {
-    display: grid;
-    grid-template-columns: var(--side-label) minmax(0, 1fr) auto;
-    column-gap: var(--cds-spacing-06, 1.5rem);
-    align-items: start;
-  }
-  .app-review--side :global(.narrative .item-head) { display: contents; }
-  .app-review--side :global(.narrative__label) { grid-column: 1; grid-row: 1; margin: 0; padding-block-start: 0.1875rem; }
-  .app-review--side :global(.narrative > :not(.item-head):not(.narrative__label)) { grid-column: 2; grid-row: 1; }
-  .app-review--side :global(.narrative .record-edit-btn),
-  .app-review--side :global(.narrative .item-actions) { grid-column: 3; grid-row: 1; margin-block-start: -0.375rem; }
-  .app-review--side :global(.narrative .item-actions .record-edit-btn) { margin-block-start: 0; }
-  .app-review--side :global(.review__row) { grid-template-columns: var(--side-label) minmax(0, 1fr); column-gap: var(--cds-spacing-06, 1.5rem); align-items: start; }
-  .app-review--side :global(.review__label) { padding-block-start: 0.1875rem; }
-  .app-review--side :global(.factgrid--tiles) { grid-template-columns: 1fr; }
-  .app-review--side :global(.factgrid__pair) {
-    display: grid;
-    grid-template-columns: var(--side-label) minmax(0, 1fr);
-    column-gap: var(--cds-spacing-06, 1.5rem);
-    align-items: start;
-  }
-  .app-review--side :global(.factgrid__key) { padding-block-start: 0.1875rem; }
-  /* The tile's Edit button is pinned top-right; in a single row the value would run
-     under it, so the whole row leaves room for the button. */
-  .app-review--side :global(.factgrid__item--editable .factgrid__pair) { padding-inline-end: 2.5rem; }
-  .app-review--side :global(.factgrid__item--editable .factgrid__key) { padding-inline-end: 0; }
-  .app-review--side :global(.factgrid__val) { margin: 0; }
-  /* A tile with sub-entries (Annual report): its key heads the tile, then each
-     entry is its own label | value row. */
-  .app-review--side :global(.factgrid__pair:has(.factgrid__entry) .factgrid__key) { grid-column: 1 / -1; }
-  .app-review--side :global(.factgrid__entry) { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: start; }
-  .narrative__body { margin: 0; color: var(--cds-text-primary, #161616); line-height: 1.6; }
-
-  .docs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-  .doc { display: flex; align-items: center; gap: 0.5rem; color: var(--cds-text-primary, #161616); }
-  .doc svg { flex: 0 0 auto; color: var(--cds-icon-secondary, #525252); }
-  .doc__type { color: var(--cds-text-secondary, #525252); margin-inline-start: auto; text-align: end; }
-
-  .ro-table { display: block; }
-
-  /* Research team — lead contacts as a card grid (ContactCard = cds-tile), the
-     same layout as the permit detail page's Research team block. */
-  .contact-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: 1rem;
-  }
-
-  /* Stacked table cell — a primary line with a secondary line beneath (participant
-     name/title, email/phone). Layout only; type + color come from tokens. */
-  .stack__primary { display: block; color: var(--cds-text-primary, #161616); }
-  .stack__secondary { display: block; margin-top: 0.125rem; color: var(--cds-text-secondary, #525252); }
-
-  /* Specimen roster head — the section title with its Add button, right-aligned.
-     Same shape as the application form's roster head. */
-  .roster__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
-  .roster__head .sub-head { margin: 0; }
-  .sub-head-row { margin-bottom: 0.75rem; }
 </style>

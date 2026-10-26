@@ -167,10 +167,10 @@ ${SIG}`,
     id: 'EM-H', name: 'Renewal placed on hold', pref: 'decisions', regulated: true,
     recipients: 'Researcher (submitter), PI, PICOF',
     placeholders: ['PI name', 'Permit #', 'Project title'],
-    subject: 'Annual report required before permit [Permit #] can be issued',
+    subject: 'Final report required before permit [Permit #] can be issued',
     body: `[PI name],
 
-Your renewal permit is ready but is on hold. The annual report for your
+Your renewal permit is ready but is on hold. The final report for your
 previous permit has not been received, so the new permit cannot be issued
 yet.
 

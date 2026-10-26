@@ -318,7 +318,7 @@ export interface StepIssues {
 export const applicationIssues: StepIssues[] = [
   {
     stepId: 'project-info',
-    missing: ['Enter the anticipated annual report due date.'],
+    missing: ['Enter the anticipated final report completion date.'],
     fields: [{ fieldId: 'annual-report-date', message: 'Required to submit.' }],
   },
   {

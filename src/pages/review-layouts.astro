@@ -28,6 +28,7 @@ import { permit, permitInfoTags } from '../data/permit';
 import { userDirectory } from '../data/user';
 import { withBase } from '../lib/base';
 import { districtKey, seedInventory, plainText } from '../data/conditions';
+import { reviewDocuments } from '../data/review-documents';
 
 export const prototype = {
   title: 'Review wizard — layout studies',
@@ -66,13 +67,8 @@ const proposalDoc = {
 
 // Every document uploaded to the permit — the document viewer's picker. The study
 // proposal (first in the list) is the default shown.
-const documents = permit.additionalDocs.files.map((f) => ({
-  href: f.href,
-  filename: f.name,
-  size: f.size,
-  pages: f.pages,
-  type: f.type,
-}));
+// Labeled by type, in review order — the same list the wizard's viewer shows.
+const documents = reviewDocuments(permit.additionalDocs.files);
 
 // ── Special conditions — the REAL catalog, same source as the detail page ────────
 // Pulled from src/data/conditions.ts (the single source of truth the permit's

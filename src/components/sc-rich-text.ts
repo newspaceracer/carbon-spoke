@@ -169,6 +169,9 @@ interface ToolButton {
 class ScRichText extends HTMLElement {
   private editor?: Editor;
   private buttons: ToolButton[] = [];
+  /** Content carried across a disconnect → reconnect (the element was MOVED, e.g.
+   *  a host relocating its modal to <body>), so a move doesn't lose the text. */
+  private carried?: string;
 
   connectedCallback() {
     if (this.editor) return;
@@ -249,7 +252,7 @@ class ScRichText extends HTMLElement {
         }),
         Placeholder.configure({ placeholder: this.getAttribute('placeholder') || 'Write a condition…' }),
       ],
-      content: this.getAttribute('value') || '',
+      content: this.carried ?? (this.getAttribute('value') || ''),
       editorProps: {
         attributes: {
           role: 'textbox',
@@ -265,9 +268,14 @@ class ScRichText extends HTMLElement {
     this.syncToolbar();
   }
 
+  // Tear down fully — editor AND the toolbar/mount it built — so reconnecting
+  // (a move) rebuilds ONE toolbar, not a second one beside the stale first.
   disconnectedCallback() {
+    if (this.editor) this.carried = this.editor.isEmpty ? '' : this.editor.getHTML();
     this.editor?.destroy();
     this.editor = undefined;
+    this.buttons = [];
+    this.replaceChildren();
   }
 
   private syncToolbar() {
@@ -298,13 +306,14 @@ class ScRichText extends HTMLElement {
 
   /** The editor's HTML (empty string when it holds no visible text). */
   get value(): string {
-    if (!this.editor) return this.getAttribute('value') || '';
+    if (!this.editor) return this.carried ?? (this.getAttribute('value') || '');
     return this.editor.isEmpty ? '' : this.editor.getHTML();
   }
 
   set value(html: string) {
     if (!this.editor) {
       this.setAttribute('value', html || '');
+      if (this.carried !== undefined) this.carried = html || '';
       return;
     }
     this.editor.commands.setContent(html || '');

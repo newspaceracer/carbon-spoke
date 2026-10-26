@@ -3,44 +3,60 @@
      shell:  cds-header (ui-shell)  — name + nav + Admin tools menu + cds-search
              + profile/logout global actions
      spine:  main.page > cds-stack(gap 6)
-     Sections mix editorial blocks (heading + whitespace), structured lists, and
-     tiles/cards — chosen per section for the clearest hierarchy. cds-tag only for
-     genuine classifications.
+     READ-ONLY. Every section inside a tab is a raised panel (ReviewSection `panel`:
+     layer-01 on the g10 field, title + the section's own classification tags and
+     compliance flags in its head, content one layer deeper) — the same read as the
+     review wizard's application record. The four record tabs compose the SHARED
+     section components (src/components/application/*) read-only, so the detail
+     and the wizard can't drift; editing lives in the wizard (Start / Open review).
+     One read rule: short facts and yes/no answers are tiles, people are contact
+     cards, collections are tables, narrative is prose. cds-tag only for genuine
+     classifications.
      sections:
        - breadcrumb    -> cds-breadcrumb  (Permits / 26-635-017)
        - permit header -> PermitHeader.astro  (title, status indicator, actions,
                           classification badges, at-a-glance labeled fact row)
        - tabs          -> cds-tabs + cds-tab x6, panels toggled on cds-tabs-selected
-           overview      -> Application summary (prose), Analysis team (person
-                            blocks), Comments (thread), Application history
-                            (cds-progress-indicator, vertical)
-           study areas   -> Parks (list)
-           special cond. -> standard conditions (numbered list)
-           project info  -> Project details (FactGrid + prose), Research team
-                            (contact cds-tiles + participants cds-table), Field
-                            occurrences (date list)
-           data collect. -> collection + laboratory (FactGrid tiles; proposal-
-                            answered facts link to the doc), specimens (cds-table)
-           add. docs     -> compliance (FactGrid tiles; proposal-answered facts
-                            link to the doc), files (cds-table)
+           overview      -> Tags, Supporting review, Comments (thread) panels +
+                            rail cds-tile (Analysis team / Application history)
+           project info  -> ProjectInfoSection (narratives + requested-date tiles),
+                            ResearchTeamSection (contact cds-tiles + participants
+                            cds-table + coverage tile), Schedule (calendar + list)
+           study areas   -> StudyAreasSection chrome around the merged-cell
+                            parks-and-contacts table (the detail's own body)
+           special cond. -> one panel around the shared PermitConditions
+           data collect. -> DataCollectionSection (gate + facts as tiles, facility
+                            contacts as cards, specimens cds-table)
+           add. docs     -> AdditionalDocsSection (Compliance tiles; files
+                            cds-table + Download all; inline DocumentViewer — View
+                            / "View CV" / proposal links open the file in place)
 */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PermitNav from '../components/PermitNav.astro';
 import PermitHeader from '../components/PermitHeader.astro';
-import PermitSection from '../components/PermitSection.astro';
-import FactGrid from '../components/FactGrid.astro';
-import ContactCard from '../components/ContactCard.astro';
-import { teamCards } from '../lib/team-cards';
+import ReviewSection from '../components/ReviewSection.astro';
+import ProjectInfoSection from '../components/application/ProjectInfoSection.astro';
+import ResearchTeamSection from '../components/application/ResearchTeamSection.astro';
+import StudyAreasSection from '../components/application/StudyAreasSection.astro';
+import DataCollectionSection from '../components/application/DataCollectionSection.astro';
+import AdditionalDocsSection from '../components/application/AdditionalDocsSection.astro';
 import Avatar from '../components/Avatar.astro';
 import AnalysisTeam from '../components/AnalysisTeam.astro';
 import InternalOnlyFlag from '../components/InternalOnlyFlag.astro';
 import PermitCalendar from '../components/PermitCalendar.astro';
 import PermitConditions from '../components/PermitConditions.astro';
-import { permit, permitInfoTags } from '../data/permit';
+import RecordToc from '../components/record/RecordToc.astro';
+import ResearcherOverview from '../components/ResearcherOverview.astro';
+import ReportObligation from '../components/ReportObligation.astro';
+import RecordLetter from '../components/record/RecordLetter.astro';
+import RecordReport from '../components/record/RecordReport.astro';
+import { permit, permitInfoTags, badgesForSection } from '../data/permit';
 import { userDirectory, findUser } from '../data/user';
 import { district as districtRecord } from '../data/district';
 import { parkKey } from '../data/parks';
+import { districtKey } from '../data/conditions';
 import { contactCellHtml, dedupeContacts } from '../lib/contact-cell';
+import '../styles/application-record.css';
 
 export const prototype = {
   title: 'Permit detail',
@@ -52,11 +68,23 @@ export const prototype = {
 
 const tabs = [
   { value: 'overview', label: 'Overview' },
-  { value: 'project-information', label: 'Project information' },
-  { value: 'study-areas', label: 'Study areas' },
+  { value: 'application', label: 'Application' },
   { value: 'special-conditions', label: 'Special conditions' },
-  { value: 'data-collection', label: 'Data collection' },
-  { value: 'additional-documentation', label: 'Additional documentation' },
+  // Gated: shown client-side only when they apply (see gateRecordTabs) — the
+  // letter once it's out for signature, the report once one is on file.
+  { value: 'letter', label: 'Final permit letter', gate: 'letter' },
+  { value: 'report', label: 'Final report', gate: 'report' },
+] as { value: string; label: string; gate?: string }[];
+
+// Application tab contents rail — one entry per section on the scroll, with the
+// section's compliance-flag count (same as the one-scroll record's rail).
+const applicationTocItems = [
+  { id: 'project-information', label: 'Project information', flags: badgesForSection('project').flags.length },
+  { id: 'research-team', label: 'Research team', flags: badgesForSection('team').flags.length },
+  { id: 'schedule', label: 'Schedule' },
+  { id: 'study-areas', label: 'Authorized parks', flags: badgesForSection('study').flags.length },
+  { id: 'data-collection', label: 'Data collection', flags: badgesForSection('data').flags.length },
+  { id: 'additional-documents', label: 'Additional documentation', flags: badgesForSection('docs').flags.length },
 ];
 
 // Responsible analyst = the lead/highlighted member of the analysis team (the
@@ -74,6 +102,14 @@ const stats = [
 // header banner so the dev permit-role control can constrain its options.
 const permitType: 'single' | 'multi' =
   permit.studyAreas.districts.length > 1 ? 'multi' : 'single';
+
+// Special-conditions contents rail: every owner that COULD hold conditions (HQ +
+// the permit's districts). The client reorders for the reader, fills the counts,
+// and drops owners with none — see the conditions-rail script.
+const conditionOwnerItems = [
+  { id: 'conditions-hq', label: 'Headquarters', count: null },
+  ...permit.studyAreas.districts.map((d) => ({ id: `conditions-${districtKey(d.name)}`, label: d.name, count: null })),
+];
 
 
 // The signed-in reviewer (the highlighted analysis-team member) authors new comments.
@@ -353,7 +389,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
         <div class="cds--css-grid">
           <cds-tabs class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" id="permit-tabs" value="overview">
             {tabs.map((tab) => (
-              <cds-tab id={`tab-${tab.value}`} value={tab.value}>{tab.label}</cds-tab>
+              <cds-tab id={`tab-${tab.value}`} value={tab.value} data-gate={tab.gate} style={tab.gate ? 'display:none' : undefined}>{tab.label}</cds-tab>
             ))}
           </cds-tabs>
         </div>
@@ -365,6 +401,13 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           <div class="panel" data-panel="overview" role="tabpanel" aria-labelledby="tab-overview">
             <div class="cds--css-grid cds--css-grid--with-row-gap">
               <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-11 overview-main">
+              <!-- Researcher owner's Overview (stage lead, final report, needs your
+                   action, the permit's facts). Hidden for staff — revealed by the
+                   viewer-class script for an owner. -->
+              <ResearcherOverview />
+              <!-- Staff: the final report obligation (overdue → lift/restore the
+                   renewal block). Hidden for non-staff and before it applies. -->
+              <ReportObligation />
               <!-- Start-review prompt — the application is fully browsable, but until
                    review is formally started the reviewer is prompted here to begin
                    (which records when review actually started). Hidden once started
@@ -382,7 +425,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                 <cds-actionable-notification-button class="permit-start-review" slot="action">Start review</cds-actionable-notification-button>
               </cds-actionable-notification>
 
-              <PermitSection title="Tags">
+              <ReviewSection title="Tags" panel>
                 <InternalOnlyFlag slot="aside" />
                 <p class="section-hint t-body-01">Internal labels for triage and coordination, separate from the permit's classification badges. Pick from the set; applied tags appear below and can be removed.</p>
                 <div class="tagger">
@@ -409,23 +452,23 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                   </div>
                   <p class="tagger__empty t-body-01" id="permit-tag-empty" hidden>No tags applied.</p>
                 </div>
-              </PermitSection>
+              </ReviewSection>
 
               <!-- Supporting review (Story 10). An informational action shown only
                    to a Supporting Agent during Under review — it records their review
                    without gating the Responsible Agent's decision. Hidden for everyone
                    else (client-gated by the IR matrix: supporting-review). -->
               <div id="supporting-review-section" hidden>
-                <PermitSection title="Supporting review">
+                <ReviewSection title="Supporting review" panel>
                   <p class="section-hint t-body-01" id="sr-hint">Record your supporting review. This is informational — it doesn't hold up the Responsible Agent's decision.</p>
                   <div class="sr-row">
                     <cds-tag id="sr-status-tag" type="cool-gray" size="md">Not started</cds-tag>
                     <cds-button id="sr-action" kind="tertiary" size="md" type="button">Start supporting review</cds-button>
                   </div>
-                </PermitSection>
+                </ReviewSection>
               </div>
 
-              <PermitSection title="Comments">
+              <ReviewSection title="Comments" panel>
                 <InternalOnlyFlag slot="aside" />
                 <!-- Composer: stock cds-textarea + cds-button, with the SAME @-mention
                      typeahead as the review wizard (shared src/lib/comment-mentions).
@@ -479,7 +522,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                     </div>
                   </li>
                 </template>
-              </PermitSection>
+              </ReviewSection>
 
               <!-- ── Anchored-comments templates (?comments=anchored) ──────────
                    Cloned into each commentable PermitSection by the page script.
@@ -550,6 +593,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                           <cds-progress-indicator vertical>
                             {phase.steps.map((s) => (
                               <cds-progress-step
+                                data-history-internal={/agents? review/i.test(s.label) ? '' : undefined}
                                 complete={s.state === 'complete'}
                                 current={s.state === 'current'}
                                 label={s.label}
@@ -566,10 +610,54 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
             </div>
           </div>
 
-          <!-- ── Study areas ──────────────────────────────────────────── -->
-          <div class="panel cds--css-grid" data-panel="study-areas" role="tabpanel" aria-labelledby="tab-study-areas" hidden>
-            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Authorized parks" commentKey="authorized-parks">
+
+          <!-- ── Application ──────────────────────────────────────────── -->
+          <!-- The whole application on ONE scroll (Project information · Research
+               team · Schedule · Study areas · Data collection · Additional
+               documents) with a pinned contents rail — the one-scroll record
+               pattern (/prototypes/application-record). Each section sits in an
+               .app-anchor the rail links to. -->
+          <div class="panel cds--css-grid" data-panel="application" role="tabpanel" aria-labelledby="tab-application" hidden>
+            <aside class="app-rail cds--css-grid-column cds--sm:col-span-0 cds--md:col-span-0 cds--lg:col-span-3">
+              <div class="app-rail__sticky">
+                <RecordToc items={applicationTocItems} />
+              </div>
+            </aside>
+            <div class="stack app-review cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+              <!-- The shared record sections, read-only (no Edit buttons). The field
+                   occurrences list sits under the calendar in Schedule instead. -->
+              <div class="app-anchor" id="project-information">
+              <ProjectInfoSection readonly panel showOccurrences={false} commentKey="project-details" />
+              </div>
+              <div class="app-anchor" id="research-team">
+              <ResearchTeamSection readonly panel commentKey="research-team" />
+              </div>
+              <div class="app-anchor" id="schedule">
+              <ReviewSection title="Schedule" panel commentKey="schedule">
+                <PermitCalendar
+                  windowStartISO={permit.activeWindow.startISO}
+                  windowEndISO={permit.activeWindow.endISO}
+                  windowStartLabel={permit.activeWindow.start}
+                  windowEndLabel={permit.activeWindow.end}
+                  fieldSessions={permit.projectInfo.fieldSessions}
+                  tentativeISO={permit.projectInfo.annualReport.tentativeISO}
+                  tentativeLabel={permit.projectInfo.annualReport.tentativeLabel}
+                  requiredISO={permit.projectInfo.annualReport.requiredISO}
+                  requiredLabel={permit.projectInfo.annualReport.requiredLabel}
+                  todayISO={permit.projectInfo.demoTodayISO}
+                />
+                <h3 class="subhead sub-head t-heading-02">Field investigation occurrences</h3>
+                <cds-contained-list class="field-dates" label="Scheduled field dates" kind="on-page">
+                  {permit.projectInfo.fieldOccurrences.map((d) => (
+                    <cds-contained-list-item>{d}</cds-contained-list-item>
+                  ))}
+                </cds-contained-list>
+              </ReviewSection>
+              </div>
+              <div class="app-anchor" id="study-areas">
+              <!-- The shared Study areas section chrome (title + badges), with the
+                   detail's own body: who covers each park, not the editable park set. -->
+              <StudyAreasSection readonly panel title="Authorized parks" commentKey="authorized-parks">
                 <p class="section-hint t-body-01">Parks where research and collection are authorized, grouped by district. The district contact covers every park in that district; a park unit may also have its own contact assigned during review.</p>
                 <script type="application/json" id="study-area-contacts" set:html={JSON.stringify(studyAreaContactModel)}></script>
                 <!-- carbon-checked: this table needs MERGED CELLS — one district
@@ -615,8 +703,14 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                     ))}
                   </table>
                 </div>
-              </PermitSection>
-
+              </StudyAreasSection>
+              </div>
+              <div class="app-anchor" id="data-collection">
+              <DataCollectionSection readonly panel commentKey="data-collection" />
+              </div>
+              <div class="app-anchor" id="additional-documents">
+              <AdditionalDocsSection readonly panel title="Additional documentation" commentKey="additional-documentation" />
+              </div>
             </div>
           </div>
 
@@ -628,7 +722,17 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
                and district blocks are rendered client-side from localStorage; see
                the "Special conditions" script block below. -->
           <div class="panel cds--css-grid" data-panel="special-conditions" role="tabpanel" aria-labelledby="tab-special-conditions" hidden>
+            <!-- Contents rail: one entry per owner group (HQ + each district), same
+                 pattern as the application record's rail. Entries are seeded for every
+                 possible owner, then reordered / counted / pruned client-side from what
+                 PermitConditions actually rendered (reader order, non-empty only). -->
+            <aside class="sc-rail cds--css-grid-column cds--sm:col-span-0 cds--md:col-span-0 cds--lg:col-span-3">
+              <div class="sc-rail__sticky">
+                <RecordToc items={conditionOwnerItems} countNoun="conditions" />
+              </div>
+            </aside>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
+              <ReviewSection title="Special conditions" panel>
               <cds-inline-notification
                 id="sc-locked-notice"
                 hidden
@@ -642,190 +746,33 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
               <!-- Read-only conditions, grouped by owner (shared PermitConditions:
                    Headquarters first, then each district), built client-side from
                    the applied set, so it reflects what the review has curated. -->
-              <PermitConditions />
+              <PermitConditions idPrefix="conditions" />
+              </ReviewSection>
             </div>
           </div>
 
-          <!-- ── Project information ──────────────────────────────────── -->
-          <div class="panel cds--css-grid" data-panel="project-information" role="tabpanel" aria-labelledby="tab-project-information" hidden>
-            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Project details" commentKey="project-details">
-                <FactGrid rows={permit.projectInfo.details} tiles />
-                <h3 class="subhead t-heading-01">Project purpose</h3>
-                <p class="lede t-body-02">{permit.projectInfo.purpose}</p>
-                <h3 class="subhead t-heading-01">Anticipated benefits to the State Park System</h3>
-                <p class="lede t-body-02">{permit.projectInfo.benefits}</p>
-              </PermitSection>
-
-              <PermitSection title="Research team" commentKey="research-team">
-                <div class="contact-grid">
-                  {teamCards([
-                    { role: 'Organization', contact: t.organization, kind: 'organization' },
-                    { role: 'Principal investigator', contact: t.principalInvestigator },
-                    { role: 'Person in charge of field work', contact: t.fieldLead },
-                  ]).map((c) => (
-                    <ContactCard role={c.roles} contact={c.contact} kind={c.kind} />
-                  ))}
-                </div>
-                <h3 class="subhead t-heading-01">Additional participants</h3>
-                <cds-table>
-                  <cds-table-head>
-                    <cds-table-header-row>
-                      <cds-table-header-cell>Name</cds-table-header-cell>
-                      <cds-table-header-cell>Phone</cds-table-header-cell>
-                      <cds-table-header-cell>Email</cds-table-header-cell>
-                    </cds-table-header-row>
-                  </cds-table-head>
-                  <cds-table-body>
-                    {t.participants.map((p) => (
-                      <cds-table-row>
-                        <cds-table-cell>{p.name}</cds-table-cell>
-                        <cds-table-cell>{p.phone || '—'}</cds-table-cell>
-                        <cds-table-cell>
-                          <cds-link href={`mailto:${p.email}`}>{p.email}</cds-link>
-                        </cds-table-cell>
-                      </cds-table-row>
-                    ))}
-                  </cds-table-body>
-                </cds-table>
-              </PermitSection>
-
-              <PermitSection title="Schedule" commentKey="schedule">
-                <PermitCalendar
-                  windowStartISO={permit.activeWindow.startISO}
-                  windowEndISO={permit.activeWindow.endISO}
-                  windowStartLabel={permit.activeWindow.start}
-                  windowEndLabel={permit.activeWindow.end}
-                  fieldSessions={permit.projectInfo.fieldSessions}
-                  tentativeISO={permit.projectInfo.annualReport.tentativeISO}
-                  tentativeLabel={permit.projectInfo.annualReport.tentativeLabel}
-                  requiredISO={permit.projectInfo.annualReport.requiredISO}
-                  requiredLabel={permit.projectInfo.annualReport.requiredLabel}
-                  todayISO={permit.projectInfo.demoTodayISO}
-                />
-                <h3 class="subhead t-heading-01">Field investigation occurrences</h3>
-                <cds-contained-list class="field-dates" label="Scheduled field dates" kind="on-page">
-                  {permit.projectInfo.fieldOccurrences.map((d) => (
-                    <cds-contained-list-item>{d}</cds-contained-list-item>
-                  ))}
-                </cds-contained-list>
-              </PermitSection>
+          <!-- ── Final permit letter / Final report ───────────────────── -->
+          <!-- The record's later documents (same components as the one-scroll
+               record): the letter EXACTLY as sent for signature, with signature
+               status; and the researcher's final report. Their tabs are gated —
+               see gateRecordTabs. Content column lines up with the other tabs'. -->
+          <div class="panel cds--css-grid" data-panel="letter" role="tabpanel" aria-labelledby="tab-letter" hidden>
+            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-start-4 cds--lg:col-span-12">
+              <ReviewSection title="Final permit letter" panel>
+                <RecordLetter />
+              </ReviewSection>
+            </div>
+          </div>
+          <div class="panel cds--css-grid" data-panel="report" role="tabpanel" aria-labelledby="tab-report" hidden>
+            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-start-4 cds--lg:col-span-12">
+              <ReviewSection title="Final report" panel>
+                <RecordReport />
+              </ReviewSection>
             </div>
           </div>
 
-          <!-- ── Data collection ──────────────────────────────────────── -->
-          <div class="panel cds--css-grid" data-panel="data-collection" role="tabpanel" aria-labelledby="tab-data-collection" hidden>
-            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              {permit.dataCollection.involvesCollection && (
-                <PermitSection title="Collection & curation" commentKey="collection">
-                  <FactGrid rows={permit.dataCollection.collection} min="20rem" tiles />
-                </PermitSection>
-              )}
 
-              {permit.dataCollection.involvesLaboratory && (
-                <PermitSection title="Laboratory & analysis" commentKey="laboratory">
-                  <FactGrid rows={permit.dataCollection.laboratory} min="20rem" tiles />
-                </PermitSection>
-              )}
 
-              <PermitSection title="Specimens to be collected" commentKey="specimens">
-                <cds-table>
-                  <cds-table-head>
-                    <cds-table-header-row>
-                      <cds-table-header-cell>Species</cds-table-header-cell>
-                      <cds-table-header-cell>Quantity</cds-table-header-cell>
-                      <cds-table-header-cell>Portion</cds-table-header-cell>
-                      <cds-table-header-cell>Condition</cds-table-header-cell>
-                    </cds-table-header-row>
-                  </cds-table-head>
-                  <cds-table-body>
-                    {permit.dataCollection.specimens.map((s) => (
-                      <cds-table-row>
-                        <cds-table-cell><em>{s.species}</em></cds-table-cell>
-                        <cds-table-cell>{s.quantity}</cds-table-cell>
-                        <cds-table-cell>{s.portion}</cds-table-cell>
-                        <cds-table-cell>{s.condition}</cds-table-cell>
-                      </cds-table-row>
-                    ))}
-                  </cds-table-body>
-                </cds-table>
-              </PermitSection>
-            </div>
-          </div>
-
-          <!-- ── Additional documentation ─────────────────────────────── -->
-          <div class="panel cds--css-grid" data-panel="additional-documentation" role="tabpanel" aria-labelledby="tab-additional-documentation" hidden>
-            <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12">
-              <PermitSection title="Compliance" commentKey="compliance">
-                <FactGrid rows={permit.additionalDocs.facts} min="20rem" tiles />
-              </PermitSection>
-
-              <PermitSection title="Uploaded files" commentKey="uploaded-files">
-                <cds-button slot="aside" id="download-all-docs" kind="tertiary" size="md">
-                  Download all
-                  <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                    <path d="M13 7 12.3 6.3 8.5 10.1 8.5 1 7.5 1 7.5 10.1 3.7 6.3 3 7 8 12z"/>
-                    <path d="M13,12v2H3v-2H2v2l0,0c0,0.6,0.4,1,1,1h10c0.6,0,1-0.4,1-1l0,0v-2H13z"/>
-                  </svg>
-                </cds-button>
-                <script type="application/json" id="all-docs-data" set:html={JSON.stringify(permit.additionalDocs.files.map((f) => ({ href: f.href, name: f.name })))}></script>
-                <cds-table>
-                  <cds-table-head>
-                    <cds-table-header-row>
-                      <cds-table-header-cell>File</cds-table-header-cell>
-                      <cds-table-header-cell>Type</cds-table-header-cell>
-                      <cds-table-header-cell>Size</cds-table-header-cell>
-                      <cds-table-header-cell>Uploaded by</cds-table-header-cell>
-                      <cds-table-header-cell>Date</cds-table-header-cell>
-                      <cds-table-header-cell>Actions</cds-table-header-cell>
-                    </cds-table-header-row>
-                  </cds-table-head>
-                  <cds-table-body>
-                    {permit.additionalDocs.files.map((f) => (
-                      <cds-table-row>
-                        <cds-table-cell>{f.name}</cds-table-cell>
-                        <cds-table-cell>{f.type}</cds-table-cell>
-                        <cds-table-cell>{f.size}</cds-table-cell>
-                        <cds-table-cell>{f.by}</cds-table-cell>
-                        <cds-table-cell>{f.date}</cds-table-cell>
-                        <cds-table-cell>
-                          <div class="doc-actions">
-                            <cds-button
-                              kind="ghost"
-                              size="md"
-                              href={f.href}
-                              target="_blank"
-                              rel="noopener"
-                              tooltip-text={`View ${f.name} in browser`}
-                              tooltip-position="left"
-                            >
-                              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                                <path d="M15.5,7.8C14.3,4.7,11.3,2.6,8,2.5C4.7,2.6,1.7,4.7,0.5,7.8c0,0.1,0,0.2,0,0.3c1.2,3.1,4.1,5.2,7.5,5.3c3.3-0.1,6.3-2.2,7.5-5.3C15.5,8.1,15.5,7.9,15.5,7.8z M8,12.5c-2.7,0-5.4-2-6.5-4.5c1-2.5,3.8-4.5,6.5-4.5s5.4,2,6.5,4.5C13.4,10.5,10.6,12.5,8,12.5z"/>
-                                <path d="M8,5C6.3,5,5,6.3,5,8s1.3,3,3,3s3-1.3,3-3S9.7,5,8,5z M8,10c-1.1,0-2-0.9-2-2s0.9-2,2-2s2,0.9,2,2S9.1,10,8,10z"/>
-                              </svg>
-                            </cds-button>
-                            <cds-button
-                              kind="ghost"
-                              size="md"
-                              href={f.href}
-                              download={f.name}
-                              tooltip-text={`Download ${f.name}`}
-                              tooltip-position="left"
-                            >
-                              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                                <path d="M13 7 12.3 6.3 8.5 10.1 8.5 1 7.5 1 7.5 10.1 3.7 6.3 3 7 8 12z"/>
-                                <path d="M13,12v2H3v-2H2v2l0,0c0,0.6,0.4,1,1,1h10c0.6,0,1-0.4,1-1l0,0v-2H13z"/>
-                              </svg>
-                            </cds-button>
-                          </div>
-                        </cds-table-cell>
-                      </cds-table-row>
-                    ))}
-                  </cds-table-body>
-                </cds-table>
-              </PermitSection>
-            </div>
-          </div>
         </div>
       </section>
     </cds-stack>
@@ -895,10 +842,19 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
   // ── Viewer class: internal reviewer · researcher owner · public (Stories 11–12) ─
   const hideSec = (sel: string) =>
-    (document.querySelector(sel)?.closest('.sec') as HTMLElement | null)?.style.setProperty('display', 'none');
+    (document.querySelector(sel)?.closest('.sec, .rpanel') as HTMLElement | null)?.style.setProperty('display', 'none');
   let internalReviewHidden = false; // set for researcher/public viewers — no internal comments
-  const hideInternalReview = () => {
+  // Researcher owners see the special conditions once they're final — from the
+  // moment the letter goes out for signature (they accept them by signing) and for
+  // the life of the permit after. Draft conditions under review stay internal.
+  const OWNER_CONDITIONS_STATUSES = ['Out for signature', 'Waiting for final report', 'Active', 'Expired'];
+  const hideInternalReview = ({ keepConditions = false } = {}) => {
     internalReviewHidden = true;
+    // Header: the analysis team's review progress is internal.
+    (document.getElementById('analysis-metric') as HTMLElement | null)?.style.setProperty('display', 'none');
+    // Application history: researchers see their own milestones, not the review
+    // team's internal steps (who reviewed when).
+    document.querySelectorAll<HTMLElement>('[data-history-internal]').forEach((el) => { el.style.display = 'none'; });
     document.documentElement.classList.add('review-started'); // hide the "Start your review" prompt for non-reviewers
     hideSec('#permit-tag-select');   // Tags
     hideSec('#comment-composer');    // Comments / internal notes
@@ -911,9 +867,11 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
     if (railFallback) customElements.whenDefined('cds-tabs').then(() =>
       railFallback.updateComplete?.then?.(() => { railFallback.value = 'application-history'; }));
     (document.getElementById('supporting-review-section') as HTMLElement | null)?.style.setProperty('display', 'none');
+    if (keepConditions) return;
     (document.getElementById('tab-special-conditions') as HTMLElement | null)?.style.setProperty('display', 'none');
     (document.querySelector('[data-panel="special-conditions"]') as HTMLElement | null)?.setAttribute('hidden', '');
   };
+  let viewerIsPublic = false; // Story 12 public summary — no letter, no report
   {
     const who = readIdentity();
     const statusLabel = liveStatus();
@@ -927,7 +885,13 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
       if (ownsIt && statusLabel !== 'Withdrawn') {
         // Story 11 — the owner reads their submitted application; IR is hidden (§6).
-        hideInternalReview();
+        hideInternalReview({ keepConditions: OWNER_CONDITIONS_STATUSES.includes(statusLabel) });
+        const ro = document.querySelector<HTMLElement>('[data-researcher-overview]');
+        if (ro) {
+          ro.style.display = '';
+          ro.dataset.status = statusLabel;
+          ro.dispatchEvent(new CustomEvent('researcher-overview-render', { detail: { status: statusLabel } }));
+        }
         // Returned for changes → point the researcher at the revise flow.
         if (statusLabel === 'Changes requested' || statusLabel === 'Returned to submitter') {
           const ret = reviewStore(thePermitId).returned();
@@ -946,6 +910,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
       } else if (isPublicStatus) {
         // Story 12 — public view of an Active/Expired permit: summary only, no PII,
         // no Internal Review. Available to anon and any authenticated non-owner.
+        viewerIsPublic = true;
         hideInternalReview();
         hideSec('.contact-grid');        // Research team (PI / field lead names — PII)
         const pub = document.getElementById('public-view-banner') as HTMLElement | null;
@@ -965,6 +930,42 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
     panels.forEach((p) => { p.hidden = p.dataset.panel !== value; });
   }
   tabsEl?.addEventListener('cds-tabs-selected', () => showPanel(tabsEl.value));
+
+  // Gated record tabs. Final permit letter: once the letter has gone out for
+  // signature (staff + the researcher owner, who signs it). Final report: once the
+  // researcher has filed one (permit-final-report-${id}; `?report=1` previews the
+  // mock). Neither is part of the public summary. A gated tab that disappears
+  // while open falls back to Overview.
+  const LETTER_STATUSES = ['Out for signature', 'Waiting for final report', 'Active', 'Expired'];
+  const gateRecordTabs = () => {
+    const hasReport = new URLSearchParams(location.search).get('report') === '1'
+      || !!localStorage.getItem(`permit-final-report-${thePermitId}`);
+    const show: Record<string, boolean> = {
+      letter: !viewerIsPublic && LETTER_STATUSES.includes(liveStatus()),
+      report: !viewerIsPublic && hasReport,
+    };
+    document.querySelectorAll<HTMLElement>('#permit-tabs cds-tab[data-gate]').forEach((tab) => {
+      const visible = show[tab.dataset.gate!] ?? true;
+      tab.style.display = visible ? '' : 'none';
+      if (!visible && tabsEl?.value === tab.getAttribute('value')) {
+        tabsEl.value = 'overview';
+        showPanel('overview');
+      }
+    });
+  };
+  gateRecordTabs();
+  window.addEventListener('permit-status-changed', gateRecordTabs);
+
+  // Header: once the permit is issued its window is the AUTHORIZED one, not the
+  // request (staff may have narrowed it — the issued dates are what's in force).
+  const syncWindowLabel = () => {
+    const issued = LETTER_STATUSES.includes(liveStatus());
+    document.querySelectorAll<HTMLElement>('#permit-banner .stat__label').forEach((dt) => {
+      if (/^(Requested|Authorized) window$/.test(dt.textContent!.trim())) dt.textContent = issued ? 'Authorized window' : 'Requested window';
+    });
+  };
+  syncWindowLabel();
+  window.addEventListener('permit-status-changed', syncWindowLabel);
 
   // Overview rail tile: Analysis team / Application history as tabs. Same deal —
   // the strip only renders the header; we toggle the two rail panels ourselves.
@@ -1264,10 +1265,10 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
       const tab = panelEl?.dataset.panel || 'overview';
       const tabLabel = document.getElementById(`tab-${tab}`)?.textContent?.trim() || '';
       const btn = btnTpl.content.firstElementChild!.cloneNode(true) as any;
-      sec.querySelector('.sec__aside')?.prepend(btn);
+      sec.querySelector('[data-section-aside]')?.prepend(btn);
       const region = threadTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
       region.setAttribute('aria-label', `Comments on ${label}`);
-      sec.querySelector('.sec__head')?.after(region);
+      sec.querySelector('[data-section-head]')?.after(region);
       const input = region.querySelector('.sec-thread__input') as any;
       input.setAttribute('label', `Comment on ${label.charAt(0).toLowerCase()}${label.slice(1)}`);
       const picked = wireMentionTypeahead(input, region.querySelector('.mention-menu'), mentionDir);
@@ -1442,6 +1443,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 <script>
   import { permit } from '../data/permit';
   import { permitStatusKey } from '../data/conditions';
+  import { readIdentity } from '../lib/maintenance';
 
   // The conditions themselves render in the shared PermitConditions component
   // (read-only; curation lives in the review workflow). This script only keeps the
@@ -1451,14 +1453,58 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
   // Approved / signed permits: note that the conditions are now final (part of the
   // permit). Kept in sync if the status changes while the page is open.
+  // A researcher only reaches this tab as the permit's owner, once the conditions
+  // are final — so they get their own wording: accept-by-signing, then comply.
   const FROZEN_STATUSES = ['Out for signature', 'Active'];
   const lockedNotice = $('sc-locked-notice') as any;
+  const isOwner = readIdentity() === 'researcher';
+  const OWNER_NOTICE: Record<string, [string, string]> = {
+    'Out for signature': ['Read these before your permit starts', 'These conditions apply to everyone working under your permit from the day it is active.'],
+    'Active': ['Follow every condition while you work', 'These conditions are part of your permit and apply to everyone working under it.'],
+  };
   const syncLocked = (status?: string | null) => {
     const s = status ?? localStorage.getItem(permitStatusKey(permitId));
-    if (lockedNotice) lockedNotice.hidden = !FROZEN_STATUSES.includes(s ?? '');
+    if (!lockedNotice) return;
+    lockedNotice.hidden = !FROZEN_STATUSES.includes(s ?? '');
+    const owner = isOwner && s ? OWNER_NOTICE[s] : undefined;
+    if (owner) [lockedNotice.title, lockedNotice.subtitle] = owner;
   };
   syncLocked();
   window.addEventListener('permit-status-changed', (e) => syncLocked((e as CustomEvent).detail?.status));
+
+  // Contents rail: match the owner entries to the groups PermitConditions actually
+  // rendered — reader order (own district first for district staff; HQ then the
+  // permit's districts for everyone else), each with its count; owners with no
+  // conditions drop out. The groups may render before or after this runs, so read
+  // the stored result first, then listen.
+  type RenderedOwner = { id: string; count: number };
+  const scPanel = document.querySelector<HTMLElement>('[data-panel="special-conditions"]');
+  const scToc = scPanel?.querySelector<HTMLElement>('[data-record-toc]');
+  const scList = scToc?.querySelector('ul');
+  const syncConditionsRail = (owners: RenderedOwner[]) => {
+    if (!scToc || !scList) return;
+    const items = [...scList.querySelectorAll<HTMLElement>('[data-toc-item]')];
+    items.forEach((li) => { li.style.display = 'none'; });
+    owners.forEach(({ id, count }) => {
+      const li = items.find((el) => el.dataset.tocItem === id);
+      if (!li) return;
+      li.style.display = '';
+      scList.appendChild(li); // re-append in reader order
+      const n = li.querySelector<HTMLElement>('[data-toc-count]');
+      if (n) n.innerHTML = `${count}<span class="cds--visually-hidden"> ${count === 1 ? 'condition' : 'conditions'}</span>`;
+    });
+    // No conditions at all → nothing to navigate; hide the whole rail.
+    (scToc.closest('.sc-rail') as HTMLElement | null)?.style.setProperty('visibility', owners.length ? '' : 'hidden');
+    scToc.dispatchEvent(new Event('record-toc-refresh'));
+  };
+  const scRoot = scPanel?.querySelector<HTMLElement>('[data-permit-conditions]');
+  if (scRoot?.dataset.renderedOwners) syncConditionsRail(JSON.parse(scRoot.dataset.renderedOwners));
+  scRoot?.addEventListener('permit-conditions-rendered', (e) => syncConditionsRail((e as CustomEvent).detail.owners));
+  // The spies skip hidden panels; re-run every contents rail when a tab is shown.
+  const permitTabs = document.getElementById('permit-tabs');
+  permitTabs?.addEventListener('cds-tabs-selected', () =>
+    requestAnimationFrame(() => document.querySelectorAll('[data-record-toc]')
+      .forEach((toc) => toc.dispatchEvent(new Event('record-toc-refresh')))));
 </script>
 
 <!-- Amendment link — surfaces the amendment on the ORIGINAL permit once one has
@@ -1579,6 +1625,46 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   }
 </script>
 
+<!-- Uploaded files: read a document IN PLACE. A file's View action, a "View CV" on
+     a research-team card, and an "Answered in study proposal" link all open that
+     document in the inline DocumentViewer under the files table (Additional
+     documentation tab) — switching the tab if needed and selecting the file in the
+     viewer's picker (the viewer's own listener swaps the embed). The links' new-tab
+     default is cancelled only when the viewer actually has that document. -->
+<script>
+  const viewerHost = document.querySelector<HTMLElement>('[data-record-docs]');
+  const viewerTabs = document.getElementById('permit-tabs') as any;
+  const viewerPanel = viewerHost?.closest<HTMLElement>('.panel');
+
+  const openInViewer = (href: string): boolean => {
+    const sel = viewerHost?.querySelector('.pdfv__select') as any;
+    const item = sel?.querySelector(`cds-dropdown-item[value="${href}"]`) as HTMLElement | null;
+    if (!viewerHost || !sel || !item) return false;
+    // Switch to the tab that holds the viewer (the page's own tab logic toggles panels).
+    const tab = viewerPanel?.dataset.panel;
+    if (tab && viewerTabs && viewerTabs.value !== tab) {
+      viewerTabs.value = tab;
+      viewerTabs.dispatchEvent(new CustomEvent('cds-tabs-selected'));
+    }
+    viewerHost.hidden = false;
+    sel.value = href;
+    sel.dispatchEvent(new CustomEvent('cds-dropdown-selected', { detail: { item } }));
+    viewerHost.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    return true;
+  };
+
+  document.addEventListener('click', (e) => {
+    const trigger = (e.target as HTMLElement).closest('[data-view-cv], [data-view-doc]') as HTMLElement | null;
+    if (!trigger) return;
+    const href = trigger.dataset.viewCv ?? trigger.dataset.viewDoc;
+    if (href && openInViewer(href)) e.preventDefault();
+  });
+
+  viewerHost?.querySelector('[data-docs-hide]')?.addEventListener('click', () => {
+    viewerHost.hidden = true;
+  });
+</script>
+
 <style>
   /* Amendment notice sits between the header and the tab strip; ships hidden. */
   .amend-notice[hidden] {
@@ -1613,20 +1699,25 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   }
 
   .panels { margin-top: 1.5rem; }
-  /* Row action buttons sit flush-right and tight; the buttons themselves are
-     stock cds-button (ghost, icon-only) — this only handles their grouping. */
-  .doc-actions { display: flex; gap: 0.25rem; justify-content: flex-end; }
+  /* Contents rails (Application, Special conditions) pin below the sticky tab strip
+     (6rem header + compact bar, plus the ~4rem strip). */
+  .sc-rail__sticky,
+  .app-rail__sticky { position: sticky; top: 10rem; }
+  /* A contents-rail jump lands the section below the sticky page chrome. */
+  .app-anchor { scroll-margin-block-start: 10rem; }
   /* Panels are now .cds--css-grid (display:grid), whose author rule would
      override the [hidden] attribute's UA `display:none` — re-assert hiding so
      the tab script's p.hidden toggle still switches panels. Higher specificity
      than .cds--css-grid, so it wins. */
   .panel[hidden] { display: none; }
 
-  /* Editorial rhythm — sections separated by whitespace, not boxes. */
+  /* Each tab stacks raised panels (ReviewSection `panel`) on the g10 field — the
+     same read as the review wizard's record. The gutter between panels is the
+     grid's own gap; .stack outranks .app-review's editorial gap. */
   .stack {
     display: flex;
     flex-direction: column;
-    gap: 2.75rem;
+    gap: var(--cds-spacing-05, 1rem);
   }
   /* Overview: main content column + Application-history rail, laid out on
      Carbon's 2x Grid (.cds--css-grid). Main spans 11 of 16 columns at lg, the
@@ -1635,15 +1726,11 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   .overview-main {
     display: flex;
     flex-direction: column;
-    gap: 2.75rem;
+    gap: var(--cds-spacing-05, 1rem);
     min-width: 0;
   }
 
-  .lede {
-    margin: 0 0 1.25rem;
-    max-width: 48rem;
-    color: var(--cds-text-secondary, #525252);
-  }
+  /* Sub-heading under the Schedule calendar. */
   .subhead {
     margin: 1.5rem 0 0.75rem;
   }
@@ -1742,11 +1829,12 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
   /* Anchored comments (?comments=anchored) — layout only; controls are cds-*.
      A section's thread sits on the next layer up, directly under its head, so it
-     reads as "about this section" without competing with the content. */
+     reads as "about this section" without competing with the content. Inside a
+     raised panel, --cds-layer resolves to the panel's next layer (gray on white). */
   .sec-thread {
     display: flex; flex-direction: column; gap: 1rem; align-items: flex-start;
     margin-block-end: 1.5rem; padding: 1rem;
-    background: var(--cds-layer-01, #f4f4f4);
+    background: var(--cds-layer, var(--cds-layer-01, #f4f4f4));
   }
   .sec-thread[hidden] { display: none; }
   .sec-thread .thread[hidden] { display: none; }
@@ -1839,24 +1927,6 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
   /* Special conditions — read-only (rendered by PermitConditions). */
   #sc-locked-notice[hidden] { display: none; }
-
-  /* Research team — lead contacts as a card grid (ContactCard = cds-tile);
-     participants render below as a cds-table (its own chrome, no tile). */
-  .contact-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-  }
-
-  /* Parks + generic lists. */
-  .plain-list {
-    margin: 0;
-    padding-left: 1.1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
 
   /* Field-investigation dates — constrain the contained list to a readable
      column width; the list itself is styled by Carbon tokens. */

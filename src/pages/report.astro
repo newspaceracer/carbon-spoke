@@ -1,0 +1,235 @@
+---
+/* manifest:
+     spine: main.page > PageHeader + cds--css-grid > form column
+     sections:
+       - identity banner -> PageHeader (crumbs Permits / id / Final report)
+       - status          -> cds-inline-notification (already on file / overdue)
+       - summary         -> cds-textarea
+       - survey effort   -> cds-table (park unit rows) + cds-text-input (sessions, samples)
+       - specimens       -> cds-table (taxon rows: permitted) + cds-text-input (collected)
+       - data products   -> cds-textarea
+       - attachments     -> cds-file-uploader-drop-container (survey log, data files)
+       - actions         -> cds-button (Submit final report = primary lg, Cancel = secondary lg)
+       - submitted       -> cds-inline-notification success + cds-button back to the permit
+
+   The researcher's FINAL REPORT for a permit — one report, due 30 days after the
+   permit ends (lib/final-report.ts). Its fields mirror what the Final report tab
+   shows (RecordReport: summary, survey effort by park unit, specimens collected
+   against permitted, data products). Submitting stores permit-final-report-${id},
+   which clears delinquency immediately and opens the permit's Final report tab.
+*/
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PermitNav from '../components/PermitNav.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { permit } from '../data/permit';
+import { withBase } from '../lib/base';
+
+export const prototype = {
+  title: 'Final report',
+  summary: 'A permit holder files the final report for an ended permit: findings, survey effort by park, specimens collected, and where the data lives.',
+  tag: 'Researcher',
+};
+
+const parks = permit.studyAreas.districts.flatMap((d) => d.parks);
+const specimens = permit.dataCollection.specimens;
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+---
+
+<BaseLayout title={`Final report — ${permit.id}`}>
+  <PermitNav slot="nav" />
+  <main class="page">
+    <PageHeader
+      eyebrow={permit.id}
+      title="Final report"
+      lede={permit.name}
+      crumbs={[{ label: 'Permits', href: '/my-permits' }, { label: permit.id, href: '/permit' }, { label: 'Final report' }]}
+    />
+
+    <div class="cds--css-grid">
+      <div class="form-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-10">
+        <cds-inline-notification id="report-status" kind="info" low-contrast hide-close-button style="display:none"></cds-inline-notification>
+
+        <form id="report-form" class="report" novalidate data-permit-id={permit.id}>
+          <section class="report__sec" aria-labelledby="sec-summary">
+            <h2 id="sec-summary" class="t-heading-03">Findings</h2>
+            <cds-textarea id="r-summary" name="summary" rows="6"
+              label="Summary of findings (required)"
+              helper-text="What you studied, what you found, and anything park staff should know."></cds-textarea>
+          </section>
+
+          <section class="report__sec" aria-labelledby="sec-effort">
+            <h2 id="sec-effort" class="t-heading-03">Survey effort</h2>
+            <p class="report__hint t-body-01">Enter the field sessions and samples for each park unit. Put the dates, sites, coordinates, and methods in the survey log below.</p>
+            <cds-table size="md">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Park unit</cds-table-header-cell>
+                  <cds-table-header-cell>Field sessions (required)</cds-table-header-cell>
+                  <cds-table-header-cell>Samples taken (required)</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body>
+                {parks.map((p) => (
+                  <cds-table-row>
+                    <cds-table-cell>{p}</cds-table-cell>
+                    <cds-table-cell><cds-text-input type="number" min="0" size="sm" hide-label label={`Field sessions at ${p}`} data-effort="sessions" data-park={p} value="0"></cds-text-input></cds-table-cell>
+                    <cds-table-cell><cds-text-input type="number" min="0" size="sm" hide-label label={`Samples taken at ${p}`} data-effort="samples" data-park={p} value="0"></cds-text-input></cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+          </section>
+
+          <section class="report__sec" aria-labelledby="sec-specimens">
+            <h2 id="sec-specimens" class="t-heading-03">Specimens collected</h2>
+            <p class="report__hint t-body-01">Enter how many of each taxon you collected. You can't report more than your permit allowed.</p>
+            <cds-table size="md">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Taxon</cds-table-header-cell>
+                  <cds-table-header-cell>Permitted</cds-table-header-cell>
+                  <cds-table-header-cell>Collected (required)</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body>
+                {specimens.map((s) => (
+                  <cds-table-row>
+                    <cds-table-cell><em>{s.species}</em></cds-table-cell>
+                    <cds-table-cell>{s.quantity}</cds-table-cell>
+                    <cds-table-cell><cds-text-input type="number" min="0" max={s.quantity} size="sm" hide-label label={`${s.species} collected`} data-collected={slug(s.species)} data-species={s.species} data-permitted={s.quantity} value="0"></cds-text-input></cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+          </section>
+
+          <section class="report__sec" aria-labelledby="sec-data">
+            <h2 id="sec-data" class="t-heading-03">Data products</h2>
+            <cds-textarea id="r-products" name="products" rows="3"
+              label="Where your data and specimens are deposited (required)"
+              helper-text="For example: herbarium accession numbers, a GenBank project, a data repository DOI."></cds-textarea>
+          </section>
+
+          <section class="report__sec" aria-labelledby="sec-files">
+            <h2 id="sec-files" class="t-heading-03">Attachments</h2>
+            <p class="report__hint t-body-01">Survey log (dates, sites, coordinates, methods) and any data files (optional). Accepted file types: PDF, CSV, XLSX.</p>
+            <cds-file-uploader-drop-container id="r-files" multiple accept=".pdf,.csv,.xlsx">
+              Drag and drop files here, or click to upload
+            </cds-file-uploader-drop-container>
+            <ul id="r-file-list" class="report__files t-body-01"></ul>
+          </section>
+
+          <div class="report__actions">
+            <cds-button id="r-submit" size="lg" type="button">Submit final report</cds-button>
+            <cds-button size="lg" kind="secondary" href={withBase('/permit')}>Cancel</cds-button>
+          </div>
+        </form>
+
+        <div id="report-done" class="report__done" style="display:none">
+          <cds-inline-notification kind="success" low-contrast hide-close-button
+            title="Final report submitted"
+            subtitle="The review team has your report. Any renewal block on your permits is lifted."></cds-inline-notification>
+          <cds-button size="lg" href={withBase('/permit')}>Back to your permit</cds-button>
+        </div>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script>
+  import { reportKey, reportOnFile, reportState, reportDueISO, formatDate, todayISO } from '../lib/final-report';
+  import { readIdentity } from '../lib/maintenance';
+  import { activeUser } from '../data/user';
+
+  const form = document.getElementById('report-form') as HTMLFormElement | null;
+  const done = document.getElementById('report-done') as HTMLElement | null;
+  const statusNote = document.getElementById('report-status') as any;
+  const id = form?.dataset.permitId ?? '';
+  const status = localStorage.getItem(`permit-status-${id}`) || 'Active';
+
+  const showDone = () => { if (form) form.style.display = 'none'; if (done) done.style.display = ''; if (statusNote) statusNote.style.display = 'none'; };
+
+  if (reportOnFile(id)) {
+    showDone();
+  } else if (statusNote) {
+    const state = reportState(status, id);
+    const due = formatDate(reportDueISO());
+    const note: [string, string, string] | null =
+      state === 'delinquent' ? ['error', `Your report is overdue — it was due ${due}`, "Until you submit it, you can't apply for, renew, or amend a permit as principal investigator."]
+      : state === 'due' ? ['info', `Due ${due}`, '30 days after your permit ended.']
+      : state === 'not-due' ? ['info', `Due ${due}`, "Your permit hasn't ended yet. You can file early if your fieldwork is done."]
+      : null;
+    if (note) {
+      statusNote.setAttribute('kind', note[0]);
+      statusNote.setAttribute('title', note[1]);
+      statusNote.setAttribute('subtitle', note[2]);
+      statusNote.style.display = '';
+    }
+  }
+
+  // Attachments: list chosen files by name (the prototype keeps names only).
+  const files: string[] = [];
+  const fileList = document.getElementById('r-file-list');
+  document.getElementById('r-files')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+    const added = ((e as CustomEvent).detail?.addedFiles ?? []) as File[];
+    added.forEach((f) => files.push(f.name));
+    if (fileList) fileList.replaceChildren(...files.map((n) => { const li = document.createElement('li'); li.textContent = n; return li; }));
+  });
+
+  const num = (el: any) => Number(el.value || 0);
+  const setInvalid = (el: any, msg: string | null) => {
+    el.invalid = !!msg;
+    if (msg) el.setAttribute('invalid-text', msg); else el.removeAttribute('invalid-text');
+  };
+
+  document.getElementById('r-submit')?.addEventListener('click', () => {
+    if (!form) return;
+    const summary = form.querySelector('#r-summary') as any;
+    const products = form.querySelector('#r-products') as any;
+    const errors: any[] = [];
+    const need = (el: any, msg: string) => { const bad = !String(el.value || '').trim(); setInvalid(el, bad ? msg : null); if (bad) errors.push(el); };
+    need(summary, 'Summarize your findings.');
+    need(products, 'Say where your data and specimens are deposited.');
+    const collected = [...form.querySelectorAll<any>('[data-collected]')];
+    collected.forEach((el) => {
+      const n = num(el), max = Number(el.dataset.permitted);
+      const msg = n < 0 ? 'Enter 0 or more.' : n > max ? `Your permit allowed ${max}.` : null;
+      setInvalid(el, msg);
+      if (msg) errors.push(el);
+    });
+    const effort = [...form.querySelectorAll<any>('[data-effort]')];
+    effort.forEach((el) => { const msg = num(el) < 0 ? 'Enter 0 or more.' : null; setInvalid(el, msg); if (msg) errors.push(el); });
+    if (errors.length) { errors[0].focus?.(); return; }
+
+    const by = activeUser(readIdentity())?.name ?? 'Permit holder';
+    const parks = [...new Set(effort.map((el) => el.dataset.park as string))];
+    localStorage.setItem(reportKey(id), JSON.stringify({
+      submittedAt: formatDate(todayISO()),
+      submittedBy: by,
+      summary: summary.value.trim(),
+      effort: parks.map((park) => ({
+        park,
+        sessions: num(effort.find((el) => el.dataset.park === park && el.dataset.effort === 'sessions')),
+        samples: num(effort.find((el) => el.dataset.park === park && el.dataset.effort === 'samples')),
+      })),
+      collected: collected.map((el) => ({ species: el.dataset.species, permitted: Number(el.dataset.permitted), collected: num(el) })),
+      products: products.value.trim(),
+      files,
+    }));
+    showDone();
+    window.scrollTo({ top: 0 });
+  });
+</script>
+
+<style>
+  /* Page-level layout only — controls are stock cds-*. */
+  .page { padding-block: 0 6rem; }
+  .form-col { padding-block-start: var(--cds-spacing-07, 2rem); display: flex; flex-direction: column; gap: var(--cds-spacing-06, 1.5rem); }
+  .report { display: flex; flex-direction: column; gap: var(--cds-spacing-09, 3rem); }
+  .report__sec { display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); }
+  .report__sec h2, .report__hint { margin: 0; }
+  .report__hint { color: var(--cds-text-secondary, #525252); max-inline-size: 48rem; }
+  .report__files { margin: 0; padding-inline-start: 1.25rem; }
+  .report__actions { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-03, 0.5rem); }
+  .report__done { display: flex; flex-direction: column; align-items: flex-start; gap: var(--cds-spacing-05, 1rem); }
+</style>

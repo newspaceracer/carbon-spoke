@@ -5,13 +5,51 @@
 // permit allowed, and where the data products live. Mock data: data/final-report.ts.
 // The tab only exists when a report is on file (gated by the page).
 import { finalReport as r } from '../../data/final-report';
+import { permit } from '../../data/permit';
 
 const totalCollected = r.collected.reduce((n, t) => n + t.collected, 0);
 const totalPermitted = r.collected.reduce((n, t) => n + t.permitted, 0);
 const taxaCollected = r.collected.filter((t) => t.collected > 0).length;
 ---
 
-<div class="rr">
+<!-- A report the researcher filed through /report (permit-final-report-${id}) is
+     shown from storage; otherwise the seeded mock below (the `?report=1` preview). -->
+<div class="rr" data-rr-filed data-permit-id={permit.id} style="display:none">
+  <dl class="rr__meta">
+    <div><dt class="t-label-01">Submitted</dt><dd class="t-body-01" data-rr="submittedAt"></dd></div>
+    <div><dt class="t-label-01">Submitted by</dt><dd class="t-body-01" data-rr="submittedBy"></dd></div>
+    <div><dt class="t-label-01">Specimens collected</dt><dd class="t-body-01" data-rr="totals"></dd></div>
+  </dl>
+  <h3 class="rr__sub t-heading-02">Summary</h3>
+  <p class="rr__prose t-body-02" data-rr="summary"></p>
+  <h3 class="rr__sub t-heading-02">Survey effort</h3>
+  <cds-table size="md">
+    <cds-table-head>
+      <cds-table-header-row>
+        <cds-table-header-cell>Park unit</cds-table-header-cell>
+        <cds-table-header-cell>Field sessions</cds-table-header-cell>
+        <cds-table-header-cell>Samples</cds-table-header-cell>
+      </cds-table-header-row>
+    </cds-table-head>
+    <cds-table-body data-rr-body="effort"></cds-table-body>
+  </cds-table>
+  <h3 class="rr__sub t-heading-02">Specimens collected</h3>
+  <cds-table size="md">
+    <cds-table-head>
+      <cds-table-header-row>
+        <cds-table-header-cell>Species</cds-table-header-cell>
+        <cds-table-header-cell>Permitted</cds-table-header-cell>
+        <cds-table-header-cell>Collected</cds-table-header-cell>
+      </cds-table-header-row>
+    </cds-table-head>
+    <cds-table-body data-rr-body="collected"></cds-table-body>
+  </cds-table>
+  <h3 class="rr__sub t-heading-02">Data products</h3>
+  <p class="rr__prose t-body-02" data-rr="products"></p>
+  <ul class="rr__products" data-rr-body="files"></ul>
+</div>
+
+<div class="rr" data-rr-mock>
   <dl class="rr__meta">
     <div><dt class="t-label-01">Submitted</dt><dd class="t-body-01">{r.submittedAt}</dd></div>
     <div><dt class="t-label-01">Submitted by</dt><dd class="t-body-01">{r.submittedBy}</dd></div>
@@ -75,6 +113,38 @@ const taxaCollected = r.collected.filter((t) => t.collected > 0).length;
     ))}
   </ul>
 </div>
+
+<script>
+  // Swap in the researcher's filed report when one is stored.
+  const filed = document.querySelector<HTMLElement>('[data-rr-filed]');
+  const mock = document.querySelector<HTMLElement>('[data-rr-mock]');
+  let report: any = null;
+  try { report = JSON.parse(localStorage.getItem(`permit-final-report-${filed?.dataset.permitId}`) || 'null'); } catch {}
+  if (filed && mock && report) {
+    const set = (k: string, v: string) => { const el = filed.querySelector(`[data-rr="${k}"]`); if (el) el.textContent = v; };
+    const collected = (report.collected ?? []) as { species: string; permitted: number; collected: number }[];
+    const got = collected.reduce((n, t) => n + t.collected, 0);
+    const allowed = collected.reduce((n, t) => n + t.permitted, 0);
+    set('submittedAt', report.submittedAt ?? '');
+    set('submittedBy', report.submittedBy ?? '');
+    set('totals', `${got} of ${allowed} permitted · ${collected.filter((t) => t.collected > 0).length} taxa`);
+    set('summary', report.summary ?? '');
+    set('products', report.products ?? '');
+    const row = (cells: string[]) => {
+      const tr = document.createElement('cds-table-row');
+      cells.forEach((c) => { const td = document.createElement('cds-table-cell'); td.textContent = c; tr.append(td); });
+      return tr;
+    };
+    filed.querySelector('[data-rr-body="effort"]')?.replaceChildren(
+      ...(report.effort ?? []).map((e: any) => row([e.park, String(e.sessions), String(e.samples)])));
+    filed.querySelector('[data-rr-body="collected"]')?.replaceChildren(
+      ...collected.map((t) => row([t.species, String(t.permitted), String(t.collected)])));
+    filed.querySelector('[data-rr-body="files"]')?.replaceChildren(
+      ...((report.files ?? []) as string[]).map((n) => { const li = document.createElement('li'); li.className = 't-body-01'; li.textContent = n; return li; }));
+    filed.style.display = '';
+    mock.style.display = 'none';
+  }
+</script>
 
 <style>
   /* Layout only — tables are cds-table, type from the t-* scale. */

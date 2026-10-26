@@ -19,9 +19,9 @@ const { title, commentKey } = Astro.props;
 ---
 
 <section class="sec" data-comment-section={commentKey} data-comment-label={commentKey ? title : undefined}>
-  <div class="sec__head">
+  <div class="sec__head" data-section-head>
     <h2 class="sec__title t-heading-03">{title}</h2>
-    <div class="sec__aside">
+    <div class="sec__aside" data-section-aside>
       <slot name="aside" />
     </div>
   </div>

@@ -90,7 +90,7 @@ const isLead = (m: TeamMember) => m.highlight === true || m.role === 'Responsibl
 // The Lead analyst reads Complete only once the permit has left review (Out for
 // signature and beyond) — their sign-off IS the end of the analysis. Before that
 // they're actively reviewing (Pending). Everyone else carries their own status.
-const leadComplete = ['Out for signature', 'Waiting for annual report', 'Active'].includes(status.label);
+const leadComplete = ['Out for signature', 'Waiting for final report', 'Active'].includes(status.label);
 const memberStatus = (m: TeamMember): ReviewStatus =>
   isLead(m) ? (leadComplete ? 'complete' : 'pending') : m.reviewStatus;
 // The date/time line under the status. The lead's is phrased as a sign-off, not a
@@ -192,7 +192,7 @@ const rosterSections = [
         </cds-menu>
       </cds-combo-button>
       <cds-button data-when="Out for signature" class="permit-action-sign" size="md" hidden>Sign permit</cds-button>
-      <cds-button data-when="Waiting for annual report" class="permit-hold-override" size="md" hidden>Override hold — issue permit</cds-button>
+      <cds-button data-when="Waiting for final report" class="permit-hold-override" size="md" hidden>Override hold — issue permit</cds-button>
       <cds-button data-when="Active" class="permit-action-amend" size="md" href={amendHref} hidden>Request amendment</cds-button>
     </div>
   </div>
@@ -254,7 +254,7 @@ const rosterSections = [
       </cds-menu>
     </cds-combo-button>
     <cds-button data-when="Out for signature" class="permit-action-sign" size="md" hidden>Sign permit</cds-button>
-      <cds-button data-when="Waiting for annual report" class="permit-hold-override" size="md" hidden>Override hold — issue permit</cds-button>
+      <cds-button data-when="Waiting for final report" class="permit-hold-override" size="md" hidden>Override hold — issue permit</cds-button>
     <cds-button data-when="Active" class="permit-action-amend" size="md" href={amendHref} hidden>Request amendment</cds-button>
   </div>
 </div>
@@ -526,7 +526,7 @@ const rosterSections = [
     'Waiting for review': 'not-started',
     'Under review': 'in-progress',
     'Out for signature': 'pending',
-    'Waiting for annual report': 'caution-minor',
+    'Waiting for final report': 'caution-minor',
     'Active': 'succeeded',
     'Changes requested': 'caution-minor',
     'Rejected': 'failed',
@@ -607,14 +607,14 @@ const rosterSections = [
   };
 
   // The second signature (Sign permit) activates — unless a renewal's prior annual
-  // report is missing, which holds it (Waiting for annual report) and notifies via
+  // report is missing, which holds it (Waiting for final report) and notifies via
   // EM-H (Story 13).
   const applySecondSignature = () => {
     const s = readSigs();
     s.second = { by: 'Second signer', at: stamp() };
     writeSigs(s);
     if (localStorage.getItem(holdFlagKey) === '1') {
-      setStatus('Waiting for annual report');
+      setStatus('Waiting for final report');
       sendEmail('EM-H', emailVars());
     } else {
       setStatus('Active');
@@ -1122,7 +1122,7 @@ const rosterSections = [
     // on every transition; repaint the lead row(s) live so the modal stays truthful
     // without a reload. Non-lead rows are driven by their own reviewStatus, untouched.
     const paintLead = (status: string) => {
-      const complete = ['Out for signature', 'Waiting for annual report', 'Active'].includes(status);
+      const complete = ['Out for signature', 'Waiting for final report', 'Active'].includes(status);
       roster.querySelectorAll<HTMLElement>('.review-row[data-lead="true"]').forEach((row) => {
         row.dataset.status = complete ? 'complete' : 'pending';
         const ind = row.querySelector('.review-row__ind');

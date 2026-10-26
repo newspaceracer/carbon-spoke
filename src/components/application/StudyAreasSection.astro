@@ -1,0 +1,51 @@
+---
+// Application record · Study areas — the authorized parks grouped by district.
+// Shared by the review wizard (ApplicationReview: the district lists, re-rendered
+// by the page script from its parks state, with an Edit button opening the parks
+// multi-select modal) and the permit detail page, which passes its OWN body in the
+// default slot — the merged-cell parks-and-contacts table (the detail's job is to
+// show who covers each park; the wizard's is to edit the park set). The section
+// chrome (title, badges, frame) is the one thing both share.
+//
+// carbon-checked: every control is stock — cds-unordered-list, cds-icon-button
+// (EditButton); the district label is label-over-list prose.
+import ReviewSection from '../ReviewSection.astro';
+import EditButton from '../EditButton.astro';
+import { permit, badgesForSection } from '../../data/permit';
+import { ORDER, type SectionFrame } from '../../lib/application-record';
+
+interface Props extends SectionFrame {
+  readonly?: boolean;
+  title?: string;
+}
+const {
+  readonly = false, title = 'Study areas',
+  collapsible = false, layered = false, panel = false, orderIndex = ORDER.study, commentKey,
+} = Astro.props;
+const sa = permit.studyAreas;
+const custom = Astro.slots.has('default');
+---
+
+<ReviewSection title={title} collapsible={collapsible} layered={layered} panel={panel} orderIndex={orderIndex} commentKey={commentKey} {...badgesForSection('study')}>
+  {custom ? (
+    <slot />
+  ) : (
+    <div class="subblock">
+      <div class="roster__head sub-head-row">
+        <h3 class="sub-head t-heading-02">Study area parks</h3>
+        {!readonly && <EditButton item="study-areas" label="study area parks" />}
+      </div>
+      <div id="sa-readonly" class="sa-readonly">
+        {sa.districts.filter((d) => d.parks.length).map((d) => (
+          <div class="narrative">
+            <p class="narrative__label t-label-01">{d.name} ({d.parks.length})</p>
+            <cds-unordered-list>
+              {[...d.parks].sort((a, b) => a.localeCompare(b)).map((name) => <cds-list-item>{name}</cds-list-item>)}
+            </cds-unordered-list>
+          </div>
+        ))}
+      </div>
+      <p id="sa-empty" class="sub-note t-body-01" hidden>No study area parks yet.</p>
+    </div>
+  )}
+</ReviewSection>

@@ -1,0 +1,136 @@
+---
+// Application record · Data collection — two parts, each led by its gate answer:
+// specimen collection → Specimens + Collection & curation; laboratory work →
+// Laboratory & analysis. Shared by the review wizard (ApplicationReview: the gate
+// is a statement with an Edit button, specimens are a roster the page script fills
+// and edits, facts are label-over-value rows with Edit buttons) and the permit
+// detail page (`readonly`: the detail's "facts are tiles" read — the gate answer
+// and the facts sit on one FactGrid of tiles, facility contacts as contact cards
+// in the same grid, the specimens as a plain table; a "No" gate shows only its
+// tile).
+//
+// carbon-checked: every control is stock — FactGrid (cds-tile), ContactCard,
+// cds-table, cds-button, cds-icon-indicator (YesNoStatement). `ro-table` is only a
+// display:block hook on the stock cds-table.
+import ReviewSection from '../ReviewSection.astro';
+import ContactCard from '../ContactCard.astro';
+import FactGrid from '../FactGrid.astro';
+import YesNoStatement from '../YesNoStatement.astro';
+import EditButton from '../EditButton.astro';
+import { permit, badgesForSection, type MetaRow } from '../../data/permit';
+import { dataCollectionParts, ORDER, type SectionFrame } from '../../lib/application-record';
+
+interface Props extends SectionFrame {
+  readonly?: boolean;
+  title?: string;
+}
+const {
+  readonly = false, title = 'Data collection',
+  collapsible = false, layered = false, panel = false, orderIndex = ORDER.data, commentKey,
+} = Astro.props;
+const dc = permit.dataCollection;
+
+// Read-only: the gate answer leads each part's tile grid as a statement tile.
+const gateRow = (part: (typeof dataCollectionParts)[number]): MetaRow => ({
+  key: part.gateKey, value: part.on ? 'Yes' : 'No', boolean: true, statements: part.statements,
+});
+---
+
+<ReviewSection title={title} collapsible={collapsible} layered={layered} panel={panel} orderIndex={orderIndex} commentKey={commentKey} {...badgesForSection('data')}>
+  {readonly ? (
+    dataCollectionParts.map((part) => (
+      <>
+        <div class="subblock">
+          <h3 class="sub-head t-heading-02">{part.heading}</h3>
+          <FactGrid rows={[gateRow(part), ...(part.on ? part.rows : [])]} min="20rem" tiles />
+        </div>
+        {part.specimens && part.on && (
+          <div class="subblock">
+            <h3 class="sub-head t-heading-02">Specimens</h3>
+            <p class="sub-note t-body-01">The taxa and quantities authorized for collection — this list prints on the permit.</p>
+            <cds-table class="ro-table">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Species</cds-table-header-cell>
+                  <cds-table-header-cell>Quantity</cds-table-header-cell>
+                  <cds-table-header-cell>Portion</cds-table-header-cell>
+                  <cds-table-header-cell>Condition</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body>
+                {dc.specimens.map((s) => (
+                  <cds-table-row>
+                    <cds-table-cell><em>{s.species}</em></cds-table-cell>
+                    <cds-table-cell>{s.quantity}</cds-table-cell>
+                    <cds-table-cell>{s.portion}</cds-table-cell>
+                    <cds-table-cell>{s.condition}</cds-table-cell>
+                  </cds-table-row>
+                ))}
+              </cds-table-body>
+            </cds-table>
+          </div>
+        )}
+      </>
+    ))
+  ) : (
+    dataCollectionParts.map((part) => (
+      <div class="dc-part" data-edit-scope={part.scope}>
+        <ul class="statements dc-gate">
+          <li class="statement">
+            <YesNoStatement value={part.on} statements={part.statements} bind="value" />
+            <EditButton item={part.scope} label={part.gateLabel} />
+          </li>
+        </ul>
+        {part.specimens && (
+          <div class="subblock" data-show-if="value" hidden={!part.on}>
+            <div class="roster__head">
+              <h3 class="sub-head t-heading-02">Specimens</h3>
+              <cds-button id="add-specimen" kind="tertiary" size="md">Add specimen</cds-button>
+            </div>
+            <p class="sub-note t-body-01">The taxa and quantities authorized for collection. Add, edit, or remove a specimen. This list prints on the permit as the authorized collection.</p>
+            <cds-table id="specimen-table" class="ro-table">
+              <cds-table-head>
+                <cds-table-header-row>
+                  <cds-table-header-cell>Species</cds-table-header-cell>
+                  <cds-table-header-cell>Quantity</cds-table-header-cell>
+                  <cds-table-header-cell>Portion</cds-table-header-cell>
+                  <cds-table-header-cell>Condition</cds-table-header-cell>
+                  <cds-table-header-cell>Actions</cds-table-header-cell>
+                </cds-table-header-row>
+              </cds-table-head>
+              <cds-table-body id="specimen-body"></cds-table-body>
+            </cds-table>
+            <p id="specimen-empty" class="sub-note t-body-01" hidden>No specimens added yet.</p>
+          </div>
+        )}
+        <div class="subblock" data-show-if="value" hidden={!part.on}>
+          <h3 class="sub-head t-heading-02">{part.heading}</h3>
+          {/* Facilities + officials keep the app's common contact-card pattern. */}
+          <div class="contact-grid dc-contacts">
+            {part.rows.map((r, i) => r.contact && (
+              <ContactCard role={r.key} contact={r.contact} kind={r.contactKind} editKey={`${part.prefix}-${i}`} />
+            ))}
+          </div>
+          <dl class="review">
+            {part.rows.map((r, i) => !r.contact && (
+              <div class="review__row" data-edit-scope={`${part.prefix}-${i}`}>
+                <dt class="review__label t-label-01">{r.key}</dt>
+                <dd class="review__value review__value--editable t-body-01">
+                  <span class="review__answer">
+                    {r.href ? (
+                      <>
+                        <cds-link href={r.href} size="lg" target="_blank" rel="noopener" data-view-doc={r.href} data-show-if="inProposal">{r.linkLabel ?? r.value}</cds-link>
+                        <span data-bind="value" data-hide-if="inProposal" hidden></span>
+                      </>
+                    ) : <span data-bind="value">{r.value}</span>}
+                  </span>
+                  <EditButton item={`${part.prefix}-${i}`} label={r.key.toLowerCase()} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    ))
+  )}
+</ReviewSection>

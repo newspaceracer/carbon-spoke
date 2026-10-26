@@ -214,7 +214,7 @@ export const permit = {
         steps: [
           { label: 'Permit active', state: 'incomplete' },
           { label: 'Permit expired', state: 'incomplete' },
-          { label: 'Annual report submitted', state: 'incomplete' },
+          { label: 'Final report submitted', state: 'incomplete' },
           { label: 'Renewal processed', state: 'incomplete' },
         ],
       },
@@ -281,9 +281,9 @@ export const permit = {
         { label: 'Start', value: '07/22/2026' },
         { label: 'End', value: '07/22/2027' },
       ] },
-      { key: 'Annual report', entries: [
-        { label: 'Tentative completion', value: '08/31/2027' },
-        { label: 'Required by', value: '09/30/2027' },
+      { key: 'Final report', entries: [
+        { label: 'Tentative completion', value: '08/14/2027' },
+        { label: 'Due', value: '08/21/2027' },
       ] },
     ] as MetaRow[],
     // ISO pair for the 'Project dates' row above — drives the calendar's project markers.
@@ -305,12 +305,13 @@ export const permit = {
     // Structured ISO sessions (calendar source) + the display list derived from them.
     fieldSessions,
     fieldOccurrences: fieldSessions.map(sessionLabel),
-    // Annual-report milestones — two distinct dates: the author's TARGET completion
-    // and the hard SUBMISSION deadline that follows it (also the special condition).
+    // Final-report milestones — two distinct dates: the author's TARGET completion
+    // and the hard deadline, 30 days after the permit ends (lib/final-report.ts;
+    // also the special condition).
     // ISO + display pairs drive the schedule calendar's report markers.
     annualReport: {
-      tentativeISO: '2027-08-31', tentativeLabel: 'Aug 31, 2027',
-      requiredISO: '2027-09-30', requiredLabel: 'Sep 30, 2027',
+      tentativeISO: '2027-08-14', tentativeLabel: 'Aug 14, 2027',
+      requiredISO: '2027-08-21', requiredLabel: 'Aug 21, 2027',
     },
     // Fixed "today" for the schedule calendar's current-date marker — anchored (not
     // new Date()) so the mock stays deterministic and the marker lands in-window.
@@ -372,7 +373,7 @@ export const permit = {
     'Collection is limited to the approved study areas and the taxa and quantities listed under Data Collection.',
     'No collection within posted marine reserve or special-closure boundaries.',
     'All collected specimens are State property and must be curated at the approved facility.',
-    'An annual report is due by Sep 30, 2027.',
+    'A final report is due by Aug 21, 2027, 30 days after the permit ends.',
   ],
 
   // ── Data collection tab ──────────────────────────────────────────────────

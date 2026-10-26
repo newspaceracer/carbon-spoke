@@ -1,37 +1,49 @@
 ---
 // The permit's applied special conditions, READ-ONLY — grouped by owner in a stock
 // cds-accordion (the app's collapse pattern): Headquarters first, then each
-// district on the permit, in the permit's own district order. Curation (add / edit
+// district on the permit, in the permit's own district order — except for a
+// district reviewer, whose own district leads (orderOwnersForReader). Curation (add / edit
 // / remove) happens in the review workflow (final-letter); this only reads the
 // shared permit-conditions-${id} localStorage set the workflow writes, so every
 // view agrees on what will print. Used by the permit detail page and the
 // application-record prototype.
+//
+// Each owner group is an anchor target (id = `${idPrefix}-${ownerKey}`) so a page
+// contents rail can jump to it. After rendering, the root fires
+// `permit-conditions-rendered` with the groups actually shown, in reader order:
+// detail = { owners: { key, id, title, count }[] } — also stored as JSON on the
+// root's data-rendered-owners for a listener that attaches later.
+interface Props {
+  idPrefix?: string;
+}
+const { idPrefix = 'conditions' } = Astro.props;
 ---
 
-<div class="pc" data-permit-conditions>
+<div class="pc" data-permit-conditions data-id-prefix={idPrefix}>
   <cds-accordion size="lg" data-pc-accordion></cds-accordion>
   <p class="pc__empty t-body-01" data-pc-empty hidden>No special conditions on this permit yet.</p>
 </div>
 
 <script>
-  import { loadAppliedConditions, permitDistricts as districts } from '../lib/permit-conditions';
+  import { loadAppliedConditions, permitDistricts as districts, readerOwnerOrder } from '../lib/permit-conditions';
 
   const conditions = loadAppliedConditions();
-  const owners: { key: string; title: string }[] = [
-    { key: 'hq', title: 'Headquarters conditions' },
-    ...districts.map((d) => ({ key: d.key, title: d.name })),
-  ];
+  const ownerTitle = (key: string) => (key === 'hq' ? 'Headquarters conditions' : districts.find((d) => d.key === key)?.name ?? key);
+  const owners: { key: string; title: string }[] = readerOwnerOrder().map((key) => ({ key, title: ownerTitle(key) }));
 
   document.querySelectorAll<HTMLElement>('[data-permit-conditions]').forEach((root) => {
     const acc = root.querySelector('[data-pc-accordion]');
     const empty = root.querySelector<HTMLElement>('[data-pc-empty]');
     if (!acc) return;
-    let rendered = 0;
+    const prefix = root.dataset.idPrefix || 'conditions';
+    const shown: { key: string; id: string; title: string; count: number }[] = [];
     owners.forEach((owner) => {
       const owned = conditions.filter((c) => c.owner === owner.key);
       if (!owned.length) return;
-      rendered++;
+      const id = `${prefix}-${owner.key}`;
+      shown.push({ key: owner.key, id, title: owner.title, count: owned.length });
       const item = document.createElement('cds-accordion-item');
+      item.id = id;
       item.setAttribute('open', ''); // conditions are for reading — expanded by default
       // Slot the title as heading-compact-01 (bold, same size as body) so the group
       // header outranks the condition text — matching the review workflow's
@@ -54,7 +66,10 @@
       item.appendChild(list);
       acc.appendChild(item);
     });
-    if (empty) empty.hidden = rendered > 0;
+    if (empty) empty.hidden = shown.length > 0;
+    // Also left on the root, for a listener whose script runs after this one.
+    root.dataset.renderedOwners = JSON.stringify(shown);
+    root.dispatchEvent(new CustomEvent('permit-conditions-rendered', { bubbles: true, detail: { owners: shown } }));
   });
 </script>
 
@@ -62,6 +77,8 @@
   /* Layout only; look is cds-* + tokens. Each item's body is the applied
      condition's rich text (JS-built, hence :global). */
   .pc__empty[hidden] { display: none; }
+  /* A contents-rail jump lands the group below the sticky page chrome. */
+  :global([data-permit-conditions] cds-accordion-item[id]) { scroll-margin-block-start: 10rem; }
   .pc__empty { margin: 0.75rem 0 0; color: var(--cds-text-secondary, #525252); }
   :global(.cond__body) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; line-height: 1.28572; }
   :global(.cond__body p) { margin: 0 0 0.375rem; font-size: 0.875rem; }

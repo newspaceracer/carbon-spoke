@@ -1,0 +1,80 @@
+---
+// Application record · Project information — the project narratives (title,
+// category, purpose, benefits), the requested dates as tiles, and the field
+// investigation occurrences. Shared by the review wizard (ApplicationReview: each
+// item editable through the shared record-edit modal, "View in calendar" opens the
+// wizard's schedule modal) and the permit detail page (`readonly`: the same read
+// with no Edit buttons; the detail shows the calendar inline in its own Schedule
+// panel, so the occurrences list and the calendar button are left to the host).
+//
+// carbon-checked: every control is stock — FactGrid (cds-tile), cds-button,
+// cds-unordered-list; the narratives are label-over-paragraph prose.
+import ReviewSection from '../ReviewSection.astro';
+import FactGrid from '../FactGrid.astro';
+import EditButton from '../EditButton.astro';
+import { permit, badgesForSection } from '../../data/permit';
+import { projectItems, requestedDates, ORDER, type SectionFrame } from '../../lib/application-record';
+
+interface Props extends SectionFrame {
+  readonly?: boolean;
+  title?: string;
+  /** Show the "View in calendar" action beside Requested dates (the wizard's
+   *  schedule modal). Defaults to on for the editable record, off when read-only. */
+  calendarButton?: boolean;
+  /** List the field investigation occurrences under the dates. Off when the host
+   *  shows them beside a calendar instead. */
+  showOccurrences?: boolean;
+}
+const {
+  readonly = false, title = 'Project information',
+  calendarButton = !readonly, showOccurrences = true,
+  collapsible = false, layered = false, panel = false, orderIndex = ORDER.project, commentKey,
+} = Astro.props;
+const pj = permit.projectInfo;
+---
+
+<ReviewSection title={title} collapsible={collapsible} layered={layered} panel={panel} orderIndex={orderIndex} commentKey={commentKey} {...badgesForSection('project')}>
+  <!-- Label-over-value items, each with its Edit button in the wizard. Title +
+       category print on the letter (the wizard listens for their edits). -->
+  <div class="subblock">
+    <h3 class="sub-head t-heading-02">Project</h3>
+    {projectItems.map((item) => (
+      <div class="narrative" data-edit-scope={readonly ? undefined : item.key}>
+        {readonly ? (
+          <p class="narrative__label t-label-01">{item.label}</p>
+        ) : (
+          <div class="item-head">
+            <p class="narrative__label t-label-01">{item.label}</p>
+            <EditButton item={item.key} label={item.label.toLowerCase()} />
+          </div>
+        )}
+        <p class="narrative__body t-body-01" data-bind={readonly ? undefined : item.field}>{item.value}</p>
+      </div>
+    ))}
+  </div>
+
+  <div class="subblock">
+    <div class="roster__head sub-head-row">
+      <h3 class="sub-head t-heading-02">Requested dates</h3>
+      {calendarButton && <cds-button kind="ghost" size="sm" data-open-field-cal>View in calendar</cds-button>}
+    </div>
+    <FactGrid rows={requestedDates} min="20rem" tiles editPrefix={readonly ? undefined : 'dates'} />
+  </div>
+
+  {showOccurrences && (
+    <div class="subblock" data-edit-scope={readonly ? undefined : 'field-occurrences'}>
+      <div class="roster__head sub-head-row">
+        <h3 class="sub-head t-heading-02">Field investigation occurrences</h3>
+        {!readonly && <EditButton item="field-occurrences" label="field investigation occurrences" />}
+      </div>
+      {/* `hidden` is spread in only when empty: on a custom element Astro would
+           render hidden={false} as hidden="false", which still hides it. */}
+      <cds-unordered-list data-bind-lines={readonly ? undefined : 'occurrences'} data-show-if={readonly ? undefined : 'occurrences'} {...(pj.fieldOccurrences.length ? {} : { hidden: true })}>
+        {pj.fieldOccurrences.map((o) => (
+          <cds-list-item>{o}</cds-list-item>
+        ))}
+      </cds-unordered-list>
+      <p class="sub-note t-body-01" data-hide-if={readonly ? undefined : 'occurrences'} hidden={pj.fieldOccurrences.length > 0}>No field investigation occurrences added.</p>
+    </div>
+  )}
+</ReviewSection>

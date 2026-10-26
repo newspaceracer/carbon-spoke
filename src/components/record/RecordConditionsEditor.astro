@@ -15,7 +15,7 @@ import ConditionsEditor from '../ConditionsEditor.astro';
 
 <script>
   import { mountConditionsEditor } from '../../lib/conditions-editor';
-  import { loadAppliedConditions, saveAppliedConditions, permitDistricts } from '../../lib/permit-conditions';
+  import { loadAppliedConditions, saveAppliedConditions, readerOwnerOrder } from '../../lib/permit-conditions';
   import { permit } from '../../data/permit';
   import { readIdentity } from '../../lib/maintenance';
   import { activeUser } from '../../data/user';
@@ -34,7 +34,7 @@ import ConditionsEditor from '../ConditionsEditor.astro';
 
     let list = loadAppliedConditions();
     const editor = mountConditionsEditor(host, {
-      owners: ['hq', ...permitDistricts.map((d) => d.key)],
+      owners: readerOwnerOrder(),
       get: () => list,
       set: (next) => { list = next; saveAppliedConditions(next); },
       currentUser: activeUser(identity)?.name || 'You',

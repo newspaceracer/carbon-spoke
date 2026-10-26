@@ -1,32 +1,44 @@
 ---
-// A titled section for ApplicationReview. Two modes:
+// A titled section of the application record. Three modes:
 //
 //   • default — a plain titled block with a hairline rule, IDENTICAL to
 //     PermitSection (so the finalize wizard's step ① is unchanged). It simply
 //     renders PermitSection.
 //   • collapsible — the header becomes a disclosure toggle and the body collapses.
-//     Used by the B2 review-layout study, where the headers are also made
+//     Used by the review wizard, where the headers are also made
 //     STICKY-STACKABLE: each pins at an offset (orderIndex × header height) so the
 //     section headers pile up at the top of the scroll pane as you scroll.
 //     `orderIndex` drives both the visual order (CSS `order`) and the sticky offset
 //     (so the pinned headers stay in visual order); `open` sets the initial state.
 //     Expand/collapse-all + per-section toggling is wired by the page script
-//     (review-layouts.astro) via the data-section-toggle / data-section-body hooks.
+//     (final-letter.astro) via the data-section-toggle / data-section-body hooks.
+//   • panel — the permit DETAIL page's static read: a raised (layer-01) panel on
+//     the page's g10 field with the title + badges in its head, content one layer
+//     deeper (cds-layer level 1 — gray tiles on the white panel). No collapsing:
+//     the detail's tabs already chunk the record, so a disclosure would be a control
+//     without a job.
+//
+// `commentKey` marks the section as a target in the detail page's anchored-comments
+// study (?comments=anchored): the page injects a comment control into the
+// [data-section-aside] hook and a thread after [data-section-head]. Inert elsewhere.
 //
 // carbon-checked: cds-accordion is the spoke's collapsible primitive, but its
-// header lives in shadow DOM and cannot be made `position: sticky`. The B2 study
+// header lives in shadow DOM and cannot be made `position: sticky`. The wizard
 // requires sticky, stacking section headers, so the collapsible mode uses a
 // light-DOM disclosure — a stock <button> toggling aria-expanded over a [hidden]
 // body. Carbon ships no sticky-header accordion; this is a documented exception,
-// not a reinvented lego.
+// not a reinvented lego. The panel mode is a plain <section> surface painted from
+// layer tokens (the same raised-surface treatment as cds-tile, for a section).
 import PermitSection from './PermitSection.astro';
 import FlagTag from './FlagTag.astro';
 import type { Badge } from '../data/permit';
 
 interface Props {
   title: string;
-  /** Render as a sticky, collapsible disclosure (B2 study) instead of a plain block. */
+  /** Render as a sticky, collapsible disclosure (the wizard) instead of a plain block. */
   collapsible?: boolean;
+  /** Render as a static raised panel (the permit detail page). */
+  panel?: boolean;
   /** Initial expanded state (collapsible mode only). */
   open?: boolean;
   /** Visual position — drives CSS `order` and the sticky-stack offset. */
@@ -40,10 +52,16 @@ interface Props {
    *  content sits one layer deeper: wrapping it in cds-layer level 1 steps every
    *  layer-aware control inside (tiles → layer-02, fields, tags, borders) the way
    *  Carbon's layering model expects — e.g. gray contact cards on a white panel
-   *  in a g10 zone. Off by default (plain sections on the page background). */
+   *  in a g10 zone. Off by default (plain sections on the page background);
+   *  always on for `panel`. */
   layered?: boolean;
+  /** Anchored-comments target key (see above). */
+  commentKey?: string;
 }
-const { title, collapsible = false, open = true, orderIndex = 0, tags = [], flags = [], layered = false } = Astro.props;
+const {
+  title, collapsible = false, panel = false, open = true, orderIndex = 0,
+  tags = [], flags = [], layered = false, commentKey,
+} = Astro.props;
 const hasBadges = tags.length + flags.length > 0;
 ---
 
@@ -51,6 +69,8 @@ const hasBadges = tags.length + flags.length > 0;
   <section
     class="rsec"
     data-review-section
+    data-comment-section={commentKey}
+    data-comment-label={commentKey ? title : undefined}
     style={`--order-i:${orderIndex}; --stack-i:${orderIndex}`}
   >
     <h2 class="rsec__head">
@@ -71,8 +91,29 @@ const hasBadges = tags.length + flags.length > 0;
       {layered ? <cds-layer level="1" class="rsec__layer"><slot /></cds-layer> : <slot />}
     </div>
   </section>
+) : panel ? (
+  <section
+    class="rpanel"
+    data-review-section
+    data-comment-section={commentKey}
+    data-comment-label={commentKey ? title : undefined}
+  >
+    <div class="rpanel__head" data-section-head>
+      <h2 class="rpanel__title t-heading-03">{title}</h2>
+      {hasBadges && (
+        <div class="rpanel__badges">
+          {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+          {flags.map((tag) => <FlagTag tag={tag} />)}
+        </div>
+      )}
+      <div class="rpanel__aside" data-section-aside>
+        <slot name="aside" />
+      </div>
+    </div>
+    <cds-layer level="1" class="rpanel__layer"><slot /></cds-layer>
+  </section>
 ) : (
-  <PermitSection title={title}>
+  <PermitSection title={title} commentKey={commentKey}>
     {hasBadges && (
       <Fragment slot="aside">
         {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
@@ -84,11 +125,34 @@ const hasBadges = tags.length + flags.length > 0;
 )}
 
 <style>
-  /* ── Collapsible, sticky-stackable disclosure (B2 study) ─────────────────────
-     The header pins to the top of the nearest scroll ancestor (B2's .appreview-scroll
-     pane). Each section's offset = its visual index × the header height, so headers
-     stack rather than overlap. Earlier sections keep a higher z-index so an incoming
-     header slides UNDER the already-pinned ones until it reaches its own stop.
+  /* ── Static raised panel (the permit detail page) ───────────────────────────
+     Layout + surface only — type from the t-* scale, color from --cds-* tokens.
+     The panel is layer-01 on the page's g10 field; its content is stepped one
+     layer deeper by the cds-layer wrapper. */
+  .rpanel {
+    background: var(--cds-layer-01, #ffffff);
+    padding: var(--cds-spacing-07, 2rem);
+  }
+  @media (max-width: 42rem) {
+    .rpanel { padding: var(--cds-spacing-06, 1.5rem) var(--cds-spacing-05, 1rem); }
+  }
+  .rpanel__head {
+    display: flex; flex-wrap: wrap; align-items: center;
+    column-gap: var(--cds-spacing-05, 1rem); row-gap: var(--cds-spacing-03, 0.5rem);
+    margin-bottom: var(--cds-spacing-06, 1.5rem);
+  }
+  .rpanel__title { margin: 0; }
+  .rpanel__badges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-spacing-02, 0.25rem); }
+  /* Real actions (and the internal-only flag) sit at the far end of the head. */
+  .rpanel__aside { display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); margin-inline-start: auto; }
+  .rpanel__aside:empty { display: none; }
+  .rpanel__layer { display: block; }
+
+  /* ── Collapsible, sticky-stackable disclosure (the wizard) ────────────────────
+     The header pins to the top of the nearest scroll ancestor. Each section's
+     offset = its visual index × the header height, so headers stack rather than
+     overlap. Earlier sections keep a higher z-index so an incoming header slides
+     UNDER the already-pinned ones until it reaches its own stop.
 
      `display: contents` is what makes the headers ACCUMULATE: it dissolves this
      section's box so the header + body become direct children of .app-review (the
@@ -103,7 +167,7 @@ const hasBadges = tags.length + flags.length > 0;
     order: var(--order-i, 0);
     position: sticky;
     /* --rsec-sticky-top lets the host page push the whole stack below fixed/sticky
-       page chrome (e.g. B2's step tracker). Defaults to 0 when unset. */
+       page chrome (e.g. the wizard's step tracker). Defaults to 0 when unset. */
     top: calc(var(--rsec-sticky-top, 0px) + var(--stack-i, 0) * var(--rsec-h));
     z-index: calc(50 - var(--stack-i, 0));
     margin: 0;
@@ -113,13 +177,16 @@ const hasBadges = tags.length + flags.length > 0;
 
   /* The whole header bar is the disclosure control (a stock button — see
      carbon-checked note above). Full-width, left-aligned, token-styled. */
+  /* Top-aligned so a header whose badges wrap to a second row keeps the chevron on
+     the TITLE's line. Padding (10px) + the title's 28px line = the 48px header, so
+     a one-line header is unchanged; a wrapped one grows evenly. */
   .rsec__toggle {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.5rem;
     inline-size: 100%;
     min-block-size: var(--rsec-h);
-    padding: 0.5rem 0;
+    padding: 0.625rem 0;
     background: none;
     border: 0;
     text-align: start;
@@ -138,12 +205,14 @@ const hasBadges = tags.length + flags.length > 0;
      when the header is narrow. */
   .rsec__label {
     display: flex; flex-wrap: wrap; align-items: center;
-    column-gap: 0.75rem; row-gap: 0.25rem; min-inline-size: 0;
+    column-gap: 0.75rem; row-gap: 0.5rem; min-inline-size: 0;
+    min-block-size: 1.75rem; /* the title's line, so badges center against it */
   }
   .rsec__badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
 
   .rsec__chevron {
     flex: 0 0 auto;
+    margin-block-start: 0.375rem; /* centers the 16px glyph on the 28px title line */
     color: var(--cds-icon-primary, #161616);
     transition: transform 0.15s ease;
   }

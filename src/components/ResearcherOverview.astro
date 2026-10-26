@@ -1,0 +1,266 @@
+---
+// The researcher OWNER's Overview: what a permit holder needs first, by stage.
+// Before a decision it answers "where is my application, and do I need to do
+// anything?"; once issued, "what am I allowed to do, where, when, and under what
+// conditions?"; once closed, "what happened, and what's next?" — plus the final
+// report obligation from the moment the permit is issued (lib/final-report.ts).
+//
+// Server-renders every block; the script picks what applies to the live status
+// and fills the dynamic bits. Hidden until the page script reveals it for an
+// owner (staff keep their review workspace on Overview).
+//
+// Composition: cds-tile, cds-progress-indicator/-step, cds-actionable-notification,
+// cds-button, cds-link, cds-contained-list. Layout CSS only; look = tokens.
+// "Go to" links switch the page's tab and scroll to an anchor (data-ro-go =
+// "tab" or "tab#anchor") — the permit page's tabs and section anchors.
+import { permit } from '../data/permit';
+import { userDirectory } from '../data/user';
+import { withBase } from '../lib/base';
+
+const sa = permit.studyAreas;
+const dc = permit.dataCollection;
+const parkCount = sa.districts.reduce((n, d) => n + d.parks.length, 0);
+const specimenTotal = dc.specimens.reduce((n, s) => n + Number(s.quantity), 0);
+const analyst = permit.overview.analysisTeam.find((m) => 'highlight' in m && m.highlight);
+const analystEmail = userDirectory.find((u) => u.id === analyst?.id)?.email ?? '';
+const steps = ['Submitted', 'Under review', 'Decision', 'Signature', 'Active'];
+---
+
+<div class="ro" data-researcher-overview data-permit-id={permit.id}
+  data-start={permit.activeWindow.start} data-end={permit.activeWindow.end}
+  data-end-iso={permit.activeWindow.endISO} style="display:none">
+
+  <!-- Stage: where the permit is, what happens next, the one thing to do. -->
+  <cds-tile class="ro__stage">
+    <h2 class="ro__title t-heading-04" data-ro-title></h2>
+    <p class="ro__next t-body-02" data-ro-next></p>
+    <cds-progress-indicator class="ro__progress" data-ro-progress space-equally>
+      {steps.map((label) => <cds-progress-step label={label}></cds-progress-step>)}
+    </cds-progress-indicator>
+    <div class="ro__actions" data-ro-actions>
+      <cds-button size="lg" data-ro-action="continue" href={withBase(`/apply?revise=${permit.id}`)} style="display:none">Continue your application</cds-button>
+      <cds-button size="lg" data-ro-action="revise" href={withBase(`/apply?revise=${permit.id}`)} style="display:none">Make the requested changes</cds-button>
+      <cds-button size="lg" data-ro-action="letter" data-ro-go="letter" style="display:none">Read your permit letter</cds-button>
+      <cds-button size="lg" kind="tertiary" data-ro-action="conditions" data-ro-go="special-conditions" style="display:none">Read the special conditions</cds-button>
+      <cds-button size="lg" data-ro-action="view-letter" data-ro-go="letter" style="display:none">View permit letter</cds-button>
+      <cds-button size="lg" data-ro-action="submit-report" href={withBase(`/report?permit=${permit.id}`)} style="display:none">Submit final report</cds-button>
+      <cds-button size="lg" data-ro-action="apply-new" href={withBase('/apply')} style="display:none">Apply for a new permit</cds-button>
+      <cds-button size="lg" data-ro-action="apply-again" href={withBase('/apply')} style="display:none">Apply again</cds-button>
+    </div>
+  </cds-tile>
+
+  <!-- Expiry warning: an Active permit within 30 days of its end date. -->
+  <cds-actionable-notification data-ro-expiry kind="warning" inline low-contrast hide-close-button style="display:none">
+    <span slot="title" data-ro-expiry-title></span>
+    <span slot="subtitle">Request an amendment to extend it, or apply for a new permit.</span>
+    <cds-actionable-notification-button slot="action" href={withBase(`/apply?amend=${permit.id}`)}>Request amendment</cds-actionable-notification-button>
+  </cds-actionable-notification>
+
+  <!-- Final report: escalates from a quiet due line to an error once overdue. -->
+  <p class="ro__report-line t-body-01" data-ro-report-line style="display:none"></p>
+  <cds-actionable-notification data-ro-report inline low-contrast hide-close-button style="display:none">
+    <span slot="title" data-ro-report-title></span>
+    <span slot="subtitle" data-ro-report-subtitle></span>
+    <cds-actionable-notification-button slot="action" data-ro-report-submit href={withBase(`/report?permit=${permit.id}`)}>Submit final report</cds-actionable-notification-button>
+    <cds-actionable-notification-button slot="action" data-ro-report-view data-ro-go="report" style="display:none">View report</cds-actionable-notification-button>
+  </cds-actionable-notification>
+
+  <!-- Needs your action: the changes the review team asked for, each linked to
+       the part of the application it's about. -->
+  <cds-tile class="ro__todo" data-ro-todo style="display:none">
+    <h2 class="t-heading-03">Needs your action</h2>
+    <cds-contained-list kind="on-page" data-ro-todo-list></cds-contained-list>
+  </cds-tile>
+
+  <!-- The permit in three facts + who to contact. -->
+  <section class="ro__facts" aria-labelledby="ro-facts-title">
+    <h2 id="ro-facts-title" class="t-heading-03" data-ro-facts-title>What you asked for</h2>
+    <div class="ro__grid">
+      <cds-tile>
+        <p class="ro__label t-label-01" data-ro-window-label>Requested window</p>
+        <p class="t-heading-03">{permit.activeWindow.start} – {permit.activeWindow.end}</p>
+        <p class="ro__line t-body-compact-01" data-ro-days></p>
+      </cds-tile>
+      <cds-tile>
+        <p class="ro__label t-label-01">Where</p>
+        <p class="t-heading-03">{parkCount} parks</p>
+        {sa.districts.map((d) => <p class="ro__line t-body-compact-01">{d.name}</p>)}
+        <cds-link class="ro__go" href="#study-areas" data-ro-go="application#study-areas">See parks and on-site contacts</cds-link>
+      </cds-tile>
+      <cds-tile>
+        <p class="ro__label t-label-01">What</p>
+        <p class="t-heading-03">{specimenTotal} specimens</p>
+        <p class="ro__line t-body-compact-01">{dc.specimens.length} taxa</p>
+        <cds-link class="ro__go" href="#data-collection" data-ro-go="application#data-collection">See what you may collect</cds-link>
+      </cds-tile>
+      <cds-tile>
+        <p class="ro__label t-label-01">Your contact</p>
+        <p class="t-heading-03">{analyst?.name ?? '—'}</p>
+        <p class="ro__line t-body-compact-01">Responsible analyst</p>
+        <cds-link class="ro__go" href={`mailto:${analystEmail}`}>{analystEmail}</cds-link>
+      </cds-tile>
+    </div>
+  </section>
+</div>
+
+<script>
+  import { reviewStore, sectionTitle } from '../lib/review-thread';
+  import { reportState, reportDueISO, formatDate, daysUntil, delinquencyClearance, renewalBlocked } from '../lib/final-report';
+
+  const root = document.querySelector<HTMLElement>('[data-researcher-overview]');
+  if (root) {
+    const id = root.dataset.permitId!;
+    const $ = <T extends HTMLElement = HTMLElement>(sel: string) => root.querySelector<T>(sel);
+    const shown = (el: HTMLElement | null, on: boolean) => { if (el) el.style.display = on ? '' : 'none'; };
+    const { start, end, endIso } = root.dataset as Record<string, string>;
+    const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+    const REVIEW = ['Waiting for review', 'Under review'];
+    const RETURNED = ['Returned to submitter', 'Changes requested'];
+    const ISSUED = ['Active', 'Expired'];
+
+    const render = (status: string) => {
+      const left = daysUntil(endIso);
+      // Stage lead — [title, what happens next, progress index, invalid step, actions].
+      type Stage = [string, string, number, number | null, string[]];
+      const stage: Stage =
+        status === 'Draft' ? ["Your application isn't submitted yet", 'Finish and submit it to start the review.', 0, null, ['continue']]
+        : REVIEW.includes(status) ? ['Your application is under review', "The review team is checking your application. You'll get an email when they reach a decision.", 1, null, []]
+        : RETURNED.includes(status) ? ['Changes requested', 'Make the changes below, then resubmit your application.', 1, 1, ['revise']]
+        : status === 'Out for signature' ? ['Your permit is being signed', 'Read the permit letter and its special conditions now. The conditions apply from the day your permit is active.', 3, null, ['letter', 'conditions']]
+        : status === 'Waiting for final report' ? ['Your permit is on hold', "It's signed, but it can't be issued until the final report for your previous permit is in.", 3, 3, ['letter']]
+        : status === 'Active' ? ['Your permit is active', `Valid ${start} – ${end}.`, 5, null, ['view-letter']]
+        : status === 'Rejected' ? ["Your application wasn't approved", reviewStore(id).rejected()?.reason || 'The review team decided not to issue this permit.', 2, 2, ['apply-again']]
+        : ['Your permit has ended', `It was valid ${start} – ${end}.`, 5, null, ['view-letter', 'apply-new']];
+      const [title, next, at, invalidAt, baseActions] = stage;
+      // Once the permit has ended, an outstanding final report is THE next step —
+      // and a delinquent one blocks new applications, so don't offer one.
+      const state = reportState(status, id);
+      const owesReport = state === 'due' || state === 'delinquent';
+      const actions = [
+        ...(owesReport ? ['submit-report'] : []),
+        ...baseActions.filter((a) => !(a === 'apply-new' && renewalBlocked(status, id))),
+      ];
+      $('[data-ro-title]')!.textContent = title;
+      $('[data-ro-next]')!.textContent = next;
+      root.querySelectorAll<HTMLElement>('cds-progress-step').forEach((step, i) => {
+        step.toggleAttribute('invalid', i === invalidAt);
+        step.toggleAttribute('complete', i < at && i !== invalidAt);
+        step.toggleAttribute('current', i === at && i !== invalidAt);
+      });
+      root.querySelectorAll<HTMLElement>('[data-ro-action]').forEach((b) => shown(b, actions.includes(b.dataset.roAction!)));
+      shown($('[data-ro-actions]'), actions.length > 0);
+      // Only the first action is primary; the rest step down — and they sit in
+      // that order, primary first.
+      const actionRow = $('[data-ro-actions]');
+      actions.forEach((a, i) => {
+        const btn = $(`[data-ro-action="${a}"]`);
+        if (!btn) return;
+        btn.setAttribute('kind', i === 0 ? 'primary' : 'tertiary');
+        actionRow?.appendChild(btn);
+      });
+
+      // Facts: requested until issued, then authorized.
+      const issued = ['Out for signature', 'Waiting for final report'].includes(status) || ISSUED.includes(status);
+      $('[data-ro-facts-title]')!.textContent = issued ? 'Your permit' : 'What you asked for';
+      $('[data-ro-window-label]')!.textContent = issued ? 'Authorized window' : 'Requested window';
+      $('[data-ro-days]')!.textContent = status === 'Active'
+        ? (left >= 0 ? `${plural(left, 'day')} left` : 'Ended')
+        : '';
+
+      // Expiry warning — Active, 30 days or fewer left.
+      const expiry = $('[data-ro-expiry]');
+      shown(expiry, status === 'Active' && left >= 0 && left <= 30);
+      $('[data-ro-expiry-title]')!.textContent = `Your permit ends in ${plural(left, 'day')}`;
+
+      // Final report.
+      const due = formatDate(reportDueISO(endIso));
+      const line = $('[data-ro-report-line]');
+      const note = $<any>('[data-ro-report]');
+      shown(line, state === 'not-due');
+      if (line) line.textContent = `Final report due ${due}, 30 days after your permit ends.`;
+      shown(note, !!state && state !== 'not-due');
+      if (note && state && state !== 'not-due') {
+        const cleared = delinquencyClearance(id);
+        const [kind, t, sub] =
+          state === 'submitted' ? ['success', 'Final report submitted', 'The review team has your report.']
+          : state === 'due' ? ['info', `Submit your final report by ${due}`, 'Your permit has ended. The report is due 30 days after the end date.']
+          : cleared ? ['info', `Final report still due — it was due ${due}`, `${cleared.by} lifted the renewal block on ${cleared.at}. Submit the report to close it out.`]
+          : ['error', 'Final report overdue — renewals are blocked', `It was due ${due}. Until you submit it, you can't apply for, renew, or amend a permit as principal investigator.`];
+        note.setAttribute('kind', kind);
+        // A blocking (error) state leads the Overview, above the stage card.
+        note.style.order = kind === 'error' ? '-1' : '';
+        $('[data-ro-report-title]')!.textContent = t;
+        $('[data-ro-report-subtitle]')!.textContent = sub;
+        // The stage's primary button carries Submit once it's the next step.
+        shown($('[data-ro-report-submit]'), state !== 'submitted' && !owesReport);
+        shown($('[data-ro-report-view]'), state === 'submitted');
+      }
+
+      // Needs your action — the returned changes.
+      const todo = $('[data-ro-todo]');
+      const list = $('[data-ro-todo-list]');
+      const ret = RETURNED.includes(status) ? reviewStore(id).returned() : null;
+      const issues = ret ? reviewStore(id).issues().filter((i) => ret.issueIds.includes(i.id)) : [];
+      shown(todo, issues.length > 0);
+      if (list) {
+        list.replaceChildren(...issues.map((i) => {
+          const item = document.createElement('cds-contained-list-item');
+          const body = document.createElement('div');
+          body.className = 'ro__issue';
+          const text = document.createElement('p');
+          text.className = 't-body-01';
+          text.textContent = i.text;
+          const link = document.createElement('cds-link');
+          link.setAttribute('href', `#${i.section}`);
+          link.dataset.roGo = `application#${i.section}`;
+          link.textContent = `Go to ${sectionTitle(i.section) || 'the application'}`;
+          body.append(text, link);
+          item.append(body);
+          return item;
+        }));
+      }
+    };
+
+    // "Go to" — switch the permit page's tab, then scroll to the anchor.
+    root.addEventListener('click', (e) => {
+      const go = (e.target as HTMLElement).closest<HTMLElement>('[data-ro-go]');
+      if (!go) return;
+      e.preventDefault();
+      const [tab, anchor] = go.dataset.roGo!.split('#');
+      const tabs = document.getElementById('permit-tabs') as any;
+      if (tabs && tabs.value !== tab) {
+        tabs.value = tab;
+        tabs.dispatchEvent(new CustomEvent('cds-tabs-selected'));
+      }
+      requestAnimationFrame(() => {
+        const target = anchor ? document.getElementById(anchor) : document.getElementById('permit-tabs');
+        target?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+      });
+    });
+
+    // The page reveals this for an owner and passes the live status.
+    // The page reveals this for an owner and sets data-status; it may do so
+    // before or after this script runs, so render now if it's set, then listen.
+    root.addEventListener('researcher-overview-render', (e) => render((e as CustomEvent).detail.status));
+    if (root.dataset.status) render(root.dataset.status);
+  }
+</script>
+
+<style>
+  /* Layout only — every surface is a stock cds-* component. */
+  .ro { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
+  .ro__title, .ro__next { margin: 0; }
+  .ro__next { margin-top: var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); max-inline-size: 48rem; }
+  .ro__progress { display: block; margin-top: var(--cds-spacing-06, 1.5rem); }
+  .ro__actions { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-03, 0.5rem); margin-top: var(--cds-spacing-06, 1.5rem); }
+  .ro__report-line { margin: 0; color: var(--cds-text-secondary, #525252); }
+  .ro__todo h2, .ro__facts h2 { margin: 0 0 var(--cds-spacing-04, 0.75rem); }
+  .ro__issue { display: flex; flex-direction: column; gap: var(--cds-spacing-02, 0.25rem); }
+  .ro__issue p { margin: 0; }
+  .ro__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--cds-spacing-05, 1rem); }
+  .ro__grid p { margin: 0; }
+  .ro__label { color: var(--cds-text-secondary, #525252); margin-bottom: var(--cds-spacing-03, 0.5rem) !important; }
+  .ro__line { color: var(--cds-text-secondary, #525252); margin-top: var(--cds-spacing-02, 0.25rem) !important; }
+  .ro__go { display: inline-block; margin-top: var(--cds-spacing-04, 0.75rem); }
+</style>

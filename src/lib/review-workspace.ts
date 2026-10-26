@@ -38,7 +38,7 @@ const APPROVED = ['out-for-signature', 'waiting-for-annual-report', 'active', 'e
 const STATUS_KIND: Record<string, string> = {
   'Waiting for review': 'not-started', 'Under review': 'in-progress',
   'Changes requested': 'caution-minor', 'Returned to submitter': 'caution-minor',
-  'Out for signature': 'pending', 'Waiting for annual report': 'pending',
+  'Out for signature': 'pending', 'Waiting for final report': 'pending',
   'Active': 'succeeded', 'Expired': 'unknown', 'Rejected': 'failed', 'Withdrawn': 'undefined',
 };
 

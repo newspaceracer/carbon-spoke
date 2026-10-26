@@ -1,0 +1,112 @@
+---
+// Application record · Research team — the organization, PI, field lead, and
+// submitter as contact cards, the additional participants as a table, and the
+// personnel-coverage answer. Shared by the review wizard (ApplicationReview, where
+// every item carries an Edit button bound to the shared record-edit modal) and the
+// permit detail page (`readonly`: the same read with no editing affordances — the
+// coverage answer becomes a fact tile, matching the detail's "facts are tiles" rule).
+//
+// carbon-checked: every control is stock — ContactCard (cds-tile), cds-table,
+// cds-link, cds-tile, cds-icon-indicator (YesNoStatement). `ro-table` is only a
+// display:block hook on the stock cds-table, not a styled table primitive.
+import ReviewSection from '../ReviewSection.astro';
+import ContactCard from '../ContactCard.astro';
+import YesNoStatement from '../YesNoStatement.astro';
+import EditButton from '../EditButton.astro';
+import { permit, badgesForSection } from '../../data/permit';
+import { yesNo } from '../../lib/yes-no';
+import { INSURANCE_ANCHOR } from '../../lib/record-summary';
+import { team, waiverDoc, ORDER, type SectionFrame } from '../../lib/application-record';
+
+interface Props extends SectionFrame {
+  readonly?: boolean;
+  title?: string;
+}
+const {
+  readonly = false, title = 'Research team',
+  collapsible = false, layered = false, panel = false, orderIndex = ORDER.team, commentKey,
+} = Astro.props;
+const t = permit.researchTeam;
+---
+
+<ReviewSection title={title} collapsible={collapsible} layered={layered} panel={panel} orderIndex={orderIndex} commentKey={commentKey} {...badgesForSection('team')}>
+  <div class="subblock">
+    <div class="contact-grid">
+      {team.map((c, i) => (
+        <ContactCard role={c.roles} contact={c.contact} kind={c.kind} cvHref={c.cvHref} editKey={readonly ? undefined : `team-${i}`}
+          wide={c.roles.includes('Organization') || c.roles.includes('Principal investigator')} />
+      ))}
+    </div>
+  </div>
+
+  <div class="subblock">
+    <h3 class="sub-head t-heading-02">Additional participants</h3>
+    {t.participants.length ? (
+      <cds-table class="ro-table">
+        <cds-table-head>
+          <cds-table-header-row>
+            <cds-table-header-cell>Name</cds-table-header-cell>
+            <cds-table-header-cell>Contact</cds-table-header-cell>
+            <cds-table-header-cell>Comments</cds-table-header-cell>
+            {!readonly && <cds-table-header-cell>Actions</cds-table-header-cell>}
+          </cds-table-header-row>
+        </cds-table-head>
+        <cds-table-body>
+          {t.participants.map((p, i) => (
+            <cds-table-row data-edit-scope={readonly ? undefined : `participant-${i}`}>
+              <cds-table-cell>
+                <span class="stack__primary t-body-01" data-bind={readonly ? undefined : 'name'}>{p.name}</span>
+                <span class="stack__secondary t-label-01" data-bind={readonly ? undefined : 'title'} data-bind-hide-empty={readonly ? undefined : ''} hidden={!p.title}>{p.title}</span>
+              </cds-table-cell>
+              <cds-table-cell>
+                {readonly && p.email ? (
+                  <cds-link class="stack__primary" href={`mailto:${p.email}`}>{p.email}</cds-link>
+                ) : (
+                  <span class="stack__primary t-body-01" data-bind={readonly ? undefined : 'email'}>{p.email}</span>
+                )}
+                <span class="stack__secondary t-label-01" data-bind={readonly ? undefined : 'phone'} data-bind-hide-empty={readonly ? undefined : ''} hidden={!p.phone}>{p.phone}</span>
+              </cds-table-cell>
+              <cds-table-cell><span data-bind={readonly ? undefined : 'comments'}>{p.comments || '—'}</span></cds-table-cell>
+              {!readonly && <cds-table-cell><EditButton item={`participant-${i}`} label={p.name} /></cds-table-cell>}
+            </cds-table-row>
+          ))}
+        </cds-table-body>
+      </cds-table>
+    ) : (
+      <p class="sub-note t-body-01">No additional participants added.</p>
+    )}
+  </div>
+
+  <!-- Yes/no answer phrased as a statement — the label IS the answer (no Yes/No).
+       Read-only: the statement sits on its own fact tile; the wizard keeps the
+       statement row with its Edit button. -->
+  <div class="subblock">
+    {readonly ? (
+      <div class="tile-row">
+        <cds-tile id={INSURANCE_ANCHOR}>
+          {t.personnelInsured ? (
+            <YesNoStatement value={true} statements={yesNo.personnelInsured} />
+          ) : (
+            <YesNoStatement value={false} statements={yesNo.personnelInsured}>
+              {waiverDoc ? (
+                <>Signed liability waiver addendum on file: <cds-link href={waiverDoc.href} size="lg" target="_blank" rel="noopener" data-view-doc={waiverDoc.href}>{waiverDoc.name}</cds-link></>
+              ) : 'Signed liability waiver addendum (DPR65B) required — not uploaded.'}
+            </YesNoStatement>
+          )}
+        </cds-tile>
+      </div>
+    ) : (
+      <ul class="statements">
+        <li class="statement" id={INSURANCE_ANCHOR} data-edit-scope="personnel-insured">
+          {/* The waiver line belongs to the "No" answer, so it shows/hides with edits. */}
+          <YesNoStatement value={t.personnelInsured} statements={yesNo.personnelInsured} bind="value" detailWhen="no">
+            {waiverDoc ? (
+              <>Signed liability waiver addendum on file: <cds-link href={waiverDoc.href} size="lg" target="_blank" rel="noopener" data-view-doc={waiverDoc.href}>{waiverDoc.name}</cds-link></>
+            ) : 'Signed liability waiver addendum (DPR65B) required — not uploaded.'}
+          </YesNoStatement>
+          <EditButton item="personnel-insured" label="personnel coverage" />
+        </li>
+      </ul>
+    )}
+  </div>
+</ReviewSection>

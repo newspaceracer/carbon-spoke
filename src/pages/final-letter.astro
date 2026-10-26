@@ -6,9 +6,11 @@
      spine:  main.page
                wiz-track  (grid, col 16) -> horizontal cds-progress-indicator, one per STEP
                page-head  (grid, col 16) -> Step N of M + title (JS-updated)
-               step 0     (grid) -> application record + Document viewer (col 8) + docked
-                                    working panel (col 8, sticky): a cds-tabs surface —
-                                    Comments / Special conditions (B3)
+               step 0     (grid) -> application record (col 8): a cds-tabs surface —
+                                    Form / Documents (the embedded PDF viewer, sticky
+                                    full-height beside the panel) + docked working
+                                    panel (col 8, sticky): a cds-tabs surface —
+                                    Special conditions / Comments (B3)
                step 1     (grid) -> letter-feeding fields (col 7) + live letter (col 9)
                step 2     (grid) -> the finished package + send (col 12, centered)
                wiz-actions(grid, col 8/7/12) -> Back / Cancel / role+step CTA
@@ -80,6 +82,7 @@ import { parks, parkKey } from '../data/parks';
 import { derivePermitActivities } from '../data/activities';
 import { derivePermitSensitiveSpecies, derivePermitRegions, derivePermitAssociatedPermits } from '../data/scope';
 import { districtKey } from '../data/conditions';
+import { reviewDocuments } from '../data/review-documents';
 import { userDirectory, findUser } from '../data/user';
 import { district as districtRecord } from '../data/district';
 import { withBase } from '../lib/base';
@@ -263,16 +266,10 @@ const originallySingle = originalDistrictsWithParks.length === 1;
 const soleDistrict = originallySingle ? originalDistrictsWithParks[0] : null;
 const scopedParkOptions = allParkOptions;
 
-// ── Docked working panel data ────────────────────────────────────────────────
-// The document viewer's picker: every file uploaded to the permit (the study
-// proposal, first, is the default). Same shape DocumentViewer expects.
-const documents = permit.additionalDocs.files.map((f) => ({
-  href: f.href,
-  filename: f.name,
-  size: f.size,
-  pages: f.pages,
-  type: f.type,
-}));
+// ── Document viewer data ─────────────────────────────────────────────────────
+// Every file uploaded to the permit, labeled by type and in review order (the
+// study proposal first, so it is the default). See data/review-documents.ts.
+const documents = reviewDocuments(permit.additionalDocs.files);
 
 
 const letterData = {
@@ -402,12 +399,14 @@ const letterData = {
       </header>
     </div>
 
-    <!-- ① Review application ─ the record (closing with the document viewer) on the
-         left, a single docked working panel on the right (B3 · Docked documents):
-         the comment thread and the special conditions are TABS in one
-         surface the reviewer flips through in place. The record grows the page as
-         its sections expand; the working panel is sticky so it stays in view. -->
-    <section class="step step--record cds--g10 cds--css-grid cds--css-grid--with-row-gap" data-step="0">
+    <!-- ① Review application ─ the record on the left (two tabs: Form, the
+         submitter's answers; Documents, the embedded PDF viewer), a single docked
+         working panel on the right (B3 · Docked documents): the comment thread and
+         the special conditions are TABS in one surface the reviewer flips through
+         in place. The Form tab grows the page as its sections expand; the Documents
+         tab and the working panel are sticky, so a document reads directly beside
+         the conditions it informs with no page scroll. -->
+    <section class="step step--record cds--css-grid cds--css-grid--with-row-gap" data-step="0">
       <div class="col-main record-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
         <div class="pane-head">
           <h3 class="pane-title t-heading-04">Application record</h3>
@@ -417,6 +416,16 @@ const letterData = {
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="m2,6v20c0,1.1045.8955,2,2,2h24c1.1045,0,2-.8955,2-2V6c0-1.1045-.8955-2-2-2H4c-1.1045,0-2,.8955-2,2Zm20,0h6v20h-6V6Zm-18,0h16v9h-10.1699s3.5798-3.5898,3.5798-3.5898l-1.4099-1.4102-6,6,6,6,1.4099-1.4102-3.5798-3.5898h10.1699v9H4V6Z"/></svg>
           </cds-button>
         </div>
+        <div class="record-tabs" data-tab-scope>
+          <!-- Form first (and open by default), then Documents with its upload count —
+               mirroring the working panel's tab strip opposite. -->
+          <cds-tabs value="form" data-record-tabs data-panels>
+            <cds-tab value="form">Form</cds-tab>
+            <cds-tab value="documents">Documents <span class="tab-badge" data-tab-badge="documents">{documents.length}</span></cds-tab>
+          </cds-tabs>
+
+        <!-- Form — the submitter's answers, section by section. -->
+        <div class="record-panel" data-tabpanel="form">
         <!-- What needs a closer look — the same list as the application-record page,
              each item linking to the answer behind it (opening its section). -->
         <div class="record-attention">
@@ -472,19 +481,23 @@ const letterData = {
           </div>
         </template>
 
-        <!-- Document viewer — the embedded PDF + picker, closing out the record so the
-             submitted files read in line with the application. `slim` keeps its file
-             bar to one line. -->
+        </div>
+
+        <!-- Documents — the embedded PDF + picker. Sticky and full-height on wide
+             screens (like the working panel) so a document reads beside the
+             conditions. `slim` keeps the file bar to one line. -->
+        <div class="record-panel record-panel--docs" data-tabpanel="documents" hidden>
         <div class="record-docs" data-record-docs>
           <div class="record-docs__head">
-            <h3 class="record-docs__title t-heading-03">Document viewer</h3>
-            <!-- Shown only after a "View CV" jump: returns to the exact spot you left. -->
+            <!-- Shown only after a "View CV" jump: returns to the Form tab at the exact spot you left. -->
             <cds-button kind="ghost" size="sm" data-docs-return hidden>
               <span data-docs-return-label>Back</span>
               <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16 4 6 14 7.41 15.41 15 7.83 15 28 17 28 17 7.83 24.59 15.41 26 14 16 4z"/></svg>
             </cds-button>
           </div>
           <DocumentViewer documents={documents} docTitle={permit.name} slim />
+        </div>
+        </div>
         </div>
       </div>
 
@@ -497,16 +510,16 @@ const letterData = {
           </cds-icon-button>
         </div>
         <div class="dock" data-tab-scope>
-          <!-- Comments first (and open by default), then Special conditions. The
+          <!-- Special conditions first (and open by default), then Comments. The
                analysis team lives in the header's team modal (Manage team). -->
-          <cds-tabs value="comments" data-panels>
-            <cds-tab value="comments">Comments <span class="tab-badge" data-tab-badge="comments" hidden></span></cds-tab>
+          <cds-tabs value="conditions" data-panels>
             <cds-tab value="conditions">Special conditions <span class="tab-badge" data-tab-badge="conditions" hidden></span></cds-tab>
+            <cds-tab value="comments">Comments <span class="tab-badge" data-tab-badge="comments" hidden></span></cds-tab>
           </cds-tabs>
 
           <!-- Special conditions — the SAME builder as before (HQ + each district,
                reorder + per-section numbering, add / edit / remove). -->
-          <div class="rail-panel" data-tabpanel="conditions" hidden>
+          <div class="rail-panel" data-tabpanel="conditions">
             <div class="dock-list">
               <ConditionsEditor />
             </div>
@@ -514,7 +527,7 @@ const letterData = {
 
           <!-- Comments — the review thread, shared with the permit detail page.
                Composer first, then the thread (newest first). -->
-          <div class="rail-panel" data-tabpanel="comments">
+          <div class="rail-panel" data-tabpanel="comments" hidden>
             <div class="dock-composer">
               <!-- The passage this comment is about (set by selecting text in the
                    record → Comment). Saved with the comment as a highlight anchor. -->
@@ -834,7 +847,7 @@ const letterData = {
   <script>
     import {
       loadPermitConditions, savePermitConditions,
-      ownerLabel, plainText,
+      ownerLabel, orderOwnersForReader, plainText,
       type PermitCondition,
     } from '../data/conditions';
     import { readIdentity } from '../lib/maintenance';
@@ -1847,7 +1860,8 @@ const letterData = {
     // one, edit, remove, reorder — numbered per section, mirroring the letter.
     const editIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2 26H30V28H2zM25.4 9c.8-.8.8-2 0-2.8l-3.6-3.6c-.8-.8-2-.8-2.8 0l-15 15V24h6.4L25.4 9zM20.4 4L24 7.6l-3 3L17.4 7zM8 22v-3.6l10-10L21.6 12l-10 10z"/></svg>';
     const conditionsEditor = mountConditionsEditor(document.querySelector<HTMLElement>('[data-conditions-editor]')!, {
-      owners: ['hq', ...liveDistrictKeys()],
+      // Reader order: a district reviewer's own district first (see orderOwnersForReader).
+      owners: orderOwnersForReader(['hq', ...liveDistrictKeys()], me?.district),
       get: () => state.conditions,
       set: (list) => { state.conditions = list; persistConditions(); },
       currentUser: data.currentUser,
@@ -2392,7 +2406,7 @@ const letterData = {
     // and flash their passages in the record.
     const showComments = (indexes: number[]) => {
       if (anchoredMode) { showInSections(indexes); return; }
-      const tabs = document.querySelector('cds-tabs[data-panels]') as any;
+      const tabs = document.querySelector('.dock cds-tabs[data-panels]') as any;
       if (tabs) { tabs.value = 'comments'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
       requestAnimationFrame(() => {
         const items = indexes.map((i) => thread.querySelector<HTMLElement>(`[data-comment-index="${i}"]`)).filter((x): x is HTMLElement => !!x);
@@ -2824,7 +2838,7 @@ const letterData = {
       setPendingAnchor(selectionAnchor);
       if (selectHost) selectHost.hidden = true;
       window.getSelection()?.removeAllRanges();
-      const tabs = document.querySelector('cds-tabs[data-panels]') as any;
+      const tabs = document.querySelector('.dock cds-tabs[data-panels]') as any;
       if (tabs) { tabs.value = 'comments'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
       setTimeout(() => commentInput?.focus?.(), 50);
     });
@@ -2931,7 +2945,7 @@ const letterData = {
     // Anchored mode: the Comments tab goes (the working panel opens on Special
     // conditions); the header action + panel come in; general comments post there.
     if (anchoredMode) {
-      const dockTabs = document.querySelector('cds-tabs[data-panels]') as any;
+      const dockTabs = document.querySelector('.dock cds-tabs[data-panels]') as any;
       if (dockTabs) {
         // Set pre-upgrade (attribute) AND after upgrade — cds-tabs re-reads its
         // value on upgrade, so the attribute alone doesn't stick.
@@ -2980,7 +2994,32 @@ const letterData = {
       syncTabs();
     });
 
-    // Where the last "View CV" jump came from — read by the viewer's Back button.
+    // ── Record tabs (step ①): Form / Documents ──────────────────────────────────
+    // The Documents tab pins the viewer full-height beside the working panel; the
+    // flag drives that layout (CSS) so the Form tab keeps scrolling the page.
+    const recordTabs = document.querySelector('cds-tabs[data-record-tabs]') as any;
+    const recordColEl = document.querySelector('.step[data-step="0"] .record-col') as HTMLElement | null;
+    const showRecordTab = (value: 'form' | 'documents') => {
+      if (!recordTabs) return;
+      recordTabs.value = value;
+      recordTabs.dispatchEvent(new CustomEvent('cds-tabs-selected'));
+    };
+    const syncRecordTab = () => {
+      const v = recordTabs?.value || recordTabs?.getAttribute('value');
+      const docs = v === 'documents';
+      const was = recordColEl?.classList.contains('record-col--docs');
+      recordColEl?.classList.toggle('record-col--docs', docs);
+      // Opening Documents: bring the pinned column fully into view (it only sticks
+      // once the page has scrolled past the page head), so the viewer gets its
+      // full height at once instead of a sliver under the header.
+      if (docs && !was) recordColEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    recordTabs?.addEventListener('cds-tabs-selected', syncRecordTab);
+    customElements.whenDefined('cds-tabs').then(syncRecordTab);
+    syncRecordTab();
+
+    // Where the last "View CV" jump came from — read by the viewer's Back button:
+    // back to the Form tab, at the exact spot (and control) the jump started from.
     let backTo: { y: number; trigger: HTMLElement } | null = null;
     document.querySelectorAll<HTMLElement>('[data-docs-return]').forEach((back) => {
       back.addEventListener('click', () => {
@@ -2988,16 +3027,19 @@ const letterData = {
         const { y, trigger } = backTo;
         backTo = null;
         back.hidden = true;
-        window.scrollTo({ top: y, behavior: 'smooth' });
-        // Return keyboard focus to the control that started the jump.
-        trigger.focus({ preventScroll: true });
+        showRecordTab('form');
+        // The Form tab re-expands the page first; then restore the scroll + focus.
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: y, behavior: 'smooth' });
+          trigger.focus({ preventScroll: true });
+        });
       });
     });
 
     // "View CV" (research-team tile) and "Answered in study proposal" links → open
-    // that document in the record's Document viewer: scroll it into view and select
-    // the file in its picker (the DocumentViewer's own listener swaps the embed).
-    // The links' new-tab default is cancelled only when the viewer can take over.
+    // that document in the record's Documents tab: switch to it and select the file
+    // in its picker (the DocumentViewer's own listener swaps the embed). The links'
+    // new-tab default is cancelled only when the viewer can take over.
     document.addEventListener('click', (e) => {
       const trigger = (e.target as HTMLElement).closest('[data-view-cv], [data-view-doc]') as HTMLElement | null;
       if (!trigger) return;
@@ -3015,7 +3057,7 @@ const letterData = {
         back.querySelector('[data-docs-return-label]')!.textContent = section ? `Back to ${section}` : 'Back';
         back.hidden = false;
       }
-      scope.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      showRecordTab('documents');
       const sel = scope.querySelector('.pdfv__select') as any;
       const item = sel?.querySelector(`cds-dropdown-item[value="${href}"]`) as HTMLElement | null;
       if (sel && item) {
@@ -3115,7 +3157,7 @@ const letterData = {
       };
       hideBtn?.addEventListener('click', () => setPanelHidden(true, { focus: true }));
       showBtn?.addEventListener('click', () => setPanelHidden(false, { focus: true }));
-      document.querySelector('cds-tabs[data-panels]')?.addEventListener('cds-tabs-selected', () => {
+      document.querySelector('.dock cds-tabs[data-panels]')?.addEventListener('cds-tabs-selected', () => {
         if (dockCol?.style.display === 'none') setPanelHidden(false);
       });
       let startHidden = false;
@@ -3131,7 +3173,7 @@ const letterData = {
       const record = document.querySelector('.step[data-step="0"] .col-main:not(.dock-col)') as HTMLElement | null;
       if (record) {
         record.querySelectorAll('cds-text-input, cds-dropdown, cds-multi-select, cds-textarea, cds-date-picker, cds-number-input')
-          .forEach((el) => { (el as any).disabled = true; });
+          .forEach((el) => { if (!el.closest('.record-docs')) (el as any).disabled = true; });
         // Issue cards / Add issue and the selection toolbar stay live: a supporting
         // analyst marks issues and comments even though the form is read-only.
         const keepLive = (el: Element) => !!el.closest('.rw-sec, #select-comment');
@@ -3165,8 +3207,9 @@ const letterData = {
     .step[hidden] { display: none; }
     .col-main, .col-fields, .col-package { min-width: 0; }
 
-    /* Step ① reads like the application-record page: a full-bleed gray (g10) field
-       with each record section on its own white panel. The field is painted with a
+    /* Step ① reads like the application-record page: a full-bleed field in the
+       page's own theme (g10 light / g90 dark — not forced, so dark mode applies)
+       with each record section on its own raised panel. The field is painted with a
        border-image outset (it bleeds sideways without adding scroll overflow) — NOT
        a positioned/isolated pseudo-element, which would create a stacking context
        and trap the record's edit modals under the app header and compact bar. */
@@ -3176,6 +3219,9 @@ const letterData = {
     }
     .step--record[hidden] { display: none; }
     .record-attention { margin-bottom: var(--cds-spacing-05, 1rem); }
+    /* Section headers scroll with their sections — the wizard doesn't pin them
+       (ReviewSection's collapsible headers are sticky by default). */
+    .record-col :global(.rsec__head) { position: static; }
     /* Each collapsible section (head + body are siblings — ReviewSection dissolves
        its box for the sticky stack) becomes a white panel with a gap above it. */
     .record-col :global(.rsec__head) { background: var(--cds-layer-01, #ffffff); padding-inline: var(--cds-spacing-06, 1.5rem); margin-block-start: var(--cds-spacing-05, 1rem); border-bottom-color: var(--cds-border-subtle-01, #e0e0e0); }
@@ -3213,11 +3259,13 @@ const letterData = {
        bottom of the panel. */
     @media (min-width: 66.01rem) {
       .dock-col {
-        position: sticky; top: 4rem; align-self: start;
+        /* Sticky line = fixed UI-Shell header (48px) + the compact permit bar (48px)
+           that takes over once the full header scrolls away — 6rem. */
+        position: sticky; top: 6rem; align-self: start;
         /* A definite height (not max-*) so the flex children have a box to fill —
            the document frame fills it, and short tabs still cap + scroll here rather
            than growing the page. */
-        block-size: calc(100vh - 5rem);
+        block-size: calc(100vh - 7rem);
         display: flex; flex-direction: column;
       }
       .dock-col .pane-head { flex: 0 0 auto; }
@@ -3226,11 +3274,37 @@ const letterData = {
       .dock-col .rail-panel:not([hidden]) { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; }
     }
 
-    /* Document viewer at the foot of the application record column. */
-    .record-docs { margin-top: var(--cds-spacing-09, 3rem); scroll-margin-top: 7.5rem; }
-    .record-docs__head { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-05, 1rem); margin: 0 0 var(--cds-spacing-05, 1rem); }
-    .record-docs__title { margin: 0; }
+    /* Record tabs (Form / Documents) — the same tabbed-surface treatment as the
+       working panel opposite. Each tab panel restates [hidden] (author reset). */
+    .record-col { min-width: 0; }
+    .record-panel { padding-block-start: var(--cds-spacing-06, 1.5rem); }
+    .record-panel[hidden] { display: none; }
+
+    /* Documents tab: the viewer. The Back row only takes space after a jump. */
+    .record-docs { display: flex; flex-direction: column; min-block-size: 0; }
+    .record-docs__head { display: flex; justify-content: flex-end; margin: 0; }
+    .record-docs__head:has([data-docs-return]:not([hidden])) { margin-block-end: var(--cds-spacing-04, 0.75rem); }
     .record-docs__head [hidden] { display: none; }
+
+    /* On wide screens the Documents tab pins the record column like the working
+       panel — same top, same height — and the PDF frame fills it, so the document
+       reads beside the conditions with no page scroll. The Form tab is unaffected
+       (the record keeps scrolling the page). */
+    @media (min-width: 66.01rem) {
+      .record-col--docs {
+        position: sticky; top: 6rem; align-self: start; scroll-margin-top: 6rem;
+        block-size: calc(100vh - 7rem);
+        display: flex; flex-direction: column;
+      }
+      .record-col--docs .pane-head { flex: 0 0 auto; }
+      .record-col--docs .record-tabs { flex: 1 1 auto; min-block-size: 0; display: flex; flex-direction: column; }
+      .record-col--docs .record-tabs cds-tabs { flex: 0 0 auto; }
+      .record-col--docs .record-panel--docs { flex: 1 1 auto; min-block-size: 0; display: flex; flex-direction: column; }
+      .record-col--docs .record-docs { flex: 1 1 auto; }
+      .record-col--docs .record-docs :global(.pdfv) { flex: 1 1 auto; min-block-size: 0; }
+      /* Fill the pinned column instead of the viewer's own vh/rem reading height. */
+      .record-col--docs .record-docs :global(.pdfv__frame) { flex: 1 1 auto; block-size: auto; min-block-size: 0; }
+    }
 
     .rail__sub { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
     .rail__tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--cds-spacing-03, 0.5rem); margin: 0 0 var(--cds-spacing-05, 1rem); }

@@ -201,6 +201,16 @@ cds-modal-body cds-stack > * {
   min-inline-size: 0;
 }
 
+/* ---- ICON INDICATOR LABEL ALIGNMENT ----------------------------------------
+   cds-icon-indicator (2.59.0) defaults its tooltip `align` prop to "right" and
+   REFLECTS it, so every indicator carries align="right" — which the browser
+   reads as the legacy presentational `align` attribute and right-aligns the
+   label text. Invisible on one-line labels; a wrapped label hugs the right edge.
+   The prop only matters for the compact tooltip, so restore start alignment. */
+cds-icon-indicator {
+  text-align: start;
+}
+
 /* ---- MODAL PAGE-SCROLL LOCK ---------------------------------------------
    cds-modal renders a full-viewport overlay but doesn't stop the page behind it
    from scrolling (a web-components-layer gap; see src/lib/carbon-modal-scroll-
@@ -223,7 +233,9 @@ html.cds-modal-open body {
   justify-content: center;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--cds-layer-accent-01, #e0e0e0);
+  /* The CURRENT layer's accent (cds-layer steps it per level), so the chip stays
+     visible on a nested tile in both themes; level-01 outside any cds-layer. */
+  background: var(--cds-layer-accent, var(--cds-layer-accent-01, #e0e0e0));
   color: var(--cds-text-primary, #161616);
   font-weight: 600;
   letter-spacing: 0.01em;

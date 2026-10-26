@@ -13,11 +13,16 @@ interface Item {
   label: string;
   /** Compliance flags in this section — shown as a warning count. */
   flags?: number;
+  /** A plain item count (e.g. conditions in a group). `null` renders an empty
+   *  slot the page fills client-side via [data-toc-count]. */
+  count?: number | null;
 }
 interface Props {
   items: Item[];
+  /** Screen-reader noun after a count ("4 conditions"). */
+  countNoun?: string;
 }
-const { items } = Astro.props;
+const { items, countNoun = 'items' } = Astro.props;
 ---
 
 <nav class="toc" aria-label="On this page" data-record-toc>
@@ -27,6 +32,11 @@ const { items } = Astro.props;
       <li data-toc-item={it.id}>
         <a class="toc__link t-body-compact-01" href={`#${it.id}`} data-toc-link={it.id}>
           <span>{it.label}</span>
+          {it.count !== undefined && (
+            <span class="toc__count" data-toc-count={it.id} data-noun={countNoun}>
+              {it.count ?? ''}{it.count != null && <span class="cds--visually-hidden"> {countNoun}</span>}
+            </span>
+          )}
           {it.flags ? (
             <span class="toc__flag" title={`${it.flags} to check`}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
@@ -48,19 +58,26 @@ const { items } = Astro.props;
   // the viewport is "current". Recomputed on scroll (rAF-throttled) rather than via
   // IntersectionObserver, so a short final section still becomes current when the
   // page bottoms out.
-  const toc = document.querySelector<HTMLElement>('[data-record-toc]');
-  if (toc) {
+  // One spy per contents rail — a page may carry several (e.g. one per tab).
+  document.querySelectorAll<HTMLElement>('[data-record-toc]').forEach((toc) => {
     const links = [...toc.querySelectorAll<HTMLAnchorElement>('[data-toc-link]')];
-    const sections = links
+    // Resolved on every pass: a target may be built client-side after this runs.
+    const targets = () => links
       .map((a) => document.getElementById(a.dataset.tocLink!))
       .filter((s): s is HTMLElement => !!s);
     let ticking = false;
     const update = () => {
       ticking = false;
+      const sections = targets();
       const line = window.innerHeight / 3;
       const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
-      // Sections a viewer can't see (gated off by the page) don't take part.
-      const shown = sections.filter((s) => s.style.display !== 'none');
+      // Sections a viewer can't see (gated off by the page, in a hidden tab, or
+      // whose contents-rail entry the page removed) don't take part.
+      const shown = sections.filter((s) =>
+        s.style.display !== 'none' && s.getClientRects().length > 0 &&
+        (links.find((a) => a.dataset.tocLink === s.id)?.closest('li') as HTMLElement | null)?.style.display !== 'none')
+        // Document order, not link order — the page may reorder targets.
+        .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
       let current = shown[0];
       for (const s of shown) if (s.getBoundingClientRect().top <= line) current = s;
       if (atBottom) current = shown[shown.length - 1];
@@ -74,7 +91,7 @@ const { items } = Astro.props;
     // The page re-runs this after gating sections in or out.
     toc.addEventListener('record-toc-refresh', update);
     update();
-  }
+  });
 </script>
 
 <style>
@@ -97,6 +114,7 @@ const { items } = Astro.props;
     font-weight: 600;
     border-inline-start-color: var(--cds-border-interactive, #0f62fe);
   }
+  .toc__count { color: var(--cds-text-secondary, #525252); font-weight: 400; }
   .toc__flag { display: inline-flex; align-items: center; gap: 0.125rem; color: var(--cds-text-primary, #161616); font-weight: 400; }
   @media (prefers-reduced-motion: no-preference) {
     .toc__link { transition: background-color 110ms, color 110ms; }

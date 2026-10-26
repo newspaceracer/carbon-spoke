@@ -155,6 +155,23 @@ export const prototype = {
           <p id="page-head-sub" class="page-head__sub t-body-02">{applicationSteps[0].secondaryLabel}</p>
         </header>
 
+        <!-- Delinquency block — the principal investigator has a permit whose final
+             report is overdue (and no reviewer lifted the block): no new application,
+             renewal, or amendment can be submitted. Revealed by the client script. -->
+        <cds-actionable-notification
+          id="report-block-note"
+          class="wizard-intro"
+          kind="error"
+          inline
+          low-contrast
+          hide-close-button
+          style="display:none"
+        >
+          <span slot="title">Submit your overdue final report first</span>
+          <span slot="subtitle" id="report-block-sub"></span>
+          <cds-actionable-notification-button slot="action" id="report-block-go" href="#">Submit final report</cds-actionable-notification-button>
+        </cds-actionable-notification>
+
         <!-- Amendment context — revealed by the client script only when amending an
              existing permit (its title names the original permit). -->
         <cds-inline-notification
@@ -335,6 +352,9 @@ export const prototype = {
   import { applicationSteps, applicationIssues } from '../data/application';
   import { withBase } from '../lib/base';
   import { reviewStore, resubmitApplication, sectionTitle, todayLabel, type ReviewIssue } from '../lib/review-thread';
+  import { renewalBlocked, reportDueISO, formatDate } from '../lib/final-report';
+  import { readIdentity } from '../lib/maintenance';
+  import { permit as heldPermit } from '../data/permit';
 
   // DEV/TEST escape hatch: `?bypass` (or `#bypass`) on the URL lifts the two
   // validation gates so the whole workflow can be walked without filling every
@@ -343,6 +363,22 @@ export const prototype = {
   // leaks into normal use. Remove before production if that matters to you.
   const params = new URLSearchParams(location.search);
   const bypassValidation = params.has('bypass') || location.hash === '#bypass';
+
+  // Final-report delinquency (lib/final-report.ts): a researcher who is principal
+  // investigator on a permit with an overdue report (block not lifted) can't submit
+  // a new application, renewal, or amendment. Revising an application that's
+  // already in review isn't blocked. (Prototype: the researcher's one permit.)
+  const heldStatus = localStorage.getItem(`permit-status-${heldPermit.id}`) || '';
+  const reportBlocked = readIdentity() === 'researcher' && !params.get('revise')
+    && renewalBlocked(heldStatus, heldPermit.id);
+  if (reportBlocked) {
+    const note = document.getElementById('report-block-note');
+    const sub = document.getElementById('report-block-sub');
+    const go = document.getElementById('report-block-go');
+    if (sub) sub.textContent = `The final report for permit ${heldPermit.id} was due ${formatDate(reportDueISO())}. You can fill in this form, but you can't submit it until that report is in.`;
+    go?.setAttribute('href', withBase(`/report?permit=${heldPermit.id}`));
+    if (note) note.style.display = '';
+  }
 
   // Amendment mode (static build → read the query param at runtime). An amendment
   // keeps the original permit's number with an "-A" suffix and reframes the header;
@@ -645,6 +681,7 @@ export const prototype = {
   // say what they changed. Answers save as they go; Resubmit unlocks once every
   // change is marked addressed, and sends the application back for review.
   function revisionReady() {
+    if (reportBlocked) return false; // overdue final report — nothing new can be submitted
     if (!reviseOf) return true;
     return requested().every((i) => i.response?.addressed);
   }

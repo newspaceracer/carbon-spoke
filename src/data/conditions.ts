@@ -284,6 +284,16 @@ export const ownerLabel = (owner: ConditionOwner) =>
 /** The park units an owner's condition may be SCOPED to. HQ → the whole system;
  *  a district → only its own units (parks whose administering district slugs to
  *  the owner key). Sorted by name for the picker. */
+/** Owner sections in READING order for a given reader: a district reviewer's own
+ *  district comes first (when it is on the permit), then Headquarters, then the
+ *  remaining districts in permit order. Anyone without a home district on the
+ *  permit (HQ reviewers, admins, a district reviewer whose district isn't on it)
+ *  gets the list unchanged. Pure — the letter keeps its own HQ-first order. */
+export const orderOwnersForReader = (owners: ConditionOwner[], homeDistrict?: string | null): ConditionOwner[] =>
+  homeDistrict && homeDistrict !== 'hq' && owners.includes(homeDistrict)
+    ? [homeDistrict, ...owners.filter((o) => o !== homeDistrict)]
+    : owners;
+
 export const parksForOwner = (owner: ConditionOwner): { id: string; name: string }[] =>
   parks
     .filter((pk) => owner === 'hq' || districtKey(pk.district) === owner)

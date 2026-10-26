@@ -1,0 +1,185 @@
+/* The application record's READ vocabulary — one stylesheet for every surface
+   that renders the record's sections (src/components/application/*): the review
+   wizard's ApplicationReview and the permit detail page's tabs. Scoped under
+   `.app-review` (the host wraps the sections in it), so the record reads the same
+   everywhere and the two pages can't drift.
+
+   Layout + type only — every control is a stock cds-* component, color and spacing
+   come from --cds-* tokens. The modal-only rules (record-edit fields, study-areas
+   picker) stay in ApplicationReview.astro, where those modals live.
+
+   carbon-checked: label/value review metadata is a definition list (the semantic
+   primitive); these are layout rules over a <dl> + headings + lists, matching
+   SummaryStep. No Carbon part is restyled. */
+
+.app-review { display: flex; flex-direction: column; gap: 2.75rem; }
+
+/* Labels — the small text above values (field labels, tile keys, contact roles,
+   sub-labels) — use Carbon's label-02 (14px), the largest label on the Carbon type
+   scale, instead of label-01 (12px). Declared BEFORE the reading rule below so the
+   explanation lines (which also carry .t-label-01) still get the reading size. */
+.app-review :is(.t-label-01) {
+  font-size: var(--cds-label-02-font-size, 0.875rem);
+  line-height: var(--cds-label-02-line-height, 1.28572);
+  letter-spacing: var(--cds-label-02-letter-spacing, 0.16px);
+}
+
+/* Content typography. The CONTENT under the labels — narratives, notes, values,
+   explanations, contact details, list items — uses Carbon's body-02 (16px / 1.5),
+   a step above the label-02 labels. `:is()` outranks the global .t-body-01 /
+   .t-label-01 utility classes these elements also carry. */
+.app-review :is(.narrative__body, .sub-note, .review__value, .yn__detail, .review__detail, .contact__meta, cds-list-item) {
+  font-size: var(--cds-body-02-font-size, 1rem);
+  line-height: var(--cds-body-02-line-height, 1.5);
+  letter-spacing: var(--cds-body-02-letter-spacing, 0);
+}
+/* ONE content style across the record (house rule: every label + value reads like
+   "Literature cited" — label-02 over body-02). Tile values (formerly heading-03),
+   contact names (formerly heading-compact-01), and table body cells (Carbon's
+   14px default) all take body-02 at regular weight. */
+.app-review :is(.factgrid__val, .factgrid__entry-value, .contact__name, .stack__primary, cds-table-cell) {
+  font-size: var(--cds-body-02-font-size, 1rem);
+  font-weight: var(--cds-body-02-font-weight, 400);
+  line-height: var(--cds-body-02-line-height, 1.5);
+  letter-spacing: var(--cds-body-02-letter-spacing, 0);
+  color: var(--cds-text-primary, #161616);
+}
+
+/* Readable line length (house guideline): desktop 45–75, tablet 40–65, mobile
+   30–50 characters. `ch` is the width of "0", wider than an average letter in IBM
+   Plex Sans (measured ≈ 0.73ch per character), so the caps are 55ch ≈ 75 chars,
+   45ch ≈ 65 chars, 35ch ≈ 50 chars (verified by measuring rendered lines). Each
+   element is capped in its OWN font. The cap is on TEXT elements only — never on
+   containers (narrative blocks, statement rows, value rows, tiles, lists): those
+   always fill the column, so Edit buttons and dividers reach the column edge while
+   the lines inside stay short. Breakpoints = Carbon md/lg. */
+.app-review { --measure: 35ch; }
+@media (min-width: 42rem) { .app-review { --measure: 45ch; } }
+@media (min-width: 66rem) { .app-review { --measure: 55ch; } }
+.app-review :where(.narrative__label, .narrative__body, .sub-note, dt, .review__answer, .yn__detail, .review__detail, .stack__secondary) { max-inline-size: var(--measure); }
+.app-review__intro { display: block; }
+
+/* Collapsible mode (the wizard): ReviewSection is display:contents, so every
+   section header + body is a direct flex item here — that's what lets the sticky
+   headers accumulate (each header's range spans this whole container, not one
+   section). `order` (set per section) puts Project information first while keeping
+   intro + tools on top. gap MUST be 0: with the headers/bodies as siblings, a flex
+   gap would push each header off its body — inter-section spacing comes from the
+   body's own bottom padding (ReviewSection) instead. */
+.app-review--collapsible { gap: 0; }
+.app-review__tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--cds-spacing-03, 0.5rem);
+  margin-bottom: var(--cds-spacing-05, 1rem);
+}
+
+.app-review .subblock + .subblock { margin-top: 2rem; }
+.app-review .sub-head { margin: 0 0 0.75rem; color: var(--cds-text-primary, #161616); }
+.app-review .sub-note { margin: 0 0 0.75rem; color: var(--cds-text-secondary, #525252); }
+.app-review .sub-note:last-child { margin-bottom: 0; }
+
+/* Record editing — layout only: each item's label row (or statement / value) with
+   its stock Edit icon button at the end. */
+.app-review .item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-block-end: 0.25rem; }
+.app-review .item-head .narrative__label { margin: 0; }
+.app-review .statement { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.app-review .review__value--editable { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.app-review .review__answer { min-inline-size: 0; }
+.app-review .review__line { display: block; }
+/* Data collection parts are wrapped (for their show/hide gate), so they restate
+   the gap .subblock + .subblock gives elsewhere. */
+.app-review .dc-part > .subblock { margin-top: 2rem; }
+.app-review .dc-part + .dc-part { margin-top: 2.5rem; }
+.app-review .dc-gate { margin: 0; }
+.app-review .dc-contacts { margin-bottom: 1rem; }
+.app-review :is(.review__line, .subblock)[hidden] { display: none; }
+.app-review .sa-readonly { display: grid; gap: 1.25rem; }
+
+/* Label/value review metadata over a <dl>. */
+.app-review .review { margin: 0; }
+/* Label stacked ABOVE its value (never side by side). */
+.app-review .review__row { display: grid; grid-template-columns: 1fr; gap: 0.25rem; padding: 0.75rem 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+.app-review .review__row:first-child { border-top: 0; padding-top: 0; }
+.app-review .review__label { margin: 0; color: var(--cds-text-secondary, #525252); }
+.app-review .review__value { margin: 0; color: var(--cds-text-primary, #161616); overflow-wrap: anywhere; }
+/* Yes/no answers as statements: icon + statement, explanation underneath. */
+.app-review .statements { list-style: none; margin: 0 0 0.75rem; padding: 0; }
+.app-review .statement { padding: 0.75rem 0; border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+.app-review .statement:first-child { border-top: 0; padding-top: 0; }
+.app-review .statements + .review .review__row:first-child { border-top: 1px solid var(--cds-border-subtle-01, #e0e0e0); padding-top: 0.75rem; }
+/* Applicant's explanation behind a "Yes" answer, under the value. */
+.app-review .review__detail { display: block; margin-top: 0.25rem; color: var(--cds-text-secondary, #525252); }
+.app-review .narrative + .narrative { margin-top: 1.5rem; }
+.app-review .narrative__label { margin: 0 0 0.375rem; color: var(--cds-text-secondary, #525252); }
+.app-review .narrative__body { margin: 0; color: var(--cds-text-primary, #161616); line-height: 1.6; }
+
+/* A single yes/no fact promoted onto its own tile (the read-only record): the same
+   tile grid FactGrid uses, so it lines up with the fact tiles around it. */
+.app-review .tile-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1rem; }
+
+/* ── Side-by-side variant (?labels=side) ─────────────────────────────────────
+   Label in a fixed left column, value to its right, Edit button at the far
+   right. Layout only — the same label-02 / body-02 type as the stacked version.
+   Rows: narrative items (title, category, purpose, benefits, district parks),
+   label/value rows (Budget …), and tiles (dates, collection, laboratory), which
+   go full-width so each reads as one label | value row. Contact cards, tables,
+   and yes/no statements have no separate label, so they stay as they are. */
+.app-review--side { --side-label: minmax(9rem, 14rem); }
+.app-review--side .narrative {
+  display: grid;
+  grid-template-columns: var(--side-label) minmax(0, 1fr) auto;
+  column-gap: var(--cds-spacing-06, 1.5rem);
+  align-items: start;
+}
+.app-review--side .narrative .item-head { display: contents; }
+.app-review--side .narrative__label { grid-column: 1; grid-row: 1; margin: 0; padding-block-start: 0.1875rem; }
+.app-review--side .narrative > :not(.item-head):not(.narrative__label) { grid-column: 2; grid-row: 1; }
+.app-review--side .narrative .record-edit-btn,
+.app-review--side .narrative .item-actions { grid-column: 3; grid-row: 1; margin-block-start: -0.375rem; }
+.app-review--side .narrative .item-actions .record-edit-btn { margin-block-start: 0; }
+.app-review--side .review__row { grid-template-columns: var(--side-label) minmax(0, 1fr); column-gap: var(--cds-spacing-06, 1.5rem); align-items: start; }
+.app-review--side .review__label { padding-block-start: 0.1875rem; }
+.app-review--side .factgrid--tiles { grid-template-columns: 1fr; }
+.app-review--side .factgrid__pair {
+  display: grid;
+  grid-template-columns: var(--side-label) minmax(0, 1fr);
+  column-gap: var(--cds-spacing-06, 1.5rem);
+  align-items: start;
+}
+.app-review--side .factgrid__key { padding-block-start: 0.1875rem; }
+/* The tile's Edit button is pinned top-right; in a single row the value would run
+   under it, so the whole row leaves room for the button. */
+.app-review--side .factgrid__item--editable .factgrid__pair { padding-inline-end: 2.5rem; }
+.app-review--side .factgrid__item--editable .factgrid__key { padding-inline-end: 0; }
+.app-review--side .factgrid__val { margin: 0; }
+/* A tile with sub-entries (Annual report): its key heads the tile, then each
+   entry is its own label | value row. */
+.app-review--side .factgrid__pair:has(.factgrid__entry) .factgrid__key { grid-column: 1 / -1; }
+.app-review--side .factgrid__entry { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: start; }
+
+/* The wizard's submitted-files list (glyph · name · type). */
+.app-review .docs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.app-review .doc { display: flex; align-items: center; gap: 0.5rem; color: var(--cds-text-primary, #161616); }
+.app-review .doc svg { flex: 0 0 auto; color: var(--cds-icon-secondary, #525252); }
+.app-review .doc__type { color: var(--cds-text-secondary, #525252); margin-inline-start: auto; text-align: end; }
+
+.app-review .ro-table { display: block; }
+
+/* Research team — lead contacts as a card grid (ContactCard = cds-tile). */
+.app-review .contact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+/* Stacked table cell — a primary line with a secondary line beneath (participant
+   name/title, email/phone). Layout only; type + color come from tokens. */
+.app-review .stack__primary { display: block; color: var(--cds-text-primary, #161616); }
+.app-review .stack__secondary { display: block; margin-top: 0.125rem; color: var(--cds-text-secondary, #525252); }
+
+/* Roster head — a sub-title with its action, right-aligned. Same shape as the
+   application form's roster head. */
+.app-review .roster__head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.app-review .roster__head .sub-head { margin: 0; }
+.app-review .sub-head-row { margin-bottom: 0.75rem; }
