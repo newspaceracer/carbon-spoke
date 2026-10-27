@@ -33,6 +33,7 @@ const BANNER_ID = 'maintenance-banner';
 const SWITCHER_ID = 'demo-identity-switcher';
 const RESET_ID = 'demo-permit-reset';
 const ROLE_ID = 'demo-permit-role';
+const ALERT_ID = 'demo-alert-preview';
 
 // ── Top banner ──────────────────────────────────────────────────────────
 function paintBanner(): void {
@@ -213,6 +214,78 @@ function mountPermitRoleControl(): void {
   });
 }
 
+// ── Dev-only alert preview ──────────────────────────────────────────────────
+// Every permit alert (lib/permit-alerts.ts) depends on state that takes a long
+// walk through the workflow to reach — an expired permit, an overdue report, a
+// renewal on hold. This control jumps straight there: each option writes the
+// permit state (and the demo clock, `?today=`) that makes one alert appear, then
+// reloads the permit page. It keeps the identity and permit role you picked, so
+// the same alert can be read as staff or as the researcher — except "Public view",
+// which signs out. Permit page only.
+const LETTER_STUB = JSON.stringify({
+  html: '<p>Dear Dr. Halvorsen,</p><p>Your scientific research and collection permit is approved, subject to the special conditions attached.</p>',
+  sentAt: 'Jul 20, 2026', sentBy: 'Linda Tran',
+});
+type AlertScenario = { value: string; label: string; status: string; today?: string; keys?: Record<string, string>; identity?: Identity };
+const alertScenarios = (id: string): AlertScenario[] => {
+  const signed = { [`permit-letter-${id}`]: LETTER_STUB, [`permit-signed-letter-${id}`]: JSON.stringify({ name: `${id}-signed.pdf`, by: 'Linda Tran', at: 'Jul 21, 2026' }) };
+  const sentBack = JSON.stringify([{ version: 1, name: `${id}_annual-report.pdf`, by: 'Renata Halvorsen', at: 'Jul 30, 2027',
+    sentBack: { by: 'Linda Tran', at: 'Aug 1, 2027', message: 'Add the survey effort for Mount Diablo SP.' } }]);
+  return [
+    { value: 'start-review', label: 'Start your review (staff)', status: 'Waiting for review' },
+    { value: 'returned', label: 'Changes requested', status: 'Returned to submitter',
+      keys: { [`permit-review-started-${id}`]: '1', [`permit-return-${id}`]: JSON.stringify({ by: 'Linda Tran', at: 'Aug 12, 2026', message: 'Add GPS coordinates for each site.', issueIds: ['i1', 'i2'] }) } },
+    { value: 'signed-letter', label: 'Waiting for the signed letter (staff)', status: 'Out for signature', keys: { [`permit-review-started-${id}`]: '1', [`permit-letter-${id}`]: LETTER_STUB } },
+    { value: 'renewal-hold', label: 'Renewal on hold', status: 'Waiting for annual report', keys: { ...signed, [`permit-renewal-hold-${id}`]: '1' } },
+    { value: 'ending-soon', label: 'Ending soon', status: 'Active', today: '2027-07-05', keys: signed },
+    { value: 'report-due', label: 'Annual report due', status: 'Expired', today: '2027-08-01', keys: signed },
+    { value: 'report-changes', label: 'Annual report needs changes', status: 'Expired', today: '2027-08-10', keys: { ...signed, [`permit-report-uploads-${id}`]: sentBack } },
+    { value: 'report-overdue', label: 'Annual report overdue', status: 'Expired', today: '2027-09-01', keys: signed },
+    { value: 'block-lifted', label: 'Renewal block lifted', status: 'Expired', today: '2027-09-01',
+      keys: { ...signed, [`permit-delinquency-cleared-${id}`]: JSON.stringify({ by: 'Linda Tran', at: 'Sep 1, 2027' }) } },
+    { value: 'amendment', label: 'Amendment in progress', status: 'Active', keys: { ...signed, [`permit-amendment-${id}`]: `${id}-A` } },
+    { value: 'renewal', label: 'Renewed', status: 'Expired', today: '2027-08-01', keys: { ...signed, [`permit-report-uploads-${id}`]: JSON.stringify([{ version: 1, name: `${id}_annual-report.pdf`, by: 'Renata Halvorsen', at: 'Jul 30, 2027' }]), [`permit-renewal-${id}`]: `${id}-R` } },
+    { value: 'several', label: 'Several at once', status: 'Expired', today: '2027-09-01',
+      keys: { ...signed, [`permit-amendment-${id}`]: `${id}-A`, [`permit-renewal-${id}`]: `${id}-R` } },
+    { value: 'public', label: 'Public view (signs out)', status: 'Active', keys: signed, identity: 'anon' },
+  ];
+};
+
+function mountAlertPreview(): void {
+  if (document.getElementById(ALERT_ID)) return;
+  const panel = document.getElementById(SWITCHER_ID);
+  const banner = document.getElementById('permit-banner');
+  if (!panel || !banner) return; // permit page only
+  const id = banner.getAttribute('data-permit-id') || '';
+  const scenarios = alertScenarios(id);
+
+  const wrap = document.createElement('div');
+  wrap.id = ALERT_ID;
+  wrap.className = 'demo-alert-preview';
+  // carbon-checked: dev-only affordance; the control is a stock cds-dropdown.
+  wrap.innerHTML = `
+    <p class="demo-identity__label t-label-01">Alert preview</p>
+    <cds-dropdown size="sm" label="Choose an alert" direction="top">
+      ${scenarios.map((o) => `<cds-dropdown-item value="${o.value}">${o.label}</cds-dropdown-item>`).join('')}
+    </cds-dropdown>`;
+  const reset = document.getElementById(RESET_ID);
+  if (reset) panel.insertBefore(wrap, reset); else panel.appendChild(wrap);
+
+  wrap.querySelector('cds-dropdown')?.addEventListener('cds-dropdown-selected', (e: any) => {
+    const pick = scenarios.find((o) => o.value === e.detail?.item?.value);
+    if (!pick) return;
+    // Start clean, but keep the permit role you picked.
+    const role = localStorage.getItem(`demo-permit-role-${id}`);
+    permitStateKeys().forEach((k) => localStorage.removeItem(k));
+    ['permit-return-', 'permit-letter-', 'permit-renewal-'].forEach((p) => localStorage.removeItem(`${p}${id}`));
+    if (role) localStorage.setItem(`demo-permit-role-${id}`, role);
+    localStorage.setItem(`permit-status-${id}`, pick.status);
+    Object.entries(pick.keys ?? {}).forEach(([k, v]) => localStorage.setItem(k, v));
+    if (pick.identity) writeIdentity(pick.identity);
+    location.href = withBase('/permit') + (pick.today ? `?today=${pick.today}` : '');
+  });
+}
+
 // ── Dev-only permit state reset ─────────────────────────────────────────────
 // The whole permit workflow lives in localStorage, spread across several keys — the
 // lifecycle status, whether review was started, the wizard's step position, and the
@@ -230,6 +303,7 @@ const PERMIT_STATE_PREFIXES = [
   'permit-review-started-',  // the "review has begun" gate — the one the old list missed
   'permit-finalize-step-',   // resume position in the finalize wizard
   'permit-amendment-',       // amendment-exists flag
+  'permit-renewal-',         // renewal started from this permit (alert preview)
   'permit-final-',           // letter draft (the ② finalize fields)
   'permit-parks-',           // study-area park edits (wizard draft)
   'permit-conditions-',      // applied special conditions (wizard draft)
@@ -237,7 +311,10 @@ const PERMIT_STATE_PREFIXES = [
   'demo-permit-role-',       // the per-permit permit-role testing hat (Story 2)
   'permit-ceqa-',            // CEQA Yes/N-A determination (Story 14)
   'permit-supporting-review-', // SA supporting-review state (Story 10)
-  'permit-signatures-',      // two-signature progress (Story 6)
+  'permit-signatures-',      // legacy two-signature progress (Story 6)
+  'permit-signed-letter-',   // uploaded signed letter that activated the permit
+  'permit-report-uploads-',  // annual report uploads + send-backs
+  'permit-delinquency-cleared-', // renewal block lifted by the RA/admin
   'permit-hold-',            // annual-report hold + override (Story 13)
   'permit-renewal-hold-',    // renewal annual-report hold trigger (Story 13)
   'permit-responsible-agent-', // auto-reassigned RA on a type flip (Story 8)
@@ -280,6 +357,7 @@ export function decorateShell(): void {
     mountIdentitySwitcher();
     mountPermitRoleControl();
     mountPermitReset();
+    mountAlertPreview();
     wireLogout();
     if (isMaintenance()) {
       const id = readIdentity();

@@ -157,7 +157,7 @@ export function normalizeStatus(label: string | null | undefined): PermitStatus 
     case 'Returned to submitter':
     case 'Changes requested': return 'returned';
     case 'Out for signature': return 'out-for-signature';
-    case 'Waiting for final report': return 'waiting-for-annual-report';
+    case 'Waiting for annual report': return 'waiting-for-annual-report';
     case 'Active': return 'active';
     case 'Expired': return 'expired';
     case 'Rejected': return 'rejected';

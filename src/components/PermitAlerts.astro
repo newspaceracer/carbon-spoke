@@ -1,0 +1,154 @@
+---
+// Permit ALERTS — one stack under the permit header, visible on every tab. The
+// rules live in lib/permit-alerts.ts (what shows, for whom, how urgent); this
+// gathers the permit's current state, renders the result, and carries out the
+// alerts' actions. Most urgent first; two showing, the rest behind "Show N more".
+// Alerts clear when their condition is resolved — there is no dismiss.
+//
+// Composition: cds-actionable-notification (alerts with an action) /
+// cds-inline-notification (without), cds-button (show more). Layout CSS only.
+import { permit } from '../data/permit';
+---
+
+<div class="cds--css-grid" data-permit-alerts-row style="display:none">
+  <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
+    <div class="permit-alerts" data-permit-alerts data-permit-id={permit.id}
+      data-end-iso={permit.activeWindow.endISO} data-end-label={permit.activeWindow.end}
+      role="region" aria-label="Permit alerts"></div>
+    <cds-button kind="ghost" size="sm" data-permit-alerts-more style="display:none"></cds-button>
+  </div>
+</div>
+
+<script>
+  import { permitAlerts, type AlertContext, type PermitAlert, type Viewer } from '../lib/permit-alerts';
+  import {
+    reportState, reportDueISO, formatDate, daysUntil, todayISO, latestUpload,
+    delinquencyClearance, clearanceKey, REPORT_EVENT,
+  } from '../lib/final-report';
+  import { readIdentity } from '../lib/maintenance';
+  import { readPermitRole } from '../lib/permissions';
+  import { activeUser } from '../data/user';
+  import { reviewStore } from '../lib/review-thread';
+  import { withBase } from '../lib/base';
+  import { showToast } from '../lib/toast';
+
+  const VISIBLE = 2;
+  const host = document.querySelector<HTMLElement>('[data-permit-alerts]');
+  const row = document.querySelector<HTMLElement>('[data-permit-alerts-row]');
+  const more = document.querySelector<HTMLElement>('[data-permit-alerts-more]');
+  if (host && row && more) {
+    const id = host.dataset.permitId!;
+    const who = readIdentity();
+    const me = activeUser(who);
+    const ls = (k: string) => localStorage.getItem(k);
+    let expanded = false;
+
+    const viewer = (): Viewer => {
+      if (['admin', 'hq-technical', 'district-lead', 'district-assistant'].includes(who)) return 'staff';
+      let owners: string[] = [];
+      try { owners = JSON.parse(document.getElementById('permit-owners')?.textContent || '[]'); } catch {}
+      return who === 'researcher' && !!me && owners.includes(me.name.toLowerCase()) ? 'owner' : 'public';
+    };
+
+    const context = (): AlertContext => {
+      const status = ls(`permit-status-${id}`) || document.getElementById('permit-banner')?.dataset.status || '';
+      const ret = reviewStore(id).returned();
+      const params = new URLSearchParams(location.search);
+      return {
+        status,
+        viewer: viewer(),
+        canAct: who === 'admin' || readPermitRole(id) === 'responsible',
+        reviewStarted: !!ls(`permit-review-started-${id}`),
+        daysLeft: daysUntil(host.dataset.endIso!),
+        endLabel: host.dataset.endLabel!,
+        report: {
+          state: reportState(status, id),
+          due: formatDate(reportDueISO()),
+          sentBack: latestUpload(id)?.sentBack ?? null,
+          lifted: delinquencyClearance(id),
+        },
+        returned: ret ? { at: ret.at, count: ret.issueIds.length, message: ret.message } : null,
+        signedLetterOnFile: !!ls(`permit-signed-letter-${id}`),
+        amendmentId: ls(`permit-amendment-${id}`),
+        // `?renewal=1` previews a renewal started from this permit.
+        renewalId: ls(`permit-renewal-${id}`) || (params.get('renewal') === '1' ? `${id}-R` : null),
+        links: { revise: withBase(`/apply?revise=${id}`), amend: withBase(`/apply?amend=${id}`) },
+      };
+    };
+
+    // ── Actions ───────────────────────────────────────────────────────────
+    const goTab = (tab: string) => {
+      const tabs = document.getElementById('permit-tabs') as any;
+      if (tabs && tabs.value !== tab) {
+        tabs.value = tab;
+        tabs.dispatchEvent(new CustomEvent('cds-tabs-selected'));
+      }
+      tabs?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    };
+    const reportChanged = () => window.dispatchEvent(new CustomEvent(REPORT_EVENT, { detail: { id } }));
+    const commands: Record<string, () => void> = {
+      // The header owns the start-review flow (records who + when, opens the wizard).
+      'start-review': () => document.querySelector<HTMLElement>('#permit-banner .permit-start-review')?.click(),
+      'upload-signed-letter': () => { const m = document.getElementById('sign-permit-modal') as any; if (m) m.open = true; },
+      'lift-block': () => {
+        localStorage.setItem(clearanceKey(id), JSON.stringify({ by: me?.name ?? 'The responsible analyst', at: formatDate(todayISO()) }));
+        reportChanged();
+        showToast('Renewal block lifted', 'The PI can apply again. The report is still due.');
+      },
+      'restore-block': () => {
+        localStorage.removeItem(clearanceKey(id));
+        reportChanged();
+        showToast('Renewal block restored', 'Renewals stay blocked until the report is in.');
+      },
+    };
+
+    // ── Render ────────────────────────────────────────────────────────────
+    const build = (a: PermitAlert) => {
+      const action = a.actions?.[0];
+      const el = document.createElement(action ? 'cds-actionable-notification' : 'cds-inline-notification');
+      el.setAttribute('kind', a.kind);
+      el.setAttribute('title', a.title);
+      if (a.subtitle) el.setAttribute('subtitle', a.subtitle);
+      el.setAttribute('low-contrast', '');
+      el.setAttribute('hide-close-button', '');
+      el.dataset.alert = a.id;
+      if (action) {
+        el.setAttribute('inline', '');
+        const btn = document.createElement('cds-actionable-notification-button');
+        btn.setAttribute('slot', 'action');
+        btn.textContent = action.label;
+        if (action.href) btn.setAttribute('href', action.href);
+        btn.addEventListener('click', () => {
+          if (action.go) goTab(action.go);
+          else if (action.run) commands[action.run]?.();
+        });
+        el.append(btn);
+      }
+      return el;
+    };
+
+    const render = () => {
+      const alerts = permitAlerts(context());
+      row.style.display = alerts.length ? '' : 'none';
+      const shown = expanded ? alerts : alerts.slice(0, VISIBLE);
+      host.replaceChildren(...shown.map(build));
+      const hidden = alerts.length - VISIBLE;
+      more.style.display = hidden > 0 ? '' : 'none';
+      more.textContent = expanded ? 'Show less' : `Show ${hidden} more`;
+    };
+    more.addEventListener('click', () => { expanded = !expanded; render(); });
+
+    render();
+    window.addEventListener('permit-status-changed', render);
+    window.addEventListener(REPORT_EVENT, render);
+    window.addEventListener('storage', render);
+  }
+</script>
+
+<style>
+  /* Layout only — the stack of stock notifications, full content width. */
+  .permit-alerts { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
+  /* The notifications are built in JS (no Astro scope attribute) → :global. */
+  .permit-alerts > :global(*) { max-inline-size: 100%; }
+  [data-permit-alerts-more] { margin-top: var(--cds-spacing-02, 0.25rem); }
+</style>

@@ -1,10 +1,10 @@
-// Mock FINAL REPORT for permit 26-635-017 — what the researcher submits through
+// Mock ANNUAL REPORT for permit 26-635-017 — what the researcher submits through
 // the portal once fieldwork is done (the HQ reporting condition asks for survey
 // effort: park units, dates, locations, method, number of samples; plus data
 // products). INVENTED and deterministic, like all mock data here; quantities stay
 // within the permitted allotments in permit.ts.
 //
-// The application-record prototype shows it in a "Final report" tab only when a
+// The application-record prototype shows it in a "Annual report" tab only when a
 // report is on file — permit-final-report-${id} in storage, or `?report=1` to
 // preview this mock.
 

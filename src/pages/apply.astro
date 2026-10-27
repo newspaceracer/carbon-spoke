@@ -167,9 +167,9 @@ export const prototype = {
           hide-close-button
           style="display:none"
         >
-          <span slot="title">Submit your overdue final report first</span>
+          <span slot="title">Upload your overdue annual report first</span>
           <span slot="subtitle" id="report-block-sub"></span>
-          <cds-actionable-notification-button slot="action" id="report-block-go" href="#">Submit final report</cds-actionable-notification-button>
+          <cds-actionable-notification-button slot="action" id="report-block-go" href="#">Upload annual report</cds-actionable-notification-button>
         </cds-actionable-notification>
 
         <!-- Amendment context — revealed by the client script only when amending an
@@ -375,8 +375,8 @@ export const prototype = {
     const note = document.getElementById('report-block-note');
     const sub = document.getElementById('report-block-sub');
     const go = document.getElementById('report-block-go');
-    if (sub) sub.textContent = `The final report for permit ${heldPermit.id} was due ${formatDate(reportDueISO())}. You can fill in this form, but you can't submit it until that report is in.`;
-    go?.setAttribute('href', withBase(`/report?permit=${heldPermit.id}`));
+    if (sub) sub.textContent = `It was due ${formatDate(reportDueISO())} for permit ${heldPermit.id}. You can fill in this form but can't submit it until the report is in.`;
+    go?.setAttribute('href', withBase('/permit?tab=report'));
     if (note) note.style.display = '';
   }
 
@@ -681,7 +681,7 @@ export const prototype = {
   // say what they changed. Answers save as they go; Resubmit unlocks once every
   // change is marked addressed, and sends the application back for review.
   function revisionReady() {
-    if (reportBlocked) return false; // overdue final report — nothing new can be submitted
+    if (reportBlocked) return false; // overdue annual report — nothing new can be submitted
     if (!reviseOf) return true;
     return requested().every((i) => i.response?.addressed);
   }

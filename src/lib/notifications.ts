@@ -15,7 +15,7 @@
 export type NotifPref = 'assignment' | 'signature' | 'status' | 'decisions' | null;
 
 export interface EmailTemplate {
-  id: string;          // 'EM-A' … 'EM-I'
+  id: string;          // 'EM-A' … 'EM-L'
   name: string;        // short admin-facing label
   subject: string;
   body: string;
@@ -167,10 +167,10 @@ ${SIG}`,
     id: 'EM-H', name: 'Renewal placed on hold', pref: 'decisions', regulated: true,
     recipients: 'Researcher (submitter), PI, PICOF',
     placeholders: ['PI name', 'Permit #', 'Project title'],
-    subject: 'Final report required before permit [Permit #] can be issued',
+    subject: 'Annual report required before permit [Permit #] can be issued',
     body: `[PI name],
 
-Your renewal permit is ready but is on hold. The final report for your
+Your renewal permit is ready but is on hold. The annual report for your
 previous permit has not been received, so the new permit cannot be issued
 yet.
 
@@ -193,6 +193,58 @@ A permit you review has changed status.
 Permit:     [Permit #] — [Project title]
 New status: [Status]
 Your role:  [Responsible Agent / Supporting Agent]
+
+[Open permit]
+
+${SIG}`,
+  },
+  {
+    // DRAFT copy — the body is an open question on Story 8.
+    id: 'EM-J', name: 'Annual report uploaded', pref: 'status', regulated: false,
+    recipients: "The permit's Responsible Agent and Supporting Agents",
+    placeholders: ['Permit #', 'Project title', 'Uploaded by'],
+    subject: 'Annual report uploaded for permit [Permit #]',
+    body: `[Uploaded by] uploaded the annual report for a permit you review.
+
+Permit: [Permit #] — [Project title]
+
+Review it on the permit's Annual report tab.
+
+[Open permit]
+
+${SIG}`,
+  },
+  {
+    // DRAFT copy — the body is an open question on Story 8.
+    id: 'EM-K', name: 'Annual report — changes requested', pref: 'decisions', regulated: true,
+    recipients: 'Researcher (submitter), PI, PICOF',
+    placeholders: ['PI name', 'Permit #', 'Project title', 'Message'],
+    subject: 'Annual report needs changes — permit [Permit #]',
+    body: `[PI name],
+
+The review team needs changes to your annual report.
+
+Permit: [Permit #] — [Project title]
+
+Their message:
+[Message]
+
+Upload a revised report on your permit's Annual report tab.
+
+${SIG}`,
+  },
+  {
+    id: 'EM-L', name: 'Supporting review completed / reopened', pref: null, regulated: false,
+    recipients: "The permit's Responsible Agent",
+    placeholders: ['First name', 'Reviewer name', 'Action', 'Next step', 'Permit #', 'Project title', 'Reviews complete'],
+    subject: '[Reviewer name] [Action] their review — permit [Permit #]',
+    body: `[First name],
+
+[Reviewer name] [Action] their review of a permit you're responsible for.
+[Next step]
+
+Permit:  [Permit #] — [Project title]
+Reviews: [Reviews complete] complete
 
 [Open permit]
 

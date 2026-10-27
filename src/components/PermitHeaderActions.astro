@@ -1,0 +1,74 @@
+---
+// The permit header's action button — ONE per viewer, by status × who's looking
+// (Story 2). Rendered twice (full header + pinned compact bar); PermitHeader's
+// script shows the one whose [data-action] matches and wires them all.
+//
+//   Status                     RA / Admin              Supporting Agent        Other staff     Researcher (owner)
+//   Waiting for review         Start review            —                       —               —
+//   Under review               Open review ▾           Review application ▾    —               —
+//   Changes requested          —                       —                       —               Revise application
+//   Out for signature          Upload signed letter ▾  —                       —               —
+//   Waiting for annual report  Override hold ▾         Download signed letter  (same)          Upload annual report ▾
+//   Active                     Download signed ▾       Download signed letter  (same)          Download signed ▾
+//   Expired                    Download signed letter  (same)                  (same)          Upload annual report ▾ while owed
+//
+// Composition: cds-button (single action) / cds-combo-button + cds-menu (primary
+// + menu). Layout CSS only.
+interface Props {
+  reviewLabel: string;
+  amendHref: string;
+  reviseHref: string;
+}
+const { reviewLabel, amendHref, reviseHref } = Astro.props;
+---
+
+<cds-button data-action="start" class="permit-start-review" size="md" hidden>Start review</cds-button>
+
+<!-- tooltip-alignment=bottom: the caret's tooltip defaults to opening upward,
+     which is clipped once the header is a pinned bar — open it downward. -->
+<cds-combo-button data-action="review" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+  <cds-menu>
+    <cds-menu-item label="Request changes"></cds-menu-item>
+    <cds-menu-item-divider></cds-menu-item-divider>
+    <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
+  </cds-menu>
+</cds-combo-button>
+
+<cds-combo-button data-action="supporting" class="permit-sa-review" size="md" label="Review application" menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+  <cds-menu>
+    <cds-menu-item label="Complete review" data-sa-toggle></cds-menu-item>
+  </cds-menu>
+</cds-combo-button>
+
+<cds-button data-action="revise" class="permit-revise" size="md" href={reviseHref} hidden>Revise application</cds-button>
+
+<cds-combo-button data-action="sign" class="permit-action-sign" size="md" label="Upload signed letter" menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+  <cds-menu>
+    <cds-menu-item label="Download unsigned letter"></cds-menu-item>
+  </cds-menu>
+</cds-combo-button>
+
+<cds-combo-button data-action="hold" class="permit-hold-override" size="md" label="Override hold — issue permit" menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+  <cds-menu>
+    <cds-menu-item label="Download signed letter"></cds-menu-item>
+  </cds-menu>
+</cds-combo-button>
+
+<cds-combo-button data-action="active" class="permit-active" size="md" label="Download signed letter" menu-alignment="bottom-end" tooltip-alignment="bottom" data-amend-href={amendHref} hidden>
+  <cds-menu>
+    <cds-menu-item label="Request amendment"></cds-menu-item>
+  </cds-menu>
+</cds-combo-button>
+
+<cds-combo-button data-action="owner-report" class="permit-owner-report" size="md" label="Upload annual report" menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+  <cds-menu>
+    <cds-menu-item label="Download signed letter"></cds-menu-item>
+  </cds-menu>
+</cds-combo-button>
+
+<cds-button data-action="download" class="permit-download-signed" size="md" hidden>Download signed letter</cds-button>
+
+<style>
+  /* Custom elements don't honor the UA [hidden] rule reliably, so force it. */
+  [data-action][hidden] { display: none; }
+</style>

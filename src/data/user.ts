@@ -350,8 +350,8 @@ export const currentUser = {
     },
     {
       key: 'reports',
-      label: 'Final reports',
-      description: 'When a final report is due or has been submitted',
+      label: 'Annual reports',
+      description: 'When an annual report is due or has been submitted',
       enabled: false,
     },
   ] as NotificationPref[],

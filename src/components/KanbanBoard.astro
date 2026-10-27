@@ -54,7 +54,7 @@ const lanes: {
   { kind: 'under-review', label: 'Under review',     note: 'Review started',         action: 'Start review',         colorToken: '--cds-tag-color-blue' },
   { kind: 'returned',     label: 'Returned to researcher', note: 'Awaiting changes', action: 'Return to researcher', colorToken: '--cds-tag-color-purple' },
   { kind: 'completed',    label: 'Review completed', note: 'Decided in the last 30 days', action: 'Mark review completed', colorToken: '--cds-tag-color-green' },
-  { kind: 'delinquent',   label: 'Delinquent',       note: 'Final report overdue',   action: 'Delinquent (automatic)',      colorToken: '--cds-tag-color-red' },
+  { kind: 'delinquent',   label: 'Delinquent',       note: 'Annual report overdue',   action: 'Delinquent (automatic)',      colorToken: '--cds-tag-color-red' },
 ];
 
 // Lane glyphs — icon + colour, matching the register's status affordance
@@ -222,7 +222,7 @@ const seeAllHref = withBase('/permits') + '?scope=mine-decided';
                       </svg>
                       <span slot="tooltip-content">Move to…</span>
                       <cds-overflow-menu-body>
-                        {/* Delinquent is automatic (final report overdue) — never a manual move. */}
+                        {/* Delinquent is automatic (annual report overdue) — never a manual move. */}
                         {lanes.filter((target) => target.kind !== 'delinquent').map((target) => (
                           <cds-overflow-menu-item
                             data-move-to={target.kind}
@@ -432,7 +432,7 @@ const seeAllHref = withBase('/permits') + '?scope=mine-decided';
         lane.classList.remove('lane--over');
         const id = e.dataTransfer?.getData('text/plain');
         const card = id && board.querySelector<HTMLElement>(`.kcard[data-permit-id="${id}"]`);
-        // Delinquent is set automatically from the final report's due date.
+        // Delinquent is set automatically from the annual report's due date.
         if (card && kind !== 'delinquent') moveCard(card, kind);
       });
     });

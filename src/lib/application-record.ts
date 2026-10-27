@@ -75,7 +75,7 @@ export const projectItems = [
 export const requestedDates: MetaRow[] = [
   { key: 'Project dates', value: `${pj.projectWindow.startLabel} – ${pj.projectWindow.endLabel}` },
   { key: 'Permit requested dates', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
-  { key: 'Final report', entries: [
+  { key: 'Annual report', entries: [
     { label: 'Tentative completion', value: pj.annualReport.tentativeLabel },
     { label: 'Required by', value: pj.annualReport.requiredLabel },
   ] },
@@ -188,7 +188,7 @@ export const editSpecs: Record<string, EditSpec> = {
     values: { start: permit.activeWindow.startISO, end: permit.activeWindow.endISO }, display: { value: '{start|date} – {end|date}' },
   },
   'dates-2': {
-    section: 'Requested dates', title: 'Final report',
+    section: 'Requested dates', title: 'Annual report',
     fields: [{ name: 'tentative', label: 'Tentative completion', type: 'date' }, { name: 'required', label: 'Required by', type: 'date' }],
     values: { tentative: pj.annualReport.tentativeISO, required: pj.annualReport.requiredISO },
     display: { 'entry-0': '{tentative|date}', 'entry-1': '{required|date}' },

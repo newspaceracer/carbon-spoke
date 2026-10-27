@@ -38,6 +38,8 @@ them. Regulated preferences are shown in Profile but cannot be turned off.
 Not mapped to any preference (no Profile / always sent):
 - **EM-B** (external second-signer request) — the external signer has no account,
   so there is no Profile toggle; always sent.
+- **EM-L** (supporting review completed / reopened) — always sent to the
+  Responsible Agent.
 
 ---
 
@@ -102,7 +104,7 @@ nrd.research@parks.ca.gov
 ---
 
 ## EM-C — Permit issued / active
-- **Trigger:** permit becomes Active (both signatures; hold, if any, cleared).
+- **Trigger:** permit becomes Active (signed letter uploaded, or the annual-report hold overridden).
 - **Recipients:** Researcher (submitter), Principal Investigator (PI), PICOF.
 - **Category:** **Regulated (always sent).**
 
@@ -291,9 +293,92 @@ nrd.research@parks.ca.gov
 
 ---
 
+## EM-J — Annual report uploaded *(draft copy)*
+- **Trigger:** the researcher uploads the annual report on the permit's Annual report tab.
+- **Recipients:** the permit's Responsible Agent and Supporting Agents.
+- **Category:** Informational · opt-out allowed (Profile: "Status changes").
+
+**Subject:** Annual report uploaded for permit [Permit #]
+
+```
+[Uploaded by] uploaded the annual report for a permit you review.
+
+Permit: [Permit #] — [Project title]
+
+Review it on the permit's Annual report tab.
+
+[Open permit]
+
+Natural Resources Division
+California State Parks
+(916) 653-6725
+nrd.research@parks.ca.gov
+```
+
+---
+
+## EM-K — Annual report: changes requested *(draft copy)*
+- **Trigger:** the Responsible Agent (or an admin) selects "Request changes" on the
+  uploaded annual report.
+- **Recipients:** Researcher (submitter), PI, PICOF.
+- **Category:** Regulated · always sent.
+
+**Subject:** Annual report needs changes — permit [Permit #]
+
+```
+[PI name],
+
+The review team needs changes to your annual report.
+
+Permit: [Permit #] — [Project title]
+
+Their message:
+[Message]
+
+Upload a revised report on your permit's Annual report tab.
+
+Natural Resources Division
+California State Parks
+(916) 653-6725
+nrd.research@parks.ca.gov
+```
+
+---
+
+## EM-L — Supporting review completed or reopened
+- **Trigger:** a Supporting Agent selects "Complete review" or "Reopen review"
+  (permit header menu, or "Complete review" in the review wizard).
+- **Recipients:** the permit's Responsible Agent.
+- **Category:** Informational · always sent (no Profile toggle) — the Responsible
+  Agent needs to know when someone else is done, or is making changes again.
+- **Merge values:** [Action] = "completed" / "reopened". [Next step] =
+  "They're done adding conditions and comments." / "They can change conditions
+  and comments again."
+
+**Subject:** [Reviewer name] [Action] their review — permit [Permit #]
+
+```
+[First name],
+
+[Reviewer name] [Action] their review of a permit you're responsible for.
+[Next step]
+
+Permit:  [Permit #] — [Project title]
+Reviews: [Reviews complete] complete
+
+[Open permit]åå
+
+Natural Resources Division
+California State Parks
+(916) 653-6725
+nrd.research@parks.ca.gov
+```
+
+---
+
 ## Notes
 - **Hold release / override → Active** reuses **EM-C** (the permit-issued email).
 - **Start review** (Story 5) sends **no email** — internal state change only.
-- Regulated researcher-facing emails (EM-C, D, E, H) are **always sent** and are
+- Regulated researcher-facing emails (EM-C, D, E, H, K) are **always sent** and are
   not opt-out in Profile; only their template text is editable on Templates &
   Defaults.

@@ -35,7 +35,7 @@
                                (the shared ConditionsEditor — add / edit / reorder)
        - final letter tab   -> RecordLetter: the saved copy of the sent letter +
                                signature status (cds-icon-indicator); gate=approved
-       - final report tab   -> RecordReport: summary, survey effort + collected vs
+       - annual report tab   -> RecordReport: summary, survey effort + collected vs
                                permitted (cds-table), data products; gate=report
        - comments           -> record/RecordSection gate=internal + RecordComments
                                (cds-textarea + cds-button + thread) — staff only
@@ -127,7 +127,7 @@ const headerStats = [
   { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
   { label: 'Submitted', value: 'Jul 9, 2026' },
   { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
-  { label: 'Final report due', value: pj.annualReport.requiredLabel },
+  { label: 'Annual report due', value: pj.annualReport.requiredLabel },
 ];
 
 const sections = [
@@ -151,8 +151,8 @@ const teamCards: { roles: string; contact: Contact; org?: boolean }[] = [
 const keyDates = [
   { label: 'Project dates', value: `${pj.projectWindow.startLabel} – ${pj.projectWindow.endLabel}` },
   { label: 'Permit requested', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
-  { label: 'Final report target', value: pj.annualReport.tentativeLabel },
-  { label: 'Final report due', value: pj.annualReport.requiredLabel },
+  { label: 'Annual report target', value: pj.annualReport.tentativeLabel },
+  { label: 'Annual report due', value: pj.annualReport.requiredLabel },
 ];
 
 const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/><path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/></svg>';
@@ -193,7 +193,7 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
         <div class="notice cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" data-rw-notice></div>
 
         <!-- One context at a time: the application, the conditions, the final permit
-             letter, the final report. Gated tabs (data-gate) exist only when they
+             letter, the annual report. Gated tabs (data-gate) exist only when they
              apply — the letter once approved, the report once one is on file, and on
              the detail page the conditions once approved. With one tab left, the
              strip hides. -->
@@ -202,7 +202,7 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
             <cds-tab value="application">Application</cds-tab>
             <cds-tab value="conditions" data-gate={review ? undefined : 'approved'}>{review ? 'Special conditions' : 'Permit conditions'}</cds-tab>
             <cds-tab value="letter" data-gate="approved">Final permit letter</cds-tab>
-            <cds-tab value="report" data-gate="report">Final report</cds-tab>
+            <cds-tab value="report" data-gate="report">Annual report</cds-tab>
           </cds-tabs>
         </div>
 
@@ -500,9 +500,9 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
           </RecordSection>
         </div>
 
-        <!-- ── Final report tab ──────────────────────────────────────────────────── -->
+        <!-- ── Annual report tab ──────────────────────────────────────────────────── -->
         <div class="content cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-12" data-record-panel="report" style="display: none">
-          <RecordSection id="report" title="Final report" summary="What the researcher reported once fieldwork was done.">
+          <RecordSection id="report" title="Annual report" summary="What the researcher reported once fieldwork was done.">
             <RecordReport />
           </RecordSection>
         </div>

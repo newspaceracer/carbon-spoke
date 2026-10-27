@@ -43,27 +43,14 @@ const steps = ['Submitted', 'Under review', 'Decision', 'Signature', 'Active'];
       <cds-button size="lg" data-ro-action="letter" data-ro-go="letter" style="display:none">Read your permit letter</cds-button>
       <cds-button size="lg" kind="tertiary" data-ro-action="conditions" data-ro-go="special-conditions" style="display:none">Read the special conditions</cds-button>
       <cds-button size="lg" data-ro-action="view-letter" data-ro-go="letter" style="display:none">View permit letter</cds-button>
-      <cds-button size="lg" data-ro-action="submit-report" href={withBase(`/report?permit=${permit.id}`)} style="display:none">Submit final report</cds-button>
+      <cds-button size="lg" data-ro-action="submit-report" data-ro-go="report" style="display:none">Upload annual report</cds-button>
       <cds-button size="lg" data-ro-action="apply-new" href={withBase('/apply')} style="display:none">Apply for a new permit</cds-button>
       <cds-button size="lg" data-ro-action="apply-again" href={withBase('/apply')} style="display:none">Apply again</cds-button>
     </div>
   </cds-tile>
 
-  <!-- Expiry warning: an Active permit within 30 days of its end date. -->
-  <cds-actionable-notification data-ro-expiry kind="warning" inline low-contrast hide-close-button style="display:none">
-    <span slot="title" data-ro-expiry-title></span>
-    <span slot="subtitle">Request an amendment to extend it, or apply for a new permit.</span>
-    <cds-actionable-notification-button slot="action" href={withBase(`/apply?amend=${permit.id}`)}>Request amendment</cds-actionable-notification-button>
-  </cds-actionable-notification>
-
-  <!-- Final report: escalates from a quiet due line to an error once overdue. -->
-  <p class="ro__report-line t-body-01" data-ro-report-line style="display:none"></p>
-  <cds-actionable-notification data-ro-report inline low-contrast hide-close-button style="display:none">
-    <span slot="title" data-ro-report-title></span>
-    <span slot="subtitle" data-ro-report-subtitle></span>
-    <cds-actionable-notification-button slot="action" data-ro-report-submit href={withBase(`/report?permit=${permit.id}`)}>Submit final report</cds-actionable-notification-button>
-    <cds-actionable-notification-button slot="action" data-ro-report-view data-ro-go="report" style="display:none">View report</cds-actionable-notification-button>
-  </cds-actionable-notification>
+  <!-- Ending-soon and annual-report alerts live in the page's alert stack
+       (PermitAlerts / lib/permit-alerts.ts), not here. -->
 
   <!-- Needs your action: the changes the review team asked for, each linked to
        the part of the application it's about. -->
@@ -105,7 +92,7 @@ const steps = ['Submitted', 'Under review', 'Decision', 'Signature', 'Active'];
 
 <script>
   import { reviewStore, sectionTitle } from '../lib/review-thread';
-  import { reportState, reportDueISO, formatDate, daysUntil, delinquencyClearance, renewalBlocked } from '../lib/final-report';
+  import { reportState, daysUntil, renewalBlocked, REPORT_EVENT } from '../lib/final-report';
 
   const root = document.querySelector<HTMLElement>('[data-researcher-overview]');
   if (root) {
@@ -128,15 +115,15 @@ const steps = ['Submitted', 'Under review', 'Decision', 'Signature', 'Active'];
         : REVIEW.includes(status) ? ['Your application is under review', "The review team is checking your application. You'll get an email when they reach a decision.", 1, null, []]
         : RETURNED.includes(status) ? ['Changes requested', 'Make the changes below, then resubmit your application.', 1, 1, ['revise']]
         : status === 'Out for signature' ? ['Your permit is being signed', 'Read the permit letter and its special conditions now. The conditions apply from the day your permit is active.', 3, null, ['letter', 'conditions']]
-        : status === 'Waiting for final report' ? ['Your permit is on hold', "It's signed, but it can't be issued until the final report for your previous permit is in.", 3, 3, ['letter']]
+        : status === 'Waiting for annual report' ? ['Your permit is on hold', "It's signed, but can't be issued until your previous permit's annual report is in.", 3, 3, ['letter']]
         : status === 'Active' ? ['Your permit is active', `Valid ${start} – ${end}.`, 5, null, ['view-letter']]
         : status === 'Rejected' ? ["Your application wasn't approved", reviewStore(id).rejected()?.reason || 'The review team decided not to issue this permit.', 2, 2, ['apply-again']]
         : ['Your permit has ended', `It was valid ${start} – ${end}.`, 5, null, ['view-letter', 'apply-new']];
       const [title, next, at, invalidAt, baseActions] = stage;
-      // Once the permit has ended, an outstanding final report is THE next step —
+      // Once the permit has ended, an outstanding annual report is THE next step —
       // and a delinquent one blocks new applications, so don't offer one.
       const state = reportState(status, id);
-      const owesReport = state === 'due' || state === 'delinquent';
+      const owesReport = state === 'due' || state === 'delinquent' || state === 'changes-requested';
       const actions = [
         ...(owesReport ? ['submit-report'] : []),
         ...baseActions.filter((a) => !(a === 'apply-new' && renewalBlocked(status, id))),
@@ -161,41 +148,12 @@ const steps = ['Submitted', 'Under review', 'Decision', 'Signature', 'Active'];
       });
 
       // Facts: requested until issued, then authorized.
-      const issued = ['Out for signature', 'Waiting for final report'].includes(status) || ISSUED.includes(status);
+      const issued = ['Out for signature', 'Waiting for annual report'].includes(status) || ISSUED.includes(status);
       $('[data-ro-facts-title]')!.textContent = issued ? 'Your permit' : 'What you asked for';
       $('[data-ro-window-label]')!.textContent = issued ? 'Authorized window' : 'Requested window';
       $('[data-ro-days]')!.textContent = status === 'Active'
         ? (left >= 0 ? `${plural(left, 'day')} left` : 'Ended')
         : '';
-
-      // Expiry warning — Active, 30 days or fewer left.
-      const expiry = $('[data-ro-expiry]');
-      shown(expiry, status === 'Active' && left >= 0 && left <= 30);
-      $('[data-ro-expiry-title]')!.textContent = `Your permit ends in ${plural(left, 'day')}`;
-
-      // Final report.
-      const due = formatDate(reportDueISO(endIso));
-      const line = $('[data-ro-report-line]');
-      const note = $<any>('[data-ro-report]');
-      shown(line, state === 'not-due');
-      if (line) line.textContent = `Final report due ${due}, 30 days after your permit ends.`;
-      shown(note, !!state && state !== 'not-due');
-      if (note && state && state !== 'not-due') {
-        const cleared = delinquencyClearance(id);
-        const [kind, t, sub] =
-          state === 'submitted' ? ['success', 'Final report submitted', 'The review team has your report.']
-          : state === 'due' ? ['info', `Submit your final report by ${due}`, 'Your permit has ended. The report is due 30 days after the end date.']
-          : cleared ? ['info', `Final report still due — it was due ${due}`, `${cleared.by} lifted the renewal block on ${cleared.at}. Submit the report to close it out.`]
-          : ['error', 'Final report overdue — renewals are blocked', `It was due ${due}. Until you submit it, you can't apply for, renew, or amend a permit as principal investigator.`];
-        note.setAttribute('kind', kind);
-        // A blocking (error) state leads the Overview, above the stage card.
-        note.style.order = kind === 'error' ? '-1' : '';
-        $('[data-ro-report-title]')!.textContent = t;
-        $('[data-ro-report-subtitle]')!.textContent = sub;
-        // The stage's primary button carries Submit once it's the next step.
-        shown($('[data-ro-report-submit]'), state !== 'submitted' && !owesReport);
-        shown($('[data-ro-report-view]'), state === 'submitted');
-      }
 
       // Needs your action — the returned changes.
       const todo = $('[data-ro-todo]');
@@ -243,6 +201,8 @@ const steps = ['Submitted', 'Under review', 'Decision', 'Signature', 'Active'];
     // The page reveals this for an owner and sets data-status; it may do so
     // before or after this script runs, so render now if it's set, then listen.
     root.addEventListener('researcher-overview-render', (e) => render((e as CustomEvent).detail.status));
+    // An upload or a send-back changes the report state — re-render in place.
+    window.addEventListener(REPORT_EVENT, () => { if (root.dataset.status) render(root.dataset.status); });
     if (root.dataset.status) render(root.dataset.status);
   }
 </script>
@@ -254,7 +214,6 @@ const steps = ['Submitted', 'Under review', 'Decision', 'Signature', 'Active'];
   .ro__next { margin-top: var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); max-inline-size: 48rem; }
   .ro__progress { display: block; margin-top: var(--cds-spacing-06, 1.5rem); }
   .ro__actions { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-03, 0.5rem); margin-top: var(--cds-spacing-06, 1.5rem); }
-  .ro__report-line { margin: 0; color: var(--cds-text-secondary, #525252); }
   .ro__todo h2, .ro__facts h2 { margin: 0 0 var(--cds-spacing-04, 0.75rem); }
   .ro__issue { display: flex; flex-direction: column; gap: var(--cds-spacing-02, 0.25rem); }
   .ro__issue p { margin: 0; }

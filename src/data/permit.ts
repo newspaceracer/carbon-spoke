@@ -214,7 +214,7 @@ export const permit = {
         steps: [
           { label: 'Permit active', state: 'incomplete' },
           { label: 'Permit expired', state: 'incomplete' },
-          { label: 'Final report submitted', state: 'incomplete' },
+          { label: 'Annual report submitted', state: 'incomplete' },
           { label: 'Renewal processed', state: 'incomplete' },
         ],
       },
@@ -281,7 +281,7 @@ export const permit = {
         { label: 'Start', value: '07/22/2026' },
         { label: 'End', value: '07/22/2027' },
       ] },
-      { key: 'Final report', entries: [
+      { key: 'Annual report', entries: [
         { label: 'Tentative completion', value: '08/14/2027' },
         { label: 'Due', value: '08/21/2027' },
       ] },
@@ -373,7 +373,7 @@ export const permit = {
     'Collection is limited to the approved study areas and the taxa and quantities listed under Data Collection.',
     'No collection within posted marine reserve or special-closure boundaries.',
     'All collected specimens are State property and must be curated at the approved facility.',
-    'A final report is due by Aug 21, 2027, 30 days after the permit ends.',
+    'An annual report is due by Aug 21, 2027, 30 days after the permit ends.',
   ],
 
   // ── Data collection tab ──────────────────────────────────────────────────

@@ -1,0 +1,265 @@
+---
+// The permit's "Annual report" tab: the report is a DOCUMENT the researcher
+// uploads, not a form (lib/final-report.ts holds the model + state). Shown for
+// Active and Expired permits.
+//   • Requirement notice — due / changes requested / overdue / complete.
+//   • Upload area — for the owner (submitter, PI, PICOF), the Responsible
+//     Agent, or an admin. Every upload is a new VERSION of the one report and
+//     becomes current; it emails the analysis team (EM-J).
+//   • Versions table — newest first, with status. The Responsible Agent (or an
+//     admin) can "Request changes" on the current version (a required message,
+//     emailed to the researcher — EM-K; the requirement reopens) and "Remove" any
+//     version behind a danger confirm (the previous version becomes current).
+//
+// Composition: cds-inline-notification, cds-file-uploader-drop-container +
+// cds-button, cds-table, cds-icon-indicator, cds-modal +
+// cds-textarea. Layout CSS only; look = tokens.
+import { permit } from '../data/permit';
+---
+
+<div class="ar" data-annual-report data-permit-id={permit.id} data-permit-name={permit.name}>
+  <cds-inline-notification data-ar-notice low-contrast hide-close-button style="display:none"></cds-inline-notification>
+
+  <!-- Upload — owner, Responsible Agent, or admin; each upload is a new version. -->
+  <section class="ar__upload" data-ar-upload aria-labelledby="ar-upload-title" style="display:none">
+    <h3 id="ar-upload-title" class="t-heading-02" data-ar-upload-title>Upload report</h3>
+    <p class="ar__hint t-body-01" data-ar-upload-hint>One document completes the requirement.</p>
+    <cds-file-uploader-drop-container data-ar-drop accept=".pdf">
+      Drag and drop a file here, or click to upload
+    </cds-file-uploader-drop-container>
+    <p class="ar__hint t-label-01">Accepted file type: PDF.</p>
+  </section>
+
+  <section class="ar__uploads" aria-labelledby="ar-uploads-title">
+    <h3 id="ar-uploads-title" class="t-heading-02">Versions</h3>
+    <p class="ar__hint t-body-01" data-ar-empty>No versions yet.</p>
+    <cds-table size="md" data-ar-table style="display:none">
+      <cds-table-head>
+        <cds-table-header-row>
+          <cds-table-header-cell>Version</cds-table-header-cell>
+          <cds-table-header-cell>File</cds-table-header-cell>
+          <cds-table-header-cell>Uploaded by</cds-table-header-cell>
+          <cds-table-header-cell>Date</cds-table-header-cell>
+          <cds-table-header-cell>Status</cds-table-header-cell>
+          <cds-table-header-cell><span class="cds--visually-hidden">Actions</span></cds-table-header-cell>
+        </cds-table-header-row>
+      </cds-table-head>
+      <cds-table-body data-ar-rows></cds-table-body>
+    </cds-table>
+  </section>
+</div>
+
+<cds-modal id="ar-request-modal" size="sm">
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label>Permit {permit.id}</cds-modal-label>
+    <cds-modal-heading>Request changes</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <p class="t-body-01 ar__lead">The researcher, PI, and PICOF get your message by email.</p>
+    <cds-textarea id="ar-request-message" label="What needs to change" rows="4" invalid-text="Enter what needs to change."></cds-textarea>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="ar-request-confirm">Request changes</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<cds-modal id="ar-remove-modal" size="sm" alert>
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-label>Permit {permit.id}</cds-modal-label>
+    <cds-modal-heading data-ar-remove-heading>Remove version?</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <p class="t-body-01" data-ar-remove-body></p>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+    <cds-modal-footer-button kind="danger" id="ar-remove-confirm">Remove</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<script>
+  import {
+    readUploads, addUpload, removeUpload, requestReportChanges, reportState, reportDueISO, formatDate,
+    REPORT_STATUSES, REPORT_EVENT,
+  } from '../lib/final-report';
+  import { readIdentity } from '../lib/maintenance';
+  import { readPermitRole } from '../lib/permissions';
+  import { activeUser } from '../data/user';
+  import { sendEmail } from '../lib/notifications';
+  import { showToast } from '../lib/toast';
+
+  const root = document.querySelector<HTMLElement>('[data-annual-report]');
+  if (root) {
+    const id = root.dataset.permitId!;
+    const $ = <T extends HTMLElement = HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
+    const shown = (el: HTMLElement, on: boolean) => { el.style.display = on ? '' : 'none'; };
+    const who = readIdentity();
+    const me = activeUser(who);
+    const status = () => localStorage.getItem(`permit-status-${id}`)
+      || document.getElementById('permit-banner')?.dataset.status || '';
+
+    // Owner = the researcher identity named on the permit (submitter / PI / PICOF).
+    let owners: string[] = [];
+    try { owners = JSON.parse(document.getElementById('permit-owners')?.textContent || '[]'); } catch {}
+    const isOwner = who === 'researcher' && !!me && owners.includes(me.name.toLowerCase());
+    // The Responsible Agent (or an admin) reviews the report: uploads, requests
+    // changes, and is the only one who can remove a version.
+    const isReviewer = () => who === 'admin' || readPermitRole(id) === 'responsible';
+
+    const emailVars = (extra: Record<string, string> = {}) => ({
+      'Permit #': id, 'Project title': root.dataset.permitName ?? '', ...extra,
+    });
+
+    // ── Upload ────────────────────────────────────────────────────────────
+    // Dropping (or picking) a file uploads it straight away — no confirm step: a
+    // wrong file is fixed by uploading the right one, which becomes current.
+    // A static prototype can't store bytes: "uploaded" records the file's name.
+    $('[data-ar-drop]').addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+      const file = ((e as CustomEvent).detail?.addedFiles as File[] | undefined)?.[0];
+      if (!file) return;
+      const by = me?.name ?? 'The researcher';
+      const { version } = addUpload(id, file.name, by);
+      sendEmail('EM-J', emailVars({ 'Uploaded by': by }));
+      showToast(`Version ${version} uploaded`, 'The review team gets an email.');
+    });
+
+    // ── Request changes (Responsible Agent / admin) ───────────────────────
+    const modal = document.getElementById('ar-request-modal') as any;
+    const message = document.getElementById('ar-request-message') as any;
+    document.getElementById('ar-request-confirm')?.addEventListener('click', () => {
+      const text = String(message?.value ?? '').trim();
+      if (!text) { message.invalid = true; return; }
+      message.invalid = false;
+      requestReportChanges(id, me?.name ?? 'The responsible analyst', text);
+      sendEmail('EM-K', emailVars({ Message: text }));
+      modal.open = false;
+      message.value = '';
+      showToast('Changes requested', 'Emailed the researcher, PI, and PICOF.');
+    });
+    message?.addEventListener('input', () => { if (message.invalid && String(message.value).trim()) message.invalid = false; });
+
+    // ── Remove a version (Responsible Agent / admin) ──────────────────────
+    const removeModal = document.getElementById('ar-remove-modal') as any;
+    let removing: number | null = null;
+    // What happens after removing `version`: the newest remaining becomes current.
+    const afterRemoval = (version: number) => {
+      const rest = readUploads(id).filter((u) => u.version !== version);
+      const isCurrent = readUploads(id).at(-1)?.version === version;
+      if (!isCurrent) return '';
+      return rest.length ? `Version ${rest.at(-1)!.version} becomes current.` : 'No version will be on file, so the report is due again.';
+    };
+    const confirmRemove = (version: number) => {
+      removing = version;
+      removeModal.querySelector('[data-ar-remove-heading]').textContent = `Remove version ${version}?`;
+      removeModal.querySelector('[data-ar-remove-body]').textContent = `${afterRemoval(version)} This can't be undone.`.trim();
+      removeModal.open = true;
+    };
+    document.getElementById('ar-remove-confirm')?.addEventListener('click', () => {
+      if (removing === null) return;
+      const next = afterRemoval(removing);
+      removeUpload(id, removing);
+      showToast(`Version ${removing} removed`, next);
+      removing = null;
+      removeModal.open = false;
+    });
+
+    // ── Render ────────────────────────────────────────────────────────────
+    const cell = (...children: (Node | string)[]) => {
+      const c = document.createElement('cds-table-cell');
+      c.append(...children);
+      return c;
+    };
+    const indicator = (kind: string, label: string) => {
+      const el = document.createElement('cds-icon-indicator');
+      el.setAttribute('kind', kind);
+      el.setAttribute('label', label);
+      el.setAttribute('size', '16');
+      return el;
+    };
+    const ghost = (label: string, onClick: () => void, kind = 'ghost') => {
+      const b = document.createElement('cds-button');
+      b.setAttribute('kind', kind);
+      b.setAttribute('size', 'sm');
+      b.textContent = label;
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    // No real bytes in the prototype: hand back a stub named like the upload.
+    const download = (name: string) => {
+      const url = URL.createObjectURL(new Blob([`Prototype placeholder for ${name}`], { type: 'application/pdf' }));
+      const a = Object.assign(document.createElement('a'), { href: url, download: name });
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    const render = () => {
+      const s = status();
+      if (!REPORT_STATUSES.includes(s)) return;
+      const state = reportState(s, id);
+      const uploads = readUploads(id);
+      const latest = uploads.at(-1);
+      const due = formatDate(reportDueISO());
+
+      // Requirement notice.
+      const notice = $<any>('[data-ar-notice]');
+      const sentBack = latest?.sentBack;
+      const ask = sentBack ? `${sentBack.by}, ${sentBack.at}: “${sentBack.message}”` : '';
+      const [kind, title, sub] =
+        state === 'submitted' ? ['success', 'Report complete', `${latest!.by} uploaded it on ${latest!.at}.`]
+        : state === 'changes-requested' ? ['warning', 'Changes requested', ask]
+        : state === 'delinquent' ? ['error', 'Report overdue', `It was due ${due}.${sentBack ? ` Changes requested — ${ask}` : ''}`]
+        : ['info', `Due ${due}`, isOwner ? '30 days after your permit ends. You can upload it now.' : '30 days after the permit ends.'];
+      notice.setAttribute('kind', kind);
+      notice.setAttribute('title', title);
+      notice.setAttribute('subtitle', sub);
+      shown(notice, true);
+
+      // Upload area — always open to the owner and the reviewer; a new upload
+      // becomes the current version.
+      shown($('[data-ar-upload]'), isOwner || isReviewer());
+      $('[data-ar-upload-title]').textContent = !latest ? 'Upload report'
+        : sentBack ? 'Upload revised report' : 'Upload new version';
+      $('[data-ar-upload-hint]').textContent = latest
+        ? 'Each upload becomes the current version.'
+        : 'One document completes the requirement.';
+
+      // Versions, newest first.
+      shown($('[data-ar-empty]'), uploads.length === 0);
+      shown($('[data-ar-table]'), uploads.length > 0);
+      const rows = [...uploads].reverse().map((u, i) => {
+        const standing = i === 0 && !u.sentBack;
+        const statusCell = u.sentBack
+          ? indicator('caution-minor', 'Changes requested')
+          : standing ? indicator('succeeded', 'Complete') : indicator('unknown', 'Replaced');
+        const actions = document.createElement('div');
+        actions.className = 'ar__actions';
+        actions.append(ghost('Download', () => download(u.name)));
+        if (standing && isReviewer()) actions.append(ghost('Request changes', () => { modal.open = true; }));
+        if (isReviewer()) actions.append(ghost('Remove', () => confirmRemove(u.version), 'danger-ghost'));
+        const row = document.createElement('cds-table-row');
+        row.append(cell(String(u.version)), cell(u.name), cell(u.by), cell(u.at), cell(statusCell), cell(actions));
+        return row;
+      });
+      $('[data-ar-rows]').replaceChildren(...rows);
+    };
+
+    render();
+    window.addEventListener(REPORT_EVENT, render);
+    window.addEventListener('permit-status-changed', render);
+  }
+</script>
+
+<style>
+  /* Layout only — every surface is a stock cds-* component. */
+  .ar { display: flex; flex-direction: column; gap: var(--cds-spacing-07, 2rem); }
+  .ar section { display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); align-items: flex-start; }
+  .ar section > cds-table, .ar__upload cds-file-uploader-drop-container { align-self: stretch; }
+  .ar__upload { max-inline-size: 46rem; }
+  .ar h3, .ar__hint { margin: 0; }
+  .ar__hint { color: var(--cds-text-secondary, #525252); }
+  .ar__actions { display: flex; gap: var(--cds-spacing-02, 0.25rem); }
+  .ar__lead { margin: 0 0 var(--cds-spacing-05, 1rem); }
+</style>

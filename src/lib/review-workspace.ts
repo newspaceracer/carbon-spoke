@@ -38,7 +38,7 @@ const APPROVED = ['out-for-signature', 'waiting-for-annual-report', 'active', 'e
 const STATUS_KIND: Record<string, string> = {
   'Waiting for review': 'not-started', 'Under review': 'in-progress',
   'Changes requested': 'caution-minor', 'Returned to submitter': 'caution-minor',
-  'Out for signature': 'pending', 'Waiting for final report': 'pending',
+  'Out for signature': 'pending', 'Waiting for annual report': 'pending',
   'Active': 'succeeded', 'Expired': 'unknown', 'Rejected': 'failed', 'Withdrawn': 'undefined',
 };
 
@@ -313,7 +313,7 @@ export function initReviewWorkspace(): void {
   };
 
   const gates = () => {
-    // A final report is on file once the researcher submits one; `?report=1`
+    // An annual report is on file once the researcher submits one; `?report=1`
     // previews the mock report without saving anything.
     const hasReport = new URLSearchParams(location.search).get('report') === '1' || !!ls(`permit-final-report-${permitId}`);
     const show: Record<string, boolean> = { internal: isInternal, approved: APPROVED.includes(phase()), report: hasReport };

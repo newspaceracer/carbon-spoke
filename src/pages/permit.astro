@@ -47,9 +47,9 @@ import PermitCalendar from '../components/PermitCalendar.astro';
 import PermitConditions from '../components/PermitConditions.astro';
 import RecordToc from '../components/record/RecordToc.astro';
 import ResearcherOverview from '../components/ResearcherOverview.astro';
-import ReportObligation from '../components/ReportObligation.astro';
+import PermitAlerts from '../components/PermitAlerts.astro';
 import RecordLetter from '../components/record/RecordLetter.astro';
-import RecordReport from '../components/record/RecordReport.astro';
+import AnnualReport from '../components/AnnualReport.astro';
 import { permit, permitInfoTags, badgesForSection } from '../data/permit';
 import { userDirectory, findUser } from '../data/user';
 import { district as districtRecord } from '../data/district';
@@ -71,9 +71,10 @@ const tabs = [
   { value: 'application', label: 'Application' },
   { value: 'special-conditions', label: 'Special conditions' },
   // Gated: shown client-side only when they apply (see gateRecordTabs) — the
-  // letter once it's out for signature, the report once one is on file.
+  // letter once it's out for signature, the annual report once the permit is
+  // Active or Expired (when the researcher can upload it).
   { value: 'letter', label: 'Final permit letter', gate: 'letter' },
-  { value: 'report', label: 'Final report', gate: 'report' },
+  { value: 'report', label: 'Annual report', gate: 'report' },
 ] as { value: string; label: string; gate?: string }[];
 
 // Application tab contents rail — one entry per section on the scroll, with the
@@ -306,17 +307,6 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
     </script>
     <script type="application/json" id="permit-owners" set:html={JSON.stringify(ownerIdentifiers)}></script>
 
-    <!-- Public view banner (Story 12) — revealed by the client for a public viewer
-         of an Active/Expired permit; the record shows summary fields only, no PII. -->
-    <cds-inline-notification
-      id="public-view-banner"
-      style="display:none"
-      kind="info"
-      low-contrast
-      hide-close-button
-      title="Public view"
-      subtitle="This is the public summary of an issued research permit. Personal details and internal review information are not shown."
-    ></cds-inline-notification>
     <cds-stack gap="6">
       <PermitHeader
         id={permit.id}
@@ -342,43 +332,10 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
       </PermitHeader>
 
-      <!-- Changes requested (researcher owner, application returned) — revealed by the
-           client: how many changes the review team asked for, and the way into the
-           revise flow, where each change is shown on the page it's about. -->
-      <div class="cds--css-grid" id="changes-requested-row" style="display:none">
-        <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
-          <cds-actionable-notification
-            id="changes-requested-banner"
-            style="display:none"
-            kind="warning"
-            low-contrast
-            inline
-            hide-close-button
-            title="Changes requested"
-            subtitle=""
-          >
-            <cds-actionable-notification-button slot="action" id="changes-requested-go">Review requested changes</cds-actionable-notification-button>
-          </cds-actionable-notification>
-        </div>
-      </div>
-
-      <!-- Amendment link — revealed by the client script only once an amendment has
-           been started from this permit. Names the amendment and links to it, so the
-           relationship is traceable from the original, not just from the amendment. -->
-      <cds-actionable-notification
-        id="amend-notice"
-        class="amend-notice"
-        kind="info"
-        low-contrast
-        hide-close-button
-        hidden
-      >
-        <span slot="title">Amendment in progress</span>
-        <span slot="subtitle" id="amend-notice-text"></span>
-        <cds-actionable-notification-button id="amend-notice-btn" href="#">
-          View amendment
-        </cds-actionable-notification-button>
-      </cds-actionable-notification>
+      <!-- Permit alerts — one stack for page-level state (amendment, renewal,
+           annual report, on hold, changes requested, public view…), visible on
+           every tab. Rules: lib/permit-alerts.ts. -->
+      <PermitAlerts />
 
       <!-- carbon-checked: .tabbar is NOT a tab component — the tabs are the stock
            cds-tabs/cds-tab below. It is only a full-bleed STICKY background layer
@@ -401,30 +358,10 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           <div class="panel" data-panel="overview" role="tabpanel" aria-labelledby="tab-overview">
             <div class="cds--css-grid cds--css-grid--with-row-gap">
               <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-11 overview-main">
-              <!-- Researcher owner's Overview (stage lead, final report, needs your
+              <!-- Researcher owner's Overview (stage lead, annual report, needs your
                    action, the permit's facts). Hidden for staff — revealed by the
                    viewer-class script for an owner. -->
               <ResearcherOverview />
-              <!-- Staff: the final report obligation (overdue → lift/restore the
-                   renewal block). Hidden for non-staff and before it applies. -->
-              <ReportObligation />
-              <!-- Start-review prompt — the application is fully browsable, but until
-                   review is formally started the reviewer is prompted here to begin
-                   (which records when review actually started). Hidden once started
-                   via the .review-started class the head script sets pre-paint.
-                   Reuses the .permit-start-review handler wired in PermitHeader. -->
-              <cds-actionable-notification
-                id="start-review-prompt"
-                class="start-review-prompt"
-                kind="info"
-                low-contrast
-                hide-close-button
-              >
-                <span slot="title">Start your review</span>
-                <span slot="subtitle">You can browse the whole application now. Starting records when your review began — the application stays exactly as the applicant filed it.</span>
-                <cds-actionable-notification-button class="permit-start-review" slot="action">Start review</cds-actionable-notification-button>
-              </cds-actionable-notification>
-
               <ReviewSection title="Tags" panel>
                 <InternalOnlyFlag slot="aside" />
                 <p class="section-hint t-body-01">Internal labels for triage and coordination, separate from the permit's classification badges. Pick from the set; applied tags appear below and can be removed.</p>
@@ -751,10 +688,10 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
             </div>
           </div>
 
-          <!-- ── Final permit letter / Final report ───────────────────── -->
+          <!-- ── Final permit letter / Annual report ───────────────────── -->
           <!-- The record's later documents (same components as the one-scroll
                record): the letter EXACTLY as sent for signature, with signature
-               status; and the researcher's final report. Their tabs are gated —
+               status; and the researcher's annual report. Their tabs are gated —
                see gateRecordTabs. Content column lines up with the other tabs'. -->
           <div class="panel cds--css-grid" data-panel="letter" role="tabpanel" aria-labelledby="tab-letter" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-start-4 cds--lg:col-span-12">
@@ -765,8 +702,8 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           </div>
           <div class="panel cds--css-grid" data-panel="report" role="tabpanel" aria-labelledby="tab-report" hidden>
             <div class="stack cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-start-4 cds--lg:col-span-12">
-              <ReviewSection title="Final report" panel>
-                <RecordReport />
+              <ReviewSection title="Annual report" panel>
+                <AnnualReport />
               </ReviewSection>
             </div>
           </div>
@@ -780,40 +717,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   </main>
 </BaseLayout>
 
-<script>
-  // Gate vs. body visibility is driven by the .review-started class the inline
-  // head script sets pre-paint from the flag; starting itself navigates to the
-  // wizard (PermitHeader.startReview), so there's no in-place reveal to run.
-
-  // The "Start your review" prompt only makes sense for someone allowed to start.
-  // PermitHeader hides the start button (.permit-start-review) for viewers who
-  // can't, so mirror that onto the whole prompt — only ever hide (never force it
-  // visible), so the .review-started stylesheet rule keeps winning once started.
-  const startPrompt = document.getElementById('start-review-prompt') as HTMLElement | null;
-  const startBtn = startPrompt?.querySelector<HTMLElement>('.permit-start-review') ?? null;
-  if (startPrompt && startBtn) {
-    const syncStartPrompt = () => { if (startBtn.hidden) startPrompt.style.display = 'none'; };
-    requestAnimationFrame(syncStartPrompt);
-    new MutationObserver(syncStartPrompt).observe(startBtn, { attributes: true, attributeFilter: ['hidden'] });
-  }
-</script>
-
-<style>
-  /* Start-review prompt — an inline call to action at the top of the Overview
-     tab, shown until review begins. The application itself is always accessible;
-     this only nudges the reviewer to formally start (which records the time). */
-  .start-review-prompt {
-    max-inline-size: 100%;
-    margin-block-end: var(--cds-spacing-06, 1.5rem);
-  }
-</style>
-
 <style is:global>
-  /* Pre-paint prompt visibility, keyed on the class the inline head script sets
-     from the flag — so a permit already in review never flashes the "Start your
-     review" prompt. #start-review-prompt exists only on this page, so this global
-     block can't affect any other screen. */
-  html.review-started #start-review-prompt { display: none; }
   /* Header no-flash: on a started permit, don't let the "Start review" action
      flash before the script swaps it to "Open review". Safe as a global rule
      because .review-started is only ever set on this page — the other PermitHeader
@@ -824,11 +728,11 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
 
 <script>
   import { withBase } from '../lib/base';
-  import { reviewStore } from '../lib/review-thread';
   import { readIdentity } from '../lib/maintenance';
   import { activeUser } from '../data/user';
   import { sectionAccessor } from '../lib/permissions';
   import { showToast } from '../lib/toast';
+  import { REPORT_STATUSES } from '../lib/final-report';
   import { renderMentionText, wireMentionTypeahead, type MentionUser } from '../lib/comment-mentions';
 
   // IR permission context (Stories 9.1–9.5): resolve each section's access from
@@ -847,7 +751,7 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   // Researcher owners see the special conditions once they're final — from the
   // moment the letter goes out for signature (they accept them by signing) and for
   // the life of the permit after. Draft conditions under review stay internal.
-  const OWNER_CONDITIONS_STATUSES = ['Out for signature', 'Waiting for final report', 'Active', 'Expired'];
+  const OWNER_CONDITIONS_STATUSES = ['Out for signature', 'Waiting for annual report', 'Active', 'Expired'];
   const hideInternalReview = ({ keepConditions = false } = {}) => {
     internalReviewHidden = true;
     // Header: the analysis team's review progress is internal.
@@ -892,29 +796,12 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
           ro.dataset.status = statusLabel;
           ro.dispatchEvent(new CustomEvent('researcher-overview-render', { detail: { status: statusLabel } }));
         }
-        // Returned for changes → point the researcher at the revise flow.
-        if (statusLabel === 'Changes requested' || statusLabel === 'Returned to submitter') {
-          const ret = reviewStore(thePermitId).returned();
-          const n = ret?.issueIds.length ?? 0;
-          const cr = document.getElementById('changes-requested-banner') as any;
-          if (cr) {
-            cr.subtitle = `The review team asked for ${n === 1 ? '1 change' : `${n} changes`}${ret ? ` on ${ret.at}` : ''}. Each one is shown on the page of your application it's about.${ret?.message ? ` Their message: “${ret.message}”` : ''}`;
-            cr.style.display = '';
-            const row = document.getElementById('changes-requested-row');
-            if (row) row.style.display = '';
-          }
-          document.getElementById('changes-requested-go')?.addEventListener('click', () => {
-            location.href = withBase(`/apply?revise=${encodeURIComponent(thePermitId)}`);
-          });
-        }
       } else if (isPublicStatus) {
         // Story 12 — public view of an Active/Expired permit: summary only, no PII,
         // no Internal Review. Available to anon and any authenticated non-owner.
         viewerIsPublic = true;
         hideInternalReview();
         hideSec('.contact-grid');        // Research team (PI / field lead names — PII)
-        const pub = document.getElementById('public-view-banner') as HTMLElement | null;
-        if (pub) pub.style.display = '';
       } else {
         // Not the owner and not a public status → no access.
         location.replace(withBase(who === 'anon' ? '/search' : '/my-permits'));
@@ -932,17 +819,15 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   tabsEl?.addEventListener('cds-tabs-selected', () => showPanel(tabsEl.value));
 
   // Gated record tabs. Final permit letter: once the letter has gone out for
-  // signature (staff + the researcher owner, who signs it). Final report: once the
-  // researcher has filed one (permit-final-report-${id}; `?report=1` previews the
-  // mock). Neither is part of the public summary. A gated tab that disappears
-  // while open falls back to Overview.
-  const LETTER_STATUSES = ['Out for signature', 'Waiting for final report', 'Active', 'Expired'];
+  // signature (staff + the researcher owner). Annual report: once the permit is
+  // Active or Expired — the tab is where the researcher uploads the report and the
+  // Responsible Agent reviews it. Neither is part of the public summary. A gated
+  // tab that disappears while open falls back to Overview.
+  const LETTER_STATUSES = ['Out for signature', 'Waiting for annual report', 'Active', 'Expired'];
   const gateRecordTabs = () => {
-    const hasReport = new URLSearchParams(location.search).get('report') === '1'
-      || !!localStorage.getItem(`permit-final-report-${thePermitId}`);
     const show: Record<string, boolean> = {
       letter: !viewerIsPublic && LETTER_STATUSES.includes(liveStatus()),
-      report: !viewerIsPublic && hasReport,
+      report: !viewerIsPublic && REPORT_STATUSES.includes(liveStatus()),
     };
     document.querySelectorAll<HTMLElement>('#permit-tabs cds-tab[data-gate]').forEach((tab) => {
       const visible = show[tab.dataset.gate!] ?? true;
@@ -955,6 +840,30 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
   };
   gateRecordTabs();
   window.addEventListener('permit-status-changed', gateRecordTabs);
+
+  // Deep link: #<tab> (e.g. #application) or ?tab=<tab> opens that tab when it's
+  // visible to this viewer (the /apply renewal block links to ?tab=report). The
+  // hash follows the open tab so the address bar is always shareable; a hash that
+  // isn't a tab (an in-page anchor) is left alone.
+  {
+    const TAB_VALUES = Array.from(document.querySelectorAll<HTMLElement>('#permit-tabs cds-tab')).map((t) => t.getAttribute('value')!);
+    const openTab = (want: string | null) => {
+      if (!want || !TAB_VALUES.includes(want)) return;
+      const tab = document.querySelector<HTMLElement>(`#permit-tabs cds-tab[value="${CSS.escape(want)}"]`);
+      if (!tab || tab.style.display === 'none') return;
+      customElements.whenDefined('cds-tabs').then(() => (tabsEl.updateComplete ?? Promise.resolve()).then(() => {
+        tabsEl.value = want;
+        showPanel(want);
+      }));
+    };
+    openTab(location.hash.slice(1) || new URLSearchParams(location.search).get('tab'));
+    window.addEventListener('hashchange', () => openTab(location.hash.slice(1)));
+    tabsEl?.addEventListener('cds-tabs-selected', () => {
+      const v = tabsEl.value;
+      const hash = v === 'overview' ? '' : `#${v}`;
+      if (location.hash !== hash) history.replaceState(null, '', `${location.pathname}${location.search}${hash}`);
+    });
+  }
 
   // Header: once the permit is issued its window is the AUTHORIZED one, not the
   // request (staff may have narrowed it — the issued dates are what's in force).
@@ -1507,23 +1416,6 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
       .forEach((toc) => toc.dispatchEvent(new Event('record-toc-refresh')))));
 </script>
 
-<!-- Amendment link — surfaces the amendment on the ORIGINAL permit once one has
-     been started (flag written by PermitHeader's Request amendment action). -->
-<script>
-  import { permit } from '../data/permit';
-  import { withBase } from '../lib/base';
-
-  const amendNumber = localStorage.getItem(`permit-amendment-${permit.id}`);
-  if (amendNumber) {
-    const notice = document.getElementById('amend-notice') as any;
-    const text = document.getElementById('amend-notice-text');
-    const btn = document.getElementById('amend-notice-btn');
-    if (text) text.textContent = `Amendment ${amendNumber} has been started for this permit.`;
-    if (btn) btn.setAttribute('href', withBase(`/apply?amend=${permit.id}`));
-    if (notice) notice.hidden = false;
-  }
-</script>
-
 <!-- Study areas → Authorized parks: reflect the district contacts recorded on
      step ② of the finalize wizard (final-letter.astro). The wizard persists a flat
      per-district list of { person, scope } entries under permit-final-${id}.contacts
@@ -1664,17 +1556,6 @@ const studyAreaContactModel = studyAreaDistricts.map((d) => ({
     viewerHost.hidden = true;
   });
 </script>
-
-<style>
-  /* Amendment notice sits between the header and the tab strip; ships hidden. */
-  .amend-notice[hidden] {
-    display: none;
-  }
-  .amend-notice {
-    max-inline-size: 99rem;
-    margin-inline: auto;
-  }
-</style>
 
 <style>
   /* Page-level LAYOUT only — component look lives in cds-* legos + --cds-* tokens.

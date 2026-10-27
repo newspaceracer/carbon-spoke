@@ -71,8 +71,8 @@ const events = [
   ] : []),
   ...fieldSessions.map((s, i) =>
     bgEvent(`field-${i}`, 'field', 'Field investigation', s.start, s.end ? addDay(s.end) : undefined, rangeLabel(s.start, s.end))),
-  bgEvent('tentative', 'tentative', 'Final report — tentative completion', tentativeISO, undefined, tentativeLabel),
-  bgEvent('required', 'required', 'Final report — due', requiredISO, undefined, requiredLabel),
+  bgEvent('tentative', 'tentative', 'Annual report — tentative completion', tentativeISO, undefined, tentativeLabel),
+  bgEvent('required', 'required', 'Annual report — due', requiredISO, undefined, requiredLabel),
   bgEvent('today', 'today', 'Today', todayISO, undefined, dayLabel(todayISO)),
 ];
 
@@ -92,8 +92,8 @@ if (project) {
   dayIndex[project.endISO] = { title: 'Project end', body: project.endLabel };
 }
 for (const s of fieldSessions) for (const iso of eachDay(s.start, s.end ? addDay(s.end) : undefined)) dayIndex[iso] = { title: 'Field investigation', body: rangeLabel(s.start, s.end) };
-dayIndex[tentativeISO] = { title: 'Final report — tentative completion', body: tentativeLabel };
-dayIndex[requiredISO] = { title: 'Final report — due', body: requiredLabel };
+dayIndex[tentativeISO] = { title: 'Annual report — tentative completion', body: tentativeLabel };
+dayIndex[requiredISO] = { title: 'Annual report — due', body: requiredLabel };
 dayIndex[todayISO] = { title: 'Today', body: dayLabel(todayISO) };
 
 // Year view starts at the permit's first month so the full span is visible at once.

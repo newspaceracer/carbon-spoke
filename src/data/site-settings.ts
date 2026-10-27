@@ -177,14 +177,14 @@ nrd.research@parks.ca.gov`,
   },
   {
     id: 'annual-report-15',
-    name: 'Final report reminder — 15 days before',
+    name: 'Annual report reminder — 15 days before',
     variables: ['[Recipient Name]', '[Permit Number]', '[Permit Title]', '[Expiration Date]', '[Link]'],
-    subject: 'CA State Parks SCP – final report due in 15 days',
+    subject: 'CA State Parks SCP – annual report due in 15 days',
     body: `Dear [Recipient Name],
 
-We are writing to remind you that the final report for your permit, [Permit Number] ([Permit Title]), is due on [Expiration Date]. The submission of this report is mandatory in all cases and must be received before a renewal permit can be issued.
+We are writing to remind you that the annual report for your permit, [Permit Number] ([Permit Title]), is due on [Expiration Date]. The submission of this report is mandatory in all cases and must be received before a renewal permit can be issued.
 
-Please submit your report by the due date. Log in, open your permit ([Link]), and select "Submit final report".
+Please upload your report by the due date. Log in, open your permit ([Link]), and select "Upload annual report".
 
 If you have any questions, please contact us.
 
@@ -198,14 +198,14 @@ nrd.research@parks.ca.gov`,
   },
   {
     id: 'annual-report-day',
-    name: 'Final report reminder — due today',
+    name: 'Annual report reminder — due today',
     variables: ['[Recipient Name]', '[Permit Number]', '[Permit Title]', '[Expiration Date]', '[Link]'],
-    subject: 'CA State Parks SCP – final report due today',
+    subject: 'CA State Parks SCP – annual report due today',
     body: `Dear [Recipient Name],
 
-We are writing to remind you that the final report for your permit, [Permit Number] ([Permit Title]), is due today: [Expiration Date]. The submission of this report is mandatory in all cases and must be received before a renewal permit can be issued.
+We are writing to remind you that the annual report for your permit, [Permit Number] ([Permit Title]), is due today: [Expiration Date]. The submission of this report is mandatory in all cases and must be received before a renewal permit can be issued.
 
-Please submit your report by the due date. Log in, open your permit ([Link]), and select "Submit final report".
+Please upload your report by the due date. Log in, open your permit ([Link]), and select "Upload annual report".
 
 If you have any questions, please contact us.
 

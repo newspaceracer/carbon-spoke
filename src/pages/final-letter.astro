@@ -702,11 +702,12 @@ const letterData = {
       <cds-modal-heading>Send this letter for signature?</cds-modal-heading>
     </cds-modal-header>
     <cds-modal-body>
-      <p class="t-body-01">
-        The letter is locked from further edits and routed to the signers. The
-        permit moves to <strong>Out for signature</strong>. You can still record the
-        signed permit from the permit page once it comes back.
+      <p class="t-body-01 send-lead">
+        The letter locks and the permit moves to <strong>Out for signature</strong>.
+        Then download the letter, get it signed, and upload the signed copy.
       </p>
+      <!-- Unfinished supporting reviews warn but never block the Responsible Agent. -->
+      <cds-inline-notification id="send-open-reviews" kind="warning" low-contrast hide-close-button style="display: none"></cds-inline-notification>
     </cds-modal-body>
     <cds-modal-footer>
       <cds-modal-footer-button kind="secondary" data-modal-close>Keep editing</cds-modal-footer-button>
@@ -852,6 +853,7 @@ const letterData = {
     } from '../data/conditions';
     import { readIdentity } from '../lib/maintenance';
     import { readPermitRole } from '../lib/permissions';
+    import { actorEmail, markReviewComplete, notifyResponsibleAgent } from '../lib/review-complete';
     import { showToast } from '../lib/toast';
     import { onRecordEdit, setRecordValues } from '../lib/record-edit';
     import { anchorFromSelection, findAnchor, paintHighlight, paintLayered, type TextAnchor } from '../lib/text-anchors';
@@ -2152,6 +2154,20 @@ const letterData = {
 
     // ── Send for signature ──────────────────────────────────────────────────────
     const sendModal = $('send-modal') as any;
+    // Reviewers on the analysis team who haven't marked their review complete (the
+    // header roster's rows carry the live status). Shown as a warning; sending is
+    // still allowed.
+    const warnOpenReviews = () => {
+      const note = $('send-open-reviews') as any;
+      if (!note) return;
+      const open = [...document.querySelectorAll<HTMLElement>('.review-row[data-lead="false"]')]
+        .filter((r) => r.dataset.status !== 'complete' && !r.hasAttribute('data-staged'))
+        .map((r) => r.querySelector('.review-row__name')?.textContent?.trim())
+        .filter(Boolean) as string[];
+      note.style.display = open.length ? '' : 'none';
+      note.setAttribute('title', open.length === 1 ? '1 review not complete' : `${open.length} reviews not complete`);
+      note.setAttribute('subtitle', open.join(', '));
+    };
     $('send-confirm')?.addEventListener('click', () => {
       persistFinal(); persistParks(); persistConditions();
       // Freeze the letter exactly as sent — the application record's "Final permit
@@ -2237,6 +2253,8 @@ const letterData = {
     // so both surfaces agree, then return to the permit.
     const completeReview = () => {
       try { localStorage.setItem(`permit-supporting-review-${permitId}-${wizIdentity}`, 'complete'); } catch {}
+      const email = actorEmail(wizIdentity);
+      if (email) { markReviewComplete(permitId, email); notifyResponsibleAgent(permitId, wizIdentity, 'completed'); }
       window.location.href = data.permitUrl;
     };
     // The SUPPORTING analyst's contact surface: on "Complete review" this modal opens
@@ -2277,7 +2295,7 @@ const letterData = {
       // contact. (Advancing past step ② does NOT lock contacts — the lead can still
       // edit them until the letter is sent; see send-confirm.)
       if (isLead && current >= 1 && !contactsComplete()) return;
-      if (current === PAGES - 1) { sendModal.open = true; return; }
+      if (current === PAGES - 1) { warnOpenReviews(); sendModal.open = true; return; }
       goTo(current + 1);
     };
     nextBtn?.addEventListener('click', advance);
@@ -3188,6 +3206,8 @@ const letterData = {
   </script>
 
   <style>
+    /* Send modal: the lede sits above the open-reviews warning. */
+    .send-lead { margin: 0 0 var(--cds-spacing-05, 1rem); }
     .page { padding-block: 0 var(--cds-spacing-10, 4rem); }
 
     /* The identity header is the shared PermitHeader component (its own g100

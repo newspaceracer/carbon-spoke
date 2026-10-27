@@ -287,6 +287,7 @@ const trashIcon =
   import { readIdentity } from '../lib/maintenance';
   import { sectionAccessor } from '../lib/permissions';
   import { installEmailCopy } from '../lib/email-copy';
+  import { paintReviewRows, REVIEW_COMPLETE_EVENT } from '../lib/review-complete';
 
   installEmailCopy();
 
@@ -455,5 +456,28 @@ const trashIcon =
     });
 
     refreshCombo();
+
+    // Reviewers who marked themselves done ("Complete review") read Complete with
+    // their date; a reopen restores the seeded state.
+    const paintComplete = () => paintReviewRows(allRows(), permitId, (row, st) => {
+      const ind = row.querySelector('.member__status cds-icon-indicator');
+      ind?.setAttribute('kind', st.kind);
+      ind?.setAttribute('label', st.label);
+      let when = row.querySelector('.member__when');
+      if (!when && st.when) {
+        when = Object.assign(document.createElement('span'), { className: 'member__when t-label-01' });
+        row.querySelector('.member__status')?.append(when);
+      }
+      if (when) when.textContent = st.when;
+    }, (row) => {
+      const ind = row.querySelector('.member__status cds-icon-indicator');
+      return {
+        status: '', kind: ind?.getAttribute('kind') || 'not-started',
+        label: ind?.getAttribute('label') || 'Not started',
+        when: row.querySelector('.member__when')?.textContent || '',
+      };
+    });
+    paintComplete();
+    window.addEventListener(REVIEW_COMPLETE_EVENT, paintComplete);
   }
 </script>

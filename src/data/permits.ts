@@ -441,7 +441,7 @@ export const permitColumns = [
   { field: 'responsibleAnalyst', headerName: 'Responsible analyst', width: 190, flex: 0 },
   { field: 'supportingAnalysts', headerName: 'Supporting analysts', minWidth: 210, flex: 1 },
   { field: 'signedPermit', headerName: 'Signed permit', width: 150, flex: 0 },
-  { field: 'annualReportDue', headerName: 'Final report due date', valueFormatter: 'date', pinned: 'left', width: 190, flex: 0 },
-  { field: 'annualReportSubmitted', headerName: 'Final report submitted', width: 200, flex: 0 },
-  { field: 'annualReport', headerName: 'Final report', cellRenderer: 'doc', width: 160, flex: 0 },
+  { field: 'annualReportDue', headerName: 'Annual report due date', valueFormatter: 'date', pinned: 'left', width: 190, flex: 0 },
+  { field: 'annualReportSubmitted', headerName: 'Annual report submitted', width: 200, flex: 0 },
+  { field: 'annualReport', headerName: 'Annual report', cellRenderer: 'doc', width: 160, flex: 0 },
 ] as const;

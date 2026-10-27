@@ -7,6 +7,7 @@ import FlagTag from './FlagTag.astro';
 import type { DirectoryUser } from '../data/user';
 import { withBase } from '../lib/base';
 import Avatar from './Avatar.astro';
+import PermitHeaderActions from './PermitHeaderActions.astro';
 
 interface Stat {
   label: string;
@@ -76,6 +77,7 @@ const reviewLabel = finalize ? 'Approve permit' : 'Open review';
 // An amendment reuses the whole application flow, prefilled from this permit and
 // numbered with an "-A" suffix — offered only once the permit is Active.
 const amendHref = withBase(`/apply?amend=${id}`);
+const reviseHref = withBase(`/apply?revise=${id}`);
 
 // ── Analysis-review metric (only when analysisTeam is supplied) ──
 // The three reviewer states, each with its icon-indicator kind + label + the verb
@@ -90,7 +92,7 @@ const isLead = (m: TeamMember) => m.highlight === true || m.role === 'Responsibl
 // The Lead analyst reads Complete only once the permit has left review (Out for
 // signature and beyond) — their sign-off IS the end of the analysis. Before that
 // they're actively reviewing (Pending). Everyone else carries their own status.
-const leadComplete = ['Out for signature', 'Waiting for final report', 'Active'].includes(status.label);
+const leadComplete = ['Out for signature', 'Waiting for annual report', 'Active'].includes(status.label);
 const memberStatus = (m: TeamMember): ReviewStatus =>
   isLead(m) ? (leadComplete ? 'complete' : 'pending') : m.reviewStatus;
 // The date/time line under the status. The lead's is phrased as a sign-off, not a
@@ -166,34 +168,10 @@ const rosterSections = [
       </div>
     </div>
 
-    <!-- Actions depend on where the permit sits in the workflow — only the set for
-         the current status is shown (the script toggles by [data-when]):
-           • Under review     → Approve (primary) + Request changes / Reject in the menu
-           • Out for signature → Sign permit
-           • Active            → Request amendment (the applicant's next move)
-           • Changes requested / Rejected → no decision remains here
-         tooltip-alignment=bottom: the caret's tooltip defaults to opening upward,
-         which is clipped once the header is a pinned bar — open it downward. -->
+    <!-- One action button per viewer: status × permit-role / owner (Story 2).
+         The script shows the matching [data-action]; see PermitHeaderActions. -->
     <div class="banner__actions">
-      <!-- Under review has two phases (the script toggles [data-phase] by the
-           permit-review-started-${id} flag):
-             not-started → Start review — records who's reviewing + when, then
-                           opens the review wizard (final-letter).
-             started     → Open review — primary enters the wizard; the decision
-                           actions stay in the menu, and the approval itself is
-                           the wizard's Send step. -->
-      <cds-button data-when="Waiting for review" class="permit-start-review" size="md">Start review</cds-button>
-      <cds-combo-button data-when="Under review" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
-        <cds-menu>
-          <cds-menu-item label="Request changes"></cds-menu-item>
-          {!finalize && <cds-menu-item label="Download"></cds-menu-item>}
-          {!finalize && <cds-menu-item-divider></cds-menu-item-divider>}
-          <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
-        </cds-menu>
-      </cds-combo-button>
-      <cds-button data-when="Out for signature" class="permit-action-sign" size="md" hidden>Sign permit</cds-button>
-      <cds-button data-when="Waiting for final report" class="permit-hold-override" size="md" hidden>Override hold — issue permit</cds-button>
-      <cds-button data-when="Active" class="permit-action-amend" size="md" href={amendHref} hidden>Request amendment</cds-button>
+      <PermitHeaderActions reviewLabel={reviewLabel} amendHref={amendHref} reviseHref={reviseHref} />
     </div>
   </div>
 
@@ -244,18 +222,7 @@ const rosterSections = [
     <cds-icon-indicator class="permit-status-indicator" size="16" kind={status.kind} label={status.label}></cds-icon-indicator>
     <span class="compactbar__window t-body-01">{requestedWindow.start} – {requestedWindow.end}</span>
     <div class="compactbar__spacer"></div>
-    <cds-button data-when="Waiting for review" class="permit-start-review" size="md">Start review</cds-button>
-    <cds-combo-button data-when="Under review" class="permit-open-review" size="md" label={reviewLabel} menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
-      <cds-menu>
-        <cds-menu-item label="Request changes"></cds-menu-item>
-        {!finalize && <cds-menu-item label="Download"></cds-menu-item>}
-        {!finalize && <cds-menu-item-divider></cds-menu-item-divider>}
-        <cds-menu-item label="Reject permit" kind="danger"></cds-menu-item>
-      </cds-menu>
-    </cds-combo-button>
-    <cds-button data-when="Out for signature" class="permit-action-sign" size="md" hidden>Sign permit</cds-button>
-      <cds-button data-when="Waiting for final report" class="permit-hold-override" size="md" hidden>Override hold — issue permit</cds-button>
-    <cds-button data-when="Active" class="permit-action-amend" size="md" href={amendHref} hidden>Request amendment</cds-button>
+    <PermitHeaderActions reviewLabel={reviewLabel} amendHref={amendHref} reviseHref={reviseHref} />
   </div>
 </div>
 
@@ -263,21 +230,29 @@ const rosterSections = [
      flow; Carbon owns the focus trap + return and the accessible heading. Approval
      is no longer a header modal — it's the review wizard's Send step, reached via
      Open review, where the reviewer confirms the window and conditions first. -->
+<!-- Activation (no in-system signing): the Responsible Agent downloads the
+     generated letter, has it signed outside the system, and uploads the signed
+     copy here. The upload is what activates the permit — the system records only
+     the file, who uploaded it, and when. -->
 <cds-modal id="sign-permit-modal" size="sm">
   <cds-modal-header>
     <cds-modal-close-button></cds-modal-close-button>
     <cds-modal-label>Permit {id}</cds-modal-label>
-    <cds-modal-heading>Record the signed permit?</cds-modal-heading>
+    <cds-modal-heading>Upload signed letter</cds-modal-heading>
   </cds-modal-header>
   <cds-modal-body>
-    <p class="t-body-01">
-      Confirm the applicant has signed and returned the permit. This activates it:
-      the permit becomes valid and the applicant can begin the authorized work.
+    <p class="t-body-01 signed-upload__lead">
+      Uploading it activates the permit.
     </p>
+    <cds-file-uploader-drop-container id="signed-letter-drop" accept=".pdf">
+      Drag and drop a file here, or click to upload
+    </cds-file-uploader-drop-container>
+    <div id="signed-letter-chosen" class="signed-upload__chosen"></div>
+    <p class="t-label-01 signed-upload__hint">Accepted file type: PDF.</p>
   </cds-modal-body>
   <cds-modal-footer>
     <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
-    <cds-modal-footer-button kind="primary" id="sign-confirm" data-modal-close>Mark as signed</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="sign-confirm" disabled>Upload and activate</cds-modal-footer-button>
   </cds-modal-footer>
 </cds-modal>
 
@@ -492,11 +467,16 @@ const rosterSections = [
 
 <script>
   import { readIdentity } from '../lib/maintenance';
-  import { readPermitRole, sectionAccessor } from '../lib/permissions';
+  import { readPermitRole } from '../lib/permissions';
   import { reviewStore, returnToResearcher, RECORD_SECTIONS } from '../lib/review-thread';
   import { activeUser } from '../data/user';
   import '../styles/review-notes.css';
   import { sendEmail } from '../lib/notifications';
+  import { showToast } from '../lib/toast';
+  import { withBase } from '../lib/base';
+  import { reportState, REPORT_EVENT } from '../lib/final-report';
+  import { downloadSignedLetter, downloadUnsignedLetter } from '../lib/letter-download';
+  import { actorEmail, isReviewComplete, markReviewComplete, notifyResponsibleAgent, reopenReview, REVIEW_COMPLETE_EVENT } from '../lib/review-complete';
   // ── Workflow state machine (prototype-local) ──
   // The permit moves through a small set of statuses; each has a cds-icon-indicator
   // `kind` (kept in sync with data/permits.ts) and its own action set. The current
@@ -514,22 +494,26 @@ const rosterSections = [
   const permitId = banner?.dataset.permitId ?? '';
   const seededStatus = banner?.dataset.status ?? 'Under review';
   const statusKey = `permit-status-${permitId}`;
+  const letterUrl = banner?.dataset.letterUrl;
+  const inFinalize = banner?.dataset.context === 'finalize';
 
-  // Decision/sign actions are permit-role gated (Story 9.3): Approve / Request
-  // changes / Reject and the review-decision entry are RA-or-Admin only; Sign is
-  // for the applicable signer only; Start review is RA-or-Admin (Story 5 refines).
+  // Decision actions are permit-role gated (Story 9.3): Approve / Request changes /
+  // Reject and the review-decision entry are RA-or-Admin only; so are Start review
+  // (Story 5 refines) and the signed-letter upload that activates the permit.
   const gateIdentity = readIdentity();
   const gatePermitType = banner?.dataset.permitType;
   const startAllowed = gateIdentity === 'admin' || readPermitRole(permitId) === 'responsible';
+  const STAFF = ['admin', 'hq-technical', 'district-lead', 'district-assistant'];
 
   const STATUS_KIND: Record<string, string> = {
     'Waiting for review': 'not-started',
     'Under review': 'in-progress',
     'Out for signature': 'pending',
-    'Waiting for final report': 'caution-minor',
+    'Waiting for annual report': 'caution-minor',
     'Active': 'succeeded',
     'Changes requested': 'caution-minor',
     'Rejected': 'failed',
+    'Expired': 'unknown',
   };
 
   const currentStatus = () =>
@@ -538,43 +522,56 @@ const rosterSections = [
   // "Under review" has two phases — before and after a reviewer starts. The flag
   // records who's reviewing + when; its presence is the whole gate.
   const reviewStartedKey = `permit-review-started-${permitId}`;
-  const isReviewStarted = () => Boolean(permitId && localStorage.getItem(reviewStartedKey));
 
   // Reflect a status across every surface: the two status indicators and the
-  // action controls. A plain [data-when] action shows for its status; a
-  // [data-phase] action (only within "Under review") additionally requires its
-  // phase to match the started flag, so Start review and Open review swap.
+  // one action button for this viewer (both mounts).
+  // ── Who's looking (Story 2) ──
+  // RA / System Admin move the permit forward; a Supporting Agent reviews and marks
+  // themselves done; other staff only download; the researcher owner revises or
+  // uploads. The public view gets no action.
+  type Viewer = 'ra' | 'sa' | 'staff' | 'owner' | 'public';
+  const viewer = (): Viewer => {
+    if (startAllowed) return 'ra';
+    if (STAFF.includes(gateIdentity)) return readPermitRole(permitId) === 'supporting' ? 'sa' : 'staff';
+    let owners: string[] = [];
+    try { owners = JSON.parse(document.getElementById('permit-owners')?.textContent || '[]'); } catch {}
+    const me = activeUser(gateIdentity);
+    return gateIdentity === 'researcher' && !!me && owners.includes(me.name.toLowerCase()) ? 'owner' : 'public';
+  };
+  const reportOwed = (status: string) =>
+    ['due', 'changes-requested', 'delinquent'].includes(reportState(status, permitId) ?? '');
+
+  /** The one [data-action] to show for this status and viewer, or null. */
+  const actionFor = (status: string): string | null => {
+    const v = viewer();
+    if (v === 'public') return null;
+    switch (status) {
+      case 'Waiting for review': return v === 'ra' ? 'start' : null;
+      case 'Under review':
+        if (v === 'ra') return 'review';
+        // Inside the wizard the Supporting Agent has its own Complete review CTA.
+        return v === 'sa' && !inFinalize ? 'supporting' : null;
+      case 'Changes requested':
+      case 'Returned to submitter': return v === 'owner' ? 'revise' : null;
+      case 'Out for signature': return v === 'ra' ? 'sign' : null;
+      case 'Waiting for annual report': return v === 'ra' ? 'hold' : v === 'owner' ? 'owner-report' : 'download';
+      case 'Active': return v === 'ra' || v === 'owner' ? 'active' : 'download';
+      case 'Expired': return v === 'owner' && reportOwed(status) ? 'owner-report' : 'download';
+      default: return null;
+    }
+  };
+
   const paintStatus = (status: string) => {
     const kind = STATUS_KIND[status] ?? 'unknown';
     document.querySelectorAll('.permit-status-indicator').forEach((el) => {
       el.setAttribute('kind', kind);
       el.setAttribute('label', status);
     });
-    const started = isReviewStarted();
-    document.querySelectorAll<HTMLElement>('[data-when]').forEach((el) => {
-      let show = el.dataset.when === status;
-      if (show && el.dataset.phase) show = el.dataset.phase === (started ? 'started' : 'not-started');
-      el.hidden = !show;
+    const action = actionFor(status);
+    document.querySelectorAll<HTMLElement>('[data-action]').forEach((el) => {
+      el.hidden = el.dataset.action !== action;
     });
-
-    // Permit-role gate (Story 9.3), applied over the status/phase visibility: hide
-    // any action the active identity's permit-role can't perform in this status.
-    const a = sectionAccessor(gateIdentity, permitId, gatePermitType, status);
-    const canDecide = a('approve') === 'update'; // RA or Admin
-    const canSign = a('sign') === 'update';       // applicable signer only
-    document.querySelectorAll<HTMLElement>('.permit-open-review').forEach((el) => {
-      if (!canDecide) el.hidden = true;
-    });
-    document.querySelectorAll<HTMLElement>('.permit-action-sign').forEach((el) => {
-      if (!canSign) el.hidden = true;
-    });
-    document.querySelectorAll<HTMLElement>('.permit-start-review').forEach((el) => {
-      if (!startAllowed) el.hidden = true;
-    });
-    // Hold override (Story 13) is RA/Admin only.
-    document.querySelectorAll<HTMLElement>('.permit-hold-override').forEach((el) => {
-      if (!startAllowed) el.hidden = true;
-    });
+    syncSupportingToggle();
   };
 
   const setStatus = (status: string) => {
@@ -585,40 +582,27 @@ const rosterSections = [
     );
   };
 
-  // ── Simulated emails + two-signature activation (Stories 6, 13) ─────────────
+  // ── Simulated emails + signed-letter activation (Stories 6, 13) ─────────────
   const projectTitle = banner?.dataset.permitName ?? '';
   const emailVars = () => ({ 'Permit #': permitId, 'Project title': projectTitle, 'Status': currentStatus() });
-  const sigKey = `permit-signatures-${permitId}`;
+  const signedKey = `permit-signed-letter-${permitId}`;
   const holdFlagKey = `permit-renewal-hold-${permitId}`; // set = renewal w/ missing prior annual report
-  const readSigs = () => { try { return JSON.parse(localStorage.getItem(sigKey) || '{}'); } catch { return {}; } };
-  const writeSigs = (s: any) => localStorage.setItem(sigKey, JSON.stringify(s));
   const stamp = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  // When the permit reaches Out for signature, the RA's first signature is complete
-  // and the second signer is notified via (simulated) DocuSign — EM-A.
-  const reconcileSignatures = (status: string) => {
-    if (status !== 'Out for signature') return;
-    const s = readSigs();
-    if (!s.first) {
-      s.first = { by: 'Responsible Agent', at: stamp() };
-      writeSigs(s);
-      sendEmail('EM-A', emailVars());
-    }
-  };
-
-  // The second signature (Sign permit) activates — unless a renewal's prior annual
-  // report is missing, which holds it (Waiting for final report) and notifies via
-  // EM-H (Story 13).
-  const applySecondSignature = () => {
-    const s = readSigs();
-    s.second = { by: 'Second signer', at: stamp() };
-    writeSigs(s);
+  // The uploaded signed letter activates — unless a renewal's prior annual report
+  // is missing, which holds it (Waiting for annual report) and notifies via EM-H
+  // (Story 13). A static prototype stores the file's name, not its bytes.
+  const applySignedLetter = (fileName: string) => {
+    const by = activeUser(gateIdentity)?.name ?? 'Responsible Agent';
+    localStorage.setItem(signedKey, JSON.stringify({ name: fileName, by, at: stamp() }));
     if (localStorage.getItem(holdFlagKey) === '1') {
-      setStatus('Waiting for final report');
+      setStatus('Waiting for annual report');
       sendEmail('EM-H', emailVars());
+      showToast('Signed letter uploaded', "On hold until the previous permit's annual report is in.");
     } else {
       setStatus('Active');
       sendEmail('EM-C', emailVars());
+      showToast('Permit activated', 'Emailed the researcher, PI, and PICOF.');
     }
   };
 
@@ -629,8 +613,6 @@ const rosterSections = [
   const rejectModal = document.getElementById('reject-permit-modal') as any;
   const requestModal = document.getElementById('request-changes-modal') as any;
   const signModal = document.getElementById('sign-permit-modal') as any;
-  const letterUrl = banner?.dataset.letterUrl;
-  const inFinalize = banner?.dataset.context === 'finalize';
 
   // Start review (Story 5) — the Waiting for review → Under review transition. Only
   // the Responsible Agent (or Admin) can start; records who + when in the flag, sets
@@ -693,41 +675,128 @@ const rosterSections = [
     requestModal.open = true;
   }
 
-  document.querySelectorAll('.permit-open-review').forEach((combo) => {
-    (combo as any).onClick = (e: Event) => {
-      const item = (e.target as HTMLElement).closest?.('cds-menu-item');
-      const label = item?.getAttribute('label');
-      if (label === 'Reject permit') rejectModal.open = true;
-      else if (label === 'Request changes') openRequestChanges();
-      else if (item) return; // other menu picks handled elsewhere
-      else if (inFinalize) document.dispatchEvent(new CustomEvent('permit:approve'));
-      else if (letterUrl) window.location.href = letterUrl; // primary "Open review"
-    };
+  // cds-combo-button fires onClick for its primary button AND for menu-item picks;
+  // `menuPick` tells them apart (null = the primary button).
+  const menuPick = (e: Event) =>
+    (e.target as HTMLElement).closest?.('cds-menu-item')?.getAttribute('label') ?? null;
+  const onCombo = (sel: string, fn: (pick: string | null) => void) =>
+    document.querySelectorAll(sel).forEach((combo) => { (combo as any).onClick = (e: Event) => fn(menuPick(e)); });
+
+  const signedDownload = () => {
+    if (!downloadSignedLetter(permitId)) showToast('No signed letter on file', '', 'warning');
+  };
+  const unsignedDownload = () => {
+    if (!downloadUnsignedLetter(permitId)) showToast('No letter on file', '', 'warning');
+  };
+  const goTab = (tab: string) => {
+    const tabs = document.getElementById('permit-tabs') as any;
+    if (!tabs) { window.location.href = `${withBase('/permit')}?tab=${tab}`; return; }
+    if (tabs.value !== tab) { tabs.value = tab; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
+    tabs.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  };
+
+  // RA: Open review (or Approve permit inside the wizard) + decision menu.
+  onCombo('.permit-open-review', (pick) => {
+    if (pick === 'Reject permit') rejectModal.open = true;
+    else if (pick === 'Request changes') openRequestChanges();
+    else if (pick) return;
+    else if (inFinalize) document.dispatchEvent(new CustomEvent('permit:approve'));
+    else if (letterUrl) window.location.href = letterUrl;
   });
-  document.querySelectorAll('.permit-action-sign').forEach((btn) => {
-    btn.addEventListener('click', () => (signModal.open = true));
+
+  // Supporting Agent: Review application enters the wizard; Complete review marks
+  // them done on the analysis team (who + when), Reopen review undoes it. Under
+  // review only — the button is gone once the permit leaves review.
+  const me = actorEmail(gateIdentity);
+  const supportingKey = `permit-supporting-review-${permitId}-${gateIdentity}`;
+  function syncSupportingToggle() {
+    const done = isReviewComplete(permitId, me);
+    document.querySelectorAll('[data-sa-toggle]').forEach((it) =>
+      it.setAttribute('label', done ? 'Reopen review' : 'Complete review'));
+  }
+  onCombo('.permit-sa-review', (pick) => {
+    if (!pick) { if (letterUrl) window.location.href = letterUrl; return; }
+    if (!me) return;
+    if (pick === 'Complete review') {
+      markReviewComplete(permitId, me);
+      localStorage.setItem(supportingKey, 'complete');
+      notifyResponsibleAgent(permitId, gateIdentity, 'completed');
+      showToast('Review complete', 'Emailed the Responsible Agent.');
+    } else {
+      reopenReview(permitId, me);
+      localStorage.setItem(supportingKey, 'in-progress');
+      notifyResponsibleAgent(permitId, gateIdentity, 'reopened');
+      showToast('Review reopened', 'Emailed the Responsible Agent.');
+    }
+    syncSupportingToggle();
   });
-  // Request amendment navigates to the prefilled application (href); before it
-  // does, record that an amendment exists for this permit so the detail page can
-  // surface a link back to it. Set synchronously so it lands before navigation.
-  document.querySelectorAll('.permit-action-amend').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (permitId) localStorage.setItem(`permit-amendment-${permitId}`, `${permitId}-A`);
-    });
+
+  // RA: Upload signed letter (activates) + the unsigned letter to get signed.
+  onCombo('.permit-action-sign', (pick) => { if (pick) unsignedDownload(); else signModal.open = true; });
+
+  // RA: Override the annual-report hold → issue the permit (Story 13); clears the
+  // hold flag and sends the issued email.
+  onCombo('.permit-hold-override', (pick) => {
+    if (pick) { signedDownload(); return; }
+    localStorage.removeItem(holdFlagKey);
+    setStatus('Active');
+    sendEmail('EM-C', emailVars());
+    showToast('Permit activated', 'Emailed the researcher, PI, and PICOF.');
   });
-  // Override the annual-report hold → issue the permit (Story 13). RA/Admin only
-  // (gated in paintStatus); clears the hold flag and sends the issued email.
-  document.querySelectorAll('.permit-hold-override').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      localStorage.removeItem(holdFlagKey);
-      setStatus('Active');
-      sendEmail('EM-C', emailVars());
-    });
+
+  // Active (RA / Admin / owner): Download signed letter + Request amendment. The
+  // amendment opens the prefilled application; record that it exists first so the
+  // permit can link back to it.
+  onCombo('.permit-active', (pick) => {
+    if (!pick) { signedDownload(); return; }
+    if (permitId) localStorage.setItem(`permit-amendment-${permitId}`, `${permitId}-A`);
+    const href = document.querySelector<HTMLElement>('.permit-active')?.dataset.amendHref;
+    if (href) window.location.href = href;
   });
+
+  // Owner: Upload annual report. Expired → this permit's Annual report tab; on a
+  // renewal hold the report is owed on the PREVIOUS permit → My permits.
+  onCombo('.permit-owner-report', (pick) => {
+    if (pick) { signedDownload(); return; }
+    if (currentStatus() === 'Expired') goTab('report');
+    else window.location.href = withBase('/my-permits');
+  });
+
+  document.querySelectorAll('.permit-download-signed').forEach((btn) => btn.addEventListener('click', signedDownload));
+  window.addEventListener(REVIEW_COMPLETE_EVENT, syncSupportingToggle);
+  window.addEventListener(REPORT_EVENT, () => paintStatus(currentStatus()));
 
   // Sign = the SECOND signature → activation (or hold). Decisions notify the
   // researcher (regulated EM-D / EM-E).
-  document.getElementById('sign-confirm')?.addEventListener('click', applySecondSignature);
+  // Signed-letter upload: one PDF; confirm stays disabled until a file is chosen.
+  {
+    const drop = document.getElementById('signed-letter-drop');
+    const chosenList = document.getElementById('signed-letter-chosen');
+    const confirm = document.getElementById('sign-confirm') as any;
+    let chosen: string | null = null;
+    const choose = (name: string | null) => {
+      chosen = name;
+      chosenList?.replaceChildren();
+      if (confirm) confirm.disabled = !name;
+      if (!name || !chosenList) return;
+      const item = document.createElement('cds-file-uploader-item') as any;
+      item.state = 'edit';
+      item.size = 'md';
+      item.textContent = name;
+      item.addEventListener('cds-file-uploader-item-deleted', () => choose(null));
+      chosenList.append(item);
+    };
+    drop?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
+      const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
+      if (files?.length) choose(files[0].name);
+    });
+    confirm?.addEventListener('click', () => {
+      if (!chosen) return;
+      applySignedLetter(chosen);
+      signModal.open = false;
+      choose(null);
+    });
+  }
   document.getElementById('request-confirm')?.addEventListener('click', () => {
     const drafts = reviewStore(permitId).issues().filter((i) => !i.sentAt && !i.resolvedAt);
     const msg = document.getElementById('request-message') as any;
@@ -743,10 +812,8 @@ const rosterSections = [
     sendEmail('EM-E', emailVars());
   });
 
-  // Reflect the persisted (or seeded) status on load, and reconcile the first
-  // signature if the permit is already Out for signature.
+  // Reflect the persisted (or seeded) status on load.
   paintStatus(currentStatus());
-  reconcileSignatures(currentStatus());
 
   // ── Compact bar reveal ──
   // Show the compact bar once the full header has scrolled out of view. This is
@@ -779,6 +846,7 @@ const rosterSections = [
   import { showToast } from '../lib/toast';
   import { readIdentity } from '../lib/maintenance';
   import { sectionAccessor } from '../lib/permissions';
+  import { paintReviewRows, REVIEW_COMPLETE_EVENT } from '../lib/review-complete';
 
   interface DirUser { id: string; name: string; role: string; detail: string; email: string; unit?: string; }
   interface TeamEdits { removed: string[]; added: DirUser[]; }
@@ -1122,7 +1190,7 @@ const rosterSections = [
     // on every transition; repaint the lead row(s) live so the modal stays truthful
     // without a reload. Non-lead rows are driven by their own reviewStatus, untouched.
     const paintLead = (status: string) => {
-      const complete = ['Out for signature', 'Waiting for final report', 'Active'].includes(status);
+      const complete = ['Out for signature', 'Waiting for annual report', 'Active'].includes(status);
       roster.querySelectorAll<HTMLElement>('.review-row[data-lead="true"]').forEach((row) => {
         row.dataset.status = complete ? 'complete' : 'pending';
         const ind = row.querySelector('.review-row__ind');
@@ -1136,6 +1204,31 @@ const rosterSections = [
       paintLead((e as CustomEvent).detail?.status ?? statusNow());
     });
     paintLead(statusNow()); // reflect the persisted status on load (SSR can't see it)
+
+    // Reviewers who marked themselves done ("Complete review") read Complete with
+    // their date; a reopen restores the seeded state. Repaint live, then re-roll
+    // the units and the meter.
+    const paintComplete = () => {
+      paintReviewRows(rows(), permitId, (row, st) => {
+        row.dataset.status = st.status;
+        const ind = row.querySelector('.review-row__ind');
+        ind?.setAttribute('kind', st.kind);
+        ind?.setAttribute('label', st.label);
+        const when = row.querySelector('.review-row__when');
+        if (when) when.textContent = st.when;
+      }, (row) => {
+        const ind = row.querySelector('.review-row__ind');
+        return {
+          status: row.dataset.status || 'not-started',
+          kind: ind?.getAttribute('kind') || 'not-started',
+          label: ind?.getAttribute('label') || 'Not started',
+          when: row.querySelector('.review-row__when')?.textContent || '',
+        };
+      });
+      recompute();
+    };
+    paintComplete();
+    window.addEventListener(REVIEW_COMPLETE_EVENT, paintComplete);
   }
 </script>
 
@@ -1262,15 +1355,9 @@ const rosterSections = [
     gap: 0.25rem;
     flex: 0 0 auto;
   }
-  /* Only the action set for the current status is shown; the script toggles
-     [hidden] on the rest. Custom elements don't honor the UA [hidden] rule
-     reliably, so force it. */
   .rc-lede { margin: 0 0 var(--cds-spacing-05, 1rem); }
   #request-none { margin-bottom: var(--cds-spacing-05, 1rem); max-inline-size: none; }
 
-  [data-when][hidden] {
-    display: none;
-  }
   /* Facts strip: the labeled facts on the left, the optional analysis-review
      key-metric on the right, sharing the divider above them. */
   .banner__facts {
@@ -1507,4 +1594,10 @@ const rosterSections = [
     margin: 0;
     color: var(--cds-text-secondary, #525252);
   }
+
+  /* Signed-letter upload modal — spacing only; the dropzone and file item are stock. */
+  .signed-upload__lead { margin: 0 0 var(--cds-spacing-05, 1rem); }
+  .signed-upload__chosen:empty { display: none; }
+  .signed-upload__chosen { margin-top: var(--cds-spacing-03, 0.5rem); }
+  .signed-upload__hint { margin: var(--cds-spacing-03, 0.5rem) 0 0; color: var(--cds-text-secondary, #525252); }
 </style>
