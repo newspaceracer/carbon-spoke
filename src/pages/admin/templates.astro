@@ -315,9 +315,13 @@ export const prototype = {
           researchers download right away.
         </p>
 
-        <cds-file-uploader-drop-container id="rm-drop" accept=".pdf">
-          Drag and drop a PDF here, or click to upload
-        </cds-file-uploader-drop-container>
+        <!-- Wrapped: the drop container self-assigns slot="drop-container", which
+             cds-modal-body doesn't have, so as a direct child it never renders. -->
+        <div>
+          <cds-file-uploader-drop-container id="rm-drop" accept=".pdf">
+            Drag and drop a PDF here, or click to upload
+          </cds-file-uploader-drop-container>
+        </div>
         <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
         <div id="rm-list" class="uploaded-list"></div>
 

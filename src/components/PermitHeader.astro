@@ -8,6 +8,7 @@ import type { DirectoryUser } from '../data/user';
 import { withBase } from '../lib/base';
 import Avatar from './Avatar.astro';
 import PermitHeaderActions from './PermitHeaderActions.astro';
+import { roleLine, teamUnitOf } from '../lib/analysis-team';
 
 interface Stat {
   label: string;
@@ -85,7 +86,7 @@ const reviseHref = withBase(`/apply?revise=${id}`);
 // is meaning, not colour alone — the indicator renders its own text label.
 const STATE_META: Record<ReviewStatus, { kind: string; label: string; verb: string }> = {
   'not-started': { kind: 'not-started', label: 'Not started', verb: 'Added' },
-  'pending':     { kind: 'in-progress', label: 'Pending',     verb: 'Started' },
+  'pending':     { kind: 'in-progress', label: 'In progress', verb: 'Last opened' },
   'complete':    { kind: 'succeeded',   label: 'Complete',    verb: 'Completed' },
 };
 const isLead = (m: TeamMember) => m.highlight === true || m.role === 'Responsible analyst';
@@ -98,7 +99,7 @@ const memberStatus = (m: TeamMember): ReviewStatus =>
 // The date/time line under the status. The lead's is phrased as a sign-off, not a
 // generic verb; everyone else gets "<verb> <date>".
 const reviewWhen = (m: TeamMember): string => {
-  if (isLead(m)) return leadComplete ? 'Signed off' : 'Reviewing';
+  if (isLead(m)) return leadComplete ? 'Signed off' : '';
   const st = memberStatus(m);
   return m.when ? `${STATE_META[st].verb} ${m.when}` : STATE_META[st].label;
 };
@@ -108,8 +109,7 @@ const reviewWhen = (m: TeamMember): string => {
 // (the responsible agent) is excluded — their sign-off doesn't move this bar.
 const unitOf = (m: TeamMember): string | null => {
   if (isLead(m)) return null;                     // excluded from the bar
-  if (m.role === 'District reviewer') return m.detail; // detail = district name
-  return 'Headquarters';                          // all other HQ roles
+  return teamUnitOf(m.detail);                    // its district, else Headquarters
 };
 const unitDone = new Map<string, boolean>();
 (analysisTeam ?? []).forEach((m) => {
@@ -123,10 +123,12 @@ const reviewAllDone = reviewTotal > 0 && reviewDone === reviewTotal;
 // Shared with the detail page's roster (removed/added edits).
 const teamStorageKey = `permit-team-${id}`;
 
-// Directory users not already on the seeded team — the modal's inline "Add member"
-// picker draws from these, adding the pick as a Supporting analyst.
-const teamIds = new Set((analysisTeam ?? []).map((m) => m.id));
-const eligibleReviewers = directory.filter((u) => !teamIds.has(u.id));
+// Collapse toggle for a review unit. The tooltip names the action; JS keeps it in
+// step with the unit's state ("Hide analysts" / "Show analysts").
+const toggleIcon =
+  '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 5L13 10 12.3 10.7 8 6.4 3.7 10.7 3 10z"/></svg><span slot="tooltip-content">Hide analysts</span>';
+const copyIcon =
+  '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/><path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/></svg>';
 
 // The roster is GROUPED to match the bar: the lead analyst sits on their own, then
 // one section per review unit (Headquarters first, then each district in the order
@@ -238,15 +240,19 @@ const rosterSections = [
   <cds-modal-header>
     <cds-modal-close-button></cds-modal-close-button>
     <cds-modal-label>Permit {id}</cds-modal-label>
-    <cds-modal-heading>Upload signed letter</cds-modal-heading>
+    <cds-modal-heading id="sign-heading">Upload signed letter</cds-modal-heading>
   </cds-modal-header>
   <cds-modal-body>
-    <p class="t-body-01 signed-upload__lead">
+    <p class="t-body-01 signed-upload__lead" id="sign-lead">
       Uploading it activates the permit.
     </p>
-    <cds-file-uploader-drop-container id="signed-letter-drop" accept=".pdf">
-      Drag and drop a file here, or click to upload
-    </cds-file-uploader-drop-container>
+    <!-- The drop container sets slot="drop-container" on itself; as a direct child
+         of cds-modal-body (no such slot) it never renders. A light-DOM div parent fixes it. -->
+    <div>
+      <cds-file-uploader-drop-container id="signed-letter-drop" accept=".pdf">
+        Drag and drop a file here, or click to upload
+      </cds-file-uploader-drop-container>
+    </div>
     <div id="signed-letter-chosen" class="signed-upload__chosen"></div>
     <p class="t-label-01 signed-upload__hint">Accepted file type: PDF.</p>
   </cds-modal-body>
@@ -303,11 +309,15 @@ const rosterSections = [
 </cds-modal>
 
 {analysisTeam && (
-  <cds-modal id="analysis-team-modal" size="lg" has-scrolling-content>
+  <!-- Analysis team — a VIEW of the team and its review progress. The team is
+       managed in ONE place (the Internal review rail, AnalysisTeam.astro); this
+       modal only reads it, so its actions are Email all and, for whoever may edit
+       the team, Manage team (which takes them to that rail). -->
+  <cds-modal id="analysis-team-modal" size="md" has-scrolling-content>
     <cds-modal-header>
       <cds-modal-close-button></cds-modal-close-button>
       <cds-modal-label>Permit {id}</cds-modal-label>
-      <cds-modal-heading id="analysis-modal-title">Analysis team</cds-modal-heading>
+      <cds-modal-heading>Analysis team</cds-modal-heading>
     </cds-modal-header>
     <cds-modal-body>
       <cds-stack gap="7">
@@ -320,38 +330,14 @@ const rosterSections = [
           status={reviewAllDone ? 'finished' : 'active'}
         ></cds-progress-bar>
 
-        <!-- Add a member INLINE (no second modal — that would stack on this one).
-             SELECTING a directory user stages them straight into their unit's section
-             as a Supporting analyst and flips the footer to Save changes / Cancel — no
-             separate "add" button. A staged row carries a Remove (×) to undo a mis-pick
-             before saving. Nothing persists until Save. -->
-        <div class="team-add">
-          <cds-combo-box
-            id="team-add-select"
-            title-text="Add a member"
-            label="Search the user directory…"
-            helper-text="Select a user to add them to the team. Only users not already on the team appear here."
-            autoalign
-          >
-            {eligibleReviewers.map((u) => (
-              <cds-combo-box-item value={u.id} data-name={u.name} data-detail={u.detail} data-email={u.email}>{u.name} — {u.detail}</cds-combo-box-item>
-            ))}
-          </cds-combo-box>
-        </div>
-
-        <!-- Reviewer roster — GROUPED by review unit to match the bar: the lead
-             analyst first, then one section per unit (Headquarters, then each
-             district). A unit heading rolls up its members' state (Reviewed once
-             ≥1 is Complete, else In progress / Not started). Each row shows the
-             person, their email (with a copy control) under the name, and their
-             review state. When the team is editable, members can be added inline
-             above (staged until Save) and removed here (a trash toggle, also staged
-             until Save). Status shows via an icon-indicator (not colour alone). -->
+        <!-- Grouped by review unit to match the bar: the Responsible analyst, then
+             Headquarters, then each district. A unit counts as complete once ≥1 of
+             its members is. Status is icon + text (not colour alone). -->
         <div class="review-roster" id="review-roster" data-team-key={teamStorageKey}>
           {rosterSections.map((sec) => {
             const sts = sec.members.map(memberStatus);
             const secKind = !sec.counts ? '' : sts.includes('complete') ? 'succeeded' : sts.includes('pending') ? 'in-progress' : 'not-started';
-            const secLabel = !sec.counts ? '' : sts.includes('complete') ? 'Reviewed' : sts.includes('pending') ? 'In progress' : 'Not started';
+            const secLabel = !sec.counts ? '' : sts.includes('complete') ? 'Complete' : sts.includes('pending') ? 'In progress' : 'Not started';
             return (
             <section class="unit-group" data-unit-group={sec.counts ? sec.key : ''}>
               <div class="unit-group__head">
@@ -359,43 +345,31 @@ const rosterSections = [
                 {sec.counts && (
                   <cds-icon-indicator class="unit-group__ind" size="16" kind={secKind} label={secLabel}></cds-icon-indicator>
                 )}
+                {sec.counts && <span class="unit-group__by t-label-01"></span>}
+                {sec.counts && <cds-icon-button class="unit-group__toggle" kind="ghost" size="sm" align="left" data-unit-toggle set:html={toggleIcon}></cds-icon-button>}
               </div>
               <ul class="unit-members">
                 {sec.members.map((m) => {
                   const st = memberStatus(m);
                   const email = directory.find((u) => u.id === m.id)?.email ?? '';
                   return (
-                  <li class="review-row" data-user-id={m.id} data-seed data-status={st} data-unit={unitOf(m) ?? ''} data-email={email} data-lead={m.highlight ? 'true' : 'false'}>
+                  <li class="review-row" data-user-id={m.id} data-status={st} data-unit={unitOf(m) ?? ''} data-email={email} data-lead={isLead(m) ? 'true' : 'false'}>
                     <Avatar name={m.name} size="md" />
                     <div class="review-row__id">
                       <p class="review-row__name t-body-01">{m.name}</p>
-                      <p class="review-row__role t-label-01">{m.role}</p>
+                      <p class="review-row__role t-label-01">{roleLine(m.role, m.detail, sec.label)}</p>
                       {email && (
                         <p class="review-row__email t-label-01">
                           <span class="review-row__email-addr">{email}</span>
-                          <cds-icon-button class="review-row__copy" kind="ghost" size="sm" align="bottom" data-copy-email>
-                            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
-                              <path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/>
-                              <path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/>
-                            </svg>
-                            <span slot="tooltip-content">Copy email</span>
-                          </cds-icon-button>
+                          <cds-icon-button class="review-row__copy" kind="ghost" size="sm" align="bottom" data-copy-email={email} set:html={`${copyIcon}<span slot="tooltip-content">Copy email</span>`}></cds-icon-button>
                         </p>
                       )}
                     </div>
                     <div class="review-row__status">
                       <cds-icon-indicator class="review-row__ind" size="16" kind={STATE_META[st].kind} label={STATE_META[st].label}></cds-icon-indicator>
                       <span class="review-row__when t-label-01">{reviewWhen(m)}</span>
+                      <span class="review-row__note t-label-01">Not required</span>
                     </div>
-                    {!m.highlight && (
-                      <cds-icon-button class="review-row__remove" kind="ghost" size="sm" align="left" data-remove>
-                        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
-                          <path d="M12 12H14V24H12zM18 12H20V24H18z"/>
-                          <path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/>
-                        </svg>
-                        <span slot="tooltip-content">Remove</span>
-                      </cds-icon-button>
-                    )}
                   </li>
                   );
                 })}
@@ -404,65 +378,49 @@ const rosterSections = [
             );
           })}
         </div>
+
       </cds-stack>
     </cds-modal-body>
-    <!-- Footer is stateful: clean → [Email all | Done]; once a member is staged →
-         [Cancel | Save changes]. Toggled by inline display (cds-* ignore [hidden]).
-         Cancel/Done close natively; the close handler discards any staged rows. -->
+    <!-- Manage team shows only for whoever may edit the team (JS); otherwise the
+         primary is Done. Toggled by inline display (cds-* ignore [hidden]). -->
     <cds-modal-footer>
-      <cds-modal-footer-button kind="secondary" id="team-cancel-btn" data-modal-close style="display:none">Cancel</cds-modal-footer-button>
       <cds-modal-footer-button kind="secondary" id="email-all-team">Email all</cds-modal-footer-button>
-      <cds-modal-footer-button kind="primary" id="team-save-btn" style="display:none">Save changes</cds-modal-footer-button>
+      <cds-modal-footer-button kind="primary" id="team-manage-btn" style="display:none">Manage team</cds-modal-footer-button>
       <cds-modal-footer-button kind="primary" id="team-done-btn" data-modal-close>Done</cds-modal-footer-button>
     </cds-modal-footer>
   </cds-modal>
 
-  <!-- Row template — clones a roster row for reviewers added inline (staged) or
-       replayed from localStorage. Same shape as a seed row: email + copy under the
-       name, status, and the remove toggle (shown only when the team is editable). -->
+  <!-- Row + unit templates — for analysts added on the Internal review rail, replayed
+       from the shared permit-team storage each time the modal opens. -->
   <template id="review-row-template">
-    <li class="review-row" data-status="not-started">
+    <li class="review-row" data-status="not-started" data-lead="false">
       <span class="avatar avatar--md" aria-hidden="true"></span>
       <div class="review-row__id">
         <p class="review-row__name t-body-01"></p>
         <p class="review-row__role t-label-01"></p>
         <p class="review-row__email t-label-01">
           <span class="review-row__email-addr"></span>
-          <cds-icon-button class="review-row__copy" kind="ghost" size="sm" align="bottom" data-copy-email>
-            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
-              <path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/>
-              <path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/>
-            </svg>
-            <span slot="tooltip-content">Copy email</span>
-          </cds-icon-button>
+          <cds-icon-button class="review-row__copy" kind="ghost" size="sm" align="bottom" data-copy-email="" set:html={`${copyIcon}<span slot="tooltip-content">Copy email</span>`}></cds-icon-button>
         </p>
       </div>
       <div class="review-row__status">
         <cds-icon-indicator class="review-row__ind" size="16" kind="not-started" label="Not started"></cds-icon-indicator>
         <span class="review-row__when t-label-01"></span>
+        <span class="review-row__note t-label-01">Not required</span>
       </div>
-      <cds-icon-button class="review-row__remove" kind="ghost" size="sm" align="left" data-remove>
-        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true">
-          <path d="M12 12H14V24H12zM18 12H20V24H18z"/>
-          <path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/>
-        </svg>
-        <span slot="tooltip-content">Remove</span>
-      </cds-icon-button>
     </li>
   </template>
-
-  <!-- Unit-group template — clones a whole section when a reviewer is added for a
-       district not yet on the roster. -->
   <template id="unit-group-template">
     <section class="unit-group" data-unit-group="">
       <div class="unit-group__head">
         <h4 class="unit-group__title t-heading-compact-01"></h4>
         <cds-icon-indicator class="unit-group__ind" size="16" kind="not-started" label="Not started"></cds-icon-indicator>
+        <span class="unit-group__by t-label-01"></span>
+        <cds-icon-button class="unit-group__toggle" kind="ghost" size="sm" align="left" data-unit-toggle set:html={toggleIcon}></cds-icon-button>
       </div>
       <ul class="unit-members"></ul>
     </section>
   </template>
-
 )}
 
 <script>
@@ -604,6 +562,20 @@ const rosterSections = [
       sendEmail('EM-C', emailVars());
       showToast('Permit activated', 'Emailed the researcher, PI, and PICOF.');
     }
+  };
+
+  // Admin only: replace the signed letter of record (or upload one that's missing)
+  // after signature. Same modal, but the status doesn't change. The replaced file is
+  // kept on the record (`previous`, oldest first) so the original upload — the
+  // activation date — survives.
+  const replaceSignedLetter = (fileName: string) => {
+    const by = activeUser(gateIdentity)?.name ?? 'System admin';
+    let prior: { name: string; by: string; at: string; previous?: { name: string; by: string; at: string }[] } | null = null;
+    try { prior = JSON.parse(localStorage.getItem(signedKey) || 'null'); } catch {}
+    const previous = prior ? [...(prior.previous ?? []), { name: prior.name, by: prior.by, at: prior.at }] : [];
+    localStorage.setItem(signedKey, JSON.stringify({ name: fileName, by, at: stamp(), ...(previous.length ? { previous } : {}) }));
+    window.dispatchEvent(new CustomEvent('signed-letter-changed'));
+    showToast(prior ? 'Signed letter replaced' : 'Signed letter uploaded', "The permit's status didn't change.");
   };
 
   // Combo-button fires onClick for its primary button AND for menu-item picks;
@@ -769,6 +741,25 @@ const rosterSections = [
   // Sign = the SECOND signature → activation (or hold). Decisions notify the
   // researcher (regulated EM-D / EM-E).
   // Signed-letter upload: one PDF; confirm stays disabled until a file is chosen.
+  // Two modes: 'activate' (the RA's upload at Out for signature) and 'replace'
+  // (admin, after signature — opened via the `signed-letter-open` event).
+  let signMode: 'activate' | 'replace' = 'activate';
+  const setSignMode = (mode: 'activate' | 'replace', current?: string) => {
+    signMode = mode;
+    const heading = document.getElementById('sign-heading');
+    const lead = document.getElementById('sign-lead');
+    const confirm = document.getElementById('sign-confirm');
+    if (heading) heading.textContent = mode === 'replace' && current ? 'Replace signed letter' : 'Upload signed letter';
+    if (lead) lead.textContent = mode === 'activate' ? 'Uploading it activates the permit.'
+      : current ? `Replaces ${current}. The permit's status doesn't change.` : "The permit's status doesn't change.";
+    if (confirm) confirm.textContent = mode === 'activate' ? 'Upload and activate' : current ? 'Replace letter' : 'Upload';
+  };
+  window.addEventListener('signed-letter-open', (e) => {
+    setSignMode('replace', (e as CustomEvent).detail?.current);
+    signModal.open = true;
+  });
+  // Every other opener (header, alerts) expects the activating upload.
+  signModal?.addEventListener('cds-modal-closed', () => setSignMode('activate'));
   {
     const drop = document.getElementById('signed-letter-drop');
     const chosenList = document.getElementById('signed-letter-chosen');
@@ -792,9 +783,10 @@ const rosterSections = [
     });
     confirm?.addEventListener('click', () => {
       if (!chosen) return;
-      applySignedLetter(chosen);
+      if (signMode === 'replace') replaceSignedLetter(chosen); else applySignedLetter(chosen);
       signModal.open = false;
       choose(null);
+      setSignMode('activate'); // closing in code fires no cds-modal-closed
     });
   }
   document.getElementById('request-confirm')?.addEventListener('click', () => {
@@ -843,60 +835,38 @@ const rosterSections = [
      view, so everything here is guarded on the metric existing) ── -->
 <script>
   import { initials } from '../lib/avatar';
-  import { showToast } from '../lib/toast';
   import { readIdentity } from '../lib/maintenance';
   import { sectionAccessor } from '../lib/permissions';
+  import { withBase } from '../lib/base';
+  import { installEmailCopy } from '../lib/email-copy';
+  import { roleLine, teamUnitOf } from '../lib/analysis-team';
   import { paintReviewRows, REVIEW_COMPLETE_EVENT } from '../lib/review-complete';
 
-  interface DirUser { id: string; name: string; role: string; detail: string; email: string; unit?: string; }
+  interface DirUser { id: string; name: string; role: string; detail: string; email: string; }
   interface TeamEdits { removed: string[]; added: DirUser[]; }
 
   const metricBtn = document.getElementById('analysis-metric');
   const modal = document.getElementById('analysis-team-modal') as any;
   const roster = document.getElementById('review-roster');
 
-  // The review-unit key for a row, mirroring the server's unitOf: a district
-  // reviewer counts toward their district; every other (non-lead) reviewer toward
-  // "Headquarters". Added reviewers are never the lead.
-  const clientUnit = (role: string, detail: string): string =>
-    /district/i.test(role) || /district/i.test(detail) ? detail : 'Headquarters';
-
   if (metricBtn && modal && roster) {
-    metricBtn.addEventListener('click', () => (modal.open = true));
+    installEmailCopy();
 
-    // Team editing is gated exactly like the Overview roster: the 'supporting-agents'
-    // section is Update only for the Responsible Agent (or Admin) during Under review.
-    // Editable → the modal manages the team (show the picker + per-row remove, label
-    // it "Manage"); not editable → a read-only view (no picker/remove, "View team").
     const banner = document.getElementById('permit-banner');
     const permitId = banner?.dataset.permitId ?? '';
     const permitType = banner?.dataset.permitType as any;
     const statusNow = () => (permitId && localStorage.getItem(`permit-status-${permitId}`)) || banner?.dataset.status || 'Under review';
-    const teamEditable = sectionAccessor(readIdentity(), permitId, permitType, statusNow())('supporting-agents') === 'update';
+    // Same gate as the rail: the Responsible Agent (or Admin) during review.
+    const canManage = () => sectionAccessor(readIdentity(), permitId, permitType, statusNow())('supporting-agents') === 'update';
 
-    const addWrap = document.querySelector('.team-add') as HTMLElement | null;
-    const ctaText = document.getElementById('analysis-metric-cta-text');
-    const titleEl = document.getElementById('analysis-modal-title');
-    if (teamEditable) {
-      if (ctaText) ctaText.textContent = 'Manage team';
-      if (titleEl) titleEl.textContent = 'Manage analysis team';
-      (roster as HTMLElement).dataset.editable = 'true'; // CSS reveals the row remove toggles
-    } else if (addWrap) {
-      addWrap.style.display = 'none'; // view-only — no picker; labels stay "View team"
-    }
-
-    // The modal shows the analysis team + review progress, and (when editable) adds
-    // members inline and removes them — both STAGED until Save. Saving writes the same
-    // `permit-team-${id}` localStorage the Overview uses, and this replays on load.
-    const teamKey = (roster as HTMLElement).dataset.teamKey || 'permit-team';
+    const teamKey = roster.dataset.teamKey || `permit-team-${permitId}`;
     const tpl = document.getElementById('review-row-template') as HTMLTemplateElement;
     const groupTpl = document.getElementById('unit-group-template') as HTMLTemplateElement;
     const bars = [
       document.getElementById('analysis-metric-bar'),
       document.getElementById('analysis-modal-bar'),
     ].filter(Boolean) as any[];
-
-    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const rows = () => Array.from(roster.querySelectorAll<HTMLElement>('.review-row'));
 
     const loadTeam = (): TeamEdits => {
       try {
@@ -905,72 +875,77 @@ const rosterSections = [
       } catch { return { removed: [], added: [] }; }
     };
 
-    const currentIds = () =>
-      Array.from(roster.querySelectorAll<HTMLElement>('[data-user-id]')).map((r) => r.dataset.userId!);
-    const rows = () => Array.from(roster.querySelectorAll<HTMLElement>('.review-row'));
+    // Collapse: a COMPLETE unit folds to its heading (status + who completed it), so
+    // finished units read as done at a glance; open ones stay expanded. A unit the
+    // viewer toggled by hand keeps their choice for the rest of the visit.
+    const userCollapsed = new Map<string, boolean>();
+    const setCollapsed = (sec: HTMLElement, collapsed: boolean) => {
+      sec.toggleAttribute('data-collapsed', collapsed);
+      const list = sec.querySelector<HTMLElement>('.unit-members');
+      if (list) list.style.display = collapsed ? 'none' : '';
+      const btn = sec.querySelector<HTMLElement>('[data-unit-toggle]');
+      btn?.setAttribute('aria-expanded', String(!collapsed));
+      const tip = btn?.querySelector('[slot="tooltip-content"]');
+      if (tip) tip.textContent = collapsed ? 'Show analysts' : 'Hide analysts';
+    };
+    roster.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest?.('[data-unit-toggle]');
+      const sec = btn?.closest<HTMLElement>('.unit-group');
+      if (!sec?.dataset.unitGroup) return;
+      const collapsed = !sec.hasAttribute('data-collapsed');
+      userCollapsed.set(sec.dataset.unitGroup, collapsed);
+      setCollapsed(sec, collapsed);
+    });
 
-    // A row staged for removal is excluded from every rollup — it reflects the state
-    // the roster will be in once Save commits.
-    const liveRows = () => rows().filter((r) => r.dataset.stagedRemove !== 'true');
-
-    // Recompute the two meters from the roster by REVIEW UNIT, not by person: group
-    // rows by their data-unit (rows with no unit — the lead analyst — are excluded),
-    // and a unit is complete once at least one of its members' data-status is 'complete'.
+    // Meters + unit headings roll up by REVIEW UNIT, not person: a unit is complete
+    // once ≥1 of its members is. The Responsible analyst (no data-unit) is excluded.
     const recompute = () => {
       const unitDone = new Map<string, boolean>();
-      liveRows().forEach((r) => {
+      rows().forEach((r) => {
         const u = r.dataset.unit;
         if (!u) return;
         unitDone.set(u, (unitDone.get(u) ?? false) || r.dataset.status === 'complete');
       });
       const total = unitDone.size;
       const done = [...unitDone.values()].filter(Boolean).length;
-      const allDone = total > 0 && done === total;
       bars.forEach((bar) => {
         bar.max = total;
         bar.value = done;
         bar.helperText = `${done} of ${total} reviews complete`;
-        bar.status = allDone ? 'finished' : 'active';
+        bar.status = total > 0 && done === total ? 'finished' : 'active';
       });
-      // Roll each unit heading up from its live members: Reviewed once ≥1 is Complete,
-      // else In progress if any is Pending, else Not started. Drop a section with no
-      // live members left (its last member removed / staged for removal).
-      roster.querySelectorAll<HTMLElement>('.unit-group[data-unit-group]').forEach((sec) => {
-        if (!sec.dataset.unitGroup) return; // the lead section has no unit key
-        const live = Array.from(sec.querySelectorAll<HTMLElement>('.review-row')).filter((r) => r.dataset.stagedRemove !== 'true');
-        if (sec.querySelectorAll('.review-row').length === 0) { sec.remove(); return; }
-        const kind = live.some((r) => r.dataset.status === 'complete') ? 'succeeded'
-          : live.some((r) => r.dataset.status === 'pending') ? 'in-progress' : 'not-started';
-        const label = kind === 'succeeded' ? 'Reviewed' : kind === 'in-progress' ? 'In progress' : 'Not started';
+      roster.querySelectorAll<HTMLElement>('.unit-group').forEach((sec) => {
+        const members = Array.from(sec.querySelectorAll<HTMLElement>('.review-row'));
+        if (!members.length) { sec.remove(); return; }
+        if (!sec.dataset.unitGroup) return; // the Responsible analyst section has no roll-up
+        const kind = members.some((r) => r.dataset.status === 'complete') ? 'succeeded'
+          : members.some((r) => r.dataset.status === 'pending') ? 'in-progress' : 'not-started';
         const ind = sec.querySelector('.unit-group__ind');
         ind?.setAttribute('kind', kind);
-        ind?.setAttribute('label', label);
+        ind?.setAttribute('label', kind === 'succeeded' ? 'Complete' : kind === 'in-progress' ? 'In progress' : 'Not started');
+        // Who closed the unit out (the first analyst to complete), beside the status;
+        // everyone else in a complete unit reads "Not required".
+        const done = kind === 'succeeded';
+        const closer = members.find((r) => r.dataset.status === 'complete');
+        const by = sec.querySelector('.unit-group__by');
+        if (by) {
+          const name = closer?.querySelector('.review-row__name')?.textContent || '';
+          const date = (closer?.querySelector('.review-row__when')?.textContent || '').replace(/^Completed\s*/, '');
+          by.textContent = done && name ? [name, date].filter(Boolean).join(' · ') : '';
+        }
+        members.forEach((r) => {
+          if (done && r.dataset.status !== 'complete') r.dataset.covered = 'true';
+          else delete r.dataset.covered;
+        });
+        const unit = sec.dataset.unitGroup;
+        setCollapsed(sec, userCollapsed.has(unit) ? userCollapsed.get(unit)! : done);
       });
     };
 
-    const buildRow = (u: DirUser): HTMLElement => {
-      const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
-      li.dataset.userId = u.id;
-      li.dataset.unit = u.unit || clientUnit(u.role, u.detail);
-      li.dataset.email = u.email || '';
-      const chip = li.querySelector('.avatar');
-      if (chip) chip.textContent = initials(u.name);
-      const nameEl = li.querySelector('.review-row__name');
-      if (nameEl) nameEl.textContent = u.name;
-      const roleEl = li.querySelector('.review-row__role');
-      if (roleEl) roleEl.textContent = u.role;
-      const addrEl = li.querySelector('.review-row__email-addr');
-      if (addrEl) addrEl.textContent = u.email || '';
-      const whenEl = li.querySelector('.review-row__when');
-      if (whenEl) whenEl.textContent = `Added ${today}`;
-      return li;
-    };
-
-    // Place a built row into its unit's section, creating the section if this is the
-    // first reviewer for that district. New sections append after the existing ones.
+    // An analyst added on the rail: Not started, in their unit's section (created
+    // after the existing ones if it's the first from that district).
     const insertRow = (u: DirUser) => {
-      const li = buildRow(u);
-      const unit = li.dataset.unit!;
+      const unit = teamUnitOf(u.detail);
       let sec = roster.querySelector<HTMLElement>(`.unit-group[data-unit-group="${CSS.escape(unit)}"]`);
       if (!sec) {
         sec = groupTpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
@@ -979,235 +954,50 @@ const rosterSections = [
         if (title) title.textContent = unit;
         roster.appendChild(sec);
       }
+      const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLElement;
+      li.dataset.userId = u.id;
+      li.dataset.unit = unit;
+      li.dataset.email = u.email || '';
+      li.dataset.added = 'true';
+      const set = (sel: string, text: string) => { const el = li.querySelector(sel); if (el) el.textContent = text; };
+      set('.avatar', initials(u.name));
+      set('.review-row__name', u.name);
+      set('.review-row__role', roleLine(u.role, u.detail, unit));
+      set('.review-row__email-addr', u.email || '');
+      li.querySelector('.review-row__copy')?.setAttribute('data-copy-email', u.email || '');
+      const emailLine = li.querySelector<HTMLElement>('.review-row__email');
+      if (emailLine && !u.email) emailLine.style.display = 'none';
       sec.querySelector('.unit-members')?.appendChild(li);
-      return li;
     };
 
-    // ── Init: replay stored add/remove edits, recompute ──
-    const edits = loadTeam();
-    edits.removed.forEach((id) => roster.querySelector(`[data-user-id="${id}"]`)?.remove());
-    edits.added.forEach((u) => { if (!currentIds().includes(u.id)) insertRow(u); });
-    recompute();
-
-    // ── Copy one email · email the whole team ───────────────────────────────
-    // Both are read-only utilities, always available (independent of who may edit
-    // the roster). Each row carries the address on data-email — seed rows from the
-    // directory, added rows from the picker.
-    const rowEmail = (row: HTMLElement) => (row.dataset.email || '').trim();
-    // The email line (address + copy control) is pointless with no address — hide the
-    // whole line for a row that has none (cloned template rows always carry the line).
-    const syncCopyButtons = () => {
-      rows().forEach((row) => {
-        const line = row.querySelector<HTMLElement>('.review-row__email');
-        if (line) line.style.display = rowEmail(row) ? '' : 'none';
-      });
-    };
-    syncCopyButtons();
-
-    roster.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest?.('[data-copy-email]');
-      if (!btn) return;
-      const email = rowEmail(btn.closest<HTMLElement>('.review-row')!);
-      if (!email) return;
-      navigator.clipboard?.writeText(email).then(
-        () => showToast('Email copied', email),
-        () => showToast('Couldn’t copy the email', 'Select and copy the address manually.', 'error'),
-      );
-    });
-
-    // Email all — one message to every team member with an address on file (all in
-    // the To line, since it's an internal review team). Dedupes shared addresses.
-    document.getElementById('email-all-team')?.addEventListener('click', () => {
-      const emails = [...new Set(rows().map(rowEmail).filter(Boolean))];
-      if (!emails.length) {
-        showToast('No email addresses on file', 'No team member has an email to write to.', 'warning');
-        return;
-      }
-      window.location.href = `mailto:${emails.join(',')}`;
-    });
-
-    // ── Add a member inline (staged until Save) ─────────────────────────────
-    // Pressing "Add member" inserts the picked user into their unit's section as a
-    // Supporting analyst, marked data-staged. Staged rows are visible immediately
-    // and count toward the bar, but persist to `permit-team-${id}` only on Save.
-    // Cancel / closing the modal discards them. This keeps everything on ONE surface
-    // (no second modal) while still being an explicit, reversible edit.
-    const addSelect = document.getElementById('team-add-select') as any;
-    const cancelBtn = document.getElementById('team-cancel-btn') as HTMLElement | null;
-    const emailAllBtn = document.getElementById('email-all-team') as HTMLElement | null;
-    const saveBtn = document.getElementById('team-save-btn') as HTMLElement | null;
-    const doneBtn = document.getElementById('team-done-btn') as HTMLElement | null;
-    let staged: DirUser[] = [];              // not-yet-saved adds
-    const stagedRemovals = new Set<string>(); // ids of committed rows staged for removal
-
-    // Footer swap — clean shows [Email all | Done], dirty shows [Cancel | Save
-    // changes]. Toggled by inline display because cds-* ignore the `hidden` attribute.
-    const setDirty = (dirty: boolean) => {
-      if (cancelBtn) cancelBtn.style.display = dirty ? '' : 'none';
-      if (saveBtn) saveBtn.style.display = dirty ? '' : 'none';
-      if (emailAllBtn) emailAllBtn.style.display = dirty ? 'none' : '';
-      if (doneBtn) doneBtn.style.display = dirty ? 'none' : '';
-    };
-    // Any pending add OR removal makes the session dirty (needs Save/Cancel).
-    const refreshFooter = () => setDirty(staged.length > 0 || stagedRemovals.size > 0);
-
-    // Cancel / close → throw away the whole edit session: drop staged adds and un-mark
-    // any rows staged for removal, returning the roster to its saved state.
-    const discardStaged = () => {
-      roster.querySelectorAll('[data-staged]').forEach((r) => r.remove());
-      staged = [];
-      stagedRemovals.forEach((id) => unmarkRemoval(id));
-      stagedRemovals.clear();
+    // The rail is the only editor and lives on the same page, so re-read the shared
+    // team edits each time the modal opens: un-hide every seed row, hide removed
+    // ones, rebuild the added ones.
+    const syncFromStorage = () => {
+      const edits = loadTeam();
+      roster.querySelectorAll('[data-added]').forEach((r) => r.remove());
+      rows().forEach((r) => { r.style.display = edits.removed.includes(r.dataset.userId || '') ? 'none' : ''; });
+      roster.querySelectorAll<HTMLElement>('.review-row[style*="none"]').forEach((r) => r.remove());
+      edits.added.forEach((u) => { if (!roster.querySelector(`[data-user-id="${CSS.escape(u.id)}"]`)) insertRow(u); });
       recompute();
-      syncCopyButtons();
-      setDirty(false);
     };
 
-    // Stage the picked user into their unit's section (Supporting analyst, pending),
-    // marked data-staged. Not persisted yet — Save commits, Cancel/close discards.
-    const stageMember = (pickedId: string) => {
-      if (!pickedId || currentIds().includes(pickedId)) return;
-      const opt = addSelect.querySelector(`cds-combo-box-item[value="${CSS.escape(pickedId)}"]`) as HTMLElement | null;
-      const name = opt?.dataset.name || pickedId;
-      const detail = opt?.dataset.detail || 'Headquarters';
-      const email = opt?.dataset.email || '';
-      // Unit follows the shared rule — a district office counts toward that district,
-      // everything else toward Headquarters.
-      const unit = clientUnit('Supporting analyst', detail);
-      const u: DirUser = { id: pickedId, name, role: 'Supporting analyst', detail, email, unit };
-      const li = insertRow(u);
-      li.dataset.staged = 'true';
-      const whenEl = li.querySelector('.review-row__when');
-      if (whenEl) whenEl.textContent = 'Not saved yet';
-      staged.push(u);
-      recompute();
-      syncCopyButtons();
-      refreshFooter();
-    };
-
-    // SELECTING a user stages them — no separate Add button. cds-combo-box-selected
-    // fires only on a committed pick (not per keystroke). Clear the field afterward
-    // so the next pick starts fresh.
-    addSelect?.addEventListener('cds-combo-box-selected', () => {
-      const pickedId: string = addSelect?.value || '';
-      if (pickedId) stageMember(pickedId);
-      if (addSelect) addSelect.value = '';
-    });
-
-    // ── Remove a member (staged until Save) ─────────────────────────────────
-    // Mark/unmark a committed row for removal: strike it, note "Will be removed", and
-    // flip the trash tooltip to Undo. Recompute treats staged-remove rows as gone, so
-    // the bar + unit rollups preview the saved state; nothing persists until Save.
-    const markRemoval = (row: HTMLElement) => {
-      row.dataset.stagedRemove = 'true';
-      const when = row.querySelector('.review-row__when');
-      if (when) { (row as any)._whenBefore = when.textContent; when.textContent = 'Will be removed'; }
-      const tip = row.querySelector('.review-row__remove [slot="tooltip-content"]');
-      if (tip) tip.textContent = 'Undo remove';
-    };
-    const unmarkRemoval = (id: string) => {
-      const row = roster.querySelector<HTMLElement>(`.review-row[data-user-id="${CSS.escape(id)}"]`);
-      if (!row) return;
-      delete row.dataset.stagedRemove;
-      const when = row.querySelector('.review-row__when');
-      if (when && (row as any)._whenBefore != null) when.textContent = (row as any)._whenBefore;
-      const tip = row.querySelector('.review-row__remove [slot="tooltip-content"]');
-      if (tip) tip.textContent = 'Remove';
-    };
-
-    // One remove control per non-lead row. A STAGED add is discarded outright (it was
-    // never saved); a COMMITTED member is toggled into/out of the staged-removal set.
-    roster.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest?.('[data-remove]');
-      if (!btn) return;
-      const row = btn.closest<HTMLElement>('.review-row');
-      if (!row) return;
-      const id = row.dataset.userId || '';
-      if (row.dataset.staged === 'true') {
-        staged = staged.filter((u) => u.id !== id);
-        row.remove();
-      } else if (stagedRemovals.has(id)) {
-        stagedRemovals.delete(id);
-        unmarkRemoval(id);
-      } else {
-        stagedRemovals.add(id);
-        markRemoval(row);
-      }
-      recompute();          // prunes a unit section left empty; previews the bar
-      syncCopyButtons();
-      refreshFooter();
-    });
-
-    // Save — commit the whole edit session to the shared team edits (survives reload,
-    // shows on the Overview too). Adds append to added[]; removals either drop out of
-    // added[] (if they were an earlier add) or go onto removed[] (a seed member).
-    saveBtn?.addEventListener('click', () => {
-      const addCount = staged.length;
-      const remCount = stagedRemovals.size;
-      if (!addCount && !remCount) { modal.open = false; return; }
-      const cur = loadTeam();
-
-      // Commit adds: append (dedup), drop the staged marker, remove from the picker.
-      staged.forEach((u) => { if (!cur.added.some((a) => a.id === u.id)) cur.added.push(u); });
-      roster.querySelectorAll<HTMLElement>('[data-staged]').forEach((r) => {
-        r.removeAttribute('data-staged');
-        const whenEl = r.querySelector('.review-row__when');
-        if (whenEl) whenEl.textContent = `Added ${today}`;
-      });
-      staged.forEach((u) => addSelect?.querySelector(`cds-combo-box-item[value="${CSS.escape(u.id)}"]`)?.remove());
-
-      // Commit removals: a previously-added member simply leaves added[]; a seed member
-      // is recorded on removed[]. The row leaves the roster either way.
-      stagedRemovals.forEach((id) => {
-        if (cur.added.some((a) => a.id === id)) cur.added = cur.added.filter((a) => a.id !== id);
-        else if (!cur.removed.includes(id)) cur.removed.push(id);
-        roster.querySelector<HTMLElement>(`.review-row[data-user-id="${CSS.escape(id)}"]`)?.remove();
-      });
-
-      localStorage.setItem(teamKey, JSON.stringify(cur));
-      staged = [];
-      stagedRemovals.clear();
-      recompute();      // prunes any now-empty unit section, refreshes the meters
-      syncCopyButtons();
-      setDirty(false);
-      modal.open = false;
-
-      const parts: string[] = [];
-      if (addCount) parts.push(addCount === 1 ? '1 member added' : `${addCount} members added`);
-      if (remCount) parts.push(remCount === 1 ? '1 member removed' : `${remCount} members removed`);
-      showToast('Analysis team updated', parts.join(' · '));
-    });
-
-    // Cancel / X / click-away all close the modal natively; drop the edit session
-    // (staged adds AND removals) so the roster returns to its saved state.
-    modal.addEventListener('cds-modal-closed', () => {
-      if (staged.length || stagedRemovals.size) discardStaged();
-    });
-    setDirty(false);
-
-    // The Lead analyst reads Complete only once the permit is Out for signature (their
-    // sign-off ends the analysis). The workflow script broadcasts permit-status-changed
-    // on every transition; repaint the lead row(s) live so the modal stays truthful
-    // without a reload. Non-lead rows are driven by their own reviewStatus, untouched.
+    // The Responsible analyst reads Complete only once the permit has left review
+    // (their sign-off ends the analysis); repaint live on every status change.
     const paintLead = (status: string) => {
       const complete = ['Out for signature', 'Waiting for annual report', 'Active'].includes(status);
       roster.querySelectorAll<HTMLElement>('.review-row[data-lead="true"]').forEach((row) => {
         row.dataset.status = complete ? 'complete' : 'pending';
         const ind = row.querySelector('.review-row__ind');
         ind?.setAttribute('kind', complete ? 'succeeded' : 'in-progress');
-        ind?.setAttribute('label', complete ? 'Complete' : 'Pending');
+        ind?.setAttribute('label', complete ? 'Complete' : 'In progress');
         const when = row.querySelector('.review-row__when');
-        if (when) when.textContent = complete ? 'Signed off' : 'Reviewing';
+        if (when) when.textContent = complete ? 'Signed off' : '';
       });
     };
-    window.addEventListener('permit-status-changed', (e) => {
-      paintLead((e as CustomEvent).detail?.status ?? statusNow());
-    });
-    paintLead(statusNow()); // reflect the persisted status on load (SSR can't see it)
 
-    // Reviewers who marked themselves done ("Complete review") read Complete with
-    // their date; a reopen restores the seeded state. Repaint live, then re-roll
-    // the units and the meter.
+    // Analysts who marked themselves done ("Complete review") read Complete with
+    // their date; a reopen restores the seeded state.
     const paintComplete = () => {
       paintReviewRows(rows(), permitId, (row, st) => {
         row.dataset.status = st.status;
@@ -1227,8 +1017,46 @@ const rosterSections = [
       });
       recompute();
     };
-    paintComplete();
+
+    const manageBtn = document.getElementById('team-manage-btn') as HTMLElement | null;
+    const doneBtn = document.getElementById('team-done-btn') as HTMLElement | null;
+    const refresh = () => {
+      syncFromStorage();
+      paintLead(statusNow());
+      paintComplete();
+      const manage = canManage();
+      if (manageBtn) manageBtn.style.display = manage ? '' : 'none';
+      if (doneBtn) doneBtn.style.display = manage ? 'none' : '';
+    };
+
+    metricBtn.addEventListener('click', () => { refresh(); modal.open = true; });
+
+    // Manage team → the Internal review rail. On the permit page that's a tab switch
+    // (via the #internal deep link); elsewhere (the review wizard) it navigates there.
+    // Scroll + focus wait out the modal's close (closing in code fires no
+    // cds-modal-closed), or its focus-return to the metric would win.
+    manageBtn?.addEventListener('click', () => {
+      const rail = document.getElementById('team-roster');
+      if (!rail) { window.location.href = `${withBase('/permit')}#internal`; return; }
+      if (location.hash !== '#internal') location.hash = 'internal';
+      modal.open = false;
+      setTimeout(() => {
+        rail.scrollIntoView({ block: 'center' });
+        (document.getElementById('team-add-open') as HTMLElement | null)?.focus({ preventScroll: true });
+      }, 300);
+    });
+
+    // Email all — one message to every analyst with an address on file.
+    document.getElementById('email-all-team')?.addEventListener('click', () => {
+      const emails = [...new Set(rows().map((r) => (r.dataset.email || '').trim()).filter(Boolean))];
+      if (emails.length) window.location.href = `mailto:${emails.join(',')}`;
+    });
+
+    window.addEventListener('permit-status-changed', (e) => {
+      paintLead((e as CustomEvent).detail?.status ?? statusNow());
+    });
     window.addEventListener(REVIEW_COMPLETE_EVENT, paintComplete);
+    refresh(); // the header meter reflects stored edits + marks on load
   }
 </script>
 
@@ -1431,40 +1259,55 @@ const rosterSections = [
   }
 
   /* ── Roster modal ── */
-  /* Inline add-member picker — selecting a user stages them (no add button). */
-  .team-add cds-combo-box {
-    display: block;
-  }
   .review-roster {
+    --status-track: 11rem;
+    --toggle-track: 2rem;
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-06, 1.5rem);
-    /* Cap the roster and let IT scroll, so a long team never grows the modal past
-       the viewport (and so the add-reviewer dropdown above it clears the list). */
-    max-block-size: 24rem;
-    overflow-y: auto;
   }
-  /* One section per review unit (Headquarters, each district) + the lead. */
+  /* One section per review unit (Headquarters, each district) + the lead. The
+     heading shares the rows' status track, so a unit's roll-up status starts on the
+     same vertical line as its members'; who completed it sits under that status. The
+     last track holds the collapse toggle (rows keep it empty so the columns match). */
   .unit-group__head {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--status-track) var(--toggle-track);
+    grid-template-areas:
+      "title ind toggle"
+      ".     by  toggle";
     align-items: center;
-    justify-content: space-between;
-    gap: var(--cds-spacing-05, 1rem);
+    column-gap: var(--cds-spacing-05, 1rem);
+    row-gap: 0.125rem;
     padding-block-end: var(--cds-spacing-03, 0.5rem);
     border-block-end: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
   .unit-group__title {
+    grid-area: title;
     margin: 0;
     color: var(--cds-text-primary, #161616);
   }
-  /* The unit's roll-up state — Reviewed once ≥1 member is Complete, else In progress
-     / Not started. The icon-indicator renders its own label, so it's icon + text,
-     not colour alone. */
+  /* The unit's roll-up state — Complete once ≥1 member is, else In progress / Not
+     started. The icon-indicator renders its own label (icon + text, not colour alone). */
   .unit-group__ind {
+    grid-area: ind;
     white-space: nowrap;
   }
+  .unit-group__by {
+    grid-area: by;
+    /* Indented past the icon so it lines up under the status text. */
+    padding-inline-start: calc(16px + var(--cds-spacing-03, 0.5rem));
+    color: var(--cds-text-secondary, #525252);
+  }
+  .unit-group__by:empty { display: none; }
+  .unit-group__toggle { grid-area: toggle; justify-self: end; }
+  /* Chevron points down when collapsed (expand), up when open. */
+  /* (The SVG comes in via set:html, so it carries no scope attribute → :global.) */
+  .unit-group__toggle :global(svg) { transition: transform 0.11s ease; }
+  .unit-group[data-collapsed] .unit-group__toggle :global(svg) { transform: rotate(180deg); }
+  @media (prefers-reduced-motion: reduce) { .unit-group__toggle :global(svg) { transition: none; } }
   .unit-members {
     list-style: none;
     margin: 0;
@@ -1472,15 +1315,15 @@ const rosterSections = [
     display: flex;
     flex-direction: column;
   }
-  /* Named grid areas keep the four cells (identity / status / remove) in lockstep
-     across rows so their edges align, and let the layout re-flow cleanly on a narrow
-     modal without per-child reordering. The status track is FIXED so its left edge
+  /* Named grid areas keep the cells in lockstep across rows (and with the unit
+     heading above) so their edges align. The status track is FIXED so its left edge
      lands on the same vertical line in every row. */
   .review-row {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) 11rem auto;
-    grid-template-areas: "avatar id status remove";
-    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr) var(--status-track) var(--toggle-track);
+    grid-template-areas: "avatar id status .";
+    /* Top-aligned: the status sits level with the name, not floating mid-row. */
+    align-items: start;
     gap: var(--cds-spacing-05, 1rem);
     padding: var(--cds-spacing-05, 1rem) 0;
     border-block-end: 1px solid var(--cds-border-subtle-01, #e0e0e0);
@@ -1488,7 +1331,6 @@ const rosterSections = [
   .review-row > .avatar { grid-area: avatar; }
   .review-row__id { grid-area: id; }
   .review-row__status { grid-area: status; }
-  .review-row__remove { grid-area: remove; }
   /* The last row in a unit sits flush — the section gap does the separating. */
   .unit-members .review-row:last-child {
     border-block-end: none;
@@ -1503,9 +1345,6 @@ const rosterSections = [
   .review-row__name {
     margin: 0;
     color: var(--cds-text-primary, #161616);
-  }
-  .review-row__lead {
-    color: var(--cds-text-secondary, #525252);
   }
   .review-row__role {
     margin: 0;
@@ -1550,39 +1389,26 @@ const rosterSections = [
     text-align: left;
     color: var(--cds-text-secondary, #525252);
   }
-  /* Remove toggle — present only when the team is editable (JS sets data-editable on
-     the roster). Hidden entirely on a read-only view. */
-  .review-row__remove {
+  .review-row__when:empty { display: none; }
+  /* An analyst whose unit another analyst already completed: their own date line
+     gives way to "Not required". */
+  .review-row__note {
     display: none;
+    padding-inline-start: calc(16px + var(--cds-spacing-03, 0.5rem));
+    color: var(--cds-text-secondary, #525252);
   }
-  .review-roster[data-editable="true"] .review-row__remove {
-    display: inline-flex;
-  }
-  /* A staged (unsaved) add reads as provisional until Save. */
-  .review-row[data-staged] .review-row__when {
-    color: var(--cds-text-error, #da1e28);
-  }
-  /* A row staged for removal is struck through + dimmed until Save; its date line
-     becomes the "Will be removed" note (not struck, so it stays legible). */
-  .review-row[data-staged-remove] {
-    opacity: 0.6;
-  }
-  .review-row[data-staged-remove] .review-row__name,
-  .review-row[data-staged-remove] .review-row__email-addr {
-    text-decoration: line-through;
-  }
-  .review-row[data-staged-remove] .review-row__when {
-    color: var(--cds-text-error, #da1e28);
-    text-decoration: none;
-  }
+  .review-row[data-covered] .review-row__when { display: none; }
+  .review-row[data-covered] .review-row__note { display: block; }
+
   @media (max-width: 42rem) {
-    /* Stack the status under the identity on a narrow modal; the remove toggle spans
-       both rows on the right, the avatar both rows on the left. */
+    /* Stack the status under the identity on a narrow modal; the avatar spans both rows. */
+    .review-roster { --status-track: auto; }
+    .unit-group__head { grid-template-columns: minmax(0, 1fr) auto var(--toggle-track); }
     .review-row {
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: auto minmax(0, 1fr);
       grid-template-areas:
-        "avatar id     remove"
-        "avatar status remove";
+        "avatar id"
+        "avatar status";
       row-gap: var(--cds-spacing-03, 0.5rem);
     }
   }

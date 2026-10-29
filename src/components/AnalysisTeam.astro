@@ -11,7 +11,8 @@
 // component resolves that itself from the shared IR matrix, so both hosts gate
 // identically. Add / remove / email-all persist to the shared `permit-team-${id}`
 // storage, keeping both surfaces in sync. The host only supplies the data.
-import { installEmailCopy } from '../lib/email-copy';
+import Avatar from './Avatar.astro';
+import { roleLine, teamUnitOf } from '../lib/analysis-team';
 
 interface TeamMember {
   id: string; role: string; name: string; detail?: string;
@@ -35,17 +36,14 @@ const whenLine = (m: TeamMember) => {
   const s = statusOf(m);
   return m.when ? `${s.verb} ${m.when}` : '';
 };
-const initials = (name: string) =>
-  name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 const emailOf = (id: string) => directory.find((u) => u.id === id)?.email ?? '';
 
-// Group members by review unit — the same rule as the header's review roster:
-// the Responsible analyst on their own, District reviewers under their district
-// (their `detail`), everyone else under Headquarters.
+// Group members by review unit: the Responsible analyst on their own, district
+// staff under their district (their `detail`), everyone else under Headquarters.
 const isResponsible = (m: TeamMember) => m.highlight === true || m.role === 'Responsible analyst';
 const RESPONSIBLE = '__responsible';
 const unitOf = (m: TeamMember): string =>
-  isResponsible(m) ? RESPONSIBLE : m.role === 'District reviewer' ? (m.detail || 'Headquarters') : 'Headquarters';
+  isResponsible(m) ? RESPONSIBLE : teamUnitOf(m.detail);
 
 const byUnit = new Map<string, TeamMember[]>();
 const seen: string[] = [];
@@ -77,8 +75,8 @@ const trashIcon =
 
 <div class="team" id="team-roster" data-storage-key={`permit-team-${permitId}`}>
   <div class="team__tools">
-    <cds-button id="team-email-all" kind="ghost" size="md">Email all</cds-button>
-    <cds-button id="team-add-open" kind="tertiary" size="md" type="button">Add member</cds-button>
+    <cds-button id="team-email-all" kind="tertiary" size="md" type="button">Email all</cds-button>
+    <cds-button id="team-add-open" kind="tertiary" size="md" type="button">Add analyst</cds-button>
   </div>
 
   <div class="team__groups" id="team-groups">
@@ -89,12 +87,12 @@ const trashIcon =
             const email = emailOf(m.id);
             const st = statusOf(m);
             return (
-              <cds-contained-list-item data-user-id={m.id} data-email={email} data-responsible={m.highlight ? 'true' : 'false'}>
-                <div class:list={['member', m.highlight && 'member--responsible']}>
-                  <span class="member__avatar" aria-hidden="true">{initials(m.name)}</span>
+              <cds-contained-list-item data-user-id={m.id} data-email={email} data-responsible={isResponsible(m) ? 'true' : 'false'}>
+                <div class="member">
+                  <div class="member__avatar"><Avatar name={m.name} /></div>
                   <div class="member__body">
                     <p class="member__name t-body-01">{m.name}</p>
-                    <p class="member__role t-label-01">{m.detail ? `${m.role} · ${m.detail}` : m.role}</p>
+                    <p class="member__role t-label-01">{roleLine(m.role, m.detail, g.label)}</p>
                     {email && (
                       <span class="member__email">
                         <cds-link href={`mailto:${email}`}>{email}</cds-link>
@@ -102,7 +100,7 @@ const trashIcon =
                       </span>
                     )}
                   </div>
-                  {!m.highlight && (
+                  {!isResponsible(m) && (
                     <div class="member__end">
                       <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member set:html={`${trashIcon}<span slot="tooltip-content">Remove ${m.name}</span>`}></cds-icon-button>
                     </div>
@@ -131,7 +129,7 @@ const trashIcon =
   <template id="team-row-template">
     <cds-contained-list-item data-user-id="" data-email="" data-responsible="false">
       <div class="member">
-        <span class="member__avatar" aria-hidden="true"></span>
+        <div class="member__avatar"><span class="avatar avatar--md" aria-hidden="true"></span></div>
         <div class="member__body">
           <p class="member__name t-body-01"></p>
           <p class="member__role t-label-01"></p>
@@ -139,17 +137,11 @@ const trashIcon =
             <cds-link class="member__emaillink" href="">
               <span class="member__emailtext"></span>
             </cds-link>
-            <cds-icon-button class="member__copy" kind="ghost" size="sm" align="bottom" data-copy-email="">
-              <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/><path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/></svg>
-              <span slot="tooltip-content">Copy email</span>
-            </cds-icon-button>
+            <cds-icon-button class="member__copy" kind="ghost" size="sm" align="bottom" data-copy-email="" set:html={`${copyIcon}<span slot="tooltip-content">Copy email</span>`}></cds-icon-button>
           </span>
         </div>
         <div class="member__end">
-          <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member>
-            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 12H14V24H12zM18 12H20V24H18z"/><path d="M4 6V8H6V28a2 2 0 002 2H24a2 2 0 002-2V8h2V6zM8 28V8H24V28zM12 2H20V4H12z"/></svg>
-            <span slot="tooltip-content"></span>
-          </cds-icon-button>
+          <cds-icon-button class="member__remove" kind="ghost" size="sm" align="left" data-remove-member set:html={`${trashIcon}<span slot="tooltip-content"></span>`}></cds-icon-button>
         </div>
         <div class="member__status">
           <cds-icon-indicator size="16" kind="not-started" label="Not started"></cds-icon-indicator>
@@ -161,7 +153,7 @@ const trashIcon =
 
   <script type="application/json" class="team-directory" set:html={JSON.stringify(directory)}></script>
 
-  <!-- Add a member — button-first: "Add member" opens this, you pick a directory
+  <!-- Add a member — button-first: "Add analyst" opens this, you pick a directory
        user (only those not already on the team), and the modal's own "Add to team"
        commits. Shared permit-team storage keeps both surfaces in sync. -->
   <cds-modal id="team-add-modal" size="sm">
@@ -223,25 +215,6 @@ const trashIcon =
   .member__body { grid-area: body; }
   .member__end { grid-area: action; }
   .member__status { grid-area: status; }
-  .member--responsible {
-    /* The Responsible analyst — a quiet layered surface, not colour-as-status. */
-    margin: calc(-1 * var(--cds-spacing-05, 1rem));
-    padding: var(--cds-spacing-05, 1rem);
-    background: var(--cds-layer-selected, #e0e0e0);
-  }
-  .member__avatar {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    background: var(--cds-layer-accent, #e0e0e0);
-    color: var(--cds-text-primary, #161616);
-    font-size: 0.75rem;
-    font-weight: 600;
-    flex: 0 0 auto;
-  }
   .member__body {
     display: flex;
     flex-direction: column;
@@ -288,6 +261,8 @@ const trashIcon =
   import { sectionAccessor } from '../lib/permissions';
   import { installEmailCopy } from '../lib/email-copy';
   import { paintReviewRows, REVIEW_COMPLETE_EVENT } from '../lib/review-complete';
+  import { initials } from '../lib/avatar';
+  import { roleLine, teamUnitOf } from '../lib/analysis-team';
 
   installEmailCopy();
 
@@ -319,12 +294,9 @@ const trashIcon =
     try { directory = JSON.parse(dirEl.textContent || '[]'); } catch { directory = []; }
     const byId = new Map(directory.map((u) => [u.id, u]));
 
-    const initials = (name: string) =>
-      name.replace(/[^A-Za-z. ]/g, '').split(/[.\s]+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
     const todayLabel = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    // The unit an ADDED user belongs to (added members are never the Responsible
-    // analyst): District reviewers under their district, everyone else Headquarters.
-    const unitOfUser = (u: DirUser) => u.role === 'District reviewer' ? (u.detail || 'Headquarters') : 'Headquarters';
+    // The unit an ADDED user belongs to (added members are never the Responsible analyst).
+    const unitOfUser = (u: DirUser) => teamUnitOf(u.detail);
 
     const allRows = () => Array.from(groupsWrap.querySelectorAll<HTMLElement>('[data-user-id]'));
     const onTeamIds = () => new Set(allRows().map((r) => r.dataset.userId!));
@@ -400,9 +372,9 @@ const trashIcon =
       li.dataset.userId = u.id;
       li.dataset.email = u.email || '';
       const set = (sel: string, text: string) => { const el = li.querySelector(sel); if (el) el.textContent = text; };
-      set('.member__avatar', initials(u.name));
+      set('.member__avatar .avatar', initials(u.name));
       set('.member__name', u.name);
-      set('.member__role', u.detail ? `${u.role} · ${u.detail}` : u.role);
+      set('.member__role', roleLine(u.role, u.detail, unitOfUser(u)));
       // Added members are Not started, added today: the icon-indicator names the
       // status, the second line dates it.
       li.querySelector('.member__status cds-icon-indicator')?.setAttribute('label', 'Not started');

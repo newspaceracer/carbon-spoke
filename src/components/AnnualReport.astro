@@ -6,6 +6,11 @@
 //   • Upload area — for the owner (submitter, PI, PICOF), the Responsible
 //     Agent, or an admin. Every upload is a new VERSION of the one report and
 //     becomes current; it emails the analysis team (EM-J).
+//   • Report — once a version exists, the CURRENT version is rendered inline in the
+//     shared DocumentViewer (same viewer as the application's documents), so no
+//     one has to download it to read it; the viewer's picker lists every version.
+//     A static prototype keeps no file bytes: a file uploaded in this session shows
+//     itself (object URL, until reload); otherwise the sample report PDF stands in.
 //   • Versions table — newest first, with status. The Responsible Agent (or an
 //     admin) can "Request changes" on the current version (a required message,
 //     emailed to the researcher — EM-K; the requirement reopens) and "Remove" any
@@ -15,10 +20,25 @@
 // cds-button, cds-table, cds-icon-indicator, cds-modal +
 // cds-textarea. Layout CSS only; look = tokens.
 import { permit } from '../data/permit';
+import DocumentViewer from './DocumentViewer.astro';
+
+// The stand-in for a report on file (invented content; see public/docs).
+const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
 ---
 
-<div class="ar" data-annual-report data-permit-id={permit.id} data-permit-name={permit.name}>
+<div class="ar" data-annual-report data-permit-id={permit.id} data-permit-name={permit.name} data-sample-href={SAMPLE_REPORT}>
   <cds-inline-notification data-ar-notice low-contrast hide-close-button style="display:none"></cds-inline-notification>
+
+  <!-- The report itself, readable in place. The picker's items are rebuilt from the
+       versions client-side; the one server-rendered item is only the seed. -->
+  <section class="ar__viewer" data-ar-viewer aria-labelledby="ar-viewer-title" style="display:none">
+    <h3 id="ar-viewer-title" class="t-heading-02">Report</h3>
+    <DocumentViewer
+      documents={[{ href: SAMPLE_REPORT, filename: `${permit.id}_annual-report.pdf`, label: 'Annual report' }]}
+      docTitle={permit.name}
+      slim
+    />
+  </section>
 
   <!-- Upload — owner, Responsible Agent, or admin; each upload is a new version. -->
   <section class="ar__upload" data-ar-upload aria-labelledby="ar-upload-title" style="display:none">
@@ -90,6 +110,7 @@ import { permit } from '../data/permit';
   import { activeUser } from '../data/user';
   import { sendEmail } from '../lib/notifications';
   import { showToast } from '../lib/toast';
+  import { withBase } from '../lib/base';
 
   const root = document.querySelector<HTMLElement>('[data-annual-report]');
   if (root) {
@@ -98,6 +119,10 @@ import { permit } from '../data/permit';
     const shown = (el: HTMLElement, on: boolean) => { el.style.display = on ? '' : 'none'; };
     const who = readIdentity();
     const me = activeUser(who);
+    // Files uploaded in this session, by version — the only real bytes we have.
+    const sessionFiles = new Map<number, string>();
+    const sampleHref = withBase(root.dataset.sampleHref!);
+    const fileUrl = (version: number) => sessionFiles.get(version) ?? sampleHref;
     const status = () => localStorage.getItem(`permit-status-${id}`)
       || document.getElementById('permit-banner')?.dataset.status || '';
 
@@ -122,6 +147,8 @@ import { permit } from '../data/permit';
       if (!file) return;
       const by = me?.name ?? 'The researcher';
       const { version } = addUpload(id, file.name, by);
+      sessionFiles.set(version, URL.createObjectURL(file));
+      render();
       sendEmail('EM-J', emailVars({ 'Uploaded by': by }));
       showToast(`Version ${version} uploaded`, 'The review team gets an email.');
     });
@@ -187,12 +214,40 @@ import { permit } from '../data/permit';
       b.addEventListener('click', onClick);
       return b;
     };
-    // No real bytes in the prototype: hand back a stub named like the upload.
-    const download = (name: string) => {
-      const url = URL.createObjectURL(new Blob([`Prototype placeholder for ${name}`], { type: 'application/pdf' }));
-      const a = Object.assign(document.createElement('a'), { href: url, download: name });
-      a.click();
-      URL.revokeObjectURL(url);
+    // The file this session uploaded, else the sample report, named like the upload.
+    const download = (u: { version: number; name: string }) => {
+      Object.assign(document.createElement('a'), { href: fileUrl(u.version), download: u.name }).click();
+    };
+
+    // The viewer: one picker item per version (newest first), the current one shown.
+    // DocumentViewer's own handler swaps the frame from each item's data-*.
+    const viewer = $('[data-ar-viewer]');
+    const picker = viewer.querySelector<any>('.pdfv__select');
+    const frame = viewer.querySelector<HTMLIFrameElement>('.pdfv__frame');
+    const openLink = viewer.querySelector<HTMLElement>('.pdfv__open');
+    const meta = viewer.querySelector<HTMLElement>('[data-doc-meta]');
+    let showing = ''; // the frame's current src — don't reload the PDF on every render
+    const renderViewer = (uploads: { version: number; name: string; by: string; at: string }[]) => {
+      shown(viewer, uploads.length > 0);
+      const latest = uploads.at(-1);
+      if (!latest || !picker || !frame) return;
+      const items = [...uploads].reverse().map((u, i) => {
+        const item = document.createElement('cds-dropdown-item');
+        item.setAttribute('value', `v${u.version}`);
+        item.dataset.src = `${fileUrl(u.version)}#view=FitH`;
+        item.dataset.open = fileUrl(u.version);
+        item.dataset.filename = u.name;
+        item.dataset.meta = `${u.name} · ${u.by}, ${u.at}`;
+        item.textContent = i === 0 ? `Version ${u.version} (current)` : `Version ${u.version}`;
+        return item;
+      });
+      picker.replaceChildren(...items);
+      picker.value = `v${latest.version}`;
+      const current = items[0].dataset;
+      if (showing !== current.src) { frame.src = current.src!; showing = current.src!; }
+      openLink?.setAttribute('href', current.open!);
+      if (meta) meta.textContent = current.meta!;
+      frame.title = `${latest.name} (PDF)`;
     };
 
     const render = () => {
@@ -236,7 +291,7 @@ import { permit } from '../data/permit';
           : standing ? indicator('succeeded', 'Complete') : indicator('unknown', 'Replaced');
         const actions = document.createElement('div');
         actions.className = 'ar__actions';
-        actions.append(ghost('Download', () => download(u.name)));
+        actions.append(ghost('Download', () => download(u)));
         if (standing && isReviewer()) actions.append(ghost('Request changes', () => { modal.open = true; }));
         if (isReviewer()) actions.append(ghost('Remove', () => confirmRemove(u.version), 'danger-ghost'));
         const row = document.createElement('cds-table-row');
@@ -244,6 +299,7 @@ import { permit } from '../data/permit';
         return row;
       });
       $('[data-ar-rows]').replaceChildren(...rows);
+      renderViewer(uploads);
     };
 
     render();
@@ -256,7 +312,7 @@ import { permit } from '../data/permit';
   /* Layout only — every surface is a stock cds-* component. */
   .ar { display: flex; flex-direction: column; gap: var(--cds-spacing-07, 2rem); }
   .ar section { display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); align-items: flex-start; }
-  .ar section > cds-table, .ar__upload cds-file-uploader-drop-container { align-self: stretch; }
+  .ar section > cds-table, .ar__upload cds-file-uploader-drop-container, .ar__viewer :global(.pdfv) { align-self: stretch; }
   .ar__upload { max-inline-size: 46rem; }
   .ar h3, .ar__hint { margin: 0; }
   .ar__hint { color: var(--cds-text-secondary, #525252); }

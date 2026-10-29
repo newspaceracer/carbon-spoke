@@ -143,8 +143,9 @@ Where they conflicted, **Carbon wins inside a Carbon spoke** — noted inline.
 5. **One management surface per collection.** Don't put add/remove controls for the
    same collection in two places. If the collection also appears inside another
    modal, that copy is **view-only** — managing it there would stack a modal on a
-   modal. (The analysis team is managed on the permit Overview; the header's
-   "Analysis review" modal only displays it + its progress.)
+   modal. (The analysis team is managed on the permit's Internal review rail; the
+   header's Analysis team modal only displays it + its progress, with a "Manage
+   team" hand-off to the rail.)
 
 ## 7. Control sizing & kind (Must)
 

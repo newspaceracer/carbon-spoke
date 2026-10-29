@@ -56,11 +56,14 @@ export interface Participant {
 
 /** One lifecycle stage. `state` drives the Carbon progress-step visual. */
 export interface HistoryStep {
+  key: string;
   label: string;
+  /** Demo date shown once the step is complete and no stored record dates it. */
   date?: string;
-  /** Shown alongside the date once a decision is reached. */
-  decision?: string;
-  state: 'complete' | 'current' | 'incomplete';
+  /** Staff-only (the review team's own steps). */
+  internal?: boolean;
+  /** A branch step, shown only when it happened. */
+  when?: 'returned' | 'withdrawn' | 'hold';
 }
 
 /** A named group of lifecycle stages (Presubmittal, In review, …). */
@@ -182,40 +185,45 @@ export const permit = {
       { author: 'Dr. L. Cheng', time: 'Jul 9, 2026', text: 'Species list and quantities are proportionate for a diversity survey; the 50-frond Corallina vancouveriensis allotment supports the reproductive case study.', section: 'specimens' },
     ],
 
-    // Application lifecycle, grouped into phases. Each step's `state` drives the
-    // Carbon progress-step visual (complete / current / incomplete). This permit
-    // is mid-review, so the current step sits inside "In review"; everything from
-    // "Decision reached" onward is still pending.
+    // Application lifecycle, grouped into phases. Steps carry no state: the
+    // ApplicationHistory component derives complete / current / invalid from the
+    // permit's LIVE status (so it can't disagree with the header), and fills dates
+    // from stored records (return, rejection, signed letter, report) where one
+    // exists. `date` is the demo date a step shows once it's complete without a
+    // record. `internal` steps are staff-only; `when` steps appear only when their
+    // branch happened (a return, a withdrawal, a renewal hold).
     history: [
       {
         phase: 'Presubmittal',
         steps: [
-          { label: 'Application started', date: 'Jul 5, 2026', state: 'complete' },
-          { label: 'Application signed', date: 'Jul 8, 2026', state: 'complete' },
-          { label: 'Application submitted', date: 'Jul 9, 2026', state: 'complete' },
+          { key: 'started', label: 'Application started', date: 'Jul 5, 2026' },
+          { key: 'signed', label: 'Application signed', date: 'Jul 8, 2026' },
+          { key: 'submitted', label: 'Application submitted', date: 'Jul 9, 2026' },
         ],
       },
       {
         phase: 'In review',
         steps: [
-          { label: 'Responsible agent review completed', date: 'Jul 12, 2026', state: 'complete' },
-          { label: 'Supporting agents review completed', state: 'current' },
-          { label: 'Decision reached', state: 'incomplete' },
+          { key: 'ra-review', label: 'Responsible agent review completed', date: 'Jul 12, 2026', internal: true },
+          { key: 'sa-review', label: 'Supporting agents review completed', date: 'Jul 14, 2026', internal: true },
+          { key: 'returned', label: 'Returned for changes', when: 'returned' },
+          { key: 'withdrawn', label: 'Application withdrawn', when: 'withdrawn' },
+          { key: 'decision', label: 'Decision reached', date: 'Jul 15, 2026' },
         ],
       },
       {
         phase: 'Signature',
         steps: [
-          { label: 'Permit active in effect', state: 'incomplete' },
+          { key: 'signed-letter', label: 'Signed letter uploaded', date: 'Jul 21, 2026' },
+          { key: 'hold', label: 'On hold for the previous annual report', when: 'hold' },
         ],
       },
       {
         phase: 'Active permit',
         steps: [
-          { label: 'Permit active', state: 'incomplete' },
-          { label: 'Permit expired', state: 'incomplete' },
-          { label: 'Annual report submitted', state: 'incomplete' },
-          { label: 'Renewal processed', state: 'incomplete' },
+          { key: 'active', label: 'Permit active', date: 'Jul 22, 2026' },
+          { key: 'expired', label: 'Permit expired', date: 'Jul 22, 2027' },
+          { key: 'report', label: 'Annual report uploaded' },
         ],
       },
     ] as HistoryPhase[],

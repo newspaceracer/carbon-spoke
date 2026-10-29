@@ -114,6 +114,9 @@ import { permit } from '../data/permit';
       el.dataset.alert = a.id;
       if (action) {
         el.setAttribute('inline', '');
+        // Carbon defaults has-focus on, which focuses the action button on every
+        // render — a page-level alert must not steal focus (or scroll) on load.
+        (el as any).hasFocus = false;
         const btn = document.createElement('cds-actionable-notification-button');
         btn.setAttribute('slot', 'action');
         btn.textContent = action.label;

@@ -1,0 +1,48 @@
+/* Parks + who covers them — the district blocks rendered by
+   districtBlocksHtml (src/lib/study-area-contacts.ts), shared by the permit's
+   Application tab (Authorized parks) and its Overview. Global, scoped to the
+   `.sad-list` container, because the blocks are injected client-side (no Astro
+   scope attribute). Layout only; every control is a stock cds-* component.
+   Each contact: initials chip beside name, email, phone. */
+.sad-list .contact-cell__person { display: block; }
+.sad-list .contact-cell__person + .contact-cell__person { margin-top: 0.5rem; }
+.sad-list .contact-cell__name { display: block; }
+.sad-list .contact-cell__email {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  max-width: 100%;
+}
+.sad-list .contact-cell__none { color: var(--cds-text-secondary, #525252); }
+/* Districts view (mobile-first). Phone: one column — district, its contacts,
+   a rule, its parks. md+ (42rem): district side left and sticky, parks right. */
+.sad-list { display: flex; flex-direction: column; gap: 1.5rem; }
+.sad-list .sad + .sad { border-block-start: 1px solid var(--cds-border-strong-01, #8d8d8d); padding-block-start: 1.5rem; }
+.sad-list cds-accordion-item.sad + cds-accordion-item.sad { border-block-start: 0; padding-block-start: 0; }
+/* Carbon holds accordion PROSE to a 75% measure (padding-inline-end: 25%); this
+   content is a two-column directory, not prose — release it through the
+   component's public `content` part. */
+.sad-list cds-accordion-item.sad::part(content) { padding-inline-end: var(--cds-spacing-05, 1rem); }
+.sad-list .sad__body { display: flex; flex-direction: column; gap: 1rem; }
+.sad-list .sad__name { margin: 0 0 0.5rem; }
+.sad-list .sad__count { font-weight: 400; color: var(--cds-text-secondary, #525252); }
+.sad-list .sad__parks { margin: 0; padding: 0; list-style: none; }
+.sad-list .sad__park { padding-block: 0.75rem; border-block-start: 1px solid var(--cds-border-subtle-01, #c6c6c6); }
+.sad-list .sad__park-name { display: block; }
+.sad-list .sad__park-contact { display: block; margin-block-start: 0.5rem; padding-inline-start: 1rem; }
+.sad-list .contact-cell__phone { display: block; }
+/* Contact identity row: initials chip beside name / email / phone. */
+.sad-list .contact-cell__person--avatar { display: flex; align-items: flex-start; gap: 0.75rem; }
+.sad-list .contact-cell__details { display: block; min-inline-size: 0; }
+.sad-list .contact-cell__person--avatar + .contact-cell__person--avatar { margin-top: 1rem; }
+/* Contact links: at least 24px tall on touch (WCAG 2.5.8), no double-tap-zoom wait. */
+.sad-list .sad cds-link { touch-action: manipulation; }
+@media (pointer: coarse) {
+  .sad-list .sad .contact-cell__email,
+  .sad-list .sad .contact-cell__phone { min-block-size: 1.5rem; display: flex; align-items: center; }
+}
+@media (min-width: 42rem) {
+  .sad-list .sad__body { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 2rem; align-items: start; }
+  .sad-list .sad__district { position: sticky; inset-block-start: 7rem; }
+  .sad-list .sad__park:first-child { border-block-start: 0; padding-block-start: 0; }
+}

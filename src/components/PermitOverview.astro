@@ -1,0 +1,627 @@
+---
+// The permit's Overview — ONE orientation view for every viewer (staff, the
+// researcher owner, the public): where the permit stands, and what it asks for or
+// allows — where, when, and who to contact — on one screen.
+//
+// Rules (docs/stories-permit-detail-page.md, Overview):
+// - It never repeats the header (status, the one action button, tags) or the
+//   alert stack — it elaborates (countdown, contact details). Everything
+//   clickable is a LINK that moves you around the page; actions stay in the header.
+// - Same blocks, same order for every viewer; only the wording changes ("Your
+//   permit…" vs "The researcher…"). The public view drops the people (person
+//   tiles, on-site contacts) and the conditions (that tab isn't public).
+// - Stage-adaptive: before a decision the labels read REQUESTED; from Out for
+//   signature on they read AUTHORIZED, the special-conditions figure fills in, the
+//   key dates appear, and the parks block adds its contacts. Nothing changes shape.
+// - Layout (Carbon dashboard pattern): a BAND — the summary cell (status, then
+//   what's next or the key dates) beside a gapless grid of six figures (dates,
+//   field visits, special conditions, specimens, species, research team) — then the
+//   Schedule timeline beside People (PI, PICOF, submitter before approval), then
+//   About this research, then the parks (the Application tab's own district
+//   blocks, capped at 5 — shown once, never also as a figure). No responsible
+//   analyst anywhere on the Overview.
+//
+// Server-renders every block; the script fills the live parts from the status the
+// page passes (`permit-overview-render` { status, viewer }) and re-renders on a
+// status or annual-report change.
+//
+// Composition: cds-tile, cds-contained-list, cds-link, cds-icon-button (copy
+// email), cds-icon-indicator. Layout CSS only; look = tokens.
+// "Go to" links switch the page's tab and scroll to an anchor (data-po-go =
+// "tab" or "tab#anchor").
+import { permit } from '../data/permit';
+import { withBase } from '../lib/base';
+import Avatar from './Avatar.astro';
+import '../styles/study-area-blocks.css';
+
+const dc = permit.dataCollection;
+const specimenTotal = dc.specimens.reduce((n, s) => n + Number(s.quantity), 0);
+const w = permit.activeWindow;
+// The applicant side, first on the Overview: the principal investigator and the
+// PICOF — the person in direct charge of field work (who's on site) — ALWAYS, and
+// the submitter until the permit is approved (questions about the application).
+// One person holding two of these roles gets ONE tile with both labels, as the
+// Application tab's team cards fold them.
+const team = permit.researchTeam;
+const same = (a?: { email?: string; name: string }, b?: { email?: string; name: string }) =>
+  !!a && !!b && (a.email ? a.email === b.email : a.name === b.name);
+const piIsPicof = same(team.principalInvestigator, team.fieldLead);
+const piIsSubmitter = same(team.principalInvestigator, team.submitter);
+const PICOF = 'PICOF (in direct charge of field work)';
+const applicantPeople = [
+  // `phase`: when the tile shows — always, or before approval only (submitter).
+  // `before` / `after`: the label before vs from approval on — roles the PI also
+  // holds fold into the PI tile's label.
+  { key: 'pi', phase: 'always', c: team.principalInvestigator,
+    before: ['Principal investigator', piIsPicof && PICOF, piIsSubmitter && 'Submitter'].filter(Boolean).join(' · '),
+    after: ['Principal investigator', piIsPicof && PICOF].filter(Boolean).join(' · ') },
+  ...(piIsPicof ? [] : [{ key: 'picof', phase: 'always', c: team.fieldLead, before: PICOF, after: PICOF }]),
+  ...(piIsSubmitter ? [] : [{ key: 'submitter', phase: 'before', c: team.submitter, before: 'Submitter', after: 'Submitter' }]),
+];
+const tel = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, '')}`;
+// Research team = the people in the field: the PI, the PICOF, and the participants
+// (one person holding two roles counts once). The submitter files the paperwork.
+const fieldTeam = [team.principalInvestigator, team.fieldLead, ...team.participants]
+  .filter((c, i, all) => all.findIndex((o) => same(o, c)) === i);
+const participantCount = team.participants.length;
+const pi = permit.projectInfo;
+// Field visits as data for the script (next visit is relative to the demo clock).
+const visits = pi.fieldSessions.map((s, i) => ({ start: s.start, end: s.end ?? s.start, label: pi.fieldOccurrences[i] }));
+// Slotted into cds-icon-button (colors with `color:` only) → fill="currentColor".
+const copyIcon =
+  '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M28,10V28H10V10H28m0-2H10a2,2,0,0,0-2,2V28a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10a2,2,0,0,0-2-2Z"/><path d="M4,18H2V4A2,2,0,0,1,4,2H18V4H4Z"/></svg>';
+---
+
+<div class="po" data-permit-overview data-permit-id={permit.id}
+  data-start={w.start} data-end={w.end} data-start-iso={w.startISO} data-end-iso={w.endISO}>
+
+  <!-- ── Band 1 · summary + figures, ONE surface ──────────────────────────
+       carbon-checked: Carbon ships no "tile group with shared dividers"; this is
+       the dashboard pattern from Carbon's own products (a summary cell beside a
+       grid of figure cells on one layer, 1px dividers between them). Plain layout
+       over --cds-* tokens; every control inside is stock (cds-link,
+       cds-icon-indicator). -->
+  <section class="po__band" aria-labelledby="po-title">
+    <!-- Summary: the status, then what's next — or, once issued, the key dates. -->
+    <div class="po__cell po__summary">
+      <h2 id="po-title" class="po__status t-heading-04" data-po-title></h2>
+      <p class="po__next t-body-01" data-po-next></p>
+      <!-- Key dates: once authorized, the deadlines that matter most — when the
+           permit starts / ends, and when the annual report is due. Filled by the
+           script per status. -->
+      <dl class="po__keydates" data-po-keydates style="display:none"></dl>
+      <div class="po__links" data-po-links>
+        <cds-link data-po-link="continue" href={withBase(`/apply?revise=${permit.id}`)} style="display:none">Continue your application</cds-link>
+        <cds-link data-po-link="letter" href="#letter" data-po-go="letter" style="display:none">Read the permit letter</cds-link>
+        <cds-link data-po-link="apply-again" href={withBase('/apply')} style="display:none">Apply again</cds-link>
+        <cds-link data-po-link="apply-new" href={withBase('/apply')} style="display:none">Apply for a new permit</cds-link>
+      </div>
+    </div>
+
+    <!-- Figures: six cells that never move. Labels say requested vs authorized. -->
+    <div class="po__figures">
+      <div class="po__cell po__figure">
+        <h3 class="po__field t-heading-compact-01" data-po-label="dates">Requested dates</h3>
+        <!-- Every permit runs one year, so the exact dates are the figure — set like
+             the key dates (heading-03), since a date at count size won't fit a cell. -->
+        <p class="po__value t-heading-03"><span class="po__nowrap">{w.start} –</span> <span class="po__nowrap">{w.end}</span></p>
+      </div>
+      <div class="po__cell po__figure">
+        <h3 class="po__field t-heading-compact-01">Field visits</h3>
+        <p class="po__value t-heading-05">{visits.length}</p>
+        <p class="po__sub t-body-compact-01" data-po-visit-next></p>
+        <cds-link class="po__go" href="#schedule" data-po-go="application#schedule">See the schedule</cds-link>
+      </div>
+      <div class="po__cell po__figure">
+        <h3 class="po__field t-heading-compact-01">Special conditions</h3>
+        <p class="po__value t-heading-05" data-po-conditions-total>—</p>
+        <div class="po__sub t-body-compact-01" data-po-conditions-owners></div>
+        <cds-link class="po__go" href="#special-conditions" data-po-go="special-conditions" data-po-conditions-link style="display:none">Read the conditions</cds-link>
+      </div>
+      <div class="po__cell po__figure">
+        <h3 class="po__field t-heading-compact-01" data-po-label="specimens">Requested specimens</h3>
+        <p class="po__value t-heading-05">{specimenTotal}</p>
+        <cds-link class="po__go" href="#data-collection" data-po-go="application#data-collection">See specimens</cds-link>
+      </div>
+      <div class="po__cell po__figure">
+        <h3 class="po__field t-heading-compact-01">Species</h3>
+        <p class="po__value t-heading-05">{dc.specimens.length}</p>
+      </div>
+      <div class="po__cell po__figure">
+        <h3 class="po__field t-heading-compact-01">Research team</h3>
+        <p class="po__value t-heading-05">{fieldTeam.length}</p>
+        <p class="po__sub t-body-compact-01">PI and {participantCount} {participantCount === 1 ? 'participant' : 'participants'}</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Returned: the changes the review team asked for, each linked to the part of
+       the application it's about. The alert above gives the count; this says which. -->
+  <cds-tile class="po__todo" data-po-todo style="display:none">
+    <h2 class="po__panel-title t-heading-03" data-po-todo-title></h2>
+    <cds-contained-list kind="on-page" data-po-todo-list></cds-contained-list>
+  </cds-tile>
+
+  <!-- ── Band 2 · the schedule beside the people ─────────────────────────── -->
+  <div class="po__pair" data-po-pair>
+    <!-- carbon-checked: Carbon ships no timeline — cds-progress-bar can show the
+         elapsed share but not dated markers (field visits, today, the report due
+         date) on one axis. The strip is presentational (aria-hidden); the band
+         above carries the same facts as text. Layout + tokens only. -->
+    <cds-tile class="po__panel">
+      <h2 class="po__panel-title t-heading-03">Schedule</h2>
+      <div class="po__tl" aria-hidden="true">
+        <div class="po__tl-labels po__tl-labels--above" data-po-tl-above></div>
+        <div class="po__tl-track">
+          <div class="po__tl-fill" data-po-tl-fill></div>
+          <div data-po-tl-marks></div>
+        </div>
+        <div class="po__tl-labels" data-po-tl-below></div>
+      </div>
+      <ul class="po__tl-legend t-label-01" aria-hidden="true">
+        <li><span class="po__tl-key po__tl-visit po__tl-visit--past"></span>Past field visit</li>
+        <li><span class="po__tl-key po__tl-visit"></span>Field visit</li>
+        <li><span class="po__tl-key po__tl-visit po__tl-visit--next"></span>Next field visit</li>
+        <li data-po-tl-legend-today><span class="po__tl-key po__tl-today-key"></span>Today</li>
+        <li data-po-tl-legend-report><span class="po__tl-key po__tl-report"></span>Annual report due</li>
+      </ul>
+    </cds-tile>
+
+    <!-- People — the applicant side only (never the responsible analyst). PI and
+         PICOF always, the submitter before approval; one person holding two roles
+         is one entry with both labels. Hidden in the public view. -->
+    <cds-tile class="po__panel" data-po-people>
+      <h2 class="po__panel-title t-heading-03">People</h2>
+      <ul class="po__people">
+        {applicantPeople.map((p) => (
+          <li class="po__person-row" data-po-person={p.phase} style="display:none">
+            <h3 class="po__field t-heading-compact-01" data-po-person-label data-before={p.before} data-after={p.after}>{p.before}</h3>
+            <div class="po__person">
+              <Avatar name={p.c.name} size="md" />
+              <div class="po__person-details">
+                <p class="t-body-01">{p.c.name}</p>
+                {p.c.email && (
+                  <p class="po__email">
+                    <cds-link href={`mailto:${p.c.email}`}>{p.c.email}</cds-link>
+                    <cds-icon-button kind="ghost" size="sm" align="bottom" autoalign data-copy-email={p.c.email} set:html={`${copyIcon}<span slot="tooltip-content">Copy email</span>`}></cds-icon-button>
+                  </p>
+                )}
+                {p.c.phone && <p><cds-link href={tel(p.c.phone)}>{p.c.phone}</cds-link></p>}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </cds-tile>
+  </div>
+
+  <!-- ── What the research is — the title alone doesn't say ──────────────── -->
+  <cds-tile class="po__panel">
+    <h2 class="po__panel-title t-heading-03">About this research</h2>
+    <p class="po__abstract t-body-01">{pi.purpose}</p>
+    <cds-link class="po__go" href="#project-information" data-po-go="application#project-information">Read the full project description</cds-link>
+  </cds-tile>
+
+  <!-- ── The parks — ONE block in every state, the SAME district blocks as the
+       Application tab's Authorized parks (districtBlocksHtml), capped. Requested:
+       park names only (contacts aren't final until the letter is). Authorized:
+       with who covers each park. ─────────────────────────────────────────── -->
+  <cds-tile class="po__panel">
+    <h2 class="po__panel-title t-heading-03" data-po-parks-title>Requested parks</h2>
+    <div class="sad-list" data-po-parks-list></div>
+    <cds-link class="po__go" href="#study-areas" data-po-go="application#study-areas" data-po-parks-link></cds-link>
+  </cds-tile>
+  <script type="application/json" data-po-visits set:html={JSON.stringify(visits)}></script>
+</div>
+
+<script>
+  import { reviewStore, sectionTitle } from '../lib/review-thread';
+  import { reportState, latestUpload, reportDueISO, formatDate, daysUntil, todayISO, renewalBlocked, REPORT_EVENT } from '../lib/final-report';
+  import { loadAppliedConditions, permitDistricts, readerOwnerOrder } from '../lib/permit-conditions';
+  import { readStudyAreaModel, resolveStudyAreas, districtBlocksHtml } from '../lib/study-area-contacts';
+  import { installEmailCopy } from '../lib/email-copy';
+
+  type Viewer = 'staff' | 'owner' | 'public';
+  const root = document.querySelector<HTMLElement>('[data-permit-overview]');
+  if (root) {
+    const id = root.dataset.permitId!;
+    const $ = <T extends HTMLElement = HTMLElement>(sel: string) => root.querySelector<T>(sel);
+    const shown = (el: HTMLElement | null, on: boolean) => { if (el) el.style.display = on ? '' : 'none'; };
+    const { start, end, startIso, endIso } = root.dataset as Record<string, string>;
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    const esc = (s: string) =>
+      String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    const RETURNED = ['Returned to submitter', 'Changes requested'];
+    // From Out for signature on, the values are what's AUTHORIZED, not requested.
+    const AUTHORIZED = ['Out for signature', 'Waiting for annual report', 'Active', 'Expired'];
+    const PARKS_SHOWN = 5;
+
+    // Stage lead — [status, what comes next, links]. The journey itself is the
+    // Application history rail (one tracker, not two).
+    // Wording by viewer; the owner reads "your", staff and the public read about it.
+    type Stage = [string, string, string[]];
+    const stageFor = (status: string, viewer: Viewer): Stage => {
+      // Title = the status, exactly as the header says it. The line = what comes
+      // next (or, once closed, how it ended). Wording by viewer.
+      const owner = viewer === 'owner';
+      const due = formatDate(reportDueISO());
+      const next = (text: string) => `Next: ${text}`;
+      if (status === 'Draft') return [status, owner
+        ? next('submit your application to start the review.')
+        : next('the researcher submits the application.'), owner ? ['continue'] : []];
+      if (status === 'Waiting for review') return [status, next('the review team starts the review.'), []];
+      if (status === 'Under review') return [status, owner
+        ? next("a decision. You'll get an email when it's made.")
+        : next('a decision, once the review team is done.'), []];
+      if (RETURNED.includes(status)) return [status, owner
+        ? next('make the changes below, then resubmit your application.')
+        : next('the researcher makes the changes and resubmits.'), []];
+      if (status === 'Out for signature') return [status, owner
+        ? next('the signed letter makes your permit active. Read the letter and its special conditions now.')
+        : next('the signed letter is uploaded and the permit becomes active.'), ['letter']];
+      if (status === 'Waiting for annual report') return [status, owner
+        ? next('it becomes active once your previous permit’s annual report is in.')
+        : next('it becomes active once the previous permit’s annual report is in.'), []];
+      if (status === 'Active') return [status, viewer === 'public'
+        ? next(`the permit ends ${end}.`)
+        : next(`the permit ends ${end}. The annual report is due ${due}.`), []];
+      if (status === 'Rejected') return [status, reviewStore(id).rejected()?.reason || 'The review team decided not to issue this permit.', owner ? ['apply-again'] : []];
+      if (status === 'Withdrawn') {
+        let rec: { by: string; at: string } | null = null;
+        try { rec = JSON.parse(localStorage.getItem(`permit-withdrawn-${id}`) || 'null'); } catch {}
+        return [status, `${rec ? `Withdrawn ${rec.at} by ${rec.by}.` : 'Withdrawn before a decision.'} It won't be reviewed.`, []];
+      }
+      // Expired — what's left is the annual report.
+      const report = viewer === 'public' ? null : reportState(status, id);
+      const line = report === 'submitted' ? 'Nothing left to do — the annual report is in.'
+        : report === 'delinquent' ? `The annual report was due ${due}.`
+        : report ? (owner ? next(`upload your annual report by ${due}.`) : next(`the researcher uploads the annual report by ${due}.`))
+        : `It ran ${start} – ${end}.`;
+      return [status, line, owner ? ['apply-new'] : []];
+    };
+
+
+    // Key dates for the stage card — [label, date, note, go-to report?]. Out for
+    // signature / on hold: when it starts and ends. Active: when it ends and when
+    // the annual report is due. Expired: when it ended and the report. The alert
+    // stack carries anything urgent; here an overdue report is a quiet indicator.
+    type KeyDate = { label: string; value: string; note?: string; overdue?: boolean; report?: boolean };
+    const keyDates = (status: string, viewer: Viewer): KeyDate[] => {
+      const left = (iso: string) => { const n = daysUntil(iso); return n > 0 ? `${plural(n, 'day')} left` : n === 0 ? 'Today' : ''; };
+      if (status === 'Out for signature' || status === 'Waiting for annual report') {
+        const n = daysUntil(startIso);
+        return [{ label: 'Starts', value: start, note: n > 0 ? `In ${plural(n, 'day')}` : '' }, { label: 'Ends', value: end }];
+      }
+      if (status !== 'Active' && status !== 'Expired') return [];
+      const ends: KeyDate = status === 'Active'
+        ? { label: 'Permit ends', value: end, note: left(endIso) }
+        : { label: 'Ended', value: end };
+      if (viewer === 'public') return [ends];
+      const state = reportState(status, id);
+      const dueIso = reportDueISO();
+      const report: KeyDate = state === 'submitted'
+        ? { label: 'Annual report', value: `Uploaded ${latestUpload(id)?.at ?? ''}`.trim(), report: true }
+        : { label: 'Annual report due', value: formatDate(dueIso), report: true,
+            note: state === 'changes-requested' ? 'Changes requested' : state === 'delinquent' ? '' : left(dueIso),
+            overdue: state === 'delinquent' };
+      return [ends, report];
+    };
+    const renderKeyDates = (status: string, viewer: Viewer) => {
+      const dl = $('[data-po-keydates]')!;
+      const items = keyDates(status, viewer);
+      dl.innerHTML = items.map((k) =>
+        `<div class="po__keydate"><dt class="po__field t-heading-compact-01">${esc(k.label)}</dt>` +
+        `<dd class="po__keydate-value t-heading-03">${esc(k.value)}</dd>` +
+        (k.overdue ? `<dd><cds-icon-indicator kind="failed" label="Overdue"></cds-icon-indicator></dd>` : '') +
+        (k.note ? `<dd class="po__line t-body-compact-01">${esc(k.note)}</dd>` : '') +
+        (k.report ? `<dd><cds-link class="po__go" href="#report" data-po-go="report">Go to the annual report</cds-link></dd>` : '') +
+        '</div>').join('');
+      shown(dl, items.length > 0);
+      // The figures say what's next on an issued permit — no sentence repeating them.
+      shown($('[data-po-next]'), !(status === 'Active' || status === 'Expired'));
+    };
+
+    // Field visits: the next one from today (or the one under way), and how many
+    // are still ahead; once they're all past, the last one.
+    type Visit = { start: string; end: string; label: string };
+    let visits: Visit[] = [];
+    try { visits = JSON.parse(root.querySelector('[data-po-visits]')?.textContent || '[]'); } catch {}
+    // The timeline: the permit window on one axis (extended to the annual report's
+    // due date once it's owed), with the elapsed share filled, each field visit, and
+    // today. Positions are percentages of the axis.
+    const t = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
+    const short = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const renderTimeline = (status: string, viewer: Viewer) => {
+      const owesReport = viewer !== 'public' && ['Active', 'Expired'].includes(status);
+      const dueIso = reportDueISO();
+      const axisEnd = owesReport ? dueIso : endIso;
+      const span = t(axisEnd) - t(startIso);
+      const pos = (iso: string) => Math.min(100, Math.max(0, ((t(iso) - t(startIso)) / span) * 100));
+      const todayIso = todayISO();
+      // Elapsed: only once the permit is in force.
+      const fill = $('[data-po-tl-fill]')!;
+      const elapsed = status === 'Active' || status === 'Expired' ? pos(todayIso < endIso ? todayIso : endIso) : 0;
+      fill.style.inlineSize = `${elapsed}%`;
+      // Markers.
+      const next = visits.find((v) => daysUntil(v.end) >= 0);
+      const marks: string[] = visits.map((v) => {
+        const kind = v === next ? ' po__tl-visit--next' : daysUntil(v.end) < 0 ? ' po__tl-visit--past' : '';
+        return `<span class="po__tl-mark po__tl-visit${kind}" style="inset-inline-start:${pos(v.start)}%"></span>`;
+      });
+      const todayIn = t(todayIso) >= t(startIso) && t(todayIso) <= t(axisEnd);
+      if (todayIn) marks.push(`<span class="po__tl-mark po__tl-today" style="inset-inline-start:${pos(todayIso)}%"></span>`);
+      if (owesReport) {
+        marks.push(`<span class="po__tl-mark po__tl-end" style="inset-inline-start:${pos(endIso)}%"></span>`);
+        marks.push(`<span class="po__tl-mark po__tl-report" style="inset-inline-start:${pos(dueIso)}%"></span>`);
+      }
+      $('[data-po-tl-marks]')!.innerHTML = marks.join('');
+      // Labels: today and the report due date above the track; the window below.
+      const at = (p: number, text: string, cls = '') => {
+        const edge = p < 10 ? ' is-start' : p > 90 ? ' is-end' : '';
+        return `<span class="po__tl-label${edge}${cls}" style="inset-inline-start:${p}%">${esc(text)}</span>`;
+      };
+      $('[data-po-tl-above]')!.innerHTML =
+        (todayIn ? at(pos(todayIso), 'Today', ' po__tl-label--strong') : '') +
+        (owesReport ? at(pos(dueIso), `Report due ${short(dueIso)}`) : '');
+      $('[data-po-tl-below]')!.innerHTML = at(0, start) + at(pos(endIso), end);
+      shown($('[data-po-tl-legend-today]'), todayIn);
+      shown($('[data-po-tl-legend-report]'), owesReport);
+    };
+
+    // Field visits figure: the total, and the next one (or the one under way).
+    const renderVisits = () => {
+      const ahead = visits.filter((v) => daysUntil(v.end) >= 0);
+      const next = ahead[0];
+      const underway = next && daysUntil(next.start) <= 0;
+      $('[data-po-visit-next]')!.textContent = !next
+        ? `All past · last ${visits.at(-1)?.label ?? ''}`
+        : `${underway ? 'Under way' : 'Next'} ${next.label} · ${ahead.length} to go`;
+    };
+
+    const render = (status: string, viewer: Viewer) => {
+      const authorized = AUTHORIZED.includes(status);
+      const [title, next, links] = stageFor(status, viewer);
+      $('[data-po-title]')!.textContent = title;
+      $('[data-po-next]')!.textContent = next;
+      // A delinquent report blocks new applications as PI — don't offer one.
+      const offered = links.filter((l) => !(l === 'apply-new' && renewalBlocked(status, id)));
+      root.querySelectorAll<HTMLElement>('[data-po-link]').forEach((a) => shown(a, offered.includes(a.dataset.poLink!)));
+      shown($('[data-po-links]'), offered.length > 0);
+
+      // Labels: requested until the letter goes out, then authorized.
+      const word = authorized ? 'Authorized' : 'Requested';
+      $('[data-po-label="dates"]')!.textContent = `${word} dates`;
+      $('[data-po-label="specimens"]')!.textContent = `${word} specimens`;
+      renderKeyDates(status, viewer);
+
+      // Parks: one block. Contacts once authorized (and never for the public).
+      const districts = resolveStudyAreas(readStudyAreaModel('study-area-contacts'), id);
+      const total = districts.reduce((n, d) => n + d.parks.length, 0);
+      const people = authorized && viewer !== 'public';
+      $('[data-po-parks-title]')!.textContent = people ? 'Authorized parks and contacts' : `${word} parks`;
+      $('[data-po-parks-list]')!.innerHTML = districtBlocksHtml(districts, { people, maxParks: PARKS_SHOWN });
+      const parksLink = $('[data-po-parks-link]');
+      if (parksLink) parksLink.textContent = `See all ${plural(total, 'park')}`;
+      shown(parksLink, total > PARKS_SHOWN);
+      renderVisits();
+      renderTimeline(status, viewer);
+
+      // Special conditions: final from Out for signature on — a count by owner, in
+      // the reader's order (own district first for district staff; HQ first else).
+      // Before then (and in the public view) the cell keeps its place with a dash.
+      const showConditions = authorized && viewer !== 'public';
+      shown($('[data-po-conditions-link]'), showConditions);
+      if (showConditions) {
+        const applied = loadAppliedConditions();
+        const ownerName = (key: string) => (key === 'hq' ? 'Headquarters' : permitDistricts.find((d) => d.key === key)?.name ?? key);
+        const rows = readerOwnerOrder()
+          .map((key) => ({ name: ownerName(key), n: applied.filter((c) => c.owner === key).length }))
+          .filter((r) => r.n > 0);
+        $('[data-po-conditions-total]')!.textContent = String(applied.length);
+        $('[data-po-conditions-owners]')!.innerHTML = rows.map((r) => `<p>${esc(r.name)} · ${r.n}</p>`).join('');
+      } else {
+        $('[data-po-conditions-total]')!.textContent = '—';
+        $('[data-po-conditions-owners]')!.innerHTML = viewer === 'public' ? '' : '<p>Final once approved</p>';
+      }
+
+      // People — the applicant side only; the responsible analyst is NOT on the
+      // Overview (staff find them in the header and on Internal review). The public
+      // view is about what a permit allows, not who to call. PI and PICOF always;
+      // the submitter before approval (roles one person holds fold into one tile).
+      // The schedule takes the full width when there are no people to show.
+      shown($('[data-po-people]'), viewer !== 'public');
+      $('[data-po-pair]')!.classList.toggle('po__pair--solo', viewer === 'public');
+      root.querySelectorAll<HTMLElement>('[data-po-person]').forEach((tile) => {
+        const phase = tile.dataset.poPerson;
+        shown(tile, viewer !== 'public' && (phase === 'always' || !authorized));
+        const label = tile.querySelector<HTMLElement>('[data-po-person-label]');
+        if (label) label.textContent = (authorized ? label.dataset.after : label.dataset.before) || label.textContent;
+      });
+
+      // Returned: the itemized changes.
+      const todo = $('[data-po-todo]');
+      const list = $('[data-po-todo-list]');
+      const ret = RETURNED.includes(status) ? reviewStore(id).returned() : null;
+      const issues = ret ? reviewStore(id).issues().filter((i) => ret.issueIds.includes(i.id)) : [];
+      shown(todo, issues.length > 0 && viewer !== 'public');
+      $('[data-po-todo-title]')!.textContent = viewer === 'owner' ? 'Needs your action' : 'Changes requested';
+      if (list) {
+        list.replaceChildren(...issues.map((i) => {
+          const item = document.createElement('cds-contained-list-item');
+          const body = document.createElement('div');
+          body.className = 'po__issue';
+          const text = document.createElement('p');
+          text.className = 't-body-01';
+          text.textContent = i.text;
+          const link = document.createElement('cds-link');
+          link.setAttribute('href', `#${i.section}`);
+          link.dataset.poGo = `application#${i.section}`;
+          link.textContent = `Go to ${sectionTitle(i.section) || 'the application'}`;
+          body.append(text, link);
+          item.append(body);
+          return item;
+        }));
+      }
+    };
+
+    // "Go to" — switch the permit page's tab, then scroll to the anchor.
+    root.addEventListener('click', (e) => {
+      const go = (e.target as HTMLElement).closest<HTMLElement>('[data-po-go]');
+      if (!go) return;
+      e.preventDefault();
+      const [tab, anchor] = go.dataset.poGo!.split('#');
+      const tabs = document.getElementById('permit-tabs') as any;
+      if (tabs && tabs.value !== tab) {
+        tabs.value = tab;
+        tabs.dispatchEvent(new CustomEvent('cds-tabs-selected'));
+      }
+      requestAnimationFrame(() => {
+        const target = anchor ? document.getElementById(anchor) : document.getElementById('permit-tabs');
+        target?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+      });
+    });
+
+    // The page passes the live status + viewer class; it may do so before or after
+    // this script runs, so render now if it's set, then listen.
+    const rerender = () => { if (root.dataset.status) render(root.dataset.status, (root.dataset.viewer as Viewer) || 'staff'); };
+    root.addEventListener('permit-overview-render', (e) => {
+      const { status, viewer } = (e as CustomEvent).detail;
+      root.dataset.status = status;
+      root.dataset.viewer = viewer;
+      rerender();
+    });
+    window.addEventListener('permit-status-changed', (e) => {
+      const status = (e as CustomEvent).detail?.status;
+      if (status) root.dataset.status = status;
+      rerender();
+    });
+    window.addEventListener(REPORT_EVENT, rerender);
+    rerender();
+    installEmailCopy();
+  }
+</script>
+
+<style>
+  /* Layout only — every control is a stock cds-* component; look = tokens.
+     Title rule: PANEL titles are heading-03 ("Schedule", "People", "About this
+     research", parks); FIELD labels inside a panel are heading-compact-01 ("Field
+     visits", "Principal investigator", "Permit ends"). The status leads the page
+     at heading-04; figures are heading-05. */
+  .po { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); container-type: inline-size; }
+  .po p, .po h2, .po h3, .po dl, .po ul { margin: 0; }
+  .po__panel-title { margin-block-end: var(--cds-spacing-05, 1rem) !important; }
+  .po__field { color: var(--cds-text-primary, #161616); }
+  .po__sub { color: var(--cds-text-secondary, #525252); margin-block-start: var(--cds-spacing-02, 0.25rem) !important; }
+  .po__go { display: inline-block; margin-block-start: var(--cds-spacing-04, 0.75rem); }
+  .po__nowrap { white-space: nowrap; }
+
+  /* Band 1 — the summary cell beside the figure grid, on ONE layer with 1px
+     dividers (the gap shows the divider colour behind the cells). Stacks below
+     48rem; the figures go three across, two on a narrow column. */
+  .po__band {
+    display: grid; gap: 1px;
+    grid-template-columns: 1fr;
+    background: var(--cds-border-subtle-01, #c6c6c6);
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
+  .po__figures { display: grid; gap: 1px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .po__cell { background: var(--cds-layer-01, #fff); padding: var(--cds-spacing-05, 1rem); min-inline-size: 0; }
+  @container (min-width: 48rem) {
+    .po__band { grid-template-columns: minmax(15rem, 1fr) 3fr; }
+    .po__figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  .po__summary { display: flex; flex-direction: column; }
+  .po__next { margin-block-start: var(--cds-spacing-03, 0.5rem) !important; color: var(--cds-text-secondary, #525252); }
+  .po__value { margin-block-start: var(--cds-spacing-03, 0.5rem) !important; }
+  .po__links { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-05, 1rem); margin-block-start: var(--cds-spacing-05, 1rem); }
+
+  /* Key dates — stacked in the summary cell. Built by the script, so the scoped
+     rules don't reach them: restate with :global. */
+  .po__keydates { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); margin-block-start: var(--cds-spacing-05, 1rem) !important; }
+  .po__keydates :global(dd) { margin: 0; }
+  .po__keydates :global(.po__keydate-value) { margin-block: var(--cds-spacing-02, 0.25rem); }
+  .po__keydates :global(.po__field) { color: var(--cds-text-primary, #161616); }
+  .po__keydates :global(.po__line) { color: var(--cds-text-secondary, #525252); }
+  .po__keydates :global(.po__go) { display: inline-block; margin-top: var(--cds-spacing-03, 0.5rem); }
+  .po__figure :global([data-po-conditions-owners] p) { margin: 0; font: inherit; color: inherit; }
+
+  /* Returned changes. */
+  .po__issue { display: flex; flex-direction: column; gap: var(--cds-spacing-02, 0.25rem); }
+
+  /* Band 2 — schedule (2/3) beside people (1/3); stacked on a narrow column, and
+     the schedule takes the row alone in the public view. */
+  .po__pair { display: grid; gap: var(--cds-spacing-05, 1rem); grid-template-columns: 1fr; }
+  @container (min-width: 48rem) {
+    .po__pair { grid-template-columns: 2fr 1fr; }
+    .po__pair--solo { grid-template-columns: 1fr; }
+  }
+
+  /* People — a list of entries with a rule between them; initials chip beside
+     name, email, phone. */
+  .po__people { padding: 0; list-style: none; }
+  .po__person-row + .po__person-row { border-block-start: 1px solid var(--cds-border-subtle-01, #c6c6c6); margin-block-start: var(--cds-spacing-05, 1rem); padding-block-start: var(--cds-spacing-05, 1rem); }
+  .po__person { display: flex; align-items: flex-start; gap: var(--cds-spacing-04, 0.75rem); margin-block-start: var(--cds-spacing-03, 0.5rem); }
+  .po__person-details { min-inline-size: 0; display: flex; flex-direction: column; gap: var(--cds-spacing-02, 0.25rem); }
+  .po__email { display: flex; align-items: center; gap: var(--cds-spacing-02, 0.25rem); min-inline-size: 0; overflow-wrap: anywhere; }
+
+  /* The opening of the project's purpose — the full text is on the Application tab. */
+  .po__abstract {
+    max-inline-size: 48rem;
+    display: -webkit-box; -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+  }
+
+  /* Schedule — the timeline strip. */
+  .po__tl { margin-block: var(--cds-spacing-04, 0.75rem) var(--cds-spacing-05, 1rem); }
+  .po__tl-track {
+    position: relative;
+    block-size: 0.5rem;
+    background: var(--cds-layer-accent-01, #e0e0e0);
+  }
+  .po__tl-fill { position: absolute; inset-block: 0; inset-inline-start: 0; background: var(--cds-interactive, #0f62fe); }
+  .po__tl-labels { position: relative; block-size: 1.25rem; color: var(--cds-text-secondary, #525252); }
+  .po__tl-labels--above { margin-block-end: var(--cds-spacing-02, 0.25rem); }
+  .po__tl-labels:not(.po__tl-labels--above) { margin-block-start: var(--cds-spacing-03, 0.5rem); }
+  .po__tl :global(.po__tl-label) {
+    position: absolute; inset-block-start: 0; transform: translateX(-50%);
+    white-space: nowrap; font-size: var(--cds-label-01-font-size, 0.75rem); line-height: 1.25rem;
+  }
+  .po__tl :global(.po__tl-label.is-start) { transform: none; }
+  .po__tl :global(.po__tl-label.is-end) { transform: translateX(-100%); }
+  .po__tl :global(.po__tl-label--strong) { color: var(--cds-text-primary, #161616); font-weight: 600; }
+  /* Markers sit centred on their date. Shape carries meaning, not colour alone:
+     dots = field visits (hollow = upcoming, filled = past, large = next), a bar =
+     today, a diamond = annual report due, a tick = the window's end. */
+  .po__tl :global(.po__tl-mark) { position: absolute; inset-block-start: 50%; transform: translate(-50%, -50%); }
+  .po__tl :global(.po__tl-visit),
+  .po__tl-legend .po__tl-visit {
+    inline-size: 0.625rem; block-size: 0.625rem; border-radius: 50%;
+    background: var(--cds-layer-01, #fff); border: 2px solid var(--cds-icon-secondary, #525252);
+  }
+  .po__tl :global(.po__tl-visit--past),
+  .po__tl-legend .po__tl-visit--past { background: var(--cds-icon-secondary, #525252); }
+  .po__tl :global(.po__tl-visit--next),
+  .po__tl-legend .po__tl-visit--next {
+    inline-size: 0.875rem; block-size: 0.875rem;
+    background: var(--cds-interactive, #0f62fe); border-color: var(--cds-interactive, #0f62fe);
+  }
+  .po__tl :global(.po__tl-today) { inline-size: 2px; block-size: 1.5rem; background: var(--cds-text-primary, #161616); }
+  .po__tl :global(.po__tl-end) { inline-size: 2px; block-size: 1rem; background: var(--cds-icon-secondary, #525252); }
+  .po__tl :global(.po__tl-report),
+  .po__tl-legend .po__tl-report {
+    inline-size: 0.75rem; block-size: 0.75rem;
+    background: var(--cds-layer-01, #fff); border: 2px solid var(--cds-text-primary, #161616);
+  }
+  .po__tl :global(.po__tl-report) { transform: translate(-50%, -50%) rotate(45deg); }
+  .po__tl-legend .po__tl-report { transform: rotate(45deg); }
+  .po__tl-legend {
+    display: flex; flex-wrap: wrap; gap: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem);
+    margin: 0; padding: 0; list-style: none; color: var(--cds-text-secondary, #525252);
+  }
+  .po__tl-legend li { display: inline-flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); }
+  .po__tl-key { display: inline-block; flex: none; }
+  .po__tl-today-key { inline-size: 2px; block-size: 0.875rem; background: var(--cds-text-primary, #161616); }
+
+  .po__panel .sad-list { margin-top: var(--cds-spacing-03, 0.5rem); }
+</style>

@@ -26,7 +26,6 @@ const { items, countNoun = 'items' } = Astro.props;
 ---
 
 <nav class="toc" aria-label="On this page" data-record-toc>
-  <p class="toc__label t-label-01">On this page</p>
   <ul class="toc__list">
     {items.map((it) => (
       <li data-toc-item={it.id}>
@@ -95,20 +94,21 @@ const { items, countNoun = 'items' } = Astro.props;
 </script>
 
 <style>
-  .toc__label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
-  .toc__list { list-style: none; margin: 0; padding: 0; border-inline-start: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
+  /* Carbon's on-page contents (carbondesignsystem.com's right rail): a gray track,
+     the current section marked by a blue bar of the same width over it. */
+  .toc__list { list-style: none; margin: 0; padding: 0; border-inline-start: 3px solid var(--cds-border-subtle-01, #e0e0e0); }
   .toc__link {
     display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem);
-    min-block-size: 2rem;
-    padding: var(--cds-spacing-02, 0.25rem) var(--cds-spacing-05, 1rem);
-    margin-inline-start: -1px;
-    border-inline-start: 2px solid transparent;
+    min-block-size: 2.25rem;
+    padding: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem) var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem);
+    margin-inline-start: -3px;
+    border-inline-start: 3px solid transparent;
     color: var(--cds-text-secondary, #525252);
     text-decoration: none;
   }
-  .toc__link:hover { color: var(--cds-text-primary, #161616); background: var(--cds-layer-hover-01, #e8e8e8); }
+  .toc__link:hover { color: var(--cds-text-primary, #161616); }
   .toc__link:focus-visible { outline: 2px solid var(--cds-focus, #0f62fe); outline-offset: -2px; }
-  /* Current section — Carbon's selected-nav treatment: weight + interactive edge. */
+  /* Current section: weight + the interactive bar. */
   .toc__link[aria-current] {
     color: var(--cds-text-primary, #161616);
     font-weight: 600;
@@ -117,6 +117,6 @@ const { items, countNoun = 'items' } = Astro.props;
   .toc__count { color: var(--cds-text-secondary, #525252); font-weight: 400; }
   .toc__flag { display: inline-flex; align-items: center; gap: 0.125rem; color: var(--cds-text-primary, #161616); font-weight: 400; }
   @media (prefers-reduced-motion: no-preference) {
-    .toc__link { transition: background-color 110ms, color 110ms; }
+    .toc__link { transition: color 110ms, border-color 110ms; }
   }
 </style>

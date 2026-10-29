@@ -1,0 +1,155 @@
+---
+// Application history — the permit's ONE progress tracker (the Overview's stage
+// card says where it is and what's next; this shows the whole journey, dated).
+// Phases (Presubmittal, In review, Signature, Active permit), each a vertical
+// cds-progress-indicator.
+//
+// Status-driven: every step server-renders without a state; the script derives
+// complete / current / invalid from the permit's LIVE status, so the history can't
+// disagree with the header. Dates come from stored records where one exists
+// (return, rejection, signed letter, report upload, withdrawal), else the step's
+// demo date once complete. Staff see the review team's internal steps; the owner
+// and the public don't — when the current step is internal, the next visible one
+// is current instead. Branch steps (returned, withdrawn, on hold) appear only when
+// they happened; a rejected or withdrawn application drops the later phases, and
+// phases not yet started fold into one "Next: …" line.
+//
+// Each step ships state="incomplete" so the indicator treats it as EXPLICIT —
+// otherwise cds-progress-indicator marks the first step of every phase current.
+//
+// The page passes the viewer class on <html data-permit-viewer> and fires
+// `permit-viewer` on window; status changes arrive as `permit-status-changed`.
+import { permit } from '../data/permit';
+---
+
+<div class="history" data-application-history data-permit-id={permit.id}>
+  {permit.overview.history.map((phase) => (
+    <div class="phase" data-history-phase={phase.phase}>
+      <h3 class="phase__title t-heading-01">{phase.phase}</h3>
+      <cds-progress-indicator vertical>
+        {phase.steps.map((s) => (
+          <cds-progress-step
+            state="incomplete"
+            label={s.label}
+            data-step={s.key}
+            data-date={s.date}
+            data-internal={s.internal ? '' : undefined}
+            data-when={s.when}
+          ></cds-progress-step>
+        ))}
+      </cds-progress-indicator>
+    </div>
+  ))}
+  <!-- Phases that haven't started fold into one line, so the rail shows what has
+       happened plus where the permit is — and grows as it moves along. -->
+  <p class="history__next t-body-compact-01" data-history-next style="display:none"></p>
+</div>
+
+<script>
+  import { reviewStore } from '../lib/review-thread';
+  import { reportState, latestUpload, REPORT_EVENT } from '../lib/final-report';
+
+  const root = document.querySelector<HTMLElement>('[data-application-history]');
+  if (root) {
+    const id = root.dataset.permitId!;
+    const read = <T,>(k: string): T | null => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } };
+    const liveStatus = () =>
+      localStorage.getItem(`permit-status-${id}`) || document.getElementById('permit-banner')?.dataset.status || 'Under review';
+
+    // The step the permit is AT for each status (everything before it is done).
+    const CURRENT: Record<string, string> = {
+      'Draft': 'started',
+      'Waiting for review': 'ra-review',
+      'Under review': 'sa-review',
+      'Returned to submitter': 'returned',
+      'Changes requested': 'returned',
+      'Out for signature': 'signed-letter',
+      'Waiting for annual report': 'hold',
+      'Active': 'active',
+      'Expired': 'report',
+      'Rejected': 'decision',
+      'Withdrawn': 'withdrawn',
+    };
+    // Steps that are a state you're IN (dated when reached), not a task pending.
+    const REACHED_WHEN_CURRENT = new Set(['returned', 'withdrawn', 'hold', 'active']);
+
+    const render = () => {
+      const status = liveStatus();
+      const staff = (document.documentElement.dataset.permitViewer || 'staff') === 'staff';
+      const ret = reviewStore(id).returned();
+      const rejected = status === 'Rejected' ? reviewStore(id).rejected() : null;
+      const report = reportState(status, id);
+      const happened: Record<string, boolean> = {
+        returned: !!ret || status === 'Returned to submitter' || status === 'Changes requested',
+        withdrawn: status === 'Withdrawn',
+        hold: status === 'Waiting for annual report',
+      };
+      // Record dates beat demo dates.
+      const recorded: Record<string, string | undefined> = {
+        returned: ret?.at,
+        decision: rejected?.at,
+        // A replaced letter keeps its original upload (the activation) date.
+        'signed-letter': ((l) => l?.previous?.[0]?.at ?? l?.at)(read<{ at: string; previous?: { at: string }[] }>(`permit-signed-letter-${id}`)),
+        report: report === 'submitted' ? latestUpload(id)?.at : undefined,
+        withdrawn: read<{ at: string }>(`permit-withdrawn-${id}`)?.at,
+      };
+
+      const steps = [...root.querySelectorAll<HTMLElement>('cds-progress-step')];
+      const visible = (s: HTMLElement) =>
+        (staff || !('internal' in s.dataset)) && (!s.dataset.when || happened[s.dataset.when]);
+      // Rejected / withdrawn end the journey: nothing after that step.
+      const endsAt = status === 'Rejected' ? 'decision' : status === 'Withdrawn' ? 'withdrawn' : null;
+      const endIdx = endsAt ? steps.findIndex((s) => s.dataset.step === endsAt) : steps.length;
+      // A withdrawn application never reached a decision.
+      const shown = steps.map((s, i) => visible(s) && i <= endIdx && !(status === 'Withdrawn' && s.dataset.step === 'decision'));
+
+      // Current = the status's step, or the next visible one if that's hidden.
+      let at = steps.findIndex((s) => s.dataset.step === CURRENT[status]);
+      while (at >= 0 && at < steps.length && !shown[at]) at++;
+      // Expired with the report in → the whole journey is complete.
+      const allDone = status === 'Expired' && report === 'submitted';
+      const invalid = status === 'Rejected' || status === 'Withdrawn' || (status === 'Expired' && report === 'delinquent');
+
+      steps.forEach((s, i) => {
+        s.style.display = shown[i] ? '' : 'none';
+        const done = allDone || i < at;
+        const current = !allDone && i === at;
+        const key = s.dataset.step!;
+        s.toggleAttribute('complete', done);
+        s.toggleAttribute('current', current && !invalid);
+        s.toggleAttribute('invalid', current && invalid);
+        const dated = done || (current && (REACHED_WHEN_CURRENT.has(key) || invalid));
+        const date = dated ? recorded[key] ?? s.dataset.date ?? '' : '';
+        const note = key === 'decision' && done ? 'Approved'
+          : key === 'decision' && status === 'Rejected' ? 'Not approved'
+          : key === 'returned' && done && ret?.resubmittedAt ? `Resubmitted ${ret.resubmittedAt}`
+          : key === 'report' && current && report === 'delinquent' ? 'Overdue' : '';
+        s.setAttribute('secondary-label-text', [note, date].filter(Boolean).join(' · '));
+      });
+      // A phase with nothing to show goes; one that hasn't started folds into the
+      // "Next:" line.
+      const upcoming: string[] = [];
+      root.querySelectorAll<HTMLElement>('[data-history-phase]').forEach((phase) => {
+        const visibleSteps = [...phase.querySelectorAll<HTMLElement>('cds-progress-step')].filter((s) => s.style.display !== 'none');
+        const started = visibleSteps.some((s) => s.hasAttribute('complete') || s.hasAttribute('current') || s.hasAttribute('invalid'));
+        if (visibleSteps.length && !started) upcoming.push(phase.dataset.historyPhase!);
+        phase.style.display = visibleSteps.length && started ? '' : 'none';
+      });
+      const nextLine = root.querySelector<HTMLElement>('[data-history-next]')!;
+      nextLine.textContent = upcoming.length ? `Next: ${upcoming.join(' · ')}` : '';
+      nextLine.style.display = upcoming.length ? '' : 'none';
+    };
+
+    window.addEventListener('permit-viewer', render);
+    window.addEventListener('permit-status-changed', render);
+    window.addEventListener(REPORT_EVENT, render);
+    render();
+  }
+</script>
+
+<style>
+  /* Layout/spacing only; the step rail, dots, and states are Carbon's. */
+  .history { display: flex; flex-direction: column; gap: 1.75rem; }
+  .phase__title { margin: 0 0 0.75rem; }
+  .history__next { margin: 0; color: var(--cds-text-secondary, #525252); }
+</style>

@@ -21,9 +21,14 @@ or permit. Written against the current prototype, with these decisions from the
   set automatically once the report is overdue; the Responsible Agent or a System
   Admin can lift its renewal block. The renewal pre-activation hold remains
   **Waiting for annual report**.
-- **The Overview tab is TBD (work in progress)** and is not described in these
-  stories. Anything that will surface there (stage summary, report notices,
-  lift/restore controls) is noted as "placement TBD".
+- **The Overview tab is one shared summary** (2026-10-28 grilling): the same
+  blocks for staff, the researcher owner, and the public, with the internal
+  material moved to a staff-only **Internal review** tab — Stories 10 and 11.
+- **Documents read in place, at full width** (2026-10-28): the annual report's
+  current version is rendered inline (Story 6), and the letter and report fill the
+  tab's content width. Only a **System Admin** can replace the signed letter after
+  signature (Story 5). Section rails sit to the right, in Carbon's on-page
+  contents style (Stories 3 and 4).
 
 Related: the
 authorized-parks table in [`stories-study-areas-contacts-table.md`](stories-study-areas-contacts-table.md);
@@ -33,7 +38,7 @@ regulated email copy in [`email-copy-notifications.md`](email-copy-notifications
 
 | # | Story |
 |---|---|
-| 1 | Restructure the permit detail page into five record tabs |
+| 1 | Restructure the permit detail page into record tabs |
 | 2 | Show status- and permit-role-driven actions in the permit header |
 | 3 | Present the full application as one read-only scroll with a contents rail |
 | 4 | Group special conditions by owner with a contents rail |
@@ -42,13 +47,15 @@ regulated email copy in [`email-copy-notifications.md`](email-copy-notifications
 | 7 | Flag overdue annual reports as Delinquent and block the PI's renewals |
 | 8 | Show a PII-free public view of issued permits |
 | 9 | Show permit alerts in one stack under the header |
+| 10 | Show one shared Overview of the permit's stage and key facts |
+| 11 | Move internal review work to a staff-only Internal review tab |
 
 ---
 
-## Story 1 — Restructure the permit detail page into five record tabs
+## Story 1 — Restructure the permit detail page into record tabs
 
 **Story Title**
-Restructure the permit detail page into five record tabs
+Restructure the permit detail page into record tabs
 
 ---
 
@@ -64,15 +71,15 @@ apply yet.
 The previous six section tabs (Overview, Project information, Study areas, Special
 conditions, Data collection, Additional documents) collapse into **Overview** and
 one **Application** scroll (Story 3). Two later-stage documents get their own
-gated tabs. The detail page is **read-only**: every edit happens in the review
+gated tabs, and the review team's workspace gets a staff-only tab (Story 11). The detail page is **read-only**: every edit happens in the review
 wizard, reached by **Start review** / **Open review** (Story 2).
 
 **Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
 Reviewer, District Assistant Technical Reviewer, Researcher (owner: submitter, PI,
 or PICOF), public viewer (see Story 8).
 
-**Out of scope:** The content of each tab — see Stories 3–8. The **Overview** tab's
-content (TBD, work in progress). The review wizard (`final-letter.astro`) itself.
+**Out of scope:** The content of each tab — see Stories 3–8, 10 (Overview), and 11
+(Internal review). The review wizard (`final-letter.astro`) itself.
 
 ---
 
@@ -80,7 +87,7 @@ content (TBD, work in progress). The review wizard (`final-letter.astro`) itself
 
 **UI & field details**
 - The tab strip shows, in order: "Overview", "Application", "Special conditions",
-  "Final permit letter", "Annual report".
+  "Final permit letter", "Annual report", "Internal review".
 - "Overview" is the selected tab when the page loads.
 - The tab strip stays pinned below the header as the page scrolls.
 - No tab contains Edit, Save, or inline-editing controls.
@@ -90,6 +97,8 @@ content (TBD, work in progress). The review wizard (`final-letter.astro`) itself
   Waiting for annual report, Active, or Expired.
 - "Annual report" appears only when the permit's status is Active or Expired.
 - Neither "Final permit letter" nor "Annual report" appears in the public view.
+- "Internal review" appears only to System Admin, HQ Technical Reviewer, District
+  Lead Technical Reviewer, and District Assistant Technical Reviewer (Story 11).
 - "Special conditions" is hidden from a Researcher (owner) until the status is Out
   for signature, Waiting for annual report, Active, or Expired; draft conditions
   stay internal.
@@ -99,15 +108,15 @@ content (TBD, work in progress). The review wizard (`final-letter.astro`) itself
   without a reload.
 - If the open tab is hidden by a status change, the page switches to "Overview".
 - A link ending in the tab's name opens that tab directly: `#application`,
-  `#special-conditions`, `#letter`, `#report` (`?tab=<name>` works too). The
+  `#special-conditions`, `#letter`, `#report`, `#internal` (`?tab=<name>` works too). The
   address bar follows the open tab, so the URL can be copied and shared. A link
   to a tab the viewer can't see opens "Overview".
 
 **Edge cases & constraints**
 - A Researcher who is not an owner of a permit in a non-public status is
   redirected to My permits (or to Search if logged out).
-- A Researcher who owns a **Withdrawn** application has no access to it: they
-  are redirected to My permits, like any non-owner.
+- A Researcher who owns a **Withdrawn** application can open it read-only; the
+  Overview leads with the withdrawal (Story 10).
 
 ---
 
@@ -344,8 +353,11 @@ contact rules — see `stories-study-areas-contacts-table.md`. The calendar — 
 **UI & field details**
 - The tab shows, in order: "Project information", "Research team", "Schedule",
   "Authorized parks", "Data collection", "Additional documentation".
-- A contents rail on the left lists the same six sections; each entry shows that
-  section's compliance-flag count when it has any.
+- A contents rail to the right of the sections lists the same six sections; each
+  entry shows that section's compliance-flag count when it has any.
+- The rail follows Carbon's on-page contents pattern: no visible heading (it is
+  announced as "On this page"), a gray track, and the section in view marked by a
+  blue bar and bold text.
 - Selecting a rail entry scrolls to that section; the rail stays pinned and
   highlights the section in view.
 - The rail is hidden at small and medium breakpoints; the sections remain in order.
@@ -403,7 +415,9 @@ conditions inside the final letter (HQ first).
 **UI & field details**
 - Conditions appear in one panel titled "Special conditions", grouped under a
   heading per owner: "Headquarters" and each of the permit's districts.
-- A contents rail lists one entry per owner group with its condition count.
+- A contents rail to the right of the panel lists one entry per owner group with
+  its condition count. It looks and behaves like the Application tab's rail
+  (Story 3).
 - Owners with no conditions are left out of both the rail and the panel; if no
   owner has conditions, the rail is hidden.
 - **Reviewer order:** the reviewer's own district first, then Headquarters, then
@@ -465,6 +479,9 @@ see Open questions.
 **Access & permissions**
 - Only the Responsible Agent or a System Admin can upload the signed letter, and
   only while the status is Out for signature.
+- After signature (Active, Waiting for annual report, Expired), only a System
+  Admin can replace the signed letter, or upload one if none is on file. The
+  Responsible Agent cannot.
 - Every other user who can see the "Final permit letter" tab can view and
   download the letters but sees no upload control.
 
@@ -487,6 +504,23 @@ see Open questions.
   the generated letter stays below it as "Unsigned letter" with "Download
   letter".
 
+**Admin replace (after signature)**
+- On the "Final permit letter" tab, the "Signed letter" section shows "Replace
+  signed letter" beside "Download signed letter" for a System Admin.
+- It opens the signed-letter upload titled "Replace signed letter": "Replaces
+  {file name}. The permit's status doesn't change." The confirm button is
+  "Replace letter".
+- With no signed letter on file, the section reads "No signed letter on file." and
+  the button is "Upload signed letter"; the dialog reads "The permit's status
+  doesn't change." with the confirm button "Upload".
+- On confirm, the new file becomes the signed letter, with the admin as uploader
+  and today's date. A toast confirms "Signed letter replaced" (or "Signed letter
+  uploaded") — "The permit's status didn't change."
+- The replaced file stays on the record. The section shows it as "Replaced":
+  "{file name} · uploaded {date} by {name}".
+- The status never changes and no email is sent. "Application history" keeps the
+  original upload date for "Signed letter uploaded".
+
 **Notifications**
 - Moving to Active sends **EM-C — Permit issued / active** to the Researcher, PI,
   and PICOF.
@@ -494,8 +528,9 @@ see Open questions.
   instead.
 
 **Edge cases & constraints**
-- Only one signed letter can be on file. Uploading again before activation
-  replaces the file; after activation, uploads are not offered.
+- Only one signed letter is current. Uploading again before activation replaces
+  the file; after activation, only a System Admin can replace it (see Admin
+  replace).
 - Only PDF files are accepted; any other type shows an inline error and the
   status doesn't change.
 - The system doesn't check the file for signatures.
@@ -504,6 +539,10 @@ see Open questions.
 - The signed permit letter appears on: the "Final permit letter" tab; Uploaded
   Files; and the Permits index grid's permit document column.
 - The signed letter is never shown in the public view.
+
+**Layout**
+- The generated letter fills the tab's full content width, in line with the
+  tabs.
 
 ---
 
@@ -523,6 +562,11 @@ visibility across surfaces** into its own ticket.
   annual report → status Waiting for annual report; EM-H received, no EM-C.
 - **Test 3 — Not RA:** As a Supporting Agent on an Out for signature permit,
   confirm no upload control on the header or tab.
+- **Test 4 — Admin replace:** As a System Admin on an Active permit, select
+  "Replace signed letter" and upload a PDF → the new file is the signed letter,
+  the old one shows under "Replaced", the status stays Active, and "Signed letter
+  uploaded" in Application history keeps the original date. As the RA, an HQ
+  Technical Reviewer, or the Researcher, confirm no "Replace signed letter".
 
 ---
 
@@ -531,8 +575,10 @@ visibility across surfaces** into its own ticket.
   retired, along with emails EM-A and EM-B?
 - [ ] Should the Researcher, PI, and PICOF get the signed letter as an email
   attachment, or only a link to the permit?
-- [ ] Can a System Admin replace a signed letter after activation (e.g. wrong file
-  uploaded)? If so, what is logged?
+- [x] ~~Can a System Admin replace a signed letter after activation?~~ Yes — see
+  Admin replace. The replaced file is kept on the record.
+- [ ] Should a replace notify anyone (the Responsible Agent, or the Researcher,
+  PI, and PICOF)? The prototype sends no email.
 - [ ] Is there a file size limit for the signed letter?
 
 ---
@@ -588,6 +634,15 @@ Reviewer, District Assistant Technical Reviewer (read).
 - The "Versions" table lists every version, newest first, with "Version", "File",
   "Uploaded by", "Date", and "Status" ("Complete", "Changes requested", or
   "Replaced" for earlier versions), and a "Download" action.
+- Once a version is on file, a "Report" section shows the current version in the
+  inline document viewer, the same one the application's documents use, so no one
+  has to download it to read it. It sits above the upload area and the versions
+  table and fills the tab's full content width.
+- The viewer's picker lists every version, newest first ("Version {n} (current)",
+  then "Version {n-1}", …). Picking one shows it; the file name, uploader, and date
+  show beside the picker, with an "Open" link.
+- After an upload, a send-back, or a removal, the viewer shows the new current
+  version.
 
 **State & status transitions**
 - **Send back:** the Responsible Agent selects "Request changes" on the report and
@@ -629,7 +684,8 @@ Reviewer, District Assistant Technical Reviewer (read).
 - The newest remaining version is always the one under review.
 
 **Document visibility**
-- Uploaded reports appear on the "Annual report" tab and in Uploaded Files.
+- Uploaded reports appear on the "Annual report" tab (shown in the viewer and
+  listed in Versions) and in Uploaded Files.
 - They never appear in the public view.
 
 ---
@@ -654,6 +710,12 @@ Agent's send-back** into its own ticket.
 - **Test 4 — Remove:** As the RA, remove version 2 → version 1 becomes current;
   remove version 1 → report due again.
 - **Test 5 — Wrong status:** On an Under review permit, confirm no upload control.
+- **Test 6 — Read in place:** Upload a version → the "Report" section shows it
+  without downloading; upload another → the viewer switches to it, and picking
+  "Version 1" shows the earlier file.
+- **Prototype note:** the prototype stores only file names. A file uploaded in the
+  current session shows itself until reload; otherwise the sample report
+  (`public/docs/annual-report-26-635-017.pdf`, invented) stands in.
 
 ---
 
@@ -807,15 +869,18 @@ or internal information.
   Review content, the "Final permit letter" and "Annual report" tabs, the special
   conditions, and the signed permit PDF.
 
+- The Overview (Story 10) shows the public its stage, dates, parks, and
+  collection, without the "Responsible analyst" tile, on-site contacts, the
+  annual report line, or the "Special conditions" tile.
+
 **Edge cases & constraints**
 - The Delinquent label is not shown in the public view.
 
 ---
 
 **Open questions**
-- [ ] The "Authorized parks" table lists district and park contacts by name.
-  Should those staff contacts be hidden in the public view like other person
-  names?
+- [ ] The Overview hides the on-site contacts from the public (Story 10). Should
+  the Application tab's "Authorized parks" section hide them too?
 
 ---
 
@@ -847,8 +912,8 @@ Reviewer, District Assistant Technical Reviewer (permit-roles: Responsible Agent
 Supporting Agent, Not assigned), Researcher (owner: submitter, PI, PICOF), public
 viewer.
 
-**Out of scope:** The Overview tab (TBD, work in progress). Transient action
-confirmations, which stay toasts. Email notifications for any alert.
+**Out of scope:** The Overview tab (Story 10), which never repeats an alert.
+Transient action confirmations, which stay toasts. Email notifications for any alert.
 
 ---
 
@@ -922,3 +987,282 @@ as their own tickets.
 - [ ] Is a cap of two visible alerts right, or should errors always show?
 - [ ] Should the Delinquent label in the header be replaced by the overdue alert,
   or kept alongside it?
+
+---
+
+## Story 10 — Show one shared Overview of the permit's stage and key facts
+
+**Story Title**
+Show one shared Overview of the permit's stage and key facts
+
+---
+
+**Description**
+
+As a Researcher who owns the permit, a reviewer (HQ Technical Reviewer, District
+Lead Technical Reviewer, District Assistant Technical Reviewer, System Admin), or a
+public viewer,
+I want the first tab to tell me where the permit stands and what it asks for or
+allows — where, when, and who to contact — on one screen,
+So that I don't have to read the whole application to get my bearings, and staff
+and researchers describe the permit the same way.
+
+The Overview is for orientation only. It **never repeats** the header (status, tags,
+the one action button — Story 2) or the alert stack (Story 9); it adds detail to
+them (a countdown, the analyst's email). Everything clickable is a **link** that
+moves around the page; actions stay in the header. Every viewer sees the **same
+blocks in the same order**; only the wording changes. Values read **requested**
+before a decision and **authorized** from Out for signature on.
+
+**Roles affected:** Researcher (owner: submitter, PI, PICOF), System Admin, HQ
+Technical Reviewer, District Lead Technical Reviewer, District Assistant Technical
+Reviewer (any permit-role), logged-out visitor and non-owner Researcher (public
+view, Story 8).
+
+**Out of scope:** Internal review material — Story 11. The screening flags (Soil
+disturbance, Beyond simple use, Additional permit required) stay header tags only.
+Request amendment stays in the header's Active menu (Story 2) and the ending-soon
+alert (Story 9). Recording who withdrew an application and when.
+
+---
+
+**Acceptance Criteria**
+
+**UI & field details**
+- The Overview shows, in order: the summary band, a "Needs your action" / "Changes
+  requested" list (returned applications only), Schedule beside People, "About
+  this research", and the parks (see Layout below). "Application history" sits in
+  the side rail (Story 11 moves the Analysis team out).
+- The summary cell has the status and one "what happens next" line — no tracker. The
+  permit's progress is shown once, in "Application history".
+- "Application history" is the one progress tracker, in four phases: Presubmittal
+  ("Application started", "Application signed", "Application submitted"), In review
+  ("Responsible agent review completed" and "Supporting agents review completed" —
+  staff only — "Returned for changes", "Application withdrawn", "Decision reached"),
+  Signature ("Signed letter uploaded", "On hold for the previous annual report"),
+  and Active permit ("Permit active", "Permit expired", "Annual report uploaded").
+- The live status sets each step: steps before the current one are complete and
+  dated, the current step is highlighted, later steps are pending. When the current
+  step is staff only, the owner and the public see the next step as current.
+- Phases that haven't started fold into one line, "Next: {phase} · {phase}", so the
+  rail shows what has happened plus the current phase.
+- Branch steps appear only when they happened ("Returned for changes" once returned,
+  "Application withdrawn", "On hold…" while held). "Decision reached" reads
+  "Approved" or "Not approved" with its date. A rejected or withdrawn application
+  ends at that step, marked invalid, and drops the later phases. An overdue annual
+  report marks "Annual report uploaded" invalid with "Overdue".
+- The stage card's title is the **status**, exactly as the header shows it
+  ("Active", "Under review", …). The line under it says what comes next (owner /
+  staff and public):
+
+  | Status | Owner | Staff (public where it differs) |
+  |---|---|---|
+  | Draft | "Next: submit your application to start the review." | "Next: the researcher submits the application." |
+  | Waiting for review | "Next: the review team starts the review." | same |
+  | Under review | "Next: a decision. You'll get an email when it's made." | "Next: a decision, once the review team is done." |
+  | Returned to submitter | "Next: make the changes below, then resubmit your application." | "Next: the researcher makes the changes and resubmits." |
+  | Out for signature | "Next: the signed letter makes your permit active. Read the letter and its special conditions now." | "Next: the signed letter is uploaded and the permit becomes active." |
+  | Waiting for annual report | "Next: it becomes active once your previous permit's annual report is in." | "Next: it becomes active once the previous permit's annual report is in." |
+  | Active | "Next: the permit ends {end}. The annual report is due {due}." | same (public: "Next: the permit ends {end}.") |
+  | Expired | "Next: upload your annual report by {due}." · overdue: "The annual report was due {due}." · uploaded: "Nothing left to do — the annual report is in." | "Next: the researcher uploads the annual report by {due}." (same overdue / uploaded lines; public: "It ran {start} – {end}.") |
+  | Rejected | the rejection reason | same |
+  | Withdrawn | "Withdrawn before a decision. It won't be reviewed." | same |
+
+- **Key dates** — from Out for signature on, the stage card shows the deadlines as
+  figures under the status instead of a sentence: Out for signature / Waiting for
+  annual report — "Starts" ({start}, "In {n} days") and "Ends"; Active — "Permit
+  ends" ({end}, "{n} days left") and "Annual report due" ({due}, "{n} days left");
+  Expired — "Ended" and "Annual report due" ({due}, "{n} days left", or an
+  "Overdue" status indicator once past due), or "Annual report" "Uploaded {date}"
+  once in. "Changes requested" shows under the report date when it was sent back.
+  The report figure links to "Go to the annual report". On Active and Expired the
+  "Next: …" line is hidden — the figures say it. The public view shows only the
+  permit's dates, never the report. The timeline's text no longer repeats the
+  countdown or the report line.
+- Stage links (owner only, all links, never buttons): "Continue your application"
+  (Draft), "Read the permit letter" (Out for signature; staff too), "Apply again"
+  (Rejected), "Apply for a new permit" (Expired, hidden while the PI's renewals are
+  blocked — Story 7).
+- Labels say **Requested** before Out for signature and **Authorized** from it on
+  (dates, specimens, parks). The full special-conditions text stays on its tab.
+- **Layout (Carbon dashboard pattern):**
+  1. A **band** on one surface with 1px dividers: the **summary** cell (the status,
+     then the "Next: …" line or the key dates, and the stage links) beside a grid of
+     **six figures** that never move — "Requested dates" / "Authorized dates" (the
+     exact start and end dates — every permit runs one year, so no duration), "Field visits" (the total; "Next {date}
+     · {n} to go", "Under way …", or "All past · last {date}"; "See the schedule"),
+     "Special conditions" (the count and a per-owner breakdown once authorized,
+     "Read the conditions"; before that "—" with "Final once approved"; the public
+     sees "—"), "Requested specimens" / "Authorized specimens" ("See specimens"),
+     "Species" (the same word as the Application tab's specimens table), and "Research team" (the PI, the PICOF, and the participants, one
+     person counted once — "PI and {n} participants"). Three figures across, two on
+     a narrow column; the summary stacks above them below ~48rem.
+  2. **Schedule** (the timeline) beside **People**: "Principal investigator",
+     "PICOF (in direct charge of field work)", and "Submitter" before Out for
+     signature, each with an initials chip, name, email + copy, and phone; one
+     person holding two roles is one entry with both labels. The public view has no
+     People panel and the Schedule takes the full width.
+  3. **About this research** — the first three lines of the purpose and "Read the
+     full project description".
+  4. The **parks** block.
+  There is no parks figure: the parks appear once, in their own block.
+- **Titles:** panel titles ("Schedule", "People", "About this research", the parks
+  block) share one size; field labels inside panels and cells ("Field visits",
+  "Principal investigator", "Permit ends") share a smaller one. The status leads at
+  the largest size; figures are large numbers.
+- The **timeline** (the Schedule panel) is a strip that spans the permit window —
+  extended to the annual report's due date on Active and Expired permits (not in the
+  public view) — and marks: the elapsed share (filled, Active and Expired only), each
+  field visit (hollow = upcoming, filled = past, large blue = next), today (a bar,
+  labelled "Today"), the window's end (a tick), and the report due date (a diamond,
+  "Report due {date}"). A legend names each shape; meaning never rests on colour
+  alone. The strip is decorative for screen readers — the text above it carries the
+  same facts. Links: "See the schedule", and "Go to the annual report" once owed.
+- The parks appear **once**, never also as a tile, in the **same district blocks** as
+  the Application tab's Authorized parks (district, park count, its parks), capped at
+  5 parks with "See all {n} parks". Both surfaces render from one shared component,
+  so they match. Before Out for signature the block is "Requested parks", park names
+  only (contacts aren't final until the letter is). From Out for signature on it is
+  "Authorized parks and contacts" and adds each district's contacts and each park's
+  own contact (initials, email + copy, phone).
+- On a phone, tiles stack in the order above; on wider screens they sit up to three
+  to a row. No tile changes size or layout between states.
+
+**Access & permissions**
+- Every viewer who can open the permit sees the Overview, and it is the tab every
+  viewer lands on.
+- The **responsible analyst is not on the Overview** for any viewer — no tile, no
+  name, no mention in the stage copy. Staff find them in the header's "Responsible
+  analyst" fact and on Internal review (Story 11). They are **never disclosed to a
+  Researcher** (owner) or the public: the header hides that fact for them.
+- The public view also hides every person tile (principal investigator, submitter,
+  PICOF), the annual report line, the
+  "Special conditions" tile, and the returned-changes list; its parks section is
+  titled "Authorized parks" and never shows contacts.
+
+**State & status transitions**
+- The stage, labels, countdown, tiles, annual report line, and Application history
+  update without a reload when the status changes or a report version is uploaded
+  or sent back.
+
+**Edge cases & constraints**
+- The Overview shows no buttons, no alert text, and no header fact repeated word for
+  word.
+- A Researcher who owns a Withdrawn application can open it (previously redirected).
+
+---
+
+This story may be large enough to split. Consider separating **the stage card**
+from **the fact tiles**, and the **authorized parks with contacts** tile into its own
+ticket.
+
+---
+
+**Testing notes**
+
+- **Test 1 — Requested → authorized:** As the RA, view an Under review permit
+  (labels read "Requested …", no conditions tile). Move it to Out for signature;
+  confirm the labels read "Authorized …", the conditions tile appears, and
+  "Authorized parks and contacts" appears below the tiles, matching the Application
+  tab's Authorized parks.
+- **Test 2 — Same blocks, different words:** Open one Active permit as the
+  researcher owner, the RA, and logged out; confirm the order of blocks matches and
+  only the wording and the public removals differ.
+- **Test 3 — Countdown and report:** Use `?today=` to put an Active permit before
+  its start ("Starts in …"), mid-window ("… days left"), and past expiry with no
+  report ("Annual report was due …").
+- **Test 4 — Park cap:** On a permit with more than 5 authorized parks, confirm at
+  most 5 show and "See all {n} parks" opens Authorized parks on the Application tab.
+- **Test 5 — Field visit:** Use `?today=` before, during, and after the field
+  sessions; confirm "Next field visit", "Field visit under way", and "Last field
+  visit".
+
+---
+
+**Open questions**
+- [ ] Withdrawn: should the system record who withdrew and when, so the stage line
+  can say "Withdrawn {date} by {name}"? (The Overview already reads such a record
+  if one exists.)
+- [ ] Is 5 the right park cap for the parks block?
+- [ ] The responsible analyst can also be a district contact (on this permit J.
+  Okafor is North Coast's district contact), so their name reaches the researcher
+  through "Authorized parks and contacts" and the letter. Is that acceptable, since
+  they're shown as a district contact, not as the analyst?
+- [ ] The owner's "Annual report needs changes" alert (Story 9) and the Annual
+  report tab name the person who sent the report back — usually the responsible
+  analyst. Should those read "The review team" for researchers?
+
+---
+
+## Story 11 — Move internal review work to a staff-only Internal review tab
+
+**Story Title**
+Move internal review work to a staff-only Internal review tab
+
+---
+
+**Description**
+
+As an HQ Technical Reviewer, District Lead Technical Reviewer, District Assistant
+Technical Reviewer, or System Admin,
+I want the review team's workspace — supporting review, tags, comments, and the
+analysis team — on its own tab,
+So that the Overview can be shared with researchers and the public, and nothing
+internal leaks because one section was missed.
+
+The privacy line is the **tab**: hiding the tab hides everything internal at once,
+so new internal sections are protected by default. Because the tab says it's
+internal, the per-section "Internal only" flags on Tags, Comments, and Analysis team
+are removed.
+
+**Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
+Reviewer, District Assistant Technical Reviewer (any permit-role); Researcher and
+public viewer (lose access to nothing they could see before).
+
+**Out of scope:** Changes to the sections themselves (tags, comments, supporting
+review, analysis team). The anchored-comments study (`?comments=anchored`) keeps its
+header panel.
+
+---
+
+**Acceptance Criteria**
+
+**Access & permissions**
+- "Internal review" is the last tab and appears only to System Admin, HQ Technical
+  Reviewer, District Lead Technical Reviewer, and District Assistant Technical
+  Reviewer, in every status.
+- A Researcher (owner) or public viewer never sees the tab; `#internal` opens
+  "Overview" for them.
+
+**UI & field details**
+- The tab holds, in order: "Supporting review" (Supporting Agent, Under review only —
+  unchanged), "Tags", "Comments"; the side rail holds "Analysis team".
+- The tab label reads "Internal review ({n})", where {n} is the number of open
+  comments (resolved ones don't count); with none it reads "Internal review". Screen
+  readers hear "Internal review ({n}), open comments".
+- The Overview no longer holds Tags, Comments, Supporting review, or the Analysis
+  team; its rail shows only "Application history".
+- The "Internal only" flags are removed from Tags, Comments, and Analysis team.
+
+**State & status transitions**
+- Posting a comment, or resolving or reopening one, updates the count in the tab
+  label without a reload.
+
+**Edge cases & constraints**
+- Staff still land on "Overview"; the header keeps the analysis team's progress
+  metric.
+
+---
+
+**Testing notes**
+
+- **Test 1 — Gate:** As the researcher owner and logged out, confirm no "Internal
+  review" tab and that `#internal` opens Overview.
+- **Test 2 — Count:** As the RA, note the count, post a comment, and confirm it goes
+  up by one.
+
+---
+
+**Open questions**
+- [ ] Should a Supporting Agent who still owes their review see a cue on the
+  Overview or the tab label, now that "Supporting review" moved off the landing tab?
