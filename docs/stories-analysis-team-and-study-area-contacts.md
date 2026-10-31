@@ -7,7 +7,7 @@ areas. Also folds in marking the internal-only Overview sections consistently.
 **Editing gate (used throughout):** the analysis-team roster is the
 `supporting-agents` section in [`permissions-matrix.md`](permissions-matrix.md). It
 is editable only by a **System Admin** (user role) or the permit's **Responsible
-Agent** (permit-role), and only while the permit is **not** in a final status
+analyst** (permit-role), and only while the permit is **not** in a final status
 (**Expired**, **Rejected**, **Withdrawn**). Everyone else who can open the permit
 sees a read-only view. The roster and its edits persist to a shared per-permit
 store, so every surface stays in sync.
@@ -45,8 +45,8 @@ the same team.
 
 **Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
 Reviewer, District Assistant Technical Reviewer (as viewers, or as managers when the
-permit's Responsible Agent); the permit-roles Responsible Agent and Supporting
-Agent. Researcher and logged-out users never see the roster (internal only).
+permit's Responsible analyst); the permit-roles Responsible analyst and Supporting
+analyst. Researcher and logged-out users never see the roster (internal only).
 
 **Out of scope:** The permit header's review-progress modal ("N of M reviews
 complete") — that separate surface is specified in
@@ -63,7 +63,7 @@ review-status transitions themselves (how a reviewer moves not-started → in pr
   Reviewer, District Lead Technical Reviewer, District Assistant Technical Reviewer);
   it is never shown to a Researcher or a logged-out visitor.
 - Add and remove controls, plus the **Add member** trigger, appear only when the
-  current user is a System Admin or the permit's Responsible Agent and the permit is
+  current user is a System Admin or the permit's Responsible analyst and the permit is
   not Expired, Rejected, or Withdrawn; otherwise the roster is read-only.
 
 **Happy path**
@@ -120,12 +120,12 @@ district, using the real role name rather than "Lead."
 Members are grouped by review unit: the **Responsible analyst** on their own, then
 **Headquarters**, then each district in the order it first appears. "Lead analyst" /
 "Lead" is retired everywhere in favor of **Responsible analyst** (this is the
-permit's Responsible Agent as shown on the roster).
+permit's Responsible analyst as shown on the roster).
 
 **Roles affected:** All internal reviewers who view the roster; the permit-role
-Responsible Agent (shown as the Responsible analyst).
+Responsible analyst (shown as the Responsible analyst).
 
-**Out of scope:** Changing which user is the Responsible Agent, or the eligibility
+**Out of scope:** Changing which user is the Responsible analyst, or the eligibility
 rules for that permit-role (governed by single- vs multi-district span in
 [`permissions-matrix.md`](permissions-matrix.md) §2).
 

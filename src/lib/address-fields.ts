@@ -16,6 +16,13 @@
 import { getAddressFormat, type Address, type AddressFieldSpec } from '../data/address';
 
 /** Keys that should span the whole field grid rather than sit two-up. */
+// Browser autofill tokens per text subfield (region/country are pickers).
+const AUTOCOMPLETE: Partial<Record<AddressFieldSpec['key'], string>> = {
+  line1: 'address-line1',
+  line2: 'address-line2',
+  city: 'address-level2',
+  postalCode: 'postal-code',
+};
 const WIDE_KEYS = new Set<AddressFieldSpec['key']>(['line1', 'line2', 'sublocality']);
 
 /** Handle a page keeps to drive a wired fieldset. */
@@ -68,6 +75,8 @@ function buildField(spec: AddressFieldSpec, prefix: string, value: string): HTML
   const field = document.createElement('cds-text-input') as any;
   field.id = id;
   field.setAttribute('label', label);
+  const token = AUTOCOMPLETE[spec.key];
+  if (token) field.setAttribute('autocomplete', token);
   if (value) field.value = value;
   return field;
 }

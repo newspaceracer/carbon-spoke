@@ -2,7 +2,7 @@
 // Permissions — the permit-role layer of the two-layer actor model.
 //
 // The prototype identity (readIdentity(), maintenance.ts) sets the USER ROLE; this
-// module owns the PER-PERMIT permit-role: Responsible Agent, Supporting Agent,
+// module owns the PER-PERMIT permit-role: Responsible analyst, Supporting analyst,
 // Second Signer, or Not assigned. A user holds exactly one review permit-role per
 // permit, so the demo control that writes it is single-select and CONSTRAINED —
 // it offers only the permit-roles the active identity is eligible for on this
@@ -25,8 +25,8 @@ export type PermitType = 'single' | 'multi';
 
 /** Human labels for the demo control + anywhere a permit-role is shown. */
 export const permitRoleLabel: Record<PermitRole, string> = {
-  responsible: 'Responsible Agent',
-  supporting: 'Supporting Agent',
+  responsible: 'Responsible analyst',
+  supporting: 'Supporting analyst',
   'second-signer': 'Second Signer',
   none: 'Not assigned',
 };
@@ -51,7 +51,7 @@ function canBeResponsible(identity: Identity, type: PermitType): boolean {
   }
 }
 
-// Every reviewer may be a Supporting Agent, in both permit types.
+// Every reviewer may be a Supporting analyst, in both permit types.
 const canBeSupporting = (identity: Identity): boolean => isReviewer(identity);
 
 // ── Second-signer pools (permissions-matrix.md §3) ──────────────────────────
@@ -180,7 +180,7 @@ const WORKFLOW_ACTIONS = new Set<IRSection>([
 ]);
 // District reviewers may READ these only when assigned (RA/SA); HQ/Admin read any.
 const SCOPED_READ = new Set<IRSection>(['dates-ceqa', 'sign']);
-// Final (terminal) statuses — the permit is closed. The Responsible Agent can no
+// Final (terminal) statuses — the permit is closed. The Responsible analyst can no
 // longer edit the analysis-team roster here (System Admin still can, as super-user).
 const FINAL_STATUSES = new Set<PermitStatus>(['expired', 'rejected', 'withdrawn']);
 
@@ -215,7 +215,7 @@ export function resolveIR(ctx: ResolveContext): Access {
   // System Admin super-user carve-out: the analysis-team roster is editable in
   // EVERY status once the permit exists (post-Draft), including the terminal
   // freeze below — admin owns team composition regardless of workflow state. The
-  // Responsible Agent's non-final editing is handled in the core cell.
+  // Responsible analyst's non-final editing is handled in the core cell.
   if (section === 'supporting-agents' && isAdmin) return 'update';
   // Withdrawn: district reviewers can't access; HQ/Admin read only.
   if (status === 'withdrawn') return isDistrict ? 'cannot-access' : 'read';
@@ -288,7 +288,7 @@ function coreCell(section: IRSection, status: PermitStatus, f: CellFlags): Acces
       return status === 'under-review' ? upd(f.raU) : 'read';
 
     case 'supporting-agents':
-      // Analysis-team roster. The Responsible Agent may edit in any NON-final
+      // Analysis-team roster. The Responsible analyst may edit in any NON-final
       // status; read-only once the permit is final (Expired/Rejected/Withdrawn).
       // System Admin's always-editable rule is handled upstream in resolveIR.
       return FINAL_STATUSES.has(status) ? 'read' : upd(f.isRA);

@@ -12,7 +12,7 @@ import { withBase } from '../lib/base';
                               Data collection / Additional documents -> fully built form steps
                             • Application summary -> <SummaryStep/>, a read-only review of
                               every answer with per-section Edit links and a certify-to-submit
-                              gate (Submit stays disabled until the certification box is checked)
+                              gate (Submit flags the box if it's unchecked)
        - Wizard actions  -> Back / Withdraw / Save and continue (Submit on the summary step).
                             The draft auto-saves before any navigation, so there is no
                             explicit save action — the system always persists what's typed,
@@ -151,7 +151,7 @@ export const prototype = {
           <p id="page-head-eyebrow" class="page-head__eyebrow t-label-01">
             Page 1 of {applicationSteps.length}
           </p>
-          <h2 id="page-head-title" class="page-head__title t-heading-04">{applicationSteps[0].label}</h2>
+          <h2 id="page-head-title" class="page-head__title t-heading-04" tabindex="-1">{applicationSteps[0].label}</h2>
           <p id="page-head-sub" class="page-head__sub t-body-02">{applicationSteps[0].secondaryLabel}</p>
         </header>
 
@@ -167,7 +167,7 @@ export const prototype = {
           hide-close-button
           style="display:none"
         >
-          <span slot="title">Upload your overdue annual report first</span>
+          <span slot="title">Annual report overdue — you can't apply as PI</span>
           <span slot="subtitle" id="report-block-sub"></span>
           <cds-actionable-notification-button slot="action" id="report-block-go" href="#">Upload annual report</cds-actionable-notification-button>
         </cds-actionable-notification>
@@ -352,9 +352,10 @@ export const prototype = {
   import { applicationSteps, applicationIssues } from '../data/application';
   import { withBase } from '../lib/base';
   import { reviewStore, resubmitApplication, sectionTitle, todayLabel, type ReviewIssue } from '../lib/review-thread';
-  import { renewalBlocked, reportDueISO, formatDate } from '../lib/final-report';
+  import { renewalBlocked } from '../lib/final-report';
   import { readIdentity } from '../lib/maintenance';
   import { permit as heldPermit } from '../data/permit';
+  import { flagField } from '../lib/form-feedback';
 
   // DEV/TEST escape hatch: `?bypass` (or `#bypass`) on the URL lifts the two
   // validation gates so the whole workflow can be walked without filling every
@@ -375,7 +376,7 @@ export const prototype = {
     const note = document.getElementById('report-block-note');
     const sub = document.getElementById('report-block-sub');
     const go = document.getElementById('report-block-go');
-    if (sub) sub.textContent = `It was due ${formatDate(reportDueISO())} for permit ${heldPermit.id}. You can fill in this form but can't submit it until the report is in.`;
+    if (sub) sub.textContent = `Upload the report for permit ${heldPermit.id} to apply again.`;
     go?.setAttribute('href', withBase('/permit?tab=report'));
     if (note) note.style.display = '';
   }
@@ -492,17 +493,21 @@ export const prototype = {
     backBtn.hidden = current === 0;
     const last = current === steps.length - 1;
     nextBtn.textContent = last ? (reviseOf ? 'Resubmit application' : 'Submit application') : 'Save and continue';
-    // On the review step, Submit stays disabled until the applicant certifies the
-    // application (and, when revising, has answered every requested change); every
-    // other step's primary is always enabled.
-    nextBtn.disabled = last ? !((bypassValidation || certify?.checked) && revisionReady()) : false;
+    // Submit stays ENABLED so it's focusable and can explain itself: clicking it
+    // uncertified flags the checkbox (see the click handler). Only an overdue
+    // annual report disables it — nothing can fix that here, and the error
+    // banner at the top of the page says why.
+    nextBtn.disabled = last && reportBlocked;
     // The top of the step area is the useful scroll target when the page changes
-    // (skipped on the initial load so we don't jump past the banner).
+    // (skipped on the initial load so we don't jump past the banner). Focus moves
+    // to the new page's heading so keyboard and screen-reader users land on it
+    // instead of staying on the button that's now on a different page.
     if (scroll) {
       document.querySelector('section.step:not([hidden])')?.scrollIntoView({
         block: 'start',
         behavior: 'smooth',
       });
+      pageHeadTitle?.focus({ preventScroll: true });
     }
   };
 
@@ -607,10 +612,17 @@ export const prototype = {
   // application being free of issues (represented here by the success path).
   nextBtn.addEventListener('click', () => {
     if (current === steps.length - 1) {
-      // Belt-and-suspenders: the button is disabled until certified, but guard the
-      // handler too so a stray click can't submit an uncertified application.
-      if (!bypassValidation && !certify?.checked) return;
-      if (!revisionReady()) return;
+      // Submit attempt: flag what's blocking it, next to the thing to fix.
+      if (!revisionReady()) {
+        const box = document.querySelector<HTMLElement>('.revise-summary');
+        box?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        box?.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true });
+        return;
+      }
+      if (!bypassValidation && !certify?.checked) {
+        flagField(certify, 'Confirm this statement to submit', 'cds-checkbox-changed');
+        return;
+      }
       if (reviseOf) resubmitApplication(reviseOf);
       showSubmitted();
       return;
@@ -637,6 +649,8 @@ export const prototype = {
   });
   withdrawConfirm?.addEventListener('click', () => {
     if (withdrawModal) withdrawModal.open = false;
+    // The redirect waits a beat for the toast — block a second withdraw meanwhile.
+    if (withdrawBtn) (withdrawBtn as any).disabled = true;
     toast('info', 'Application withdrawn', 'This draft has been discarded.');
     // Prototype: return to the home hub after the confirmation is seen.
     window.setTimeout(() => {
@@ -659,9 +673,6 @@ export const prototype = {
     t.addEventListener('cds-notification-closed', () => t.remove());
   }
 
-  // Checking/unchecking the certification re-runs render so the Submit gate on the
-  // review step tracks it live.
-  certify?.addEventListener('cds-checkbox-changed', () => render(false));
 
   // Per-section "Edit" links on the review step jump back to that wizard step so
   // the applicant can fix an answer. Editing goes backward (never to the gated
@@ -838,6 +849,7 @@ export const prototype = {
       summaryBox.replaceChildren();
       const h = document.createElement('h3');
       h.className = 'revise-items__title t-heading-compact-02';
+      h.tabIndex = -1; // focus target when Resubmit is clicked with changes still open
       h.textContent = `Requested changes · ${done} of ${all.length} addressed`;
       summaryBox.append(h);
       if (done < all.length) {

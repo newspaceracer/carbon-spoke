@@ -24,6 +24,37 @@ these win. Where this file is silent, the base skill applies.
 
 ---
 
+## Workflow — ASK open questions BEFORE drafting (mandatory)
+
+An open question written into a story with no chance to answer it is a dead end —
+the whole point of surfacing it is to get it answered. So questions go to the
+user **first**, and only the leftovers get recorded.
+
+1. **Gather.** Read the input and run the AC evaluation pass (base skill + the NRD
+   checks below). Collect every gap: undefined behavior, missing email copy,
+   unstated permit-role/status/district-span rules, tiebreakers, fallbacks.
+2. **Ask.** Put them to the user with `AskUserQuestion` **before writing the
+   story** — up to 4 per call, multiple rounds if needed, highest-impact first.
+   - Give concrete options (the plausible answers), with a recommended one first
+     when you have a view. The user can always pick "Other".
+   - Make each question stand alone. If it references existing copy or a spec
+     (an email like EM-I, a status rule, a prior story), **quote that text in the
+     question** — don't make the user go look it up.
+   - Don't ask what the code, `docs/permissions-matrix.md`, the decision log, or
+     prior stories already answer — look it up instead.
+3. **Fold in.** Write each answer into the AC as a definite rule (not as a
+   resolved question).
+4. **Record only true unknowns.** The **Open questions** section is for what the
+   user explicitly can't answer yet (e.g. "needs Legal", "ask the district",
+   "decide later"). Note who/what it's waiting on. If every question was
+   answered, omit the section.
+
+Never skip step 2 because there are "only a few" questions or the story is
+small. The one exception: the user explicitly says to just draft it — then
+record the questions, and say in your reply that they weren't asked.
+
+---
+
 ## NRD System Context
 
 This skill is for the CA State Parks Natural Resources Division (NRD) permit
@@ -70,8 +101,8 @@ is eligible for on that permit (see eligibility below).
 
 | Permit-role | Meaning |
 |---|---|
-| **Responsible Agent (RA)** | Owns the permit; the only one who can **Start review**; the **1st signer** |
-| **Supporting Agent (SA)** | Contributes analysis; no final sign-off |
+| **Responsible analyst (RA)** | Owns the permit; the only one who can **Start review**; the **1st signer** |
+| **Supporting analyst (SA)** | Contributes analysis; no final sign-off |
 | **Second Signer** | Co-signs — a separate per-permit capability, not a review role |
 | **Not assigned** | Holds no permit-role on this permit |
 
@@ -149,16 +180,18 @@ These override the base skill's notification guidance for NRD stories.
   nrd.research@parks.ca.gov
   ```
 
-- If email copy is not provided in the input, flag it as an open question:
-  "What is the email body copy sent to [role] when [trigger event]?"
-  Never leave a Notifications AC item without either the copy or a flagged
-  open question.
+- If email copy is not provided in the input, **ask the user for it** (see
+  Workflow): "What is the email body copy sent to [role] when [trigger event]?"
+  — quoting any existing template it should follow. Only if they can't supply it
+  yet does it go in Open questions. Never leave a Notifications AC item without
+  either the copy or a recorded open question.
 
 ---
 
 ## NRD AC Evaluation — Additional Checks
 
-Run these after the base skill's AC evaluation pass.
+Run these after the base skill's AC evaluation pass. Every gap they turn up is a
+question for the user **before** drafting (see Workflow), not a line item to park.
 
 **NRD: full status sweep**
 - Check every NRD status (Draft, Waiting for review, Under review, Returned to
@@ -170,7 +203,7 @@ Run these after the base skill's AC evaluation pass.
   it explicitly called out?
 
 **NRD: permit-role eligibility**
-- Is the action gated on a **permit-role** (e.g. only the Responsible Agent can
+- Is the action gated on a **permit-role** (e.g. only the Responsible analyst can
   Start review or sign first) rather than just a user role? If so, name the
   permit-role, not just the identity.
 - Where eligibility depends on the **single- vs multi-district** span, is that
@@ -179,7 +212,8 @@ Run these after the base skill's AC evaluation pass.
 **NRD: email copy completeness**
 - Is the full email body present for every triggered notification?
 - Does every regulated email include the standard NRD signature block?
-- If email copy is missing, it must be an open question — never omit it silently.
+- If email copy is missing, ask for it before drafting; record it as an open
+  question only if the user can't supply it — never omit it silently.
 
 **NRD: document visibility**
 - If a document is uploaded or generated (signed permit, DPR65A, DPR65B, etc.),
@@ -197,6 +231,38 @@ Run these after the base skill's AC evaluation pass.
 
 ---
 
+## Prototype Reference Links
+
+When a story covers a screen or flow that exists in the prototype, link to it so
+readers can see the intended behavior. Put the links in a **Prototype** section
+right after **Out of scope** in the Description:
+
+```
+**Prototype:**
+- [Permit detail — Overview](https://newspaceracer.github.io/carbon-spoke/permit/?status=Active#overview) — view as District Lead Technical Reviewer
+```
+
+**Rules**
+- **Use only the deployed GitHub Pages URL:** `https://newspaceracer.github.io/carbon-spoke/`
+  plus the route. A page at `src/pages/<path>.astro` is served at
+  `/carbon-spoke/<path>/`; `index.astro` is the site root.
+- **Never use a local URL** — no `localhost`, `127.0.0.1`, dev-server ports, or file
+  paths. If you only know the local URL, rewrite it to the deployed one.
+- **Link to pages that exist.** Check `src/pages/` before linking. If the feature
+  isn't in the prototype yet, leave out the Prototype section — never invent a URL.
+- **Deep-link to the right state** when the page supports it: query params such as
+  `?status=`, `?tab=`, `?scope=`, `?comments=anchored`, `?parks=all`, `?report=1`, or
+  a `#tab` hash. Read the page's script for the params it accepts.
+- **Name the identity to view as.** The prototype identity is stored in the browser,
+  not the URL, so add "view as <user role>" and use the exact role names from the
+  NRD Roles table. Readers set it with the **Prototype identity** switcher.
+- **Name each link for what it shows** (page + tab or state), not "link" or "here".
+- The deployed site updates when `master` is pushed. If the screen only exists in
+  uncommitted or unpushed work, add "(live after the next push to master)" after
+  that link. It's a note, not an open question.
+
+---
+
 ## NRD Testing Environment Note
 
 When a story involves email notifications, always include this in Testing notes:
@@ -211,6 +277,10 @@ When a story involves email notifications, always include this in Testing notes:
 
 The base skill's examples cover generic patterns. The examples below are
 NRD-specific and show the full extension in practice.
+
+> **Open questions in these examples** show the *format* for questions the user
+> couldn't answer. In a real run, each one would first be asked via
+> `AskUserQuestion` (see Workflow); only the unanswered ones would remain.
 
 ---
 
@@ -272,7 +342,7 @@ Reviewer, District Assistant Technical Reviewer
 
 > **Model note:** this example illustrates how to structure a *rich* input — the
 > vocabulary sections above are the source of truth. In the current model the
-> auto-assigned reviewer becomes the permit's **Responsible Agent**, and RA
+> auto-assigned reviewer becomes the permit's **Responsible analyst**, and RA
 > eligibility depends on the permit's **single- vs multi-district** span (§2 of
 > `permissions-matrix.md`). A real version of this story would state that
 > interaction; it's called out as an open question below rather than silently
@@ -382,6 +452,6 @@ CSPS-44. Changes to the email template by any user — see CSPS-44.
   application count — random, round-robin, or last-assignment date?
 - [ ] What is the full email body sent to the assigned technical reviewer?
   A template is needed since email copy changes are out of scope for this story.
-- [ ] Does the auto-assigned reviewer become the permit's **Responsible Agent**,
+- [ ] Does the auto-assigned reviewer become the permit's **Responsible analyst**,
   and how does assignment respect RA eligibility on **single- vs multi-district**
   permits (e.g. an HQ reviewer cannot be RA on a single-district permit)?

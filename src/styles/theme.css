@@ -205,6 +205,16 @@ cds-icon-indicator {
   text-align: start;
 }
 
+/* ---- TABS OVERFLOW ARROWS --------------------------------------------------
+   cds-tabs (2.59.0) leaves its host display:block, but its shadow root lays the
+   ‹ / › overflow buttons beside the tab list as siblings — so when the tabs
+   overflow (a phone), the › button drops onto its own line UNDER the tabs. A
+   flex host puts the arrows inline at the strip's ends, as Carbon intends. */
+cds-tabs:not([vertical]) {
+  display: flex;
+  align-items: stretch;
+}
+
 /* ---- MODAL PAGE-SCROLL LOCK ---------------------------------------------
    cds-modal renders a full-viewport overlay but doesn't stop the page behind it
    from scrolling (a web-components-layer gap; see src/lib/carbon-modal-scroll-
@@ -297,6 +307,19 @@ body.has-maintenance-banner cds-header { inset-block-start: 2rem; }
   border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
+/* Collapsed: only the toggle button shows, so the panel stops covering content. */
+.demo-identity[data-collapsed] {
+  min-inline-size: 0;
+  padding: 0;
+}
+.demo-identity[data-collapsed] > :not(.demo-identity__toggle) {
+  display: none;
+}
+.demo-identity:not([data-collapsed]) > .demo-identity__toggle {
+  display: block;
+  margin: calc(-1 * var(--cds-spacing-03, 0.5rem)) 0 var(--cds-spacing-03, 0.5rem) auto;
+  inline-size: fit-content;
+}
 .demo-identity__label {
   margin: 0 0 var(--cds-spacing-02, 0.25rem);
   color: var(--cds-text-secondary, #525252);
@@ -307,7 +330,8 @@ body.has-maintenance-banner cds-header { inset-block-start: 2rem; }
    above it in the same dev panel, separated by a hairline. */
 .demo-permit-role,
 .demo-alert-preview,
-.demo-reset {
+.demo-reset,
+.demo-fixture {
   margin-block-start: var(--cds-spacing-04, 0.75rem);
   padding-block-start: var(--cds-spacing-04, 0.75rem);
   border-block-start: 1px solid var(--cds-border-subtle-01, #e0e0e0);
@@ -315,3 +339,4 @@ body.has-maintenance-banner cds-header { inset-block-start: 2rem; }
 .demo-reset cds-button {
   inline-size: 100%;
 }
+.demo-fixture { min-inline-size: 18rem; }

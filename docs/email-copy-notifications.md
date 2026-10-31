@@ -39,7 +39,7 @@ Not mapped to any preference (no Profile / always sent):
 - **EM-B** (external second-signer request) — the external signer has no account,
   so there is no Profile toggle; always sent.
 - **EM-L** (supporting review completed / reopened) — always sent to the
-  Responsible Agent.
+  Responsible analyst.
 
 ---
 
@@ -57,7 +57,7 @@ A research permit is ready for your signature as the second signer.
 
 Permit:            [Permit #] — [Project title]
 District(s):       [District(s)]
-Responsible Agent: [Responsible Agent name] (first signature complete)
+Responsible analyst: [Responsible analyst name] (first signature complete)
 
 Review and sign in DocuSign. The permit becomes active once your
 signature is recorded.
@@ -134,7 +134,7 @@ nrd.research@parks.ca.gov
 ---
 
 ## EM-D — Application returned to researcher
-- **Trigger:** Responsible Agent returns the application (→ Returned to submitter).
+- **Trigger:** Responsible analyst returns the application (→ Returned to submitter).
 - **Recipients:** Researcher (submitter), PI, PICOF.
 - **Category:** **Regulated (always sent).**
 
@@ -159,7 +159,7 @@ nrd.research@parks.ca.gov
 ---
 
 ## EM-E — Application rejected
-- **Trigger:** Responsible Agent rejects the application (→ Rejected).
+- **Trigger:** Responsible analyst rejects the application (→ Rejected).
 - **Recipients:** Researcher (submitter), PI, PICOF.
 - **Category:** **Regulated (always sent).**
 
@@ -183,24 +183,24 @@ nrd.research@parks.ca.gov
 
 ---
 
-## EM-F — Responsible Agent assigned (incoming)
-- **Trigger:** a user becomes the Responsible Agent (assignment or type-flip
+## EM-F — Responsible analyst assigned (incoming)
+- **Trigger:** a user becomes the Responsible analyst (assignment or type-flip
   reassignment, Story 8).
-- **Recipients:** the new Responsible Agent.
+- **Recipients:** the new Responsible analyst.
 - **Category:** Informational · opt-out allowed (Profile: "Assignment changes").
 
-**Subject:** You are the Responsible Agent for permit [Permit #]
+**Subject:** You are the Responsible analyst for permit [Permit #]
 
 ```
 [First name],
 
-You are now the Responsible Agent for a research permit.
+You are now the Responsible analyst for a research permit.
 
 Permit: [Permit #] — [Project title]
 Type:   [Single/Multi]-district
 Status: [Status]
 
-As Responsible Agent you lead the review and are the first signer.
+As Responsible analyst you lead the review and are the first signer.
 
 [Open permit]
 
@@ -212,21 +212,21 @@ nrd.research@parks.ca.gov
 
 ---
 
-## EM-G — Responsible Agent unassigned (outgoing)
-- **Trigger:** a user is removed as Responsible Agent (type-flip reassignment,
+## EM-G — Responsible analyst unassigned (outgoing)
+- **Trigger:** a user is removed as Responsible analyst (type-flip reassignment,
   Story 8).
-- **Recipients:** the outgoing Responsible Agent.
+- **Recipients:** the outgoing Responsible analyst.
 - **Category:** Informational · opt-out allowed (Profile: "Assignment changes").
 
-**Subject:** You are no longer the Responsible Agent for permit [Permit #]
+**Subject:** You are no longer the Responsible analyst for permit [Permit #]
 
 ```
 [First name],
 
 Your role on permit [Permit #] — [Project title] has changed because the
-permit's districts changed. You are no longer the Responsible Agent.
+permit's districts changed. You are no longer the Responsible analyst.
 
-[You remain a Supporting Agent on this permit. / You no longer have a role
+[You remain a Supporting analyst on this permit. / You no longer have a role
 on this permit.]
 
 No action is needed.
@@ -256,8 +256,8 @@ yet.
 
 Permit: [Permit #] — [Project title]
 
-Submit the outstanding annual report to release the hold. Once it is
-received, the permit will be issued.
+Upload the annual report for your previous permit. We'll issue your new
+permit once we've reviewed the report.
 
 Natural Resources Division
 California State Parks
@@ -269,7 +269,7 @@ nrd.research@parks.ca.gov
 
 ## EM-I — Status change on a permit you review
 - **Trigger:** a permit changes status; sent to its assigned reviewers.
-- **Recipients:** the permit's Responsible Agent and Supporting Agents.
+- **Recipients:** the permit's Responsible analyst and Supporting analysts.
 - **Category:** Informational · opt-out allowed (Profile: "Status changes").
 
 **Subject:** Status update — permit [Permit #] is now [Status]
@@ -281,7 +281,7 @@ A permit you review has changed status.
 
 Permit:     [Permit #] — [Project title]
 New status: [Status]
-Your role:  [Responsible Agent / Supporting Agent]
+Your role:  [Responsible analyst / Supporting analyst]
 
 [Open permit]
 
@@ -295,7 +295,7 @@ nrd.research@parks.ca.gov
 
 ## EM-J — Annual report uploaded *(draft copy)*
 - **Trigger:** the researcher uploads the annual report on the permit's Annual report tab.
-- **Recipients:** the permit's Responsible Agent and Supporting Agents.
+- **Recipients:** the permit's Responsible analyst and Supporting analysts.
 - **Category:** Informational · opt-out allowed (Profile: "Status changes").
 
 **Subject:** Annual report uploaded for permit [Permit #]
@@ -318,7 +318,7 @@ nrd.research@parks.ca.gov
 ---
 
 ## EM-K — Annual report: changes requested *(draft copy)*
-- **Trigger:** the Responsible Agent (or an admin) selects "Request changes" on the
+- **Trigger:** the Responsible analyst (or an admin) selects "Request changes" on the
   uploaded annual report.
 - **Recipients:** Researcher (submitter), PI, PICOF.
 - **Category:** Regulated · always sent.
@@ -346,11 +346,11 @@ nrd.research@parks.ca.gov
 ---
 
 ## EM-L — Supporting review completed or reopened
-- **Trigger:** a Supporting Agent selects "Complete review" or "Reopen review"
+- **Trigger:** a Supporting analyst selects "Complete review" or "Reopen review"
   (permit header menu, or "Complete review" in the review wizard).
-- **Recipients:** the permit's Responsible Agent.
+- **Recipients:** the permit's Responsible analyst.
 - **Category:** Informational · always sent (no Profile toggle) — the Responsible
-  Agent needs to know when someone else is done, or is making changes again.
+  analyst needs to know when someone else is done, or is making changes again.
 - **Merge values:** [Action] = "completed" / "reopened". [Next step] =
   "They're done adding conditions and comments." / "They can change conditions
   and comments again."

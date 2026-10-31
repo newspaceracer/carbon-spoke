@@ -125,7 +125,7 @@ get saved and the permissions around them are unchanged.
 
 **Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
 Reviewer, District Assistant Technical Reviewer — whoever holds the Responsible
-Agent or Supporting Agent permit-role that can edit conditions. Researchers are
+analyst or Supporting analyst permit-role that can edit conditions. Researchers are
 unaffected (they never open this modal).
 
 **Out of scope:** Who may add conditions and when (the existing permit-role and

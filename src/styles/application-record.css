@@ -116,7 +116,7 @@
 
 /* A single yes/no fact promoted onto its own tile (the read-only record): the same
    tile grid FactGrid uses, so it lines up with the fact tiles around it. */
-.app-review .tile-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1rem; }
+.app-review .tile-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr)); gap: 1rem; }
 
 /* ── Side-by-side variant (?labels=side) ─────────────────────────────────────
    Label in a fixed left column, value to its right, Edit button at the far
@@ -167,11 +167,19 @@
 .app-review .ro-table { display: block; }
 
 /* Research team — lead contacts as a card grid (ContactCard = cds-tile). */
+/* Every card the same width: equal columns, no card spans the row, at most 3
+   across. The column minimum is the larger of 15rem and a third of the row (minus
+   the two 1rem gaps), so a wide row never fits a 4th; min(…, 100%) lets a phone
+   fall back to one full-width column. auto-fill (not auto-fit) keeps a lone last
+   card at column width instead of stretching it. */
 .app-review .contact-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(15rem, (100% - 2rem) / 3)), 1fr));
   gap: 1rem;
 }
+/* The organization sits alone on the first row (at column width); the people
+   start a new row beneath it. */
+.app-review .contact-grid > .contact--organization + * { grid-column-start: 1; }
 
 /* Stacked table cell — a primary line with a secondary line beneath (participant
    name/title, email/phone). Layout only; type + color come from tokens. */

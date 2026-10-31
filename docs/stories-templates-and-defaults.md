@@ -7,7 +7,9 @@ DPR65A/DPR65B document-management story to the remaining downloadable forms.
 Story 6 adds the variable affordance to the email editor; Story 7 makes the email
 **message** a rich text editor and renders variables as distinct tokens in it;
 Story 8 standardizes the seeded applicant email copy and reconciles the variable
-names (resolving several open questions raised in Stories 5 and 6).
+names (resolving several open questions raised in Stories 5 and 6). Story 9
+replaces Story 4's report cadence with an annual-report due setting and wires it
+into the review wizard.
 
 Notation: the final permit **letter body** template is tracked separately in
 **CSPS-211**; e-signature configuration is out of scope for all of these.
@@ -150,8 +152,11 @@ not a system concern.
   uploaded file.
 
 **Edge cases & constraints**
-- If a System Admin uploads a non-PDF file, the system rejects it and shows an
-  error naming the accepted file type; the previous file remains current.
+- If a System Admin chooses a non-PDF file, or one over the maximum size, it
+  shows in the dialog as an error item ("Unsupported file type" naming the
+  accepted file type, or "File too large" naming the limit). "Replace document"
+  stays disabled and the previous file remains current. This follows
+  `stories-file-upload-controls.md`.
 - If an upload fails, the previous version remains available — the form is never
   left missing or broken.
 
@@ -702,3 +707,130 @@ and their recipients — see Story 5.
   prototype placeholders pending the official lines.
 - [ ] Confirm the NRD signature block should close all six emails (Story 5 had it
   on only some), and fix the (916) 635-6725 → 653-6725 typo noted in CSPS-52.
+
+---
+
+## Story 9 — Set when the annual report is due and seed it into the review wizard
+
+**Story Title**
+Let System Admin set the annual report due period for new letters
+
+---
+
+**Description**
+
+As a System Admin,
+I want to set how many days after a permit ends its annual report is due, and
+have that default fill in the due date when a reviewer prepares the permit letter,
+So that every new permit letter states a consistent annual report deadline without
+a developer changing the rule.
+
+A permit has ONE annual report, due a set number of days after the permit ends
+(today a fixed 30). This story replaces Story 4's "Summary report due" cadence
+(Annually / Semi-annually / Quarterly / At permit expiration), which no longer
+fits that model and was never connected to the review wizard. Once a letter is
+sent for signature, the due date on the letter is the permit's due date from then
+on; later changes to the admin setting never move it.
+
+**Roles affected:** System Admin (sets the default). Responsible analyst — a System
+Admin, HQ Technical Reviewer, or District Lead Technical Reviewer holding that
+permit-role — sees the default on the review wizard's **Finalize the letter**
+step. Researcher, Principal Investigator (PI), and PICOF see the resulting due
+date on the letter and the Annual report tab.
+
+**Out of scope:** The "Default validity (months)" setting — wiring it into the
+review wizard's permit window is a separate story. The regulated wording of the
+letter's report reminder paragraph and condition HQ-C04. The copy and timing of
+the Annual report reminder email (CSPS-21) — only its due-date source changes.
+
+---
+
+**Acceptance Criteria**
+
+**Access & permissions**
+- Only a System Admin can view and edit the setting, in the Permit defaults
+  section of Templates & defaults.
+- On the review wizard, only the Responsible analyst or a System Admin reaches the
+  **Finalize the letter** step where the default appears; a Supporting analyst
+  never sees it.
+
+**Happy path — admin setting**
+- The Permit defaults read view shows **Annual report due** with the value
+  "<N> days after the permit ends" (e.g. "30 days after the permit ends").
+- In edit mode, the field **Annual report due (days after permit ends)** is a
+  number field; the default is 30 and the allowed range is 1–365.
+- On **Save changes**, the read view shows the new value and the existing
+  success notification appears.
+
+**Happy path — review wizard**
+- On **Finalize the letter**, the **Due date** under **Annual report due**
+  defaults to the permit end date plus the admin setting's number of days.
+- The hint under the field states the current setting: "Defaults to <N> days
+  after the permit ends." (e.g. "Defaults to 30 days after the permit ends.")
+- The due date follows the permit end date when the reviewer changes it, until
+  the reviewer picks a due date themselves.
+
+**State & status transitions**
+- A change to the admin setting applies to every permit not yet sent for
+  signature whose due date the reviewer has not picked by hand: its due date is
+  recalculated the next time the review wizard opens.
+- A due date the reviewer picked by hand is never recalculated.
+- When the Responsible analyst sends the letter for signature (status → **Out for
+  signature**), the due date on the letter is stored on the permit and becomes the
+  permit's annual report due date. Later changes to the admin setting do not
+  change it.
+- From **Out for signature** onward (**Active**, **Expired**, and renewals held in
+  **Waiting for annual report**), the stored due date drives:
+  - the due date shown on the permit's Annual report tab;
+  - the timing of the Annual report reminder email (CSPS-21);
+  - the automatic **Delinquent** label when the report is past due;
+  - the renewal hold's missing-vs-overdue check for the previous permit's report.
+- No status, permit-role, record type, or district span changes as a result of
+  editing the setting.
+
+**UI & field details**
+- Read view label: **Annual report due**. Edit field label: **Annual report due
+  (days after permit ends)**.
+- The previous **Summary report due** dropdown and its four options are removed.
+- If the field is empty, not a whole number, or outside 1–365, **Save changes**
+  does not save and the field shows the error "Enter a number from 1 to 365."
+
+**Notifications**
+- No new emails. The Annual report reminder email (CSPS-21) keeps its copy and
+  "15 days before" timing; it now counts back from the permit's stored due date.
+
+**Edge cases & constraints**
+- Permits already sent for signature or issued before this story ships keep the
+  due date printed on their letter; if a permit has none stored, its due date is
+  the permit end date plus 30 days.
+- Review drafts saved before this story that hold a due date the reviewer did not
+  pick are recalculated from the current setting on next open.
+- The letter's reminder paragraph and condition HQ-C04 show the same due date as
+  the wizard field.
+
+---
+
+**Testing notes**
+
+- **Test 1 — Setting validation:** As System Admin, edit Permit defaults and enter
+  0, 366, 2.5, and an empty value in turn. Expected: each shows "Enter a number
+  from 1 to 365." and nothing saves. Enter 45 and save. Expected: read view shows
+  "45 days after the permit ends."
+- **Test 2 — Wizard default:** With the setting at 45, open the review wizard for
+  a permit Under review as its Responsible analyst and go to Finalize the letter.
+  Expected: Due date = permit end + 45 days; hint reads "Defaults to 45 days after
+  the permit ends."; the letter's reminder paragraph shows the same date.
+- **Test 3 — Reviewer-picked date survives:** Pick a due date by hand. Change the
+  setting to 60. Reopen the wizard. Expected: the picked date is unchanged.
+- **Test 4 — In-progress review follows the setting:** On another permit Under
+  review where the due date was not picked, change the setting to 60 and reopen
+  the wizard. Expected: Due date = permit end + 60 days.
+- **Test 5 — Sent letters are fixed:** Send a letter for signature with the
+  setting at 30. Change the setting to 90. Expected: the permit's Annual report
+  tab still shows end + 30 days; the reminder email and Delinquent label follow
+  that date.
+
+---
+
+**Open questions**
+None — story appears complete.

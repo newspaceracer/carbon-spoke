@@ -88,7 +88,7 @@ Add a constrained per-permit permit-role selector for testing
 
 As a prototype tester,
 I want a per-permit control that sets my permit-role on that specific permit —
-Responsible Agent, Supporting Agent, Second Signer, or Not assigned,
+Responsible analyst, Supporting analyst, Second Signer, or Not assigned,
 So that I can test how each permit-role sees and acts on a permit without
 depending on seeded assignment data.
 
@@ -111,8 +111,8 @@ control. The eligibility rules it enforces are defined in `permissions-matrix.md
 **Access & permissions**
 - The control offers only the permit-roles the active identity is eligible for on
   this permit's type (per the eligibility table): e.g. a District Assistant
-  Technical Reviewer identity can select Supporting Agent only; an HQ Technical
-  Reviewer on a single-district permit cannot select Responsible Agent.
+  Technical Reviewer identity can select Supporting analyst only; an HQ Technical
+  Reviewer on a single-district permit cannot select Responsible analyst.
 - The control is presented as a prototype/testing affordance, visually distinct
   from real UI, alongside the identity switcher.
 
@@ -120,7 +120,7 @@ control. The eligibility rules it enforces are defined in `permissions-matrix.md
 - No permit status changes result from selecting a permit-role.
 
 **UI & field details**
-- Options are: Responsible Agent, Supporting Agent, Second Signer, Not assigned —
+- Options are: Responsible analyst, Supporting analyst, Second Signer, Not assigned —
   filtered by eligibility.
 - The selection persists per permit (e.g. `demo-permit-role-${permitId}`) and
   survives navigation away and back.
@@ -239,14 +239,14 @@ Add Waiting for review status gated by Start review
 
 **Description**
 
-As a Responsible Agent,
+As a Responsible analyst,
 I want a submitted application to sit in a "Waiting for review" status until I
 click "Start review,"
 So that there is a clear, owned handoff between submission and active review, and
 review edits are locked until review has formally begun.
 
-**Roles affected:** Researcher, Responsible Agent (Technical Reviewer as
-Responsible Agent), System Admin
+**Roles affected:** Researcher, Responsible analyst (Technical Reviewer as
+Responsible analyst), System Admin
 
 **Out of scope:** Reviewer assignment logic. The full IR read/update matrix once
 Under review — see Story 9.
@@ -260,15 +260,15 @@ Under review — see Story 9.
   Under review).
 - Clicking **Start review** transitions the permit from **Waiting for review** to
   **Under review** and records who started the review and when.
-- Only the **Responsible Agent** (or System Admin) can start review.
+- Only the **Responsible analyst** (or System Admin) can start review.
 
 **UI & field details**
 - In Waiting for review, the application form is read-only for eligible reviewers
-  and the **Start review** action is shown to the Responsible Agent only.
+  and the **Start review** action is shown to the Responsible analyst only.
 - The rest of the Internal Review is gated (read-only) until review starts.
 
 **Edge cases & constraints**
-- A reviewer who is not the Responsible Agent does not see the Start review action
+- A reviewer who is not the Responsible analyst does not see the Start review action
   in Waiting for review.
 - Starting review is not available once the permit is past Under review.
 
@@ -291,17 +291,17 @@ Add two-signature activation via Out for signature
 
 **Description**
 
-As a Responsible Agent,
+As a Responsible analyst,
 I want to sign an approved permit and send it to a second signer, after which the
 permit becomes Active,
 So that every issued permit carries the two required signatures before it takes
 effect.
 
-A permit becomes Active only after two signatures. The Responsible Agent is always
+A permit becomes Active only after two signatures. The Responsible analyst is always
 the first signer; signing sends the permit out for signature to a configured
 second signer (Story 7 configures who). Signing is handled in-system via DocuSign.
 
-**Roles affected:** Responsible Agent (Technical Reviewer as Responsible Agent),
+**Roles affected:** Responsible analyst (Technical Reviewer as Responsible analyst),
 Second Signer, System Admin
 
 **Out of scope:** Second-signer configuration surfaces — see Story 7. The
@@ -314,14 +314,14 @@ in-system.
 **Acceptance Criteria**
 
 **State & status transitions**
-- When the Responsible Agent approves and applies the **first signature**, the
+- When the Responsible analyst approves and applies the **first signature**, the
   permit transitions to **Out for signature**.
 - When the **second signer** completes their signature, the permit transitions to
   **Active** (unless intercepted by the annual-report hold — see the hold story).
 - The permit record type changes from Application to **Permit** on becoming Active.
 
 **Access & permissions**
-- Only the Responsible Agent can apply the first signature. Only the configured
+- Only the Responsible analyst can apply the first signature. Only the configured
   second signer can apply the second signature.
 - The "Generate unsigned permit" and "Upload signed active permit" actions do not
   exist; signing is in-system.
@@ -351,7 +351,7 @@ in-system.
 - **Environment note:** All emails in the QA environment route to a shared ESA
   inbox. Notify the ESA team before testing so the email can be forwarded for
   verification. Do not test against real user email addresses in QA.
-- **Test 1 — Full sign path:** As Responsible Agent, approve and apply the first
+- **Test 1 — Full sign path:** As Responsible analyst, approve and apply the first
   signature; confirm status is Out for signature and a DocuSign request goes to the
   second signer. Complete the second signature; confirm status is Active and record
   type is Permit.
@@ -359,7 +359,7 @@ in-system.
 ---
 
 **Open questions**
-- [ ] Can the Responsible Agent recall or cancel a permit that is Out for signature
+- [ ] Can the Responsible analyst recall or cancel a permit that is Out for signature
   before the second signature? If so, to what status does it return?
 
 ---
@@ -375,7 +375,7 @@ As a System Admin (multi-district) or a district administrator (single-district)
 I want to configure the second signer who co-signs a permit,
 So that every permit routes to the correct second signature automatically.
 
-The Responsible Agent is always the first signer. The second signer is configured
+The Responsible analyst is always the first signer. The second signer is configured
 by permit type: one designated person for all multi-district permits, and a
 per-district default signer for single-district permits.
 
@@ -437,19 +437,19 @@ Allow editing permit parks with managed district-flip handling
 
 **Description**
 
-As a Responsible Agent (or System Admin),
+As a Responsible analyst (or System Admin),
 I want to add and remove parks on a permit, with the system managing the
 consequences when the district span changes,
 So that a permit's parks can be corrected while keeping its district type,
-responsible agent, and district data consistent.
+responsible analyst, and district data consistent.
 
 A permit's multi/single-district type is a stored attribute computed from its
 parks' district span. Editing parks can flip the type, which changes who is
-eligible to be the Responsible Agent, so the system reassigns the lead and prunes
+eligible to be the Responsible analyst, so the system reassigns the lead and prunes
 data for any district that is fully removed. Because this is consequential, the
 editor must confirm before it commits.
 
-**Roles affected:** Responsible Agent (Technical Reviewer as Responsible Agent),
+**Roles affected:** Responsible analyst (Technical Reviewer as Responsible analyst),
 System Admin, HQ Technical Reviewer, District Lead Technical Reviewer, District
 Assistant Technical Reviewer
 
@@ -461,8 +461,8 @@ Assistant Technical Reviewer
 **Acceptance Criteria**
 
 **Access & permissions**
-- Only the **Responsible Agent** or a **System Admin** can add/remove parks. An HQ
-  Technical Reviewer who is not the Responsible Agent cannot edit parks.
+- Only the **Responsible analyst** or a **System Admin** can add/remove parks. An HQ
+  Technical Reviewer who is not the Responsible analyst cannot edit parks.
 - Parks are editable only in pre-decision statuses: Draft, Waiting for review,
   Under review, Returned to submitter.
 
@@ -474,34 +474,34 @@ Assistant Technical Reviewer
 
 **Happy path**
 - When a park add/remove changes the district span, a confirmation dialog is shown
-  before anything commits. On Confirm, parks, permit type, and agent reassignments
+  before anything commits. On Confirm, parks, permit type, and analyst reassignments
   commit together.
 
 **UI & field details**
 - The confirmation dialog states: the type change; the newly assigned Responsible
-  Agent; "You will no longer be the Responsible Agent on this permit" when the
-  editor is the outgoing lead; and any agent/condition removals.
-- The editor is informed of the new Responsible Agent but cannot choose them.
+  analyst; "You will no longer be the Responsible analyst on this permit" when the
+  editor is the outgoing lead; and any analyst/condition removals.
+- The editor is informed of the new Responsible analyst but cannot choose them.
 
 **Edge cases & constraints**
-- On a type flip, the system **auto-assigns** the new Responsible Agent: multi→
+- On a type flip, the system **auto-assigns** the new Responsible analyst: multi→
   single assigns the remaining district's Lead; single→multi assigns an HQ
   Technical Reviewer. The editor cannot pick the assignee.
 - When more than one HQ Technical Reviewer is eligible on a single→multi flip, the
   **prototype assigns one at random**. (Production has an established HQ tiebreak
   business rule; the prototype does not replicate it.)
-- The outgoing Responsible Agent is demoted to Supporting Agent if still
+- The outgoing Responsible analyst is demoted to Supporting analyst if still
   district-relevant, otherwise removed.
 - When a park removal empties a district entirely, that district's Supporting
-  Agents are removed **and** that district's Special Conditions are removed. (This
+  analysts are removed **and** that district's Special Conditions are removed. (This
   pruning does not exist today and must be built.)
 - The final-letter preview must render district condition blocks from the permit's
   **live** districts, not the original seed set (fixes a current defect where a
   dropped district keeps printing its conditions).
 
 **Notifications**
-- On a type-flip reassignment, the incoming Responsible Agent receives **EM-F**
-  and the outgoing Responsible Agent receives **EM-G** (both informational,
+- On a type-flip reassignment, the incoming Responsible analyst receives **EM-F**
+  and the outgoing Responsible analyst receives **EM-G** (both informational,
   opt-out via Profile). Copy: see `email-copy-notifications.md`.
 
 ---
@@ -510,10 +510,10 @@ Assistant Technical Reviewer
 
 - **Test 1 — Single→multi flip:** On a single-district permit, add a park from a
   second district. Confirm the dialog names an HQ Technical Reviewer as the new
-  Responsible Agent, the outgoing lead is demoted to Supporting Agent, and the
+  Responsible analyst, the outgoing lead is demoted to Supporting analyst, and the
   stored type becomes multi-district.
 - **Test 2 — Dropped district pruning:** On a multi-district permit, remove the
-  last park of one district. Confirm that district's Supporting Agents and Special
+  last park of one district. Confirm that district's Supporting analysts and Special
   Conditions are removed, and the letter preview no longer prints that district's
   conditions.
 
@@ -550,8 +550,8 @@ So that every IR section enforces permissions consistently from one source inste
 of ad-hoc per-section logic.
 
 **Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
-Reviewer, District Assistant Technical Reviewer, Responsible Agent, Supporting
-Agent
+Reviewer, District Assistant Technical Reviewer, Responsible analyst, Supporting
+analyst
 
 **Out of scope:** Applying the resolver to specific sections — see Stories
 9.2–9.5. Researcher access — see Story 11.
@@ -582,21 +582,21 @@ Agent
 
 ---
 
-## Story 9.2 — Enforce permissions on agent assignment and Tags
+## Story 9.2 — Enforce permissions on analyst assignment and Tags
 
 **Story Title**
-Enforce IR permissions on Responsible/Supporting Agent and Tags
+Enforce IR permissions on Responsible/Supporting analyst and Tags
 
 **Description**
 
 As the system,
-I want the Responsible Agent, Supporting Agents, and Tags sections to enforce the
+I want the Responsible analyst, Supporting analysts, and Tags sections to enforce the
 resolver's rules,
 So that only the permitted roles can change assignment and tagging in each status.
 
 **Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
-Reviewer, District Assistant Technical Reviewer, Responsible Agent, Supporting
-Agent
+Reviewer, District Assistant Technical Reviewer, Responsible analyst, Supporting
+analyst
 
 **Out of scope:** The resolver itself — see Story 9.1.
 
@@ -605,8 +605,8 @@ Agent
 **Acceptance Criteria**
 
 **Access & permissions**
-- Responsible Agent and Supporting Agents assignment sections are Update-if-
-  Responsible-Agent; others see Read per the matrix.
+- Responsible analyst and Supporting analysts assignment sections are Update-if-
+  Responsible-analyst; others see Read per the matrix.
 - Tags are updatable per the matrix across the reachable statuses.
 
 **State & status transitions**
@@ -629,10 +629,10 @@ Enforce IR permissions on Dates/CEQA, decisions, and signing
 As the system,
 I want Dates/CEQA, Approve permit, Return to researcher, Reject application, and
 Sign permit to enforce the resolver's rules,
-So that only the Responsible Agent (or the applicable signer) can take these
+So that only the Responsible analyst (or the applicable signer) can take these
 actions in the correct statuses.
 
-**Roles affected:** Responsible Agent, Second Signer, System Admin, HQ Technical
+**Roles affected:** Responsible analyst, Second Signer, System Admin, HQ Technical
 Reviewer, District Lead Technical Reviewer, District Assistant Technical Reviewer
 
 **Out of scope:** The status transitions themselves (Stories 5, 6). The resolver —
@@ -644,14 +644,14 @@ Story 9.1.
 
 **Access & permissions**
 - Dates/CEQA, Approve permit, Return to researcher, and Reject application are
-  Update-if-Responsible-Agent and Hidden for non-Responsible-Agents per the matrix.
-- Sign permit resolves to the first signer (Responsible Agent, in Under review) or
+  Update-if-Responsible-analyst and Hidden for non-Responsible-analysts per the matrix.
+- Sign permit resolves to the first signer (Responsible analyst, in Under review) or
   the second signer (in Out for signature) only.
 - District Lead/Assistant read Dates/CEQA and signing sections only when assigned.
 
 **State & status transitions**
 - In Returned to submitter, decision actions are Disabled for the Responsible
-  Agent and Hidden for others.
+  analyst and Hidden for others.
 
 **Notifications**
 - Return to researcher sends **EM-D**; Reject application sends **EM-E**; both to
@@ -675,10 +675,10 @@ Enforce IR permissions on HQ and District Special Conditions
 As the system,
 I want the HQ and District Special Conditions sections to enforce the resolver's
 rules,
-So that conditions are editable only by the Responsible Agent and Supporting Agent
+So that conditions are editable only by the Responsible analyst and Supporting analyst
 during review, and read-only afterward.
 
-**Roles affected:** Responsible Agent, Supporting Agent, System Admin, HQ Technical
+**Roles affected:** Responsible analyst, Supporting analyst, System Admin, HQ Technical
 Reviewer, District Lead Technical Reviewer, District Assistant Technical Reviewer
 
 **Out of scope:** The scope derivation from identity (Story 1) and the resolver
@@ -689,8 +689,8 @@ Reviewer, District Lead Technical Reviewer, District Assistant Technical Reviewe
 **Acceptance Criteria**
 
 **Access & permissions**
-- HQ and District Special Conditions are updatable by the Responsible Agent and
-  Supporting Agent during Under review; Read once Out for signature or later, per
+- HQ and District Special Conditions are updatable by the Responsible analyst and
+  Supporting analyst during Under review; Read once Out for signature or later, per
   the matrix.
 - The editable scope (HQ vs a district's conditions) derives from the active
   identity, not a self-selected control.
@@ -715,8 +715,8 @@ the resolver's rules,
 So that document and note access matches the matrix in each status.
 
 **Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
-Reviewer, District Assistant Technical Reviewer, Responsible Agent, Supporting
-Agent
+Reviewer, District Assistant Technical Reviewer, Responsible analyst, Supporting
+analyst
 
 **Out of scope:** The resolver — Story 9.1.
 
@@ -725,9 +725,9 @@ Agent
 **Acceptance Criteria**
 
 **Access & permissions**
-- The Form is Read, Update-if-Responsible-Agent during Under review, and Read plus
+- The Form is Read, Update-if-Responsible-analyst during Under review, and Read plus
   annual-report upload in Active/Expired, per the matrix.
-- Supporting Documents are updatable by the Responsible Agent and Supporting Agent
+- Supporting Documents are updatable by the Responsible analyst and Supporting analyst
   per the matrix.
 - Internal Notes are updatable by any reviewer with access (not permit-role gated).
 
@@ -745,18 +745,18 @@ Agent
 ## Story 10 — Supporting review (informational)
 
 **Story Title**
-Add an informational supporting review action for Supporting Agents
+Add an informational supporting review action for Supporting analysts
 
 **Description**
 
-As a Supporting Agent,
+As a Supporting analyst,
 I want to start and complete my supporting review of a permit,
-So that my review is recorded, without blocking the Responsible Agent's decision.
+So that my review is recorded, without blocking the Responsible analyst's decision.
 
-**Roles affected:** Supporting Agent (Technical Reviewer as Supporting Agent),
-Responsible Agent
+**Roles affected:** Supporting analyst (Technical Reviewer as Supporting analyst),
+Responsible analyst
 
-**Out of scope:** Gating the Responsible Agent's decision on supporting reviews —
+**Out of scope:** Gating the Responsible analyst's decision on supporting reviews —
 supporting review is informational and never blocks.
 
 ---
@@ -765,25 +765,25 @@ supporting review is informational and never blocks.
 
 **Access & permissions**
 - The Start/Complete supporting review action is visible only to a user assigned as
-  a Supporting Agent, during Under review.
+  a Supporting analyst, during Under review.
 
 **State & status transitions**
 - Completing a supporting review records the review but does not change the permit
-  status and does not gate the Responsible Agent's ability to proceed to a decision.
+  status and does not gate the Responsible analyst's ability to proceed to a decision.
 
 **UI & field details**
-- The action is distinct from the Responsible Agent's "Start review" (which is the
+- The action is distinct from the Responsible analyst's "Start review" (which is the
   Waiting for review → Under review transition in Story 5).
 
 **Edge cases & constraints**
-- The Responsible Agent can approve, return, or reject regardless of whether any
+- The Responsible analyst can approve, return, or reject regardless of whether any
   supporting reviews are complete.
 
 ---
 
 **Open questions**
 - [ ] Is a completed supporting review reflected anywhere visible to the
-  Responsible Agent (e.g. the review history/timeline)?
+  Responsible analyst (e.g. the review history/timeline)?
 
 ---
 
@@ -898,7 +898,7 @@ version's annual report is missing,
 So that permits are not validated while an outstanding compliance requirement is
 unmet — while still allowing an override when appropriate.
 
-**Roles affected:** Responsible Agent, System Admin, Researcher, PI, PICOF
+**Roles affected:** Responsible analyst, System Admin, Researcher, PI, PICOF
 
 **Out of scope:** The delinquent label on an already-active overdue permit (a
 separate display concept, not a status).
@@ -912,10 +912,10 @@ separate display concept, not a status).
   submitted, the permit enters **Waiting for annual report** instead of Active.
 - While held, the permit is not Active and no active-permit notifications are sent.
 - The hold clears — moving the permit to Active — when the missing annual report is
-  provided, or when a Responsible Agent or System Admin **overrides** the hold.
+  provided, or when a Responsible analyst or System Admin **overrides** the hold.
 
 **Access & permissions**
-- Only the Responsible Agent or System Admin can override the hold.
+- Only the Responsible analyst or System Admin can override the hold.
 
 **UI & field details**
 - The permit surfaces a clear held state and, for authorized roles, an override
@@ -948,11 +948,11 @@ Add a CEQA Yes/N-A radio to the Dates section
 
 **Description**
 
-As a Responsible Agent,
+As a Responsible analyst,
 I want to record CEQA applicability as a simple Yes / N/A choice,
 So that CEQA status is captured without the dropped write-only implementation.
 
-**Roles affected:** Responsible Agent (Technical Reviewer as Responsible Agent),
+**Roles affected:** Responsible analyst (Technical Reviewer as Responsible analyst),
 System Admin
 
 **Out of scope:** Any CEQA document handling or workflow beyond the applicability
@@ -967,7 +967,7 @@ choice.
   and **N/A**.
 
 **Access & permissions**
-- CEQA is editable per the IR matrix (Update if Responsible Agent, in the
+- CEQA is editable per the IR matrix (Update if Responsible analyst, in the
   appropriate statuses); read-only otherwise.
 
 ---
@@ -1042,7 +1042,7 @@ consistent across the permit workflow.
 - The area lists each notification template with an editable **subject** and
   **body**: EM-A, EM-B (second-signer request, internal/external), EM-C
   (permit issued/active), EM-D (returned to researcher), EM-E (rejected), EM-F/EM-G
-  (Responsible Agent assigned/unassigned), EM-H (annual-report hold), EM-I (status
+  (Responsible analyst assigned/unassigned), EM-H (annual-report hold), EM-I (status
   change on a permit you review). Copy source: `email-copy-notifications.md`.
 - Each template shows its available merge placeholders (e.g. `[Permit #]`,
   `[Project title]`, `[PI name]`) and its recipient roles.

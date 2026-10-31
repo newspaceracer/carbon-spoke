@@ -43,6 +43,8 @@ export interface EditField {
   yes?: string;
   no?: string;
   helper?: string;
+  /** text: maximum length, shown as a character counter (cds-text-input max-count). */
+  maxCount?: number;
   /** Only show this control while another field is truthy ("field") or falsy ("!field"). */
   showIf?: string;
   /** daterange: the two value fields it reads/writes, and their input labels. */
@@ -220,7 +222,7 @@ const controlHtml = (f: EditField, v: unknown) => {
         <p class="rec-occ__empty" hidden>No field investigation occurrences added yet.</p>
       </div>`;
     default:
-      return `<cds-text-input id="${id}" data-field-name="${f.name}" label="${label}"${helper} value="${escHtml(asText(v))}"></cds-text-input>`;
+      return `<cds-text-input id="${id}" data-field-name="${f.name}" label="${label}"${helper}${f.maxCount ? ` max-count="${f.maxCount}" enable-counter` : ''} value="${escHtml(asText(v))}"></cds-text-input>`;
   }
 };
 

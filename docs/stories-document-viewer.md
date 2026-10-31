@@ -63,7 +63,7 @@ exploration, not part of this story.
 - The document viewer appears in the review wizard and is available to any reviewer
   who can access the review wizard on that permit — System Admin, HQ Technical
   Reviewer, District Lead Technical Reviewer, District Assistant Technical Reviewer —
-  regardless of their **permit-role** (Responsible Agent or Supporting Agent). It
+  regardless of their **permit-role** (Responsible analyst or Supporting analyst). It
   inherits the review wizard's existing access gating; this story does not redefine
   who may open the wizard.
 - Viewing a document is read-only: no reviewer can edit, replace, or delete a

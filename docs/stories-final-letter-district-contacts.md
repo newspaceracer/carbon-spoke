@@ -10,10 +10,10 @@ review wizard).
 The Technical Reviewer sub-roles referenced are the same as in
 `stories-district-administration.md`: **HQ Technical Reviewer**, **District Lead
 Technical Reviewer**, **District Assistant Technical Reviewer**. The permit-role
-layer (**Responsible Agent**, **Supporting Agent**) is the same as in
-`stories-roles-permissions.md`. In this feature the permit's **Responsible Agent
+layer (**Responsible analyst**, **Supporting analyst**) is the same as in
+`stories-roles-permissions.md`. In this feature the permit's **Responsible analyst
 (RA)** — and a **System Admin** acting on the permit — is the "lead" who edits the
-letter directly; a **Supporting Agent (SA)** assigned to a district raises change
+letter directly; a **Supporting analyst (SA)** assigned to a district raises change
 requests the RA approves.
 
 ---
@@ -27,7 +27,7 @@ Manage permit-letter district contacts as a person plus park scope
 
 **Description**
 
-As the permit's Responsible Agent (or a System Admin),
+As the permit's Responsible analyst (or a System Admin),
 I want each district on the permit letter to carry a plain list of contacts —
 each one a person and the parks they cover — that I can add to, edit, and remove,
 So that every applicant knows exactly who to notify before working in any
@@ -59,7 +59,7 @@ developer-only identity switcher, and the per-permit permit-role with a
 constrained per-permit control. In production, the acting role is the signed-in
 user's actual account role and their assigned permit-role.
 
-**Roles affected:** Responsible Agent (RA), Supporting Agent (SA), System Admin,
+**Roles affected:** Responsible analyst (RA), Supporting analyst (SA), System Admin,
 HQ Technical Reviewer / District Lead Technical Reviewer / District Assistant
 Technical Reviewer (as the users who hold RA/SA), Researcher / Principal
 Investigator (PI) (letter recipients — read the printed list, do not edit it).
@@ -76,10 +76,10 @@ existing behavior, unchanged here.
 **Acceptance Criteria**
 
 **Access & permissions**
-- On the **Finalize the letter** step, the Responsible Agent (or a System Admin)
+- On the **Finalize the letter** step, the Responsible analyst (or a System Admin)
   can add, edit, and remove contacts for **every** district on the permit, applied
   directly.
-- A Supporting Agent can add, edit, and remove contacts only for the district they
+- A Supporting analyst can add, edit, and remove contacts only for the district they
   belong to, and only from their **Complete review** modal; every such action
   becomes a change request awaiting the RA. Districts they do not belong to show
   "Not your district — managed by its reviewer." and are read-only.
@@ -127,7 +127,7 @@ existing behavior, unchanged here.
 - The list locks only when the letter is sent and the permit moves to **Out for
   signature**; it unlocks if the permit is reset back to review.
 
-**Change-request workflow (Supporting Agent)**
+**Change-request workflow (Supporting analyst)**
 - A SA's add / edit / remove for their district is recorded as a pending request,
   shown to the RA under "Pending change requests" with **Accept** and **Decline**,
   and to the SA under "Your change requests · pending lead approval" with
@@ -185,7 +185,7 @@ Require every permit district to have a letter contact before finalizing
 
 **Description**
 
-As the permit's Responsible Agent,
+As the permit's Responsible analyst,
 I want to be prevented from finalizing or sending the letter while any district
 with authorized parks has no contact,
 So that the applicant is never issued a letter that fails to name who to notify
@@ -195,7 +195,7 @@ for an authorized park unit.
 developer-only identity switcher, and the per-permit permit-role with a
 constrained per-permit control.
 
-**Roles affected:** Responsible Agent (RA), System Admin (as RA), Supporting Agent
+**Roles affected:** Responsible analyst (RA), System Admin (as RA), Supporting analyst
 (SA) (indirectly — resolves the gap by contributing a contact request the RA
 accepts).
 

@@ -326,8 +326,11 @@ export function initReviewWorkspace(): void {
     });
     // Gated tabs (the detail page's conditions tab); with only one tab left the
     // strip hides — and falls back to the application if it was showing.
+    // Disabled too: cds-tabs' arrow keys skip only [disabled] tabs.
     document.querySelectorAll<HTMLElement>('cds-tab[data-gate]').forEach((tab) => {
-      tab.style.display = (show[tab.dataset.gate!] ?? true) ? '' : 'none';
+      const visible = show[tab.dataset.gate!] ?? true;
+      tab.style.display = visible ? '' : 'none';
+      tab.toggleAttribute('disabled', !visible);
     });
     const strip = document.querySelector<HTMLElement>('[data-record-tabs-wrap]');
     if (strip) {

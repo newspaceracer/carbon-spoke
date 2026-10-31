@@ -6,6 +6,9 @@
   "description": "A Carbon Design System spoke — an Astro shell that composes @carbon/web-components (cds-*) as its default component layer, with a re-pointed Claude 'carbon-first' plugin for building UIs fast.",
   "scripts": {
     "dev": "astro dev",
+    "dev:demo": "astro dev --port 4351",
+    "dev:worst": "PUBLIC_PERMIT_FIXTURE=worst astro dev --port 4352",
+    "dev:sparse": "PUBLIC_PERMIT_FIXTURE=sparse astro dev --port 4353",
     "build": "astro build",
     "preview": "astro preview"
   },

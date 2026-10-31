@@ -35,7 +35,11 @@ import Avatar from './Avatar.astro';
 import '../styles/study-area-blocks.css';
 
 const dc = permit.dataCollection;
-const specimenTotal = dc.specimens.reduce((n, s) => n + Number(s.quantity), 0);
+// Quantities arrive as typed — "1,284" must count, not turn the total into NaN;
+// a non-numeric entry ("~50") adds nothing rather than poisoning the sum.
+const specimenTotal = dc.specimens
+  .reduce((n, s) => n + (Number(String(s.quantity).replace(/,/g, '')) || 0), 0)
+  .toLocaleString('en-US');
 const w = permit.activeWindow;
 // The applicant side, first on the Overview: the principal investigator and the
 // PICOF — the person in direct charge of field work (who's on site) — ALWAYS, and
@@ -47,7 +51,7 @@ const same = (a?: { email?: string; name: string }, b?: { email?: string; name: 
   !!a && !!b && (a.email ? a.email === b.email : a.name === b.name);
 const piIsPicof = same(team.principalInvestigator, team.fieldLead);
 const piIsSubmitter = same(team.principalInvestigator, team.submitter);
-const PICOF = 'PICOF (in direct charge of field work)';
+const PICOF = 'Person in direct charge of field work'; // same wording as the Application tab
 const applicantPeople = [
   // `phase`: when the tile shows — always, or before approval only (submitter).
   // `before` / `after`: the label before vs from approval on — roles the PI also
@@ -63,7 +67,16 @@ const tel = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, '')}`;
 // (one person holding two roles counts once). The submitter files the paperwork.
 const fieldTeam = [team.principalInvestigator, team.fieldLead, ...team.participants]
   .filter((c, i, all) => all.findIndex((o) => same(o, c)) === i);
-const participantCount = team.participants.length;
+// Who the count is: the PI, the PICOF when someone else, and the participants
+// (after de-duping anyone who holds two roles).
+const participantCount = fieldTeam.length - (piIsPicof ? 1 : 2);
+const teamParts = [
+  'PI',
+  ...(piIsPicof ? [] : ['PICOF']),
+  ...(participantCount > 0 ? [`${participantCount} ${participantCount === 1 ? 'participant' : 'participants'}`] : []),
+];
+const teamSummary = teamParts.length === 1 ? 'PI only'
+  : `${teamParts.slice(0, -1).join(', ')} and ${teamParts.at(-1)}`;
 const pi = permit.projectInfo;
 // Field visits as data for the script (next visit is relative to the demo clock).
 const visits = pi.fieldSessions.map((s, i) => ({ start: s.start, end: s.end ?? s.start, label: pi.fieldOccurrences[i] }));
@@ -104,7 +117,9 @@ const copyIcon =
         <h3 class="po__field t-heading-compact-01" data-po-label="dates">Requested dates</h3>
         <!-- Every permit runs one year, so the exact dates are the figure — set like
              the key dates (heading-03), since a date at count size won't fit a cell. -->
-        <p class="po__value t-heading-03"><span class="po__nowrap">{w.start} –</span> <span class="po__nowrap">{w.end}</span></p>
+        <p class="po__value t-heading-03">{w.start === w.end
+          ? <span class="po__nowrap">{w.start}</span>
+          : <Fragment><span class="po__nowrap">{w.start} –</span> <span class="po__nowrap">{w.end}</span></Fragment>}</p>
       </div>
       <div class="po__cell po__figure">
         <h3 class="po__field t-heading-compact-01">Field visits</h3>
@@ -116,7 +131,7 @@ const copyIcon =
         <h3 class="po__field t-heading-compact-01">Special conditions</h3>
         <p class="po__value t-heading-05" data-po-conditions-total>—</p>
         <div class="po__sub t-body-compact-01" data-po-conditions-owners></div>
-        <cds-link class="po__go" href="#special-conditions" data-po-go="special-conditions" data-po-conditions-link style="display:none">Read the conditions</cds-link>
+        <cds-link class="po__go" href="#special-conditions" data-po-go="special-conditions" data-po-conditions-link style="display:none">See the conditions</cds-link>
       </div>
       <div class="po__cell po__figure">
         <h3 class="po__field t-heading-compact-01" data-po-label="specimens">Requested specimens</h3>
@@ -130,7 +145,7 @@ const copyIcon =
       <div class="po__cell po__figure">
         <h3 class="po__field t-heading-compact-01">Research team</h3>
         <p class="po__value t-heading-05">{fieldTeam.length}</p>
-        <p class="po__sub t-body-compact-01">PI and {participantCount} {participantCount === 1 ? 'participant' : 'participants'}</p>
+        <p class="po__sub t-body-compact-01">{teamSummary}</p>
       </div>
     </div>
   </section>
@@ -159,9 +174,9 @@ const copyIcon =
         <div class="po__tl-labels" data-po-tl-below></div>
       </div>
       <ul class="po__tl-legend t-label-01" aria-hidden="true">
-        <li><span class="po__tl-key po__tl-visit po__tl-visit--past"></span>Past field visit</li>
-        <li><span class="po__tl-key po__tl-visit"></span>Field visit</li>
-        <li><span class="po__tl-key po__tl-visit po__tl-visit--next"></span>Next field visit</li>
+        <li><span class="po__tl-key po__tl-visit po__tl-visit--past"></span><span data-po-tl-legend="past">Past field visit</span></li>
+        <li><span class="po__tl-key po__tl-visit"></span><span data-po-tl-legend="visit">Field visit</span></li>
+        <li><span class="po__tl-key po__tl-visit po__tl-visit--next"></span><span data-po-tl-legend="next">Next field visit</span></li>
         <li data-po-tl-legend-today><span class="po__tl-key po__tl-today-key"></span>Today</li>
         <li data-po-tl-legend-report><span class="po__tl-key po__tl-report"></span>Annual report due</li>
       </ul>
@@ -199,7 +214,7 @@ const copyIcon =
   <cds-tile class="po__panel">
     <h2 class="po__panel-title t-heading-03">About this research</h2>
     <p class="po__abstract t-body-01">{pi.purpose}</p>
-    <cds-link class="po__go" href="#project-information" data-po-go="application#project-information">Read the full project description</cds-link>
+    <cds-link class="po__go" href="#project-information" data-po-go="application#project-information">See the full project description</cds-link>
   </cds-tile>
 
   <!-- ── The parks — ONE block in every state, the SAME district blocks as the
@@ -241,7 +256,12 @@ const copyIcon =
     // Application history rail (one tracker, not two).
     // Wording by viewer; the owner reads "your", staff and the public read about it.
     type Stage = [string, string, string[]];
-    const stageFor = (status: string, viewer: Viewer): Stage => {
+    // The changes a return asked for — empty when it carried only a message.
+    const returnedIssues = (status: string) => {
+      const ret = RETURNED.includes(status) ? reviewStore(id).returned() : null;
+      return ret ? reviewStore(id).issues().filter((i) => ret.issueIds.includes(i.id)) : [];
+    };
+    const stageFor = (status: string, viewer: Viewer, hasIssues = false): Stage => {
       // Title = the status, exactly as the header says it. The line = what comes
       // next (or, once closed, how it ended). Wording by viewer.
       const owner = viewer === 'owner';
@@ -255,7 +275,9 @@ const copyIcon =
         ? next("a decision. You'll get an email when it's made.")
         : next('a decision, once the review team is done.'), []];
       if (RETURNED.includes(status)) return [status, owner
-        ? next('make the changes below, then resubmit your application.')
+        ? next(hasIssues
+          ? 'make the changes below, then resubmit your application.'
+          : 'make the changes the review team asked for, then resubmit your application.')
         : next('the researcher makes the changes and resubmits.'), []];
       if (status === 'Out for signature') return [status, owner
         ? next('the signed letter makes your permit active. Read the letter and its special conditions now.')
@@ -315,7 +337,7 @@ const copyIcon =
         `<dd class="po__keydate-value t-heading-03">${esc(k.value)}</dd>` +
         (k.overdue ? `<dd><cds-icon-indicator kind="failed" label="Overdue"></cds-icon-indicator></dd>` : '') +
         (k.note ? `<dd class="po__line t-body-compact-01">${esc(k.note)}</dd>` : '') +
-        (k.report ? `<dd><cds-link class="po__go" href="#report" data-po-go="report">Go to the annual report</cds-link></dd>` : '') +
+        (k.report ? `<dd><cds-link class="po__go" href="#report" data-po-go="report">See the annual report</cds-link></dd>` : '') +
         '</div>').join('');
       shown(dl, items.length > 0);
       // The figures say what's next on an issued permit — no sentence repeating them.
@@ -331,12 +353,15 @@ const copyIcon =
     // due date once it's owed), with the elapsed share filled, each field visit, and
     // today. Positions are percentages of the axis.
     const t = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
+    const DAY = 86_400_000;
+    const MAX_VISIT_MARKS = 15;
     const short = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const renderTimeline = (status: string, viewer: Viewer) => {
       const owesReport = viewer !== 'public' && ['Active', 'Expired'].includes(status);
       const dueIso = reportDueISO();
       const axisEnd = owesReport ? dueIso : endIso;
-      const span = t(axisEnd) - t(startIso);
+      // A one-day window has no length — guard the divide so markers sit at 0%.
+      const span = Math.max(1, t(axisEnd) - t(startIso));
       const pos = (iso: string) => Math.min(100, Math.max(0, ((t(iso) - t(startIso)) / span) * 100));
       const todayIso = todayISO();
       // Elapsed: only once the permit is in force.
@@ -345,10 +370,25 @@ const copyIcon =
       fill.style.inlineSize = `${elapsed}%`;
       // Markers.
       const next = visits.find((v) => daysUntil(v.end) >= 0);
-      const marks: string[] = visits.map((v) => {
-        const kind = v === next ? ' po__tl-visit--next' : daysUntil(v.end) < 0 ? ' po__tl-visit--past' : '';
-        return `<span class="po__tl-mark po__tl-visit${kind}" style="inset-inline-start:${pos(v.start)}%"></span>`;
+      // Many visits pile into one smear of dots, so past MAX_VISIT_MARKS they're
+      // grouped: one dot per month, or per quarter on a window over two years.
+      // A group is "next" if it holds the next visit, "past" once all of it is.
+      const unit = visits.length <= MAX_VISIT_MARKS ? null
+        : span > 2 * 365 * DAY ? 'quarter' : 'month';
+      const groupKey = (iso: string) => unit === 'quarter'
+        ? `${iso.slice(0, 4)}-Q${Math.floor((Number(iso.slice(5, 7)) - 1) / 3)}`
+        : unit === 'month' ? iso.slice(0, 7) : iso;
+      const groups = new Map<string, Visit[]>();
+      for (const v of visits) groups.set(groupKey(v.start), [...(groups.get(groupKey(v.start)) ?? []), v]);
+      const marks: string[] = [...groups.values()].map((g) => {
+        const kind = next && g.includes(next) ? ' po__tl-visit--next'
+          : g.every((v) => daysUntil(v.end) < 0) ? ' po__tl-visit--past' : '';
+        return `<span class="po__tl-mark po__tl-visit${kind}" style="inset-inline-start:${pos(g[0].start)}%"></span>`;
       });
+      const legend = unit
+        ? { past: `Past ${unit} with visits`, visit: `${unit === 'quarter' ? 'Quarter' : 'Month'} with visits`, next: `${unit === 'quarter' ? 'Quarter' : 'Month'} of the next visit` }
+        : { past: 'Past field visit', visit: 'Field visit', next: 'Next field visit' };
+      for (const [k, text] of Object.entries(legend)) $(`[data-po-tl-legend="${k}"]`)!.textContent = text;
       const todayIn = t(todayIso) >= t(startIso) && t(todayIso) <= t(axisEnd);
       if (todayIn) marks.push(`<span class="po__tl-mark po__tl-today" style="inset-inline-start:${pos(todayIso)}%"></span>`);
       if (owesReport) {
@@ -364,7 +404,7 @@ const copyIcon =
       $('[data-po-tl-above]')!.innerHTML =
         (todayIn ? at(pos(todayIso), 'Today', ' po__tl-label--strong') : '') +
         (owesReport ? at(pos(dueIso), `Report due ${short(dueIso)}`) : '');
-      $('[data-po-tl-below]')!.innerHTML = at(0, start) + at(pos(endIso), end);
+      $('[data-po-tl-below]')!.innerHTML = at(0, start) + (endIso === startIso ? '' : at(pos(endIso), end));
       shown($('[data-po-tl-legend-today]'), todayIn);
       shown($('[data-po-tl-legend-report]'), owesReport);
     };
@@ -381,7 +421,7 @@ const copyIcon =
 
     const render = (status: string, viewer: Viewer) => {
       const authorized = AUTHORIZED.includes(status);
-      const [title, next, links] = stageFor(status, viewer);
+      const [title, next, links] = stageFor(status, viewer, returnedIssues(status).length > 0);
       $('[data-po-title]')!.textContent = title;
       $('[data-po-next]')!.textContent = next;
       // A delinquent report blocks new applications as PI — don't offer one.
@@ -399,7 +439,7 @@ const copyIcon =
       const districts = resolveStudyAreas(readStudyAreaModel('study-area-contacts'), id);
       const total = districts.reduce((n, d) => n + d.parks.length, 0);
       const people = authorized && viewer !== 'public';
-      $('[data-po-parks-title]')!.textContent = people ? 'Authorized parks and contacts' : `${word} parks`;
+      $('[data-po-parks-title]')!.textContent = `${word} parks`; // same title as the Application tab's section
       $('[data-po-parks-list]')!.innerHTML = districtBlocksHtml(districts, { people, maxParks: PARKS_SHOWN });
       const parksLink = $('[data-po-parks-link]');
       if (parksLink) parksLink.textContent = `See all ${plural(total, 'park')}`;
@@ -419,7 +459,7 @@ const copyIcon =
           .map((key) => ({ name: ownerName(key), n: applied.filter((c) => c.owner === key).length }))
           .filter((r) => r.n > 0);
         $('[data-po-conditions-total]')!.textContent = String(applied.length);
-        $('[data-po-conditions-owners]')!.innerHTML = rows.map((r) => `<p>${esc(r.name)} · ${r.n}</p>`).join('');
+        $('[data-po-conditions-owners]')!.innerHTML = rows.map((r) => `<p>${esc(r.name)}&nbsp;·&nbsp;${r.n}</p>`).join('');
       } else {
         $('[data-po-conditions-total]')!.textContent = '—';
         $('[data-po-conditions-owners]')!.innerHTML = viewer === 'public' ? '' : '<p>Final once approved</p>';
@@ -442,8 +482,7 @@ const copyIcon =
       // Returned: the itemized changes.
       const todo = $('[data-po-todo]');
       const list = $('[data-po-todo-list]');
-      const ret = RETURNED.includes(status) ? reviewStore(id).returned() : null;
-      const issues = ret ? reviewStore(id).issues().filter((i) => ret.issueIds.includes(i.id)) : [];
+      const issues = returnedIssues(status);
       shown(todo, issues.length > 0 && viewer !== 'public');
       $('[data-po-todo-title]')!.textContent = viewer === 'owner' ? 'Needs your action' : 'Changes requested';
       if (list) {
@@ -551,7 +590,9 @@ const copyIcon =
 
   /* Band 2 — schedule (2/3) beside people (1/3); stacked on a narrow column, and
      the schedule takes the row alone in the public view. */
-  .po__pair { display: grid; gap: var(--cds-spacing-05, 1rem); grid-template-columns: 1fr; }
+  /* Each card keeps its own height — a long People list mustn't stretch the
+     Schedule card into an empty block. */
+  .po__pair { display: grid; gap: var(--cds-spacing-05, 1rem); grid-template-columns: 1fr; align-items: start; }
   @container (min-width: 48rem) {
     .po__pair { grid-template-columns: 2fr 1fr; }
     .po__pair--solo { grid-template-columns: 1fr; }

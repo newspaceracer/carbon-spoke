@@ -35,10 +35,34 @@ function ensureHost(): HTMLElement {
   return host;
 }
 
+export interface ToastAction {
+  label: string;
+  onAction: () => void;
+}
+
 /** Show a transient confirmation toast (top-right, auto-dismissing). Success/info
- *  announce politely; warning/error announce assertively. */
-export function showToast(title: string, subtitle = '', kind: ToastKind = 'success'): void {
+ *  announce politely; warning/error announce assertively. With an `action` (e.g.
+ *  Undo) it's Carbon's actionable notification instead, and it does NOT time out —
+ *  an action must stay reachable (WCAG 2.2.1); the caller may remove the returned
+ *  element once the action no longer applies. */
+export function showToast(title: string, subtitle = '', kind: ToastKind = 'success', action?: ToastAction): HTMLElement {
   const host = ensureHost();
+  if (action) {
+    const t = document.createElement('cds-actionable-notification');
+    t.setAttribute('kind', kind);
+    t.setAttribute('role', kind === 'warning' || kind === 'error' ? 'alert' : 'status');
+    t.setAttribute('low-contrast', '');
+    t.setAttribute('title', title);
+    if (subtitle) t.setAttribute('subtitle', subtitle);
+    const btn = document.createElement('cds-actionable-notification-button');
+    btn.setAttribute('slot', 'action');
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => { t.remove(); action.onAction(); });
+    t.appendChild(btn);
+    host.appendChild(t);
+    t.addEventListener('cds-notification-closed', () => t.remove());
+    return t;
+  }
   const t = document.createElement('cds-toast-notification');
   t.setAttribute('kind', kind);
   // Carbon defaults a notification to role="alert" (assertive) — right for a
@@ -53,4 +77,5 @@ export function showToast(title: string, subtitle = '', kind: ToastKind = 'succe
   // Remove on close (X or timeout); backstop cleanup in case the event is missed.
   t.addEventListener('cds-notification-closed', () => t.remove());
   window.setTimeout(() => t.remove(), 6600);
+  return t;
 }

@@ -10,7 +10,7 @@ redundant per-step intro info banners.
 The review wizard (permit **Under review**) has three steps: **Review &
 conditions** (step ①), **Finalize the letter** (step ②), and **Review & send**
 (step ③). Steps ② and ③ are reached only by the permit's lead — the **Responsible
-Agent (RA)** or a **System Admin** acting on the permit; a **Supporting Agent
+analyst (RA)** or a **System Admin** acting on the permit; a **Supporting analyst
 (SA)** never advances past step ①.
 
 ---
@@ -24,7 +24,7 @@ Promote section actions into headers and drop step-intro banners
 
 **Description**
 
-As the permit's Responsible Agent (or a System Admin),
+As the permit's Responsible analyst (or a System Admin),
 I want the Finalize the letter and Review & send steps to open directly on their
 content, with each section's primary action sitting in that section's header,
 So that the steps read cleanly without stating what I already understand from the
@@ -42,8 +42,8 @@ developer-only identity switcher, and the per-permit permit-role with a
 constrained per-permit control. In production, the acting role is the signed-in
 user's actual account role and their assigned permit-role.
 
-**Roles affected:** Responsible Agent (RA), System Admin (the leads who reach
-steps ② and ③). Supporting Agent (SA) is unaffected — they never reach these steps.
+**Roles affected:** Responsible analyst (RA), System Admin (the leads who reach
+steps ② and ③). Supporting analyst (SA) is unaffected — they never reach these steps.
 
 **Out of scope:** The **Add contact**-in-header treatment for District contacts —
 already covered in `stories-final-letter-district-contacts.md`. The behavior of

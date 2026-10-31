@@ -33,8 +33,7 @@ const t = permit.researchTeam;
   <div class="subblock">
     <div class="contact-grid">
       {team.map((c, i) => (
-        <ContactCard role={c.roles} contact={c.contact} kind={c.kind} cvHref={c.cvHref} editKey={readonly ? undefined : `team-${i}`}
-          wide={c.roles.includes('Organization') || c.roles.includes('Principal investigator')} />
+        <ContactCard role={c.roles} contact={c.contact} kind={c.kind} cvHref={c.cvHref} editKey={readonly ? undefined : `team-${i}`} />
       ))}
     </div>
   </div>

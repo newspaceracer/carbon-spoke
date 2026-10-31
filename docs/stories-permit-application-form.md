@@ -277,8 +277,10 @@ participant to create an account.
 - The Principal investigator section offers the checkbox "I am the principal
   investigator for this project"; when checked, the PI contact fields prefill from
   the signed-in Researcher's profile.
-- The Researcher can upload the PI's résumé, and is offered "Save this résumé to
-  my profile and auto-fill it on future applications".
+- The Researcher can upload the PI's résumé. When they are the PI and a valid
+  résumé is attached (a wrong-type or too-large file doesn't count), they are
+  offered "Save this résumé to my profile and auto-fill it on future
+  applications".
 - The Person in direct charge of field work section asks "Is this the same person
   as the principal investigator? (required)".
 - Answering yes replaces the contact fields with the confirmation "No extra
@@ -509,18 +511,20 @@ certification. The Principal Investigator's signature on the regulated form.
 - The Application summary shows the checkbox "I certify that the information
   provided in this application is accurate and complete to the best of my
   knowledge."
-- "Submit application" is disabled until the checkbox is checked.
-- Checking the box enables "Submit application" immediately; unchecking it disables
-  the button again.
+- "Submit application" is always enabled (so it stays focusable).
+- Selecting "Submit application" with the box unchecked does not submit; the
+  checkbox shows the error "Confirm this statement to submit" and takes focus.
+- Checking the box clears the error.
 
 **UI & field details**
 - The certification is introduced by the banner "Ready to submit?" / "Once
   submitted, your application goes to California State Parks for review. Confirm
-  the statement below to enable Submit."
+  the statement below, then submit."
 
 **Edge cases & constraints**
-- The system does not submit an uncertified application even if the disabled
-  button is activated by other means.
+- The system never submits an uncertified application.
+- When the PI has an overdue annual report, "Submit application" is disabled; the
+  error banner at the top of the page explains why.
 
 ---
 
@@ -606,7 +610,7 @@ I want unmistakable confirmation that it was received, with my tracking number a
 what happens next,
 So that I know the submission landed and do not resubmit.
 
-**Roles affected:** Researcher. Downstream: the Responsible Agent who picks the
+**Roles affected:** Researcher. Downstream: the Responsible analyst who picks the
 application up for review.
 
 **Out of scope:** Reviewer-side assignment and the "Start review" action.

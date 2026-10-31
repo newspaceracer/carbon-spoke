@@ -4,23 +4,24 @@
 // Active and Expired permits.
 //   • Requirement notice — due / changes requested / overdue / complete.
 //   • Upload area — for the owner (submitter, PI, PICOF), the Responsible
-//     Agent, or an admin. Every upload is a new VERSION of the one report and
+//     analyst, or an admin. Every upload is a new VERSION of the one report and
 //     becomes current; it emails the analysis team (EM-J).
 //   • Report — once a version exists, the CURRENT version is rendered inline in the
 //     shared DocumentViewer (same viewer as the application's documents), so no
 //     one has to download it to read it; the viewer's picker lists every version.
 //     A static prototype keeps no file bytes: a file uploaded in this session shows
 //     itself (object URL, until reload); otherwise the sample report PDF stands in.
-//   • Versions table — newest first, with status. The Responsible Agent (or an
+//   • Versions table — newest first, with status. The Responsible analyst (or an
 //     admin) can "Request changes" on the current version (a required message,
 //     emailed to the researcher — EM-K; the requirement reopens) and "Remove" any
 //     version behind a danger confirm (the previous version becomes current).
 //
-// Composition: cds-inline-notification, cds-file-uploader-drop-container +
+// Composition: cds-inline-notification, cds-file-uploader (button variant) +
 // cds-button, cds-table, cds-icon-indicator, cds-modal +
 // cds-textarea. Layout CSS only; look = tokens.
 import { permit } from '../data/permit';
 import DocumentViewer from './DocumentViewer.astro';
+import { MAX_FILE_SIZE } from '../lib/file-upload';
 
 // The stand-in for a report on file (invented content; see public/docs).
 const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
@@ -40,19 +41,22 @@ const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
     />
   </section>
 
-  <!-- Upload — owner, Responsible Agent, or admin; each upload is a new version. -->
+  <!-- Upload — owner, Responsible analyst, or admin; each upload is a new version. -->
   <section class="ar__upload" data-ar-upload aria-labelledby="ar-upload-title" style="display:none">
     <h3 id="ar-upload-title" class="t-heading-02" data-ar-upload-title>Upload report</h3>
-    <p class="ar__hint t-body-01" data-ar-upload-hint>One document completes the requirement.</p>
-    <cds-file-uploader-drop-container data-ar-drop accept=".pdf">
-      Drag and drop a file here, or click to upload
-    </cds-file-uploader-drop-container>
-    <p class="ar__hint t-label-01">Accepted file type: PDF.</p>
+    <!-- No uploader title: the section heading above names it. Picking a file
+         uploads it, so the button says Upload and the list holds only errors
+         (wrong type, too large) — the Versions table shows the result. -->
+    <cds-file-uploader class="ar__uploader">
+      <span slot="label-description"><span data-ar-upload-hint>One document completes the requirement.</span> Accepted file type: PDF. Maximum file size: {MAX_FILE_SIZE}.</span>
+      <cds-file-uploader-button button-kind="tertiary" size="md" data-ar-drop accept=".pdf">Upload file</cds-file-uploader-button>
+      <div data-ar-errors></div>
+    </cds-file-uploader>
   </section>
 
   <section class="ar__uploads" aria-labelledby="ar-uploads-title">
     <h3 id="ar-uploads-title" class="t-heading-02">Versions</h3>
-    <p class="ar__hint t-body-01" data-ar-empty>No versions yet.</p>
+    <p class="ar__hint t-body-01" data-ar-empty>No report uploaded yet.</p>
     <cds-table size="md" data-ar-table style="display:none">
       <cds-table-head>
         <cds-table-header-row>
@@ -111,6 +115,7 @@ const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
   import { sendEmail } from '../lib/notifications';
   import { showToast } from '../lib/toast';
   import { withBase } from '../lib/base';
+  import { wireUpload } from '../lib/file-upload';
 
   const root = document.querySelector<HTMLElement>('[data-annual-report]');
   if (root) {
@@ -130,7 +135,7 @@ const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
     let owners: string[] = [];
     try { owners = JSON.parse(document.getElementById('permit-owners')?.textContent || '[]'); } catch {}
     const isOwner = who === 'researcher' && !!me && owners.includes(me.name.toLowerCase());
-    // The Responsible Agent (or an admin) reviews the report: uploads, requests
+    // The Responsible analyst (or an admin) reviews the report: uploads, requests
     // changes, and is the only one who can remove a version.
     const isReviewer = () => who === 'admin' || readPermitRole(id) === 'responsible';
 
@@ -139,21 +144,19 @@ const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
     });
 
     // ── Upload ────────────────────────────────────────────────────────────
-    // Dropping (or picking) a file uploads it straight away — no confirm step: a
-    // wrong file is fixed by uploading the right one, which becomes current.
-    // A static prototype can't store bytes: "uploaded" records the file's name.
-    $('[data-ar-drop]').addEventListener('cds-file-uploader-drop-container-changed', (e) => {
-      const file = ((e as CustomEvent).detail?.addedFiles as File[] | undefined)?.[0];
-      if (!file) return;
+    // Picking a file uploads it straight away — no confirm step: a wrong file is
+    // fixed by uploading the right one, which becomes current. A static prototype
+    // can't store bytes: "uploaded" records the file's name.
+    wireUpload($('[data-ar-drop]'), { list: $('[data-ar-errors]'), single: true, errorsOnly: true, onAdd: ([file]) => {
       const by = me?.name ?? 'The researcher';
       const { version } = addUpload(id, file.name, by);
       sessionFiles.set(version, URL.createObjectURL(file));
       render();
       sendEmail('EM-J', emailVars({ 'Uploaded by': by }));
       showToast(`Version ${version} uploaded`, 'The review team gets an email.');
-    });
+    } });
 
-    // ── Request changes (Responsible Agent / admin) ───────────────────────
+    // ── Request changes (Responsible analyst / admin) ───────────────────────
     const modal = document.getElementById('ar-request-modal') as any;
     const message = document.getElementById('ar-request-message') as any;
     document.getElementById('ar-request-confirm')?.addEventListener('click', () => {
@@ -168,7 +171,7 @@ const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
     });
     message?.addEventListener('input', () => { if (message.invalid && String(message.value).trim()) message.invalid = false; });
 
-    // ── Remove a version (Responsible Agent / admin) ──────────────────────
+    // ── Remove a version (Responsible analyst / admin) ──────────────────────
     const removeModal = document.getElementById('ar-remove-modal') as any;
     let removing: number | null = null;
     // What happens after removing `version`: the newest remaining becomes current.
@@ -266,7 +269,7 @@ const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
         state === 'submitted' ? ['success', 'Report complete', `${latest!.by} uploaded it on ${latest!.at}.`]
         : state === 'changes-requested' ? ['warning', 'Changes requested', ask]
         : state === 'delinquent' ? ['error', 'Report overdue', `It was due ${due}.${sentBack ? ` Changes requested — ${ask}` : ''}`]
-        : ['info', `Due ${due}`, isOwner ? '30 days after your permit ends. You can upload it now.' : '30 days after the permit ends.'];
+        : ['info', `Due ${due}`, isOwner ? '30 days after your permit ends. You can upload it now.' : '30 days after the permit ends. The researcher uploads it here.'];
       notice.setAttribute('kind', kind);
       notice.setAttribute('title', title);
       notice.setAttribute('subtitle', sub);
@@ -292,7 +295,8 @@ const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
         const actions = document.createElement('div');
         actions.className = 'ar__actions';
         actions.append(ghost('Download', () => download(u)));
-        if (standing && isReviewer()) actions.append(ghost('Request changes', () => { modal.open = true; }));
+        // Not on your own upload — you'd upload a new version instead (CSPS-410).
+        if (standing && isReviewer() && u.by !== me?.name) actions.append(ghost('Request changes', () => { modal.open = true; }));
         if (isReviewer()) actions.append(ghost('Remove', () => confirmRemove(u.version), 'danger-ghost'));
         const row = document.createElement('cds-table-row');
         row.append(cell(String(u.version)), cell(u.name), cell(u.by), cell(u.at), cell(statusCell), cell(actions));
@@ -312,7 +316,7 @@ const SAMPLE_REPORT = '/docs/annual-report-26-635-017.pdf';
   /* Layout only — every surface is a stock cds-* component. */
   .ar { display: flex; flex-direction: column; gap: var(--cds-spacing-07, 2rem); }
   .ar section { display: flex; flex-direction: column; gap: var(--cds-spacing-04, 0.75rem); align-items: flex-start; }
-  .ar section > cds-table, .ar__upload cds-file-uploader-drop-container, .ar__viewer :global(.pdfv) { align-self: stretch; }
+  .ar section > cds-table, .ar__uploader, .ar__viewer :global(.pdfv) { align-self: stretch; }
   .ar__upload { max-inline-size: 46rem; }
   .ar h3, .ar__hint { margin: 0; }
   .ar__hint { color: var(--cds-text-secondary, #525252); }

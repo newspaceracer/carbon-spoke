@@ -34,6 +34,10 @@ const dc = permit.dataCollection;
 const gateRow = (part: (typeof dataCollectionParts)[number]): MetaRow => ({
   key: part.gateKey, value: part.on ? 'Yes' : 'No', boolean: true, statements: part.statements,
 });
+// Quantities arrive as typed ("1000", "1,284"): format whole numbers one way, so
+// the column compares at a glance; anything else ("~50") shows as written.
+const quantityLabel = (q: string) =>
+  /^\d[\d,]*$/.test(q.trim()) ? Number(q.replace(/,/g, '')).toLocaleString('en-US') : q || '—';
 ---
 
 <ReviewSection title={title} collapsible={collapsible} layered={layered} panel={panel} orderIndex={orderIndex} commentKey={commentKey} {...badgesForSection('data')}>
@@ -61,9 +65,9 @@ const gateRow = (part: (typeof dataCollectionParts)[number]): MetaRow => ({
                 {dc.specimens.map((s) => (
                   <cds-table-row>
                     <cds-table-cell><em>{s.species}</em></cds-table-cell>
-                    <cds-table-cell>{s.quantity}</cds-table-cell>
-                    <cds-table-cell>{s.portion}</cds-table-cell>
-                    <cds-table-cell>{s.condition}</cds-table-cell>
+                    <cds-table-cell>{quantityLabel(s.quantity)}</cds-table-cell>
+                    <cds-table-cell>{s.portion || '—'}</cds-table-cell>
+                    <cds-table-cell>{s.condition || '—'}</cds-table-cell>
                   </cds-table-row>
                 ))}
               </cds-table-body>

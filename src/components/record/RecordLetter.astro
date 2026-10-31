@@ -6,7 +6,7 @@
 // says so rather than inventing a letter.
 //
 // Activation is a signed-letter UPLOAD (no in-system signing): the Responsible
-// Agent downloads this letter, has it signed outside the system, and uploads the
+// analyst downloads this letter, has it signed outside the system, and uploads the
 // signed copy (PermitHeader's #sign-permit-modal, which writes
 // permit-signed-letter-${id} = { name, by, at }). Once uploaded, the signed letter
 // leads the tab and the generated letter stays below it.
@@ -29,7 +29,7 @@ import '../../styles/permit-letter.css';
     style="display: none"
   ></cds-inline-notification>
 
-  <!-- The signed letter of record — revealed once the Responsible Agent uploads it
+  <!-- The signed letter of record — revealed once the Responsible analyst uploads it
        (or, for the admin, once the permit is past signature without one). -->
   <section class="rl__signed" data-rl-signed aria-labelledby="rl-signed-title" style="display: none">
     <h3 id="rl-signed-title" class="t-heading-02">Signed letter</h3>
@@ -84,6 +84,7 @@ import '../../styles/permit-letter.css';
     $('[data-rl-upload]').addEventListener('click', () => { if (uploadModal) uploadModal.open = true; });
     // Admin: replace (or add a missing) signed letter after signature.
     const SIGNED = ['Active', 'Waiting for annual report', 'Expired'];
+    const SENT = ['Out for signature', ...SIGNED];
     const canReplace = () => !!uploadModal && who === 'admin' && SIGNED.includes(status());
     $('[data-rl-replace]').addEventListener('click', () => {
       const current = (read(`permit-signed-letter-${id}`) as { name: string } | null)?.name;
@@ -96,6 +97,12 @@ import '../../styles/permit-letter.css';
       const signed = read(`permit-signed-letter-${id}`) as (Upload & { previous?: Upload[] }) | null;
       const replace = canReplace();
       shown($('[data-rl-empty]'), !letter && !replace);
+      // Past "sent for signature", "appears once it's sent" would contradict the
+      // status — say what's actually true: the sent letter isn't on this record.
+      const sent = SENT.includes(status());
+      $('[data-rl-empty]').setAttribute('subtitle', sent
+        ? 'The letter sent for signature isn’t saved to this record.'
+        : 'It appears here once it’s sent for signature.');
       shown($('[data-rl-doc]'), !!letter);
       shown($('[data-rl-signed]'), !!signed || replace);
       shown($('[data-rl-signed-none]'), !signed);

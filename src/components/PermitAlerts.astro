@@ -2,7 +2,8 @@
 // Permit ALERTS — one stack under the permit header, visible on every tab. The
 // rules live in lib/permit-alerts.ts (what shows, for whom, how urgent); this
 // gathers the permit's current state, renders the result, and carries out the
-// alerts' actions. Most urgent first; two showing, the rest behind "Show N more".
+// alerts' actions. Most urgent first; every error plus two warnings/info showing,
+// the rest behind "Show N more".
 // Alerts clear when their condition is resolved — there is no dismiss.
 //
 // Composition: cds-actionable-notification (alerts with an action) /
@@ -23,7 +24,7 @@ import { permit } from '../data/permit';
   import { permitAlerts, type AlertContext, type PermitAlert, type Viewer } from '../lib/permit-alerts';
   import {
     reportState, reportDueISO, formatDate, daysUntil, todayISO, latestUpload,
-    delinquencyClearance, clearanceKey, REPORT_EVENT,
+    delinquencyClearance, clearanceKey, priorReport, REPORT_EVENT,
   } from '../lib/final-report';
   import { readIdentity } from '../lib/maintenance';
   import { readPermitRole } from '../lib/permissions';
@@ -69,10 +70,14 @@ import { permit } from '../data/permit';
         },
         returned: ret ? { at: ret.at, count: ret.issueIds.length, message: ret.message } : null,
         signedLetterOnFile: !!ls(`permit-signed-letter-${id}`),
+        priorReport: priorReport(id),
+        // Prototype: the PI's other permit is this renewal's previous one; its
+        // overdue report (Delinquent) blocks the PI.
+        piBlockedBy: (() => { const p = priorReport(id); return p?.overdue ? { permitId: p.permitId } : null; })(),
         amendmentId: ls(`permit-amendment-${id}`),
         // `?renewal=1` previews a renewal started from this permit.
         renewalId: ls(`permit-renewal-${id}`) || (params.get('renewal') === '1' ? `${id}-R` : null),
-        links: { revise: withBase(`/apply?revise=${id}`), amend: withBase(`/apply?amend=${id}`) },
+        links: { revise: withBase(`/apply?revise=${id}`), amend: withBase(`/apply?amend=${id}`), myPermits: withBase('/my-permits') },
       };
     };
 
@@ -133,9 +138,12 @@ import { permit } from '../data/permit';
     const render = () => {
       const alerts = permitAlerts(context());
       row.style.display = alerts.length ? '' : 'none';
-      const shown = expanded ? alerts : alerts.slice(0, VISIBLE);
+      // Errors always show; the cap applies to warnings and info (CSPS-413).
+      const errors = alerts.filter((a) => a.kind === 'error');
+      const rest = alerts.filter((a) => a.kind !== 'error');
+      const shown = expanded ? alerts : [...errors, ...rest.slice(0, VISIBLE)];
       host.replaceChildren(...shown.map(build));
-      const hidden = alerts.length - VISIBLE;
+      const hidden = rest.length - VISIBLE;
       more.style.display = hidden > 0 ? '' : 'none';
       more.textContent = expanded ? 'Show less' : `Show ${hidden} more`;
     };

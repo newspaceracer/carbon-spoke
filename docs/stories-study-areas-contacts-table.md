@@ -53,7 +53,7 @@ misrepresent which parks it applies to.
 **Roles affected:** All internal reviewers who can open the permit's Study areas
 tab — System Admin, HQ Technical Reviewer, District Lead Technical Reviewer, and
 District Assistant Technical Reviewer (user roles). The table renders identically
-regardless of the viewer's permit-role (Responsible Agent, Supporting Agent, Second
+regardless of the viewer's permit-role (Responsible analyst, Supporting analyst, Second
 Signer, or Not assigned).
 
 **Out of scope:** Editing contacts or the authorized park set — both are done on the
@@ -68,7 +68,7 @@ Row hover behavior — see Story 2. The copy-email control — see Story 3.
 **Access & permissions**
 - Every internal reviewer who can open the permit sees the table; it is **read-only**
   on this tab for all user roles and all permit-roles, including the Responsible
-  Agent.
+  analyst.
 - The table renders in every permit status — **Draft**, **Waiting for review**,
   **Under review**, **Returned to submitter**, **Out for signature**, **Waiting for
   annual report**, **Active**, **Expired**, **Rejected**, and **Withdrawn**. Status

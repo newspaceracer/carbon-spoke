@@ -162,7 +162,7 @@ export const editSpecs: Record<string, EditSpec> = {
   },
   'project-title': {
     section: 'Project information', title: 'Project title', role: 'letter-title',
-    fields: [{ name: 'title', label: 'Project title', type: 'text' }], values: { title: permit.name },
+    fields: [{ name: 'title', label: 'Project title', type: 'text', maxCount: 200 }], values: { title: permit.name },
   },
   'project-category': {
     section: 'Project information', title: 'Category', role: 'letter-category',

@@ -73,6 +73,7 @@ export interface HistoryPhase {
 }
 
 import { yesNo } from '../lib/yes-no';
+import { worstPermit, sparsePermit } from './permit-fixtures';
 
 const invented = 'Invented for this prototype — not real contact information.';
 
@@ -114,7 +115,7 @@ function sessionLabel(s: FieldSession): string {
     : `${MONTH_ABBR[a.m - 1]} ${a.d}, ${a.y} – ${MONTH_ABBR[b.m - 1]} ${b.d}, ${b.y}`;
 }
 
-export const permit = {
+const demoPermit = {
   id: '26-635-017',
   name: 'Diversity of coralline algae in northern California and their reproductive systems',
   // State, not a category — rendered as cds-icon-indicator (icon + label).
@@ -123,6 +124,10 @@ export const permit = {
   // Dates the applicant REQUESTED. Display strings drive the at-a-glance stat;
   // the ISO pair prefills the approval modal's confirmation date-range picker.
   activeWindow: { start: 'Jul 22, 2026', end: 'Jul 22, 2027', startISO: '2026-07-22', endISO: '2027-07-22' },
+  // The permit this one renews — read only when the renewal hold applies
+  // (`permit-renewal-hold-${id}`, lib/final-report.ts priorReport). It ended the
+  // day before this window opens, so its annual report is due 30 days later.
+  previousPermit: { id: '25-635-017', endISO: '2026-07-21' },
 
   // Header classification badges — reflect THIS application.
   infoTags: [
@@ -204,8 +209,8 @@ export const permit = {
       {
         phase: 'In review',
         steps: [
-          { key: 'ra-review', label: 'Responsible agent review completed', date: 'Jul 12, 2026', internal: true },
-          { key: 'sa-review', label: 'Supporting agents review completed', date: 'Jul 14, 2026', internal: true },
+          { key: 'ra-review', label: 'Responsible analyst review completed', date: 'Jul 12, 2026', internal: true },
+          { key: 'sa-review', label: 'Supporting analysts review completed', date: 'Jul 14, 2026', internal: true },
           { key: 'returned', label: 'Returned for changes', when: 'returned' },
           { key: 'withdrawn', label: 'Application withdrawn', when: 'withdrawn' },
           { key: 'decision', label: 'Decision reached', date: 'Jul 15, 2026' },
@@ -462,6 +467,17 @@ export const permit = {
 
   _dataNote: invented,
 } as const;
+
+// DEV-ONLY data stress test (break-ui): `npm run dev:worst` / `dev:sparse` start a
+// dev server with PUBLIC_PERMIT_FIXTURE set, which swaps this one record for a
+// worst-case or minimal fixture (./permit-fixtures.ts) — server and client agree
+// because the env var is fixed at server start. A production build always ships
+// the demo record. FixtureToggle.astro switches between the servers.
+const fixture = import.meta.env.DEV ? import.meta.env.PUBLIC_PERMIT_FIXTURE : undefined;
+export const permit: typeof demoPermit =
+  fixture === 'worst' ? (worstPermit as unknown as typeof demoPermit)
+  : fixture === 'sparse' ? (sparsePermit as unknown as typeof demoPermit)
+  : demoPermit;
 
 // Header classification badges, in display order: the application's own info tags
 // (district scope, category) + the activities it involves — derived from the SAME

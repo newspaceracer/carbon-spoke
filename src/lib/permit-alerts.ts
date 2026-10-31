@@ -5,7 +5,7 @@
 //
 // PermitAlerts.astro gathers the context, calls `permitAlerts`, and renders the
 // result as one stack under the header: most urgent first (error → warning →
-// info), two showing, the rest behind "Show N more".
+// info), every error plus two warnings/info showing, the rest behind "Show N more".
 //
 // Tab-specific notices ("Conditions are final" on Special conditions, the Annual
 // report tab's own status) stay in their tab — this registry is for state that
@@ -38,7 +38,7 @@ export interface PermitAlert {
 export interface AlertContext {
   status: string;
   viewer: Viewer;
-  /** Responsible Agent on this permit, or a System Admin. */
+  /** Responsible analyst on this permit, or a System Admin. */
   canAct: boolean;
   reviewStarted: boolean;
   /** Days until the permit's end date (negative once ended). */
@@ -53,15 +53,23 @@ export interface AlertContext {
   /** The researcher's application was returned for changes. */
   returned?: { at: string; count: number; message?: string } | null;
   signedLetterOnFile: boolean;
+  /** A renewal whose previous permit's annual report is missing (lib/final-report
+   *  priorReport) — overdue once its due date has passed. */
+  priorReport?: { permitId: string; due: string; overdue: boolean } | null;
+  /** The PI is blocked by an overdue annual report on ANOTHER permit (CSPS-411),
+   *  block not lifted. */
+  piBlockedBy?: { permitId: string } | null;
   amendmentId?: string | null;
   renewalId?: string | null;
   /** Hrefs the renderer resolves against the site base. */
-  links: { revise: string; amend: string };
+  links: { revise: string; amend: string; myPermits: string };
 }
 
 const RANK: Record<AlertKind, number> = { error: 0, warning: 1, info: 2 };
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const RETURNED = ['Returned to submitter', 'Changes requested'];
+/** Before the signed letter: a renewal can still be held at activation. */
+const PRE_ACTIVATION = ['Waiting for review', 'Under review', ...RETURNED, 'Out for signature'];
 
 type Rule = (c: AlertContext) => PermitAlert | null;
 
@@ -84,12 +92,18 @@ const RULES: Rule[] = [
     if (!RETURNED.includes(c.status) || c.viewer === 'public') return null;
     const n = c.returned?.count ?? 0;
     const when = c.returned?.at ? ` on ${c.returned.at}` : '';
+    const message = c.returned?.message ? ` “${c.returned.message}”` : '';
+    // A return can carry only a message (no marked issues) — never say "0 changes".
     return c.viewer === 'owner'
       ? { id: 'changes-requested', kind: 'warning', title: 'Changes requested',
-          subtitle: `The review team asked for ${plural(n, 'change')}${when}.${c.returned?.message ? ` “${c.returned.message}”` : ''}`,
+          subtitle: n
+            ? `The review team asked for ${plural(n, 'change')}${when}.${message}`
+            : `The review team returned your application${when}.${message}`,
           actions: [{ label: 'Review requested changes', href: c.links.revise }] }
       : { id: 'changes-requested', kind: 'info', title: 'Returned to the researcher',
-          subtitle: `${plural(n, 'change')} requested${when}. Waiting for them to resubmit.` };
+          subtitle: n
+            ? `${plural(n, 'change')} requested${when}. Waiting for them to resubmit.`
+            : `Returned${when}. Waiting for them to resubmit.` };
   },
 
   // ── Annual report: needs changes ─────────────────────────────────────────
@@ -115,6 +129,40 @@ const RULES: Rule[] = [
           subtitle: "This renewal can't be issued until the previous permit's annual report is in." };
   },
 
+  // ── Renewals blocked by an overdue report on another of the PI's permits ──
+  // A warning, not an error: this permit isn't the overdue one (CSPS-413). Before
+  // activation, 'prior-report' below already says the same thing, so it yields.
+  // Prototype: no page for another permit, so the action goes to My permits.
+  (c) => {
+    const b = c.piBlockedBy;
+    if (!b || c.viewer === 'public' || (c.priorReport && PRE_ACTIVATION.includes(c.status))) return null;
+    const title = `Renewals blocked — annual report overdue on ${b.permitId}`;
+    const actions = [{ label: 'Go to My permits', href: c.links.myPermits }];
+    return c.viewer === 'owner'
+      ? { id: 'renewals-blocked', kind: 'warning', title,
+          subtitle: 'Upload it to apply for, renew, or amend a permit as PI.', actions }
+      : { id: 'renewals-blocked', kind: 'warning', title,
+          subtitle: "The PI can't apply for, renew, or amend a permit until it's in.", actions };
+  },
+
+  // ── Renewal: the previous permit's annual report is missing ──────────────
+  // Before activation, so the review team and the researcher can get it in before
+  // the signed letter is uploaded (which holds the renewal without it). Overdue =
+  // the previous permit is Delinquent. Once held, 'renewal-hold' above takes over.
+  (c) => {
+    const p = c.priorReport;
+    if (!p || !PRE_ACTIVATION.includes(c.status) || c.viewer === 'public') return null;
+    const when = `Permit ${p.permitId} · ${p.overdue ? 'was due' : 'due'} ${p.due}.`;
+    return c.viewer === 'owner'
+      ? { id: 'prior-report', kind: p.overdue ? 'error' : 'warning',
+          title: p.overdue ? "Your previous permit's annual report is overdue" : "Upload your previous permit's annual report",
+          subtitle: `${when} If it's still missing when this permit is signed, the permit goes on hold.`,
+          actions: [{ label: 'Go to My permits', href: c.links.myPermits }] }
+      : { id: 'prior-report', kind: p.overdue ? 'error' : 'warning',
+          title: p.overdue ? "Previous permit's annual report is overdue" : "Previous permit's annual report is missing",
+          subtitle: `${when} If it's still missing when the signed letter is uploaded, this renewal goes on hold.` };
+  },
+
   // ── Ending soon ──────────────────────────────────────────────────────────
   (c) => {
     if (c.status !== 'Active' || c.daysLeft < 0 || c.daysLeft > 30 || c.viewer === 'public') return null;
@@ -130,7 +178,9 @@ const RULES: Rule[] = [
   (c) => {
     if (c.status !== 'Out for signature' || c.signedLetterOnFile || c.viewer !== 'staff') return null;
     return { id: 'signed-letter', kind: 'info', title: 'Waiting for the signed letter',
-      subtitle: 'Uploading it activates the permit.',
+      subtitle: c.priorReport
+        ? 'When you upload it, choose to hold the permit or activate it.'
+        : 'Uploading it activates the permit.',
       actions: c.canAct ? [{ label: 'Upload signed letter', run: 'upload-signed-letter' }] : [] };
   },
 
@@ -171,12 +221,6 @@ const RULES: Rule[] = [
   (c) => c.renewalId
     ? { id: 'renewal', kind: 'info', title: `Renewed as ${c.renewalId}`,
         subtitle: 'This permit continues under the renewal.' }
-    : null,
-
-  // ── Public view ──────────────────────────────────────────────────────────
-  (c) => c.viewer === 'public'
-    ? { id: 'public-view', kind: 'info', title: 'Public view',
-        subtitle: "Personal details and internal review information aren't shown." }
     : null,
 ];
 

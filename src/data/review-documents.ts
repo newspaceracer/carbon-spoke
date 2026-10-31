@@ -42,6 +42,11 @@ const rankOf = (type: string | undefined) => {
   return i === -1 ? REVIEW_ORDER.length : i;
 };
 
+/** A stored type (Title Case, e.g. "Principal Investigator Resume") in the app's
+ *  sentence case for display. Form codes and acronyms (DPR65B, CEQA) keep theirs. */
+export const documentTypeText = (type: string | undefined) =>
+  (type ?? '').split(' ').map((w, i) => (i === 0 || /\d|[A-Z]{2,}/.test(w) ? w : w.toLowerCase())).join(' ');
+
 /** Short label for a stored type; unknown types fall back to the type itself. */
 export const documentLabel = (type: string | undefined, filename: string) =>
   REVIEW_ORDER.find(([t]) => t === type)?.[1] ?? type ?? filename;

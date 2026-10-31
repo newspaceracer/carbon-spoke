@@ -8,7 +8,7 @@ the team — lets them add and remove members and email the team.
 
 **Editing gate (used throughout):** the team roster is the `supporting-agents`
 section in `permissions-matrix.md`. It is editable only by a **System Admin**
-(user role) or the permit's **Responsible Agent** (permit-role), and only while the
+(user role) or the permit's **Responsible analyst** (permit-role), and only while the
 permit is **not** in a final status (**Expired**, **Rejected**, **Withdrawn**).
 Everyone else who can open the permit sees a read-only view.
 
@@ -36,7 +36,7 @@ must reflect that, so a viewer is never shown edit controls they cannot use.
 
 **Roles affected:** System Admin, HQ Technical Reviewer, District Lead Technical
 Reviewer, District Assistant Technical Reviewer (as viewers or, when RA, as
-managers); the permit-roles Responsible Agent and Supporting Agent.
+managers); the permit-roles Responsible analyst and Supporting analyst.
 
 **Out of scope:** The review-status model (Story 2), the progress-bar count
 (Story 3), adding (Story 4), removing (Story 5), and emailing (Story 6) — those
@@ -50,7 +50,7 @@ behaviors are specified in their own stories.
 - Any user who can open the permit can open the Analysis team modal from the
   header metric tile.
 - The modal is **editable** (add/remove controls present) only when the current
-  user is a System Admin or the permit's Responsible Agent, and the permit is not
+  user is a System Admin or the permit's Responsible analyst, and the permit is not
   Expired, Rejected, or Withdrawn.
 - For every other viewer the modal is **read-only**: no add picker and no per-row
   remove control.
@@ -80,7 +80,7 @@ behaviors are specified in their own stories.
 - **Test 1 — Manager view:** As a System Admin (or the RA) on an Under review
   permit, open the modal. Confirm CTA "Manage team", heading "Manage analysis
   team", the add picker is present, and rows show a remove control.
-- **Test 2 — Viewer view:** As a Supporting Agent (or any non-RA reviewer), open
+- **Test 2 — Viewer view:** As a Supporting analyst (or any non-RA reviewer), open
   the modal. Confirm CTA "View team", heading "Analysis team", no add picker, no
   remove controls.
 - **Test 3 — Final status:** As the RA on a Rejected permit, open the modal.
@@ -118,7 +118,7 @@ permit reaches **Out for signature** (their sign-off ends the analysis), and
 Pending before that.
 
 **Roles affected:** All internal reviewers who can open the modal; the permit-roles
-Responsible Agent (shown as Lead analyst) and Supporting Agent.
+Responsible analyst (shown as Lead analyst) and Supporting analyst.
 
 **Out of scope:** How a reviewer sets their own status (the Start review / Complete
 review actions on their review surface) — this story only displays the resulting
@@ -242,7 +242,7 @@ Add a team member inline by selecting a user, staged until Save
 
 **Description**
 
-As a System Admin or the permit's Responsible Agent,
+As a System Admin or the permit's Responsible analyst,
 I want to add a reviewer to the analysis team by selecting them from the user
 directory directly in the modal, with the change held until I Save,
 So that I can build the team without leaving the roster and without a separate
@@ -252,7 +252,7 @@ Selecting a user from the directory picker **stages** them into their review uni
 as a Supporting analyst; nothing persists until Save. The footer swaps to a
 save/cancel pair while there are unsaved changes.
 
-**Roles affected:** System Admin, and the permit's Responsible Agent (permit-role).
+**Roles affected:** System Admin, and the permit's Responsible analyst (permit-role).
 
 **Out of scope:** Removing a member — see Story 5. Notifying a newly added reviewer
 that they were assigned — see Open questions.
@@ -319,7 +319,7 @@ Remove a team member from the modal, staged until Save with undo
 
 **Description**
 
-As a System Admin or the permit's Responsible Agent,
+As a System Admin or the permit's Responsible analyst,
 I want to remove a reviewer from the analysis team in the modal, with the removal
 held until I Save and reversible before then,
 So that I can take someone off the review deliberately and recover from a mis-click
@@ -329,7 +329,7 @@ Removal is **staged**, matching the add flow: marking a member for removal strik
 the row and previews the resulting count; nothing persists until Save. The **Lead
 analyst cannot be removed**.
 
-**Roles affected:** System Admin, and the permit's Responsible Agent (permit-role).
+**Roles affected:** System Admin, and the permit's Responsible analyst (permit-role).
 
 **Out of scope:** Adding a member — see Story 4. Whether a removed reviewer is
 notified — see Open questions.

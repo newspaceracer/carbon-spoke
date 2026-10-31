@@ -10,6 +10,7 @@
 // the same localStorage-backed state in ./maintenance.
 // ---------------------------------------------------------------------------
 import { withBase } from './base';
+import { renewalHoldKey } from './final-report';
 import {
   ROUTES,
   isMaintenance,
@@ -31,6 +32,7 @@ import {
 
 const BANNER_ID = 'maintenance-banner';
 const SWITCHER_ID = 'demo-identity-switcher';
+const PANEL_OPEN_KEY = 'demo-panel-open';
 const RESET_ID = 'demo-permit-reset';
 const ROLE_ID = 'demo-permit-role';
 const ALERT_ID = 'demo-alert-preview';
@@ -145,11 +147,26 @@ function mountIdentitySwitcher(): void {
   box.id = SWITCHER_ID;
   box.className = 'demo-identity';
   box.innerHTML = `
+    <cds-button class="demo-identity__toggle" kind="ghost" size="sm"></cds-button>
     <p class="demo-identity__label t-label-01">Prototype identity</p>
     <cds-dropdown value="${current}" size="sm" label="Identity" direction="top">
       ${options.map((o) => `<cds-dropdown-item value="${o.value}">${o.label}</cds-dropdown-item>`).join('')}
     </cds-dropdown>`;
   document.body.appendChild(box);
+  // The panel floats over the page, so it collapses to one button naming the
+  // current identity — page content underneath stays readable. Collapsed by
+  // default; the choice persists across pages.
+  const toggle = box.querySelector('.demo-identity__toggle') as HTMLElement;
+  const currentLabel = options.find((o) => o.value === current)?.label ?? current;
+  const setCollapsed = (collapsed: boolean) => {
+    box.toggleAttribute('data-collapsed', collapsed);
+    toggle.textContent = collapsed ? `Prototype: ${currentLabel}` : 'Hide prototype controls';
+    try { localStorage.setItem(PANEL_OPEN_KEY, collapsed ? '0' : '1'); } catch {}
+  };
+  let open = false;
+  try { open = localStorage.getItem(PANEL_OPEN_KEY) === '1'; } catch {}
+  setCollapsed(!open);
+  toggle.addEventListener('click', () => setCollapsed(!box.hasAttribute('data-collapsed')));
   const dd = box.querySelector('cds-dropdown') as any;
   dd?.addEventListener('cds-dropdown-selected', (e: any) => {
     const value = e.detail?.item?.value as Identity | undefined;
@@ -162,7 +179,7 @@ function mountIdentitySwitcher(): void {
 
 // ── Dev-only per-permit permit-role control ─────────────────────────────────
 // The identity switcher sets the USER ROLE; this sets the PER-PERMIT permit-role
-// (Responsible Agent / Supporting Agent / Second Signer / Not assigned) — the
+// (Responsible analyst / Supporting analyst / Second Signer / Not assigned) — the
 // second axis of the two-layer actor model. It rides in the same dev panel, only
 // on the permit page and only for reviewer identities. CONSTRAINED: it offers just
 // the permit-roles the active identity is eligible for on this permit's type
@@ -236,7 +253,11 @@ const alertScenarios = (id: string): AlertScenario[] => {
     { value: 'returned', label: 'Changes requested', status: 'Returned to submitter',
       keys: { [`permit-review-started-${id}`]: '1', [`permit-return-${id}`]: JSON.stringify({ by: 'Linda Tran', at: 'Aug 12, 2026', message: 'Add GPS coordinates for each site.', issueIds: ['i1', 'i2'] }) } },
     { value: 'signed-letter', label: 'Waiting for the signed letter (staff)', status: 'Out for signature', keys: { [`permit-review-started-${id}`]: '1', [`permit-letter-${id}`]: LETTER_STUB } },
-    { value: 'renewal-hold', label: 'Renewal on hold', status: 'Waiting for annual report', keys: { ...signed, [`permit-renewal-hold-${id}`]: '1' } },
+    { value: 'signed-letter-held', label: 'Signed letter, previous report missing (staff)', status: 'Out for signature',
+      keys: { [`permit-review-started-${id}`]: '1', [`permit-letter-${id}`]: LETTER_STUB, [renewalHoldKey(id)]: '1' } },
+    { value: 'signed-letter-overdue', label: 'Signed letter, previous report overdue (staff)', status: 'Out for signature', today: '2026-08-25',
+      keys: { [`permit-review-started-${id}`]: '1', [`permit-letter-${id}`]: LETTER_STUB, [renewalHoldKey(id)]: '1' } },
+    { value: 'renewal-hold', label: 'Renewal on hold', status: 'Waiting for annual report', keys: { ...signed, [renewalHoldKey(id)]: '1' } },
     { value: 'ending-soon', label: 'Ending soon', status: 'Active', today: '2027-07-05', keys: signed },
     { value: 'report-due', label: 'Annual report due', status: 'Expired', today: '2027-08-01', keys: signed },
     { value: 'report-changes', label: 'Annual report needs changes', status: 'Expired', today: '2027-08-10', keys: { ...signed, [`permit-report-uploads-${id}`]: sentBack } },

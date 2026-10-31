@@ -12,14 +12,17 @@ interface Props {
   label: string;
   /** Initial value as an E.164 string (e.g. "+19165550148"). */
   value?: string;
+  /** Autofill token for the number field — `tel-national` for the user's own
+   *  number, `off` when it's someone else's. Omit to leave the browser default. */
+  autocomplete?: string;
 }
 
-const { id, label, value } = Astro.props;
+const { id, label, value, autocomplete } = Astro.props;
 ---
 
 <div class="phone-field" data-phone data-prefix={id} data-value={value ?? ''}>
   <cds-combo-box id={`${id}-cc`} title-text="Country code" label="Country"></cds-combo-box>
-  <cds-text-input id={`${id}-num`} type="tel" label={label}></cds-text-input>
+  <cds-text-input id={`${id}-num`} type="tel" label={label} autocomplete={autocomplete}></cds-text-input>
 </div>
 
 <style>

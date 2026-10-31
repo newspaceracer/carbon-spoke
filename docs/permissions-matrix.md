@@ -1,7 +1,7 @@
 # Permissions Matrix — Implementation Reference
 
 Derived from the Confluence spec ("Test of User roles and permissions
-documentation — Responsible/Supporting Agents Version", 5/13/25) **reconciled with
+documentation — Responsible/Supporting analysts Version", 5/13/25) **reconciled with
 the decisions in [`decisions-roles-permissions.md`](./decisions-roles-permissions.md)**.
 Where the two disagree, the decision log wins. This document is the reference an
 implementer builds the permission resolver from.
@@ -11,7 +11,7 @@ Legend for permission cells:
   read-only, control present but inert) · **H** = Hide (control not rendered) ·
   **CA** = Cannot Access (whole record not reachable) · **—** = not applicable.
 - Conditions in cells are **permit-role** conditions: *"U if RA"* = updatable only
-  by the Responsible Agent; *RA* = Responsible Agent, *SA* = Supporting Agent.
+  by the Responsible analyst; *RA* = Responsible analyst, *SA* = Supporting analyst.
 
 ---
 
@@ -31,8 +31,8 @@ Identity is the **single global actor** on every page (prototype-only switcher,
 `readIdentity()`), including the permit detail page. No per-page "acting as".
 
 ### 1.2 Permit-roles (per permit)
-- Exactly **one review permit-role per user per permit**: **Responsible Agent
-  (RA)** or **Supporting Agent (SA)** — or **not assigned**.
+- Exactly **one review permit-role per user per permit**: **Responsible analyst
+  (RA)** or **Supporting analyst (SA)** — or **not assigned**.
 - **Signer** is a separate per-permit capability (see §3): the RA is always the
   **1st signer**; a configured **2nd signer** co-signs.
 - Prototype: a **constrained per-permit demo control** sets the current identity's
@@ -83,7 +83,7 @@ is **auto-reassigned** (multi→single ⇒ the remaining district's Lead; single
 ---
 
 ## 3. Signer configuration (two-signature flow)
-- **1st signer** = the **Responsible Agent** (always). Signing sends the permit
+- **1st signer** = the **Responsible analyst** (always). Signing sends the permit
   **out for signature**.
 - **2nd signer:**
   - **Multi-district:** one designated person on **Templates & Defaults**
@@ -156,8 +156,8 @@ Columns are the statuses where the IR is reachable. *WfR* = Waiting for review,
 | **Form (application)** | R | R · U if RA | R · D | R | R · Upload annual report | R · Upload annual report | R |
 | **Start review** (RA) | Show to RA | (done) | H | H | H | H | H |
 | **Supporting review** (SA, *informational*) | H | Show/Start–Complete if SA | H | H | H | H | H |
-| **Responsible Agent** (assignment) | R | R · U if RA | R | R | R | R | R |
-| **Supporting Agents** (assignment) | R | R · U if RA | R | R | R | R · U if RA | R |
+| **Responsible analyst** (assignment) | R | R · U if RA | R | R | R | R | R |
+| **Supporting analysts** (assignment) | R | R · U if RA | R | R | R | R · U if RA | R |
 | **Tags** | R | R · U | R · U | R · U | R · U | R · U | R · U |
 | **Dates / CEQA** (CEQA = Yes/N-A radio) | R | R · U if RA | R · D | R | R | R | R |
 | **Approve permit** (→ decision) | H | Show · U if RA · H if not RA | D if RA · H if not | H | H | H | H |
@@ -213,21 +213,21 @@ Waiting for annual report, Rejected, Withdrawn.
 ## 8. Cross-cutting workflows
 
 ### 8.1 Editable parks + single↔multi flip
-- **Who:** Responsible Agent **or** System Admin only (HQ cannot unless they are
+- **Who:** Responsible analyst **or** System Admin only (HQ cannot unless they are
   the RA). Editable only in **pre-decision** statuses (Draft / Waiting for review /
   Under review / Returned).
 - **On add/remove that changes district span:** a **confirmation dialog** precedes
   commit. On Confirm, atomically: update parks → recompute & store permit type →
-  reassign agents:
+  reassign analysts:
   - **Type flip** ⇒ **auto-reassign the RA** (system decides; editor cannot pick,
     only is informed): multi→single ⇒ remaining district's **Lead**; single→multi
     ⇒ an **HQ reviewer**. *(Prototype: pick a random eligible HQ reviewer when >1.
     Production has an established HQ tiebreak business rule — not replicated here.)*
   - **Outgoing RA** → demoted to **SA** if still district-relevant, else removed.
   - **Dropped district** (no parks left) ⇒ remove that district's **Supporting
-    Agents** and its **Special Conditions**.
+    analysts** and its **Special Conditions**.
 - Dialog states: the type change, the new RA, "you will no longer be the
-  Responsible Agent" (if editor is outgoing RA), and any removals.
+  Responsible analyst" (if editor is outgoing RA), and any removals.
 
 ### 8.2 Two-signature activation
 1. RA completes review & **approves** → **signs (1st)** → status **Out for
@@ -244,7 +244,7 @@ Waiting for annual report, Rejected, Withdrawn.
 ---
 
 ## 9. Open implementation notes
-- HQ Responsible Agent tiebreak on a single→multi flip (§8.1): **prototype =
+- HQ Responsible analyst tiebreak on a single→multi flip (§8.1): **prototype =
   random**; production uses its existing HQ tiebreak business rule.
 - Make `status` a typed union (production hardening).
 - "One permit-role per permit" — enforce as a real constraint in production (the

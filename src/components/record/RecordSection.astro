@@ -32,7 +32,7 @@ const { id, title, summary, tags = [], flags = [], gate, reviewable = false } = 
       <h2 class="rs__title t-heading-04" id={`${id}-title`}>{title}</h2>
       {tags.length + flags.length > 0 && (
         <div class="rs__badges">
-          {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+          {tags.map((tag) => <cds-tag type={tag.type} size="md" title={tag.label}>{tag.label}</cds-tag>)}
           {flags.map((tag) => <FlagTag tag={tag} />)}
         </div>
       )}

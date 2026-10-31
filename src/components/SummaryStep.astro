@@ -11,7 +11,7 @@
 //
 // Everything shown comes from the same seed the form steps render from, so the
 // summary and the steps stay in lockstep. Edit-navigation and the submit gate
-// (Submit stays disabled until the certification box is checked) are wired on the
+// (Submit flags the box if it's unchecked) are wired on the
 // page (apply.astro), which owns wizard navigation.
 import PermitSection from './PermitSection.astro';
 import YesNoStatement from './YesNoStatement.astro';
@@ -626,7 +626,7 @@ const parkRows = seedStudyAreas.map((id) => parkById.get(id)).filter(Boolean);
       low-contrast
       hide-close-button
       title="Ready to submit?"
-      subtitle="Once submitted, your application goes to California State Parks for review. Confirm the statement below to enable Submit."
+      subtitle="Once submitted, your application goes to California State Parks for review. Confirm the statement below, then submit."
     ></cds-inline-notification>
     <cds-checkbox
       id="summary-certify"

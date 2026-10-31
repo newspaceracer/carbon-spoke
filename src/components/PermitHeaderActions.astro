@@ -3,12 +3,13 @@
 // (Story 2). Rendered twice (full header + pinned compact bar); PermitHeader's
 // script shows the one whose [data-action] matches and wires them all.
 //
-//   Status                     RA / Admin              Supporting Agent        Other staff     Researcher (owner)
+//   Status                     RA / Admin              Supporting analyst        Other staff     Researcher (owner)
 //   Waiting for review         Start review            —                       —               —
 //   Under review               Open review ▾           Review application ▾    —               —
-//   Changes requested          —                       —                       —               Revise application
+//   Returned to submitter      —                       Complete review         —               Revise application
+//                                                      (or Reopen review)
 //   Out for signature          Upload signed letter ▾  —                       —               —
-//   Waiting for annual report  Override hold ▾         Download signed letter  (same)          Upload annual report ▾
+//   Waiting for annual report  Activate permit ▾       Download signed letter  (same)          Upload annual report ▾
 //   Active                     Download signed ▾       Download signed letter  (same)          Download signed ▾
 //   Expired                    Download signed letter  (same)                  (same)          Upload annual report ▾ while owed
 //
@@ -40,6 +41,10 @@ const { reviewLabel, amendHref, reviseHref } = Astro.props;
   </cds-menu>
 </cds-combo-button>
 
+<!-- Returned to submitter: the Supporting analyst can still mark their review done
+     (or reopen it) — no wizard to open, so a plain button (CSPS-406). -->
+<cds-button data-action="sa-toggle" class="permit-sa-toggle" size="md" data-sa-toggle hidden>Complete review</cds-button>
+
 <cds-button data-action="revise" class="permit-revise" size="md" href={reviseHref} hidden>Revise application</cds-button>
 
 <cds-combo-button data-action="sign" class="permit-action-sign" size="md" label="Upload signed letter" menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
@@ -48,7 +53,7 @@ const { reviewLabel, amendHref, reviseHref } = Astro.props;
   </cds-menu>
 </cds-combo-button>
 
-<cds-combo-button data-action="hold" class="permit-hold-override" size="md" label="Override hold — issue permit" menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
+<cds-combo-button data-action="hold" class="permit-hold-override" size="md" label="Activate permit" menu-alignment="bottom-end" tooltip-alignment="bottom" hidden>
   <cds-menu>
     <cds-menu-item label="Download signed letter"></cds-menu-item>
   </cds-menu>

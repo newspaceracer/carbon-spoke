@@ -27,7 +27,7 @@ The high-value questions, each tied to a suspected weakness surfaced in the flow
 |---|----------|-------------------------------|
 | RQ1 | Can a reviewer figure out **how to approve/issue a permit**? | There is no "Approve" button — approval *is* completing the finalize wizard's **Send for signature** step. |
 | RQ2 | Do reviewers understand the **review-started gate** and the **forced redirect** into the wizard? | Starting a review seals→unseals the detail page *and* immediately yanks the user into `/final-letter`. |
-| RQ3 | Do reviewers grasp the **two-layer role model** (account role vs. per-permit Responsible/Supporting Agent)? | Controls silently appear/disappear based on permit-role; a Supporting Agent sees fewer actions with no explanation. |
+| RQ3 | Do reviewers grasp the **two-layer role model** (account role vs. per-permit Responsible/Supporting analyst)? | Controls silently appear/disappear based on permit-role; a Supporting analyst sees fewer actions with no explanation. |
 | RQ4 | Can reviewers find the **right surface to manage the analysis team** vs. the view-only progress modal? | One-management-surface rule: add/remove lives on Overview; the header modal looks similar but is read-only. |
 | RQ5 | Do users understand the **kanban board's hidden state coupling**? | Dragging a card in/out of *Under review* silently starts/un-starts the real review used elsewhere. |
 | RQ6 | Do district admins distinguish **"Remove from district"** from **"Request account deactivation"**? | Independent actions that read as synonyms; deactivation is a cross-console handshake. |
@@ -79,8 +79,8 @@ should not see or touch the dev switchers (they don't exist in production).
       District Lead / a reviewer identity).
 - [ ] For reviewer sessions, pre-stage permits in known states: one **Submitted /
       Waiting for review**, one **Under review (already started)**, one where the
-      participant is **Responsible Agent**, and one where they are only a **Supporting
-      Agent** (for RQ3).
+      participant is **Responsible analyst**, and one where they are only a **Supporting
+      analyst** (for RQ3).
 - [ ] For district-admin sessions, ensure the scoped district has ≥2 technical reviewers
       (so the last-reviewer guardrail is reachable but not pre-tripped) and a named lead.
 - [ ] For system-admin sessions, seed the inboxes: ≥1 role-change request, ≥1
@@ -142,7 +142,7 @@ Each card: the **participant-facing goal** (read aloud, no button names), **setu
 
 > **R2 — Begin reviewing an application.** *"This permit just came in and it's yours to
 > review. Get into it and start your review."*
-> - **Setup:** a Submitted / Waiting-for-review permit where they're Responsible Agent.
+> - **Setup:** a Submitted / Waiting-for-review permit where they're Responsible analyst.
 > - **Success:** opens the permit, recognizes the sealed gate, starts the review.
 > - **Watch for (RQ2):** Do they understand *why* the application body is sealed before
 >   they start? When Start review **immediately redirects them into the finalize
@@ -152,7 +152,7 @@ Each card: the **participant-facing goal** (read aloud, no button names), **setu
 
 > **R3 — Issue the permit. ★ headline task.** *"You've reviewed everything and you're
 > satisfied. Approve this permit and get it moving toward being issued."*
-> - **Setup:** a permit Under review, participant is Responsible Agent, conditions set.
+> - **Setup:** a permit Under review, participant is Responsible analyst, conditions set.
 > - **Success:** reaches **Send for signature** in the wizard (the actual approval act).
 > - **Watch for (RQ1):** This is the biggest hypothesized failure. There is **no
 >   "Approve" button** on the detail page — the primary action reads "Open review," and
@@ -164,7 +164,7 @@ Each card: the **participant-facing goal** (read aloud, no button names), **setu
 
 > **R4 — Bring in another reviewer.** *"You want a colleague to help review this permit.
 > Add them to the team working on it."*
-> - **Setup:** permit Under review, participant is Responsible Agent.
+> - **Setup:** permit Under review, participant is Responsible analyst.
 > - **Success:** uses **Add to team** on the Overview tab.
 > - **Watch for (RQ4):** Do they instead open the header's "reviewers done" progress tile
 >   (which is **view-only**) expecting to add someone there? Note the detour and whether
@@ -181,7 +181,7 @@ Each card: the **participant-facing goal** (read aloud, no button names), **setu
 
 > **R6 — Understand your limits on a shared permit.** *"You've been asked to help on this
 > other permit. Take whatever review actions you can on it."*
-> - **Setup:** a permit where the participant is only a **Supporting Agent**.
+> - **Setup:** a permit where the participant is only a **Supporting analyst**.
 > - **Success (learning task):** they discover they **cannot** start/decide it, and can
 >   articulate why (they're supporting, not responsible).
 > - **Watch for (RQ3):** With controls silently absent (no Start review, no decision

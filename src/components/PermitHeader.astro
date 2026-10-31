@@ -9,6 +9,7 @@ import { withBase } from '../lib/base';
 import Avatar from './Avatar.astro';
 import PermitHeaderActions from './PermitHeaderActions.astro';
 import { roleLine, teamUnitOf } from '../lib/analysis-team';
+import { MAX_FILE_SIZE } from '../lib/file-upload';
 
 interface Stat {
   label: string;
@@ -106,7 +107,7 @@ const reviewWhen = (m: TeamMember): string => {
 // The progress bar measures REVIEW UNITS, not people: each involved district is
 // one unit, and every HQ reviewer collapses into a single "Headquarters" unit. A
 // unit is complete once AT LEAST ONE of its members is Complete. The lead analyst
-// (the responsible agent) is excluded — their sign-off doesn't move this bar.
+// (the responsible analyst) is excluded — their sign-off doesn't move this bar.
 const unitOf = (m: TeamMember): string | null => {
   if (isLead(m)) return null;                     // excluded from the bar
   return teamUnitOf(m.detail);                    // its district, else Headquarters
@@ -165,7 +166,7 @@ const rosterSections = [
         <cds-icon-indicator class="permit-status-indicator" size="20" kind={status.kind} label={status.label}></cds-icon-indicator>
       </div>
       <div class="banner__tags">
-        {infoTags.map((tag) => <cds-tag type={tag.type} size="lg">{tag.label}</cds-tag>)}
+        {infoTags.map((tag) => <cds-tag type={tag.type} size="lg" title={tag.label}>{tag.label}</cds-tag>)}
         {flagTags.map((tag) => <FlagTag tag={tag} size="lg" />)}
       </div>
     </div>
@@ -232,7 +233,7 @@ const rosterSections = [
      flow; Carbon owns the focus trap + return and the accessible heading. Approval
      is no longer a header modal — it's the review wizard's Send step, reached via
      Open review, where the reviewer confirms the window and conditions first. -->
-<!-- Activation (no in-system signing): the Responsible Agent downloads the
+<!-- Activation (no in-system signing): the Responsible analyst downloads the
      generated letter, has it signed outside the system, and uploads the signed
      copy here. The upload is what activates the permit — the system records only
      the file, who uploaded it, and when. -->
@@ -243,19 +244,30 @@ const rosterSections = [
     <cds-modal-heading id="sign-heading">Upload signed letter</cds-modal-heading>
   </cds-modal-header>
   <cds-modal-body>
+    <!-- A renewal whose previous permit's annual report is missing: say so FIRST,
+         before the uploader — it decides which button to press. A Callout, not an
+         inline notification: it's standing context in the dialog, not a response to
+         something the user did. Callouts are info/warning only, so overdue stays a
+         warning and says "overdue" in the title. Filled by the script. -->
+    <cds-callout-notification id="sign-prior-report" class="signed-upload__notice" kind="warning" low-contrast style="display:none">
+      <!-- The details on their own line under the title (the subtitle runs inline). -->
+      <p class="t-body-compact-01" id="sign-prior-details"></p>
+    </cds-callout-notification>
     <p class="t-body-01 signed-upload__lead" id="sign-lead">
       Uploading it activates the permit.
     </p>
-    <!-- The drop container sets slot="drop-container" on itself; as a direct child
-         of cds-modal-body (no such slot) it never renders. A light-DOM div parent fixes it. -->
-    <div>
-      <cds-file-uploader-drop-container id="signed-letter-drop" accept=".pdf">
-        Drag and drop a file here, or click to upload
-      </cds-file-uploader-drop-container>
-    </div>
-    <div id="signed-letter-chosen" class="signed-upload__chosen"></div>
-    <p class="t-label-01 signed-upload__hint">Accepted file type: PDF.</p>
+    <!-- The modal heading names the upload, so the uploader carries no title. The
+         button slots into cds-file-uploader (as a direct child of cds-modal-body
+         it would never render). -->
+    <cds-file-uploader label-description={`Accepted file type: PDF. Maximum file size: ${MAX_FILE_SIZE}.`}>
+      <cds-file-uploader-button button-kind="tertiary" size="md" id="signed-letter-drop" accept=".pdf">Add file</cds-file-uploader-button>
+      <div id="signed-letter-chosen"></div>
+    </cds-file-uploader>
   </cds-modal-body>
+  <!-- A renewal whose previous permit's annual report is missing gets a third
+       button, "Upload and activate" (the RA's override), before the primary, which
+       then reads "Upload and hold". The script adds/removes it rather than hiding
+       it: cds-modal-footer counts its slotted buttons for the three-button layout. -->
   <cds-modal-footer>
     <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
     <cds-modal-footer-button kind="primary" id="sign-confirm" disabled>Upload and activate</cds-modal-footer-button>
@@ -305,6 +317,28 @@ const rosterSections = [
   <cds-modal-footer>
     <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
     <cds-modal-footer-button kind="danger" id="reject-confirm" data-modal-close>Reject permit</cds-modal-footer-button>
+  </cds-modal-footer>
+</cds-modal>
+
+<!-- "Activate permit" on a renewal held for its previous permit's annual report
+     (CSPS-406). The warning shows only while that report is missing — the
+     callout sits first, as in the signed-letter dialog. Filled by the script. -->
+<cds-modal id="activate-permit-modal" size="sm">
+  <cds-modal-header>
+    <cds-modal-close-button></cds-modal-close-button>
+    <cds-modal-heading>Activate permit {id}?</cds-modal-heading>
+  </cds-modal-header>
+  <cds-modal-body>
+    <cds-callout-notification id="activate-prior-report" class="signed-upload__notice" kind="warning" low-contrast style="display:none">
+      <p class="t-body-compact-01">Activate this permit only if you're making an exception.</p>
+    </cds-callout-notification>
+    <p class="t-body-01">
+      The permit becomes active and the researcher, PI, and PICOF get an email.
+    </p>
+  </cds-modal-body>
+  <cds-modal-footer>
+    <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
+    <cds-modal-footer-button kind="primary" id="activate-confirm">Activate permit</cds-modal-footer-button>
   </cds-modal-footer>
 </cds-modal>
 
@@ -432,8 +466,9 @@ const rosterSections = [
   import { sendEmail } from '../lib/notifications';
   import { showToast } from '../lib/toast';
   import { withBase } from '../lib/base';
-  import { reportState, REPORT_EVENT } from '../lib/final-report';
+  import { reportState, priorReport, renewalHoldKey, REPORT_EVENT } from '../lib/final-report';
   import { downloadSignedLetter, downloadUnsignedLetter } from '../lib/letter-download';
+  import { wireUpload } from '../lib/file-upload';
   import { actorEmail, isReviewComplete, markReviewComplete, notifyResponsibleAgent, reopenReview, REVIEW_COMPLETE_EVENT } from '../lib/review-complete';
   // ── Workflow state machine (prototype-local) ──
   // The permit moves through a small set of statuses; each has a cds-icon-indicator
@@ -484,7 +519,7 @@ const rosterSections = [
   // Reflect a status across every surface: the two status indicators and the
   // one action button for this viewer (both mounts).
   // ── Who's looking (Story 2) ──
-  // RA / System Admin move the permit forward; a Supporting Agent reviews and marks
+  // RA / System Admin move the permit forward; a Supporting analyst reviews and marks
   // themselves done; other staff only download; the researcher owner revises or
   // uploads. The public view gets no action.
   type Viewer = 'ra' | 'sa' | 'staff' | 'owner' | 'public';
@@ -507,10 +542,10 @@ const rosterSections = [
       case 'Waiting for review': return v === 'ra' ? 'start' : null;
       case 'Under review':
         if (v === 'ra') return 'review';
-        // Inside the wizard the Supporting Agent has its own Complete review CTA.
+        // Inside the wizard the Supporting analyst has its own Complete review CTA.
         return v === 'sa' && !inFinalize ? 'supporting' : null;
       case 'Changes requested':
-      case 'Returned to submitter': return v === 'owner' ? 'revise' : null;
+      case 'Returned to submitter': return v === 'owner' ? 'revise' : v === 'sa' ? 'sa-toggle' : null;
       case 'Out for signature': return v === 'ra' ? 'sign' : null;
       case 'Waiting for annual report': return v === 'ra' ? 'hold' : v === 'owner' ? 'owner-report' : 'download';
       case 'Active': return v === 'ra' || v === 'owner' ? 'active' : 'download';
@@ -544,15 +579,18 @@ const rosterSections = [
   const projectTitle = banner?.dataset.permitName ?? '';
   const emailVars = () => ({ 'Permit #': permitId, 'Project title': projectTitle, 'Status': currentStatus() });
   const signedKey = `permit-signed-letter-${permitId}`;
-  const holdFlagKey = `permit-renewal-hold-${permitId}`; // set = renewal w/ missing prior annual report
+  const holdFlagKey = renewalHoldKey(permitId); // set = renewal w/ missing prior annual report
   const stamp = () => new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   // The uploaded signed letter activates — unless a renewal's prior annual report
   // is missing, which holds it (Waiting for annual report) and notifies via EM-H
-  // (Story 13). A static prototype stores the file's name, not its bytes.
-  const applySignedLetter = (fileName: string) => {
-    const by = activeUser(gateIdentity)?.name ?? 'Responsible Agent';
+  // (Story 13). The RA can override at upload ("Upload and activate"), the same
+  // override the hold's header action offers later. A static prototype stores the
+  // file's name, not its bytes.
+  const applySignedLetter = (fileName: string, override = false) => {
+    const by = activeUser(gateIdentity)?.name ?? 'Responsible analyst';
     localStorage.setItem(signedKey, JSON.stringify({ name: fileName, by, at: stamp() }));
+    if (override) localStorage.removeItem(holdFlagKey);
     if (localStorage.getItem(holdFlagKey) === '1') {
       setStatus('Waiting for annual report');
       sendEmail('EM-H', emailVars());
@@ -587,7 +625,7 @@ const rosterSections = [
   const signModal = document.getElementById('sign-permit-modal') as any;
 
   // Start review (Story 5) — the Waiting for review → Under review transition. Only
-  // the Responsible Agent (or Admin) can start; records who + when in the flag, sets
+  // the Responsible analyst (or Admin) can start; records who + when in the flag, sets
   // the status, then drops the reviewer into the review wizard (final-letter).
   const startReview = () => {
     if (!permitId || !startAllowed) return;
@@ -676,40 +714,59 @@ const rosterSections = [
     else if (letterUrl) window.location.href = letterUrl;
   });
 
-  // Supporting Agent: Review application enters the wizard; Complete review marks
+  // Supporting analyst: Review application enters the wizard; Complete review marks
   // them done on the analysis team (who + when), Reopen review undoes it. Under
-  // review only — the button is gone once the permit leaves review.
+  // review (menu item) and Returned to submitter (its own button), per CSPS-406.
+  // A menu item's text is its `label`; a button's is its text.
   const me = actorEmail(gateIdentity);
   const supportingKey = `permit-supporting-review-${permitId}-${gateIdentity}`;
   function syncSupportingToggle() {
     const done = isReviewComplete(permitId, me);
-    document.querySelectorAll('[data-sa-toggle]').forEach((it) =>
-      it.setAttribute('label', done ? 'Reopen review' : 'Complete review'));
+    const label = done ? 'Reopen review' : 'Complete review';
+    document.querySelectorAll<HTMLElement>('[data-sa-toggle]').forEach((it) => {
+      if (it.tagName === 'CDS-MENU-ITEM') it.setAttribute('label', label);
+      else it.textContent = label;
+    });
   }
-  onCombo('.permit-sa-review', (pick) => {
-    if (!pick) { if (letterUrl) window.location.href = letterUrl; return; }
+  const toggleSupportingReview = (pick: string) => {
     if (!me) return;
     if (pick === 'Complete review') {
       markReviewComplete(permitId, me);
       localStorage.setItem(supportingKey, 'complete');
       notifyResponsibleAgent(permitId, gateIdentity, 'completed');
-      showToast('Review complete', 'Emailed the Responsible Agent.');
+      showToast('Review complete', 'Emailed the responsible analyst.');
     } else {
       reopenReview(permitId, me);
       localStorage.setItem(supportingKey, 'in-progress');
       notifyResponsibleAgent(permitId, gateIdentity, 'reopened');
-      showToast('Review reopened', 'Emailed the Responsible Agent.');
+      showToast('Review reopened', 'Emailed the responsible analyst.');
     }
     syncSupportingToggle();
+  };
+  onCombo('.permit-sa-review', (pick) => {
+    if (!pick) { if (letterUrl) window.location.href = letterUrl; return; }
+    toggleSupportingReview(pick);
   });
+  document.querySelectorAll<HTMLElement>('.permit-sa-toggle').forEach((btn) =>
+    btn.addEventListener('click', () => toggleSupportingReview(btn.textContent?.trim() ?? '')));
 
   // RA: Upload signed letter (activates) + the unsigned letter to get signed.
   onCombo('.permit-action-sign', (pick) => { if (pick) unsignedDownload(); else signModal.open = true; });
 
-  // RA: Override the annual-report hold → issue the permit (Story 13); clears the
-  // hold flag and sends the issued email.
+  // RA: "Activate permit" overrides the annual-report hold (Story 13), after a
+  // confirmation (CSPS-406) that warns while the previous report is missing.
+  // Confirming clears the hold flag and sends the issued email.
+  const activateModal = document.getElementById('activate-permit-modal') as any;
   onCombo('.permit-hold-override', (pick) => {
     if (pick) { signedDownload(); return; }
+    const prior = priorReport(permitId);
+    const notice = document.getElementById('activate-prior-report') as any;
+    notice.style.display = prior ? '' : 'none';
+    if (prior) notice.setAttribute('title', `No annual report for permit ${prior.permitId}`);
+    activateModal.open = true;
+  });
+  document.getElementById('activate-confirm')?.addEventListener('click', () => {
+    activateModal.open = false;
     localStorage.removeItem(holdFlagKey);
     setStatus('Active');
     sendEmail('EM-C', emailVars());
@@ -744,16 +801,44 @@ const rosterSections = [
   // Two modes: 'activate' (the RA's upload at Out for signature) and 'replace'
   // (admin, after signature — opened via the `signed-letter-open` event).
   let signMode: 'activate' | 'replace' = 'activate';
+  const overrideButton = document.createElement('cds-modal-footer-button') as any;
+  overrideButton.setAttribute('kind', 'secondary');
+  overrideButton.disabled = true;
+  overrideButton.textContent = 'Upload and activate';
   const setSignMode = (mode: 'activate' | 'replace', current?: string) => {
     signMode = mode;
     const heading = document.getElementById('sign-heading');
     const lead = document.getElementById('sign-lead');
     const confirm = document.getElementById('sign-confirm');
     if (heading) heading.textContent = mode === 'replace' && current ? 'Replace signed letter' : 'Upload signed letter';
-    if (lead) lead.textContent = mode === 'activate' ? 'Uploading it activates the permit.'
+    // A held renewal: hold is the rule (primary); activating is the RA's
+    // override (the third button). Three buttons need the md width.
+    const prior = mode === 'activate' ? priorReport(permitId) : null;
+    const held = !!prior;
+    if (held && !overrideButton.isConnected) confirm?.before(overrideButton);
+    if (!held) overrideButton.remove();
+    signModal?.setAttribute('size', held ? 'md' : 'sm');
+    const notice = document.getElementById('sign-prior-report') as any;
+    if (notice) {
+      notice.style.display = prior ? '' : 'none';
+      if (prior) {
+        notice.setAttribute('title', prior.overdue ? "Previous permit's annual report is overdue" : "Previous permit's annual report is missing");
+        const details = document.getElementById('sign-prior-details');
+        if (details) details.textContent = `Permit ${prior.permitId} · ${prior.overdue ? 'was due' : 'due'} ${prior.due}`;
+      }
+    }
+    // Held: the notification + the buttons say it all — no lead.
+    if (lead) lead.style.display = held ? 'none' : '';
+    if (lead) lead.textContent = mode === 'activate'
+      ? 'Uploading it activates the permit.'
       : current ? `Replaces ${current}. The permit's status doesn't change.` : "The permit's status doesn't change.";
-    if (confirm) confirm.textContent = mode === 'activate' ? 'Upload and activate' : current ? 'Replace letter' : 'Upload';
+    if (confirm) confirm.textContent = mode === 'activate' ? held ? 'Upload and hold' : 'Upload and activate' : current ? 'Replace letter' : 'Upload';
   };
+  // The hold flag can change after load (demo state switcher) — settle on open.
+  // cds-modal fires no "opening" event, so watch its reflected `open` attribute.
+  if (signModal) new MutationObserver(() => {
+    if (signModal.hasAttribute('open') && signMode === 'activate') setSignMode('activate');
+  }).observe(signModal, { attributes: true, attributeFilter: ['open'] });
   window.addEventListener('signed-letter-open', (e) => {
     setSignMode('replace', (e as CustomEvent).detail?.current);
     signModal.open = true;
@@ -761,33 +846,28 @@ const rosterSections = [
   // Every other opener (header, alerts) expects the activating upload.
   signModal?.addEventListener('cds-modal-closed', () => setSignMode('activate'));
   {
-    const drop = document.getElementById('signed-letter-drop');
-    const chosenList = document.getElementById('signed-letter-chosen');
     const confirm = document.getElementById('sign-confirm') as any;
     let chosen: string | null = null;
-    const choose = (name: string | null) => {
-      chosen = name;
-      chosenList?.replaceChildren();
-      if (confirm) confirm.disabled = !name;
-      if (!name || !chosenList) return;
-      const item = document.createElement('cds-file-uploader-item') as any;
-      item.state = 'edit';
-      item.size = 'md';
-      item.textContent = name;
-      item.addEventListener('cds-file-uploader-item-deleted', () => choose(null));
-      chosenList.append(item);
-    };
-    drop?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
-      const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
-      if (files?.length) choose(files[0].name);
+    // A wrong-type or too-large file shows as an error item; it doesn't turn the
+    // upload buttons on (lib/file-upload).
+    const upload = wireUpload(document.getElementById('signed-letter-drop')!, {
+      list: document.getElementById('signed-letter-chosen')!,
+      single: true,
+      onChange: (names) => {
+        chosen = names[0] ?? null;
+        if (confirm) confirm.disabled = !chosen;
+        overrideButton.disabled = !chosen;
+      },
     });
-    confirm?.addEventListener('click', () => {
+    const submit = (override: boolean) => {
       if (!chosen) return;
-      if (signMode === 'replace') replaceSignedLetter(chosen); else applySignedLetter(chosen);
+      if (signMode === 'replace') replaceSignedLetter(chosen); else applySignedLetter(chosen, override);
       signModal.open = false;
-      choose(null);
+      upload.clear();
       setSignMode('activate'); // closing in code fires no cds-modal-closed
-    });
+    };
+    confirm?.addEventListener('click', () => submit(false));
+    overrideButton.addEventListener('click', () => submit(true));
   }
   document.getElementById('request-confirm')?.addEventListener('click', () => {
     const drafts = reviewStore(permitId).issues().filter((i) => !i.sentAt && !i.resolvedAt);
@@ -856,7 +936,7 @@ const rosterSections = [
     const permitId = banner?.dataset.permitId ?? '';
     const permitType = banner?.dataset.permitType as any;
     const statusNow = () => (permitId && localStorage.getItem(`permit-status-${permitId}`)) || banner?.dataset.status || 'Under review';
-    // Same gate as the rail: the Responsible Agent (or Admin) during review.
+    // Same gate as the rail: the Responsible analyst (or Admin) during review.
     const canManage = () => sectionAccessor(readIdentity(), permitId, permitType, statusNow())('supporting-agents') === 'update';
 
     const teamKey = roster.dataset.teamKey || `permit-team-${permitId}`;
@@ -1136,6 +1216,11 @@ const rosterSections = [
     max-inline-size: 99rem;
     margin-inline: auto;
     padding-inline: var(--cds-grid-margin, 1.5rem);
+  }
+  /* Carbon's grid margin is 0 below md (its columns carry the gutter); this banner
+     has no columns, so it keeps a 16px gutter on phones. */
+  @media (max-width: 41.98rem) {
+    .banner__inner { padding-inline: var(--cds-spacing-05, 1rem); }
   }
   /* Breadcrumb row sits above the title, inside the dark header. */
   .banner__crumb {
@@ -1421,9 +1506,10 @@ const rosterSections = [
     color: var(--cds-text-secondary, #525252);
   }
 
-  /* Signed-letter upload modal — spacing only; the dropzone and file item are stock. */
+  /* Signed-letter upload modal — spacing only; the uploader and file item are stock. */
   .signed-upload__lead { margin: 0 0 var(--cds-spacing-05, 1rem); }
-  .signed-upload__chosen:empty { display: none; }
-  .signed-upload__chosen { margin-top: var(--cds-spacing-03, 0.5rem); }
-  .signed-upload__hint { margin: var(--cds-spacing-03, 0.5rem) 0 0; color: var(--cds-text-secondary, #525252); }
+  .signed-upload__notice { margin: 0 0 var(--cds-spacing-05, 1rem); }
+  /* The callout's content row wraps (flex) — a full-width body line drops the
+     details under the title: title = the fact, details = which permit and when. */
+  .signed-upload__notice p { flex-basis: 100%; margin-block-start: var(--cds-spacing-02, 0.25rem); }
 </style>

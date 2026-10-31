@@ -18,8 +18,9 @@ import YesNoStatement from '../YesNoStatement.astro';
 import EditButton from '../EditButton.astro';
 import DocumentViewer from '../DocumentViewer.astro';
 import { permit, badgesForSection } from '../../data/permit';
-import { reviewDocuments } from '../../data/review-documents';
+import { reviewDocuments, documentTypeText } from '../../data/review-documents';
 import { answerIdFor } from '../../lib/record-summary';
+import { truncateMiddle } from '../../lib/truncate';
 import { statementFacts, otherFacts, factIndex, fileGlyph, ORDER, type SectionFrame } from '../../lib/application-record';
 
 interface Props extends SectionFrame {
@@ -68,11 +69,16 @@ const documents = reviewDocuments(ad.files);
           <cds-table-body>
             {ad.files.map((f) => (
               <cds-table-row>
-                <cds-table-cell>{f.name}</cds-table-cell>
-                <cds-table-cell>{f.type}</cds-table-cell>
-                <cds-table-cell>{f.size}</cds-table-cell>
+                <cds-table-cell>{truncateMiddle(f.name) === f.name ? f.name : (
+                  <Fragment>
+                    <span title={f.name} aria-hidden="true">{truncateMiddle(f.name)}</span>
+                    <span class="cds--visually-hidden">{f.name}</span>
+                  </Fragment>
+                )}</cds-table-cell>
+                <cds-table-cell>{documentTypeText(f.type)}</cds-table-cell>
+                <cds-table-cell><span class="doc-nowrap">{f.size}</span></cds-table-cell>
                 <cds-table-cell>{f.by}</cds-table-cell>
-                <cds-table-cell>{f.date}</cds-table-cell>
+                <cds-table-cell><span class="doc-nowrap">{f.date}</span></cds-table-cell>
                 <cds-table-cell>
                   <div class="doc-actions">
                     {/* View opens the file in the viewer below (the page wires it);
@@ -166,7 +172,7 @@ const documents = reviewDocuments(ad.files);
             <li class="doc">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d={fileGlyph}></path></svg>
               <span class="t-body-01">{f.name}</span>
-              <span class="doc__type t-label-01">{f.type}</span>
+              <span class="doc__type t-label-01">{documentTypeText(f.type)}</span>
             </li>
           ))}
         </ul>
@@ -179,6 +185,9 @@ const documents = reviewDocuments(ad.files);
   /* Row action buttons sit flush-right and tight; the buttons themselves are
      stock cds-button (ghost, icon-only) — this only handles their grouping. */
   .doc-actions { display: flex; gap: 0.25rem; justify-content: flex-end; }
+  /* Sizes and dates are compared down the column — never break them across lines.
+     Long file names are shortened from the middle instead (truncateMiddle). */
+  .doc-nowrap { white-space: nowrap; }
   /* The inline reader under the files table. Author element reset beats the UA
      [hidden] rule, so restate the collapse. A jump to it lands below the sticky
      header + tab strip. */

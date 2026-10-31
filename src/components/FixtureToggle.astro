@@ -1,0 +1,65 @@
+---
+// DEV-ONLY data-stress toggle (break-ui). Each permit fixture runs in its own dev
+// server (the fixture is fixed at server start — see `permit` in data/permit.ts),
+// so switching hops to that server's port and keeps the path, query and hash.
+//   npm run dev:demo   → :4351     npm run dev:worst → :4352
+//   npm run dev:sparse → :4353
+// It joins the dev "Prototype" panel (maintenance-shell) as one more section, so it
+// collapses with it instead of floating over page content; until that panel
+// exists it floats bottom-center. Renders nothing in a production build.
+const current = import.meta.env.PUBLIC_PERMIT_FIXTURE || 'demo';
+// cds-content-switcher selects by index on first render (item `selected` loses).
+const FIXTURES = ['demo', 'worst', 'sparse'];
+---
+{import.meta.env.DEV && (
+  <div class="fixture-toggle" id="fixture-toggle-wrap">
+    <p class="demo-identity__label t-label-01">Test data</p>
+    <cds-content-switcher id="fixture-toggle" value={current} selected-index={FIXTURES.indexOf(current)} size="sm" aria-label="Permit test data">
+      <cds-content-switcher-item value="demo" selected={current === 'demo' || undefined}>Demo data</cds-content-switcher-item>
+      <cds-content-switcher-item value="worst" selected={current === 'worst' || undefined}>Worst case</cds-content-switcher-item>
+      <cds-content-switcher-item value="sparse" selected={current === 'sparse' || undefined}>Sparse</cds-content-switcher-item>
+    </cds-content-switcher>
+  </div>
+)}
+
+<style>
+  .fixture-toggle {
+    position: fixed;
+    inset-block-end: 4.5rem; /* clear of Astro's dev toolbar */
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    z-index: 9000;
+    inline-size: 20rem;
+    padding: var(--cds-spacing-04, 0.75rem);
+    background: var(--cds-layer-01, #ffffff);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+  }
+</style>
+
+<script>
+  if (import.meta.env.DEV) {
+    const PORTS: Record<string, string> = { demo: '4351', worst: '4352', sparse: '4353' };
+    // Dock into the dev panel once it mounts (it's built by a separate script).
+    const dock = () => {
+      const panel = document.getElementById('demo-identity-switcher');
+      const wrap = document.getElementById('fixture-toggle-wrap');
+      if (!panel || !wrap) return false;
+      wrap.classList.remove('fixture-toggle');
+      wrap.classList.add('demo-fixture');
+      panel.appendChild(wrap);
+      return true;
+    };
+    if (!dock()) {
+      const mo = new MutationObserver(() => { if (dock()) mo.disconnect(); });
+      mo.observe(document.body, { childList: true });
+    }
+    document.getElementById('fixture-toggle')?.addEventListener('cds-content-switcher-selected', (e) => {
+      const value = (e as CustomEvent).detail?.item?.value as string;
+      const port = PORTS[value];
+      if (!port || location.port === port) return;
+      const url = new URL(location.href);
+      url.port = port;
+      location.href = url.href;
+    });
+  }
+</script>

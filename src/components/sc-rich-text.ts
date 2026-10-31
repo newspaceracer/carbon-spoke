@@ -254,10 +254,17 @@ class ScRichText extends HTMLElement {
       ],
       content: this.carried ?? (this.getAttribute('value') || ''),
       editorProps: {
+        // A visible label elsewhere in the light DOM names the editor via
+        // data-labelledby (and its helper via data-describedby); otherwise fall
+        // back to the host's aria-label.
         attributes: {
           role: 'textbox',
           'aria-multiline': 'true',
-          'aria-label': this.getAttribute('aria-label') || 'Condition text',
+          ...(this.dataset.labelledby
+            ? { 'aria-labelledby': this.dataset.labelledby }
+            : { 'aria-label': this.getAttribute('aria-label') || 'Condition text' }),
+          ...(this.dataset.describedby ? { 'aria-describedby': this.dataset.describedby } : {}),
+          ...(this.hasAttribute('data-required') ? { 'aria-required': 'true' } : {}),
         },
       },
       onTransaction: () => this.syncToolbar(),
@@ -321,6 +328,11 @@ class ScRichText extends HTMLElement {
   }
 
   clear() { this.value = ''; }
+
+  /** Focus the writing surface (so an external label can act like a <label>). */
+  focus(): void {
+    this.editor?.commands.focus();
+  }
 
   /** Insert literal text at the caret (used to drop template tokens like [Name]). */
   insert(text: string): void {

@@ -88,7 +88,7 @@ seal is removed: all six tabs are accessible while the permit is **Waiting for
 review**. In its place, an inline "Start your review" prompt appears on the Overview
 tab, above Tags, for the reviewer who is able to start.
 
-**Roles affected:** System Admin and the permit's **Responsible Agent** (who can
+**Roles affected:** System Admin and the permit's **Responsible analyst** (who can
 start review); other internal reviewers (who can browse but not start). Researcher
 (owner) and public viewers never see the prompt.
 
@@ -105,7 +105,7 @@ are existing behavior defined in [`stories-roles-permissions.md`](stories-roles-
   the permit can open all Overview, Project information, Study areas, Special
   conditions, Data collection, and Additional documentation tabs.
 - The "Start your review" prompt is shown only to a viewer eligible to start review
-  (the permit's **Responsible Agent**, or a **System Admin**); other internal
+  (the permit's **Responsible analyst**, or a **System Admin**); other internal
   reviewers can browse but do not see the prompt.
 - The prompt is never shown to a Researcher (owner) or public viewer.
 

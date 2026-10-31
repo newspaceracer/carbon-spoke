@@ -8,7 +8,7 @@
 //                        narrows the list. Selections echo below in a cds-table
 //                        roster (Park · District) the applicant can remove from,
 //                        mirroring the additional-participants table.
-//   • GIS location    — an optional multi-file cds-file-uploader-drop-container
+//   • GIS location    — an optional multi-file cds-file-uploader (button variant)
 //                        for the study-area boundary/location data (a Shapefile
 //                        bundle is several files, so it accepts multiple).
 //
@@ -16,6 +16,7 @@
 // client script; wizard step navigation lives on the page.
 import PermitSection from './PermitSection.astro';
 import { parks, seedStudyAreas } from '../data/parks';
+import { MAX_FILE_SIZE } from '../lib/file-upload';
 ---
 
 <div class="sa">
@@ -69,26 +70,21 @@ import { parks, seedStudyAreas } from '../data/parks';
       reviewers locate the exact sites within each park.
     </p>
 
-    <div class="uploader">
-      <p class="field-label t-label-01">GIS files <span class="opt">(optional)</span></p>
-      <cds-file-uploader-drop-container
-        id="gis-drop"
-        multiple
-        accept=".zip,.shp,.shx,.dbf,.prj,.kml,.kmz,.geojson,.json,.gpkg,.gdb"
-      >
-        Drag and drop GIS files here, or click to upload
-      </cds-file-uploader-drop-container>
-      <div id="gis-list" class="uploaded-list"></div>
-      <p class="uploader-hint t-label-01">
+    <cds-file-uploader class="uploader">
+      <span slot="label-title">GIS files <span class="opt">(optional)</span></span>
+      <span slot="label-description">
         Accepted: a zipped Shapefile (.zip), KML/KMZ, GeoJSON, or GeoPackage (.gpkg). A
-        Shapefile is several files (.shp, .shx, .dbf, .prj) — add them together or zip them.
-      </p>
-    </div>
+        Shapefile is several files (.shp, .shx, .dbf, .prj) — add them together or zip them. Maximum file size: {MAX_FILE_SIZE}.
+      </span>
+      <cds-file-uploader-drop-container id="gis-drop" multiple accept=".zip,.shp,.shx,.dbf,.prj,.kml,.kmz,.geojson,.json,.gpkg,.gdb">Drag and drop GIS files here, or click to upload</cds-file-uploader-drop-container>
+      <div id="gis-list"></div>
+    </cds-file-uploader>
   </PermitSection>
 </div>
 
 <script>
   import { parkById, seedStudyAreas } from '../data/parks';
+  import { wireUpload } from '../lib/file-upload';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id) as T | null;
@@ -135,9 +131,14 @@ import { parks, seedStudyAreas } from '../data/parks';
           </cds-icon-button>
         </cds-table-cell>`;
       row.querySelector('.row-remove')?.addEventListener('click', () => {
+        const at = selected.indexOf(id);
         selected = selected.filter((x) => x !== id);
         setSelectValue(selected); // deselect it in the menu too
         renderTable();
+        // The table re-renders, so land focus on the row that took this one's
+        // place (or the one above), else back on the park search.
+        const buttons = body ? Array.from(body.querySelectorAll<HTMLElement>('.row-remove')) : [];
+        (buttons[Math.min(at, buttons.length - 1)] ?? select)?.focus();
       });
       body.appendChild(row);
     });
@@ -153,23 +154,10 @@ import { parks, seedStudyAreas } from '../data/parks';
   renderTable(); // initial paint from the seed
 
   // ── GIS location: multi-file upload ──────────────────────────────────────
-  // A static prototype can't store bytes, so "uploaded" means: render a Carbon
-  // file item per chosen file. Multiple files accumulate (a Shapefile bundle),
-  // each removable on its own.
+  // Files accumulate (a Shapefile bundle), each removable on its own.
+  const gisDrop = $('gis-drop');
   const gisList = $('gis-list');
-
-  $('gis-drop')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
-    const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
-    if (!files || !files.length || !gisList) return;
-    files.forEach((file) => {
-      const item = document.createElement('cds-file-uploader-item') as any;
-      item.state = 'edit';
-      item.size = 'md';
-      item.textContent = file.name;
-      item.addEventListener('cds-file-uploader-item-deleted', () => item.remove());
-      gisList.appendChild(item);
-    });
-  });
+  if (gisDrop && gisList) wireUpload(gisDrop, { list: gisList });
 </script>
 
 <style>
@@ -214,23 +202,15 @@ import { parks, seedStudyAreas } from '../data/parks';
     display: none;
   }
 
-  /* Uploader block — a labeled dropzone (stock cds-file-uploader-drop-container)
-     plus its help text; layout only. */
+  /* Uploader — stock cds-file-uploader (title, description, drop zone, file
+     list); layout only. Drag-and-drop because a Shapefile is several files
+     picked together. The (optional) marker reads secondary, like every label. */
   .uploader {
+    display: block;
     max-width: 46rem;
   }
-  .field-label {
-    margin: 0 0 0.5rem;
-    color: var(--cds-text-secondary, #525252);
-  }
-  .field-label .opt {
-    color: var(--cds-text-secondary, #525252);
-  }
-  .uploaded-list {
-    margin-top: 0.5rem;
-  }
-  .uploader-hint {
-    margin: 0.5rem 0 0;
+  .uploader .opt {
+    font-weight: 400;
     color: var(--cds-text-secondary, #525252);
   }
 </style>

@@ -19,13 +19,11 @@ interface Props {
    *  '/docs/cv-jun-2025.pdf') — the host page wires the [data-view-cv] click to its
    *  document viewer. */
   cvHref?: string;
-  /** Span every column of the parent card grid (a full-width row). */
-  wide?: boolean;
   /** Application-record editing: the item key for an Edit button + the bindings
    *  the shared edit modal re-renders (src/lib/record-edit.ts). */
   editKey?: string;
 }
-const { role, contact, kind = 'person', cvHref, wide = false, editKey } = Astro.props;
+const { role, contact, kind = 'person', cvHref, editKey } = Astro.props;
 
 // Carbon `building` 20 glyph — marks a facility/place rather than a person.
 const buildingIcon =
@@ -45,7 +43,7 @@ const icon = kind === 'organization' ? enterpriseIcon : kind === 'facility' ? bu
 const roles = Array.isArray(role) ? role : [role];
 ---
 
-<cds-tile class:list={['contact', wide && 'contact--wide']} data-edit-scope={editKey}>
+<cds-tile class:list={['contact', `contact--${kind}`]} data-edit-scope={editKey}>
   <div class="contact__head">
     <div class="contact__roles">
       {roles.map((r) => <p class="contact__role t-label-01">{r}</p>)}
@@ -85,8 +83,6 @@ const roles = Array.isArray(role) ? role : [role];
 
 <style>
   /* Surface/padding/border are the tile's — these rules lay out its content. */
-  /* Full-width row inside the parent's card grid. */
-  .contact--wide { grid-column: 1 / -1; }
   /* Role eyebrow, with the Edit button (when editable) pinned to the right. */
   .contact__head {
     display: flex;
@@ -126,7 +122,12 @@ const roles = Array.isArray(role) ? role : [role];
     display: inline-flex;
     align-items: center;
     gap: 0.125rem;
+    max-inline-size: 100%;
   }
+  /* A long address wraps inside the card (it has no spaces, so allow breaks
+     anywhere); the copy button keeps its size and stays beside it. */
+  .contact__email cds-link { min-inline-size: 0; overflow-wrap: anywhere; }
+  .contact__copy { flex-shrink: 0; }
   /* An editable card keeps an empty email line in the DOM (hidden) so an edit can
      fill it; the display rule above would otherwise override [hidden]. */
   .contact__email[hidden] { display: none; }

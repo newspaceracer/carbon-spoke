@@ -73,7 +73,7 @@ const adminMenuRoles = DISTRICT_ADMIN;
     button-label-inactive="Open menu"
   ></cds-header-menu-button>
 
-  <cds-header-name href={withBase('/')} prefix="CA State Parks">Research &amp; Collection Permits</cds-header-name>
+  <cds-header-name href={withBase('/')} prefix="CA State Parks"><span class="header__product">Research &amp; Collection Permits</span></cds-header-name>
 
   <cds-header-nav menu-bar-label="Primary navigation">
     {primaryNav.map((item) => (
@@ -158,5 +158,14 @@ const adminMenuRoles = DISTRICT_ADMIN;
       max-width: none;
       min-width: 0;
     }
+    /* A phone row can't fit the full name beside the actions. Keep the "CA
+       State Parks" prefix, drop the rest. */
+    .header__product { display: none; }
+  }
+  /* The name never wraps or squeezes (it broke into four lines on tablets and
+     phones); the search field takes the squeeze instead. */
+  cds-header-name {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 </style>

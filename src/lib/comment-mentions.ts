@@ -71,9 +71,27 @@ export function wireMentionTypeahead(
       if (/\n/.test(q) || /\s$/.test(q) || q.length > 30) return null;
       return { at, caret, q };
     };
-    const hideMenu = () => { menu.hidden = true; menu.innerHTML = ''; active = -1; };
-    const paintActive = () =>
-      Array.from(menu.children).forEach((li, i) => (li as HTMLElement).classList.toggle('is-active', i === active));
+    // Combobox semantics so a screen reader hears the menu open and the highlighted
+    // name. The textarea lives in cds-textarea's shadow root, where ID refs can't
+    // reach the light-DOM menu — so use ARIA element reflection, which can point
+    // outward from a shadow tree.
+    const aria = ta as any;
+    ta.setAttribute('role', 'combobox');
+    ta.setAttribute('aria-autocomplete', 'list');
+    ta.setAttribute('aria-expanded', 'false');
+    aria.ariaControlsElements = [menu];
+    const hideMenu = () => {
+      menu.hidden = true; menu.innerHTML = ''; active = -1;
+      ta.setAttribute('aria-expanded', 'false');
+      aria.ariaActiveDescendantElement = null;
+    };
+    const paintActive = () => {
+      Array.from(menu.children).forEach((li, i) => {
+        (li as HTMLElement).classList.toggle('is-active', i === active);
+        li.setAttribute('aria-selected', i === active ? 'true' : 'false');
+      });
+      aria.ariaActiveDescendantElement = active >= 0 ? menu.children[active] ?? null : null;
+    };
     const renderMenu = (matches: MentionUser[]) => {
       items = matches;
       menu.innerHTML = '';
@@ -94,6 +112,7 @@ export function wireMentionTypeahead(
       active = matches.length ? 0 : -1;
       paintActive();
       menu.hidden = matches.length === 0;
+      ta.setAttribute('aria-expanded', matches.length ? 'true' : 'false');
     };
     const refresh = () => {
       const ctx = queryAtCaret();

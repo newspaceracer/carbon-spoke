@@ -19,7 +19,7 @@ always on).
 
 ## Source of truth (the spec)
 - Confluence export: **"Test of User roles and permissions documentation
-  (Responsible/Supporting Agents Version)"**, last updated 5/13/25.
+  (Responsible/Supporting analysts Version)"**, last updated 5/13/25.
 - Local copy of the doc: `~/Downloads/Test+of+User+roles+and+permissions+documentation+(Responsible_Supporting+Agents+Version).doc`
   (Confluence MHTML; decoded text was extracted during the audit).
 - The spec defines a matrix: **`role × permit-role × status × (multi | single-district)`
@@ -28,12 +28,12 @@ always on).
 ## Spec vocabulary (for reference)
 - **User roles (5):** System Admin, HQ Technical Reviewer, District Lead
   Technical Reviewer, District Assistant Technical Reviewer, Researcher.
-- **Permit-roles (per permit, exactly one):** Responsible Agent, Supporting Agent.
+- **Permit-roles (per permit, exactly one):** Responsible analyst, Supporting analyst.
 - **Permit statuses (8):** Draft, In Review, Sent back to researcher, Active
   Permit, Expired Permit, Rejected Application, Waiting for Annual Report
   (Renewal only), Withdrawn Permit.
 - **Permit type axis:** Multi-district vs Single-district.
-- **IR sections:** Responsible Agent, Supporting Agents, Tags, Dates/CEQA,
+- **IR sections:** Responsible analyst, Supporting analysts, Tags, Dates/CEQA,
   Generate unsigned permit, Upload signed active permit, Approve Permit, Return
   to researcher, Reject Application, Supporting Documents, Internal Notes, HQ
   Special conditions, District Special conditions; plus a "Start/complete
@@ -60,7 +60,7 @@ real auth.
    hq-technical / district-lead / district-assistant / researcher (+ pending /
    anon for auth states).
 2. **Per-permit demo control (local to each permit):** sets the **permit-role**
-   on that permit — Responsible Agent / Supporting Agent / Not assigned.
+   on that permit — Responsible analyst / Supporting analyst / Not assigned.
 
 Together they resolve the full matrix; status and district-span come from the
 permit data.
@@ -160,7 +160,7 @@ permit data.
   review**. Semantics: application has been **submitted** but the lead/responsible
   reviewer has **not yet clicked "Start review."** Clicking Start review
   transitions **Waiting for review → Under review** and flips the existing
-  `permit-review-started-${id}` gate. Only the **responsible agent** can start
+  `permit-review-started-${id}` gate. Only the **responsible analyst** can start
   review. This promotes the Kanban "Submitted / Awaiting review" lane to a
   first-class status and turns the review gate into a real status transition
   (refines [[permit-review-started-gate]], where Start review was previously a
@@ -204,12 +204,12 @@ permit data.
 
 ### IR section gaps ✅ SETTLED
 1. **Supporting review — BUILD** ✅: add a **Start / Complete supporting review**
-   action, visible **only to a Supporting Agent when assigned**, during Under
+   action, visible **only to a Supporting analyst when assigned**, during Under
    review. Separate from the lead's "Start review" (which is the Waiting for review
    → Under review transition). Detail-permit history already implies a sequence
-   (Responsible agent review completed → Supporting agents review completed).
-   - **Sequencing: INFORMATIONAL** ✅ — supporting agents record their review, but
-     it does **not gate** the responsible agent, who can proceed to a decision
+   (Responsible analyst review completed → Supporting analysts review completed).
+   - **Sequencing: INFORMATIONAL** ✅ — supporting analysts record their review, but
+     it does **not gate** the responsible analyst, who can proceed to a decision
      whenever they choose regardless of whether supporting reviews are complete.
 2. **CEQA — BUILD (minimal)** ✅: CEQA is just a **radio: Yes / N/A** within the
    Dates/CEQA section. Not the dropped write-only version — a simple two-option
@@ -225,10 +225,10 @@ permit data.
      inline in the review wizard rather than via a per-section Make-changes toggle.
 ### NEW — Signer permit-role + two-signature workflow ✅ SETTLED
 - **New per-permit role/capability: `Signer`.** Permit-level roles are now
-  **Responsible Agent, Supporting Agent, and Signer** (Signer is a permit-scoped
+  **Responsible analyst, Supporting analyst, and Signer** (Signer is a permit-scoped
   capability, like the others — not a new account role).
 - **Two signers per permit:**
-  - **First signer = the Responsible Agent (always).** A Responsible Agent is
+  - **First signer = the Responsible analyst (always).** A Responsible analyst is
     always a Signer. They sign to **send the permit out for signature** → this is
     the transition into **Out for signature**.
   - **Second signer = another user in the system**, configured by permit type:
@@ -245,7 +245,7 @@ permit data.
   means (IR gap #3): e-signature is integrated, not a manual generate-PDF →
   upload-signed round trip. Multi-district second signer is an HQ system user;
   single-district second signer may be external (email-only).
-- **Activation flow (refined) ✅:** Responsible Agent completes review → **signs
+- **Activation flow (refined) ✅:** Responsible analyst completes review → **signs
   (1st)** → **Out for signature** (DocuSign sent to the 2nd signer) → **second
   signer signs (2nd)** → **Active** (subject to the Waiting-for-annual-report hold).
 - **Demo control ✅:** the per-permit demo control **exposes "second signer"** as a
@@ -295,17 +295,17 @@ permit data.
 - **Editable parks** ✅: reviewers with appropriate permissions can **add and
   remove parks** on a permit. This can flip the permit **single ↔ multi**.
 - **A flip is a managed transition** ✅ (details TBD):
-  - Because eligibility depends on permit type, the **Responsible (lead) agent can
+  - Because eligibility depends on permit type, the **Responsible (lead) analyst can
     change**: single→multi, a District Lead can no longer be Responsible
     (Supporting only on multi); multi→single, an HQ reviewer can no longer be
     Responsible (Supporting only on single).
-  - The **previous lead loses the permissions** they held as Responsible Agent
+  - The **previous lead loses the permissions** they held as Responsible analyst
     (likely demoted to Supporting if still district-relevant).
   - The change is **consequential → requires explicit confirmation** from the
     reviewer making it before it commits (modal confirm per design-principles:
     reserve confirms for consequential actions).
 - **Transition workflow ✅ SETTLED:**
-  1. **Who can edit parks:** only the **Responsible Agent** (the lead) + **System
+  1. **Who can edit parks:** only the **Responsible analyst** (the lead) + **System
      Admin**. HQ reviewers **cannot** edit parks unless they are the lead. Editable
      only in **pre-decision statuses** (Draft / Waiting for review / Under review /
      Returned to submitter) — not once Out for signature / Active / later.
@@ -317,14 +317,14 @@ permit data.
      - ⚙️ **Tiebreak ✅:** when >1 HQ reviewer is eligible (single→multi), the
        **prototype assigns at random**. Production already has an established HQ
        tiebreak business rule — not replicated in the prototype.
-  3. **Confirmation dialog** (only on Confirm do parks + stored type + agent
+  3. **Confirmation dialog** (only on Confirm do parks + stored type + analyst
      reassignments commit together) states: the type change; the auto-assigned new
-     Responsible Agent; "you will no longer be the Responsible Agent" when the
+     Responsible analyst; "you will no longer be the Responsible analyst" when the
      editor is the outgoing lead; and any removals from item 4.
-  4. **Outgoing lead:** auto-demoted to **Supporting Agent** if still
+  4. **Outgoing lead:** auto-demoted to **Supporting analyst** if still
      district-relevant on the new permit, else **removed**.
   5. **Dropped district (park removal empties a district):** that district's
-     **Supporting Agents are removed**, AND that district's **Special Conditions
+     **Supporting analysts are removed**, AND that district's **Special Conditions
      are removed**.
      - ✅ VERIFIED (not handled today — this is net-new work): `final-letter.astro`
        already shows a **confirmation modal** when a district empties

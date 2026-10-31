@@ -1,7 +1,7 @@
 // Review COMPLETE marks — a non-Responsible reviewer on the analysis team marks
 // themselves done ("Complete review") so the team knows when they've finished
 // adding conditions, comments, and the rest. It records only who and when; it
-// never gates the Responsible Agent. Reopening is allowed while the permit is
+// never gates the Responsible analyst. Reopening is allowed while the permit is
 // Under review.
 //
 // One map per permit, keyed by the reviewer's email (the analysis-team rosters
@@ -71,13 +71,13 @@ export function paintReviewRows(
   });
 }
 
-/** EM-L — tell the Responsible Agent a Supporting Agent completed or reopened
+/** EM-L — tell the Responsible analyst a Supporting analyst completed or reopened
  *  their review. Call AFTER the mark changes so the roster/meter (read from the
  *  page's header) already reflect it. */
 export function notifyResponsibleAgent(permitId: string, identity: Identity, action: 'completed' | 'reopened'): void {
   const banner = document.getElementById('permit-banner');
   const lead = document.querySelector('.review-row[data-lead="true"]');
-  const ra = lead?.querySelector('.review-row__name')?.textContent?.trim() || 'Responsible Agent';
+  const ra = lead?.querySelector('.review-row__name')?.textContent?.trim() || 'Responsible analyst';
   const bar = document.getElementById('analysis-metric-bar') as any;
   sendEmail('EM-L', {
     'First name': ra,

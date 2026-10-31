@@ -35,8 +35,38 @@ The user may provide:
 Adapt to whatever they give you. If the input is 10 words or fewer and the
 role and action aren't both clear, ask one question before drafting:
 **"Who is the user and what are they trying to accomplish?"**
-For anything longer, draft immediately — do not ask for clarification unless
-something is genuinely ambiguous and would significantly change the output.
+For anything longer, don't stop for general clarification; go straight to the
+Workflow below.
+
+---
+
+## Workflow — ASK open questions BEFORE drafting (mandatory)
+
+An open question written into a story with no chance to answer it is a dead end —
+the whole point of surfacing it is to get it answered. So questions go to the
+user **first**, and only the leftovers get recorded.
+
+1. **Gather.** Run the AC Evaluation Pass (below) against the input and collect
+   every gap: undefined behavior, missing message copy, unstated roles or
+   statuses, missing error states, tiebreakers, fallbacks.
+2. **Ask.** Put them to the user with `AskUserQuestion` **before writing the
+   story** — up to 4 per call, multiple rounds if needed, highest-impact first.
+   - Give concrete options (the plausible answers), with a recommended one first
+     when you have a view. The user can always pick "Other".
+   - Make each question stand alone. If it references existing copy, a spec, or
+     a prior story, **quote that text in the question** — don't make the user go
+     look it up.
+   - Don't ask what the input, the codebase, or project docs already answer —
+     look it up instead.
+3. **Fold in.** Write each answer into the AC as a definite rule (not as a
+   resolved question).
+4. **Record only true unknowns.** The **Open questions** section is for what the
+   user explicitly can't answer yet (e.g. "needs Legal", "decide later"). Note
+   who/what it's waiting on.
+
+Never skip step 2 because there are "only a few" questions or the story is
+small. The one exception: the user explicitly says to just draft it — then
+record the questions, and say in your reply that they weren't asked.
 
 ---
 
@@ -123,20 +153,22 @@ or environment context that isn't product behavior)*
 ---
 
 **Open questions**
-- [ ] [Specific, answerable question for the PM or stakeholder. Framed so
-      someone can respond with a direct answer.]
+- [ ] [A question the user was asked but couldn't answer yet — note who or
+      what it's waiting on. Framed so someone can respond with a direct answer.]
 
-[Aim for 2–5 questions. If there are more, the story likely needs a discovery
-conversation before it's ready to be written. Write "None — story appears
-complete." if the evaluation pass found no gaps.]
+[Only questions left unanswered after the Workflow's ask step belong here. If
+there are more than ~5, the story likely needs a discovery conversation before
+it's ready to be written. Write "None — story appears complete." if every
+question was answered or none came up.]
 
 ---
 
 ## AC Evaluation Pass
 
-After drafting the story, silently run this checklist before presenting output.
-Fix what you can directly in the draft. Surface what you can't resolve as Open
-questions. Do not mention that you are running this checklist — just do it.
+Run this checklist against the input **before drafting** (Workflow step 1), and
+again on the draft before presenting it. Resolve what you can from the input or
+the codebase. Everything you can't resolve becomes a question for the user
+**before** drafting (Workflow step 2) — not a line item to park in Open questions.
 
 ### Coverage: roles
 - Have all affected roles been checked — not just the primary actor? Consider
@@ -152,7 +184,8 @@ questions. Do not mention that you are running this checklist — just do it.
 
 ### Coverage: notifications
 - Does every action that changes state have a corresponding notification check?
-- Is the message body copy present, or missing and flagged as an open question?
+- Is the message body copy present? If missing, ask the user for it before
+  drafting; record it as an open question only if they can't supply it.
 
 ### Coverage: failure and error states
 - What happens if a required prerequisite is missing?
@@ -228,6 +261,10 @@ questions. Do not mention that you are running this checklist — just do it.
 ---
 
 ## Examples
+
+> **Open questions in these examples** show the *format* for questions the user
+> couldn't answer. In a real run, each one would first be asked via
+> `AskUserQuestion` (see Workflow); only the unanswered ones would remain.
 
 ### Example 1: Sparse input → lean output
 

@@ -35,7 +35,7 @@ export const defaultTemplates: EmailTemplate[] = [
   {
     id: 'EM-A', name: 'Second-signer request (internal)', pref: 'signature', regulated: false,
     recipients: 'The configured second signer (system user)',
-    placeholders: ['Permit #', 'Project title', 'District(s)', 'Responsible Agent name'],
+    placeholders: ['Permit #', 'Project title', 'District(s)', 'Responsible analyst name'],
     subject: 'Signature requested — research permit [Permit #]',
     body: `[First name],
 
@@ -43,7 +43,7 @@ A research permit is ready for your signature as the second signer.
 
 Permit:            [Permit #] — [Project title]
 District(s):       [District(s)]
-Responsible Agent: [Responsible Agent name] (first signature complete)
+Responsible analyst: [Responsible analyst name] (first signature complete)
 
 Review and sign in DocuSign. The permit becomes active once your
 signature is recorded.
@@ -128,35 +128,35 @@ questions, contact nrd.research@parks.ca.gov.
 ${SIG}`,
   },
   {
-    id: 'EM-F', name: 'Responsible Agent assigned', pref: 'assignment', regulated: false,
-    recipients: 'The new Responsible Agent',
+    id: 'EM-F', name: 'Responsible analyst assigned', pref: 'assignment', regulated: false,
+    recipients: 'The new Responsible analyst',
     placeholders: ['First name', 'Permit #', 'Project title', 'Single/Multi', 'Status'],
-    subject: 'You are the Responsible Agent for permit [Permit #]',
+    subject: 'You are the Responsible analyst for permit [Permit #]',
     body: `[First name],
 
-You are now the Responsible Agent for a research permit.
+You are now the Responsible analyst for a research permit.
 
 Permit: [Permit #] — [Project title]
 Type:   [Single/Multi]-district
 Status: [Status]
 
-As Responsible Agent you lead the review and are the first signer.
+As Responsible analyst you lead the review and are the first signer.
 
 [Open permit]
 
 ${SIG}`,
   },
   {
-    id: 'EM-G', name: 'Responsible Agent unassigned', pref: 'assignment', regulated: false,
-    recipients: 'The outgoing Responsible Agent',
+    id: 'EM-G', name: 'Responsible analyst unassigned', pref: 'assignment', regulated: false,
+    recipients: 'The outgoing Responsible analyst',
     placeholders: ['First name', 'Permit #', 'Project title'],
-    subject: 'You are no longer the Responsible Agent for permit [Permit #]',
+    subject: 'You are no longer the Responsible analyst for permit [Permit #]',
     body: `[First name],
 
 Your role on permit [Permit #] — [Project title] has changed because the
-permit's districts changed. You are no longer the Responsible Agent.
+permit's districts changed. You are no longer the Responsible analyst.
 
-[You remain a Supporting Agent on this permit. / You no longer have a role
+[You remain a Supporting analyst on this permit. / You no longer have a role
 on this permit.]
 
 No action is needed.
@@ -176,15 +176,15 @@ yet.
 
 Permit: [Permit #] — [Project title]
 
-Submit the outstanding annual report to release the hold. Once it is
-received, the permit will be issued.
+Upload the annual report for your previous permit. We'll issue your new
+permit once we've reviewed the report.
 
 ${SIG}`,
   },
   {
     id: 'EM-I', name: 'Status change (permits you review)', pref: 'status', regulated: false,
-    recipients: "The permit's Responsible Agent and Supporting Agents",
-    placeholders: ['First name', 'Permit #', 'Project title', 'Status', 'Responsible Agent / Supporting Agent'],
+    recipients: "The permit's Responsible analyst and Supporting analysts",
+    placeholders: ['First name', 'Permit #', 'Project title', 'Status', 'Responsible analyst / Supporting analyst'],
     subject: 'Status update — permit [Permit #] is now [Status]',
     body: `[First name],
 
@@ -192,7 +192,7 @@ A permit you review has changed status.
 
 Permit:     [Permit #] — [Project title]
 New status: [Status]
-Your role:  [Responsible Agent / Supporting Agent]
+Your role:  [Responsible analyst / Supporting analyst]
 
 [Open permit]
 
@@ -201,7 +201,7 @@ ${SIG}`,
   {
     // DRAFT copy — the body is an open question on Story 8.
     id: 'EM-J', name: 'Annual report uploaded', pref: 'status', regulated: false,
-    recipients: "The permit's Responsible Agent and Supporting Agents",
+    recipients: "The permit's Responsible analyst and Supporting analysts",
     placeholders: ['Permit #', 'Project title', 'Uploaded by'],
     subject: 'Annual report uploaded for permit [Permit #]',
     body: `[Uploaded by] uploaded the annual report for a permit you review.
@@ -235,7 +235,7 @@ ${SIG}`,
   },
   {
     id: 'EM-L', name: 'Supporting review completed / reopened', pref: null, regulated: false,
-    recipients: "The permit's Responsible Agent",
+    recipients: "The permit's Responsible analyst",
     placeholders: ['First name', 'Reviewer name', 'Action', 'Next step', 'Permit #', 'Project title', 'Reviews complete'],
     subject: '[Reviewer name] [Action] their review — permit [Permit #]',
     body: `[First name],

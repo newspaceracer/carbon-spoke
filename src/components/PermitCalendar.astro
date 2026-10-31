@@ -108,10 +108,12 @@ const config = { initialISO: `${windowStartISO.slice(0, 7)}-01`, events, dayInde
       <cds-button data-cal="next" kind="ghost" size="sm">Next ›</cds-button>
     </div>
     <span class="cal__title t-heading-03" data-cal-title>—</span>
-    <div class="cal__views">
-      <cds-button data-view="yearView" kind="primary" size="sm">Year</cds-button>
-      <cds-button data-view="dayGridMonth" kind="ghost" size="sm">Month</cds-button>
-    </div>
+    <!-- A view toggle, not two actions: the stock content switcher (a primary
+         "Year" button competed with the page's real primary action). -->
+    <cds-content-switcher class="cal__views" data-cal-views value="yearView" selected-index="0" size="sm" aria-label="Calendar view">
+      <cds-content-switcher-item value="yearView" selected>Year</cds-content-switcher-item>
+      <cds-content-switcher-item value="dayGridMonth">Month</cds-content-switcher-item>
+    </cds-content-switcher>
   </div>
 
   <div class="cal__legend">
@@ -119,7 +121,7 @@ const config = { initialISO: `${windowStartISO.slice(0, 7)}-01`, events, dayInde
       <span class="lg"><i class="sw" style={`background:${c.color}`} aria-hidden="true"></i>{c.name}</span>
     ))}
   </div>
-  <p class="cal__hint t-helper-text-01">Select an event for its dates. Toggle Year / Month; Prev / Next to move.</p>
+  <p class="cal__hint t-helper-text-01">Select a highlighted day for its details.</p>
 
   <div class="cal__mount" data-cal-mount data-config={JSON.stringify(config)} aria-label="Permit schedule calendar"></div>
 </div>
@@ -134,20 +136,27 @@ const config = { initialISO: `${windowStartISO.slice(0, 7)}-01`, events, dayInde
     const mount = root.querySelector<HTMLElement>('[data-cal-mount]')!;
     const cfg = JSON.parse(mount.dataset.config!);
     const titleEl = root.querySelector('[data-cal-title]')!;
-    const viewBtns = Array.from(root.querySelectorAll<HTMLElement>('[data-view]'));
     let cal: any = null;
 
     const setTitle = () => { titleEl.textContent = cal.view.title; };
-    const setActiveView = (view: string) => {
-      for (const b of viewBtns) b.setAttribute('kind', b.dataset.view === view ? 'primary' : 'ghost');
-    };
 
-    // Flag the milestone day cells (pointer + hover title) after each (re)render.
+    // Flag the milestone day cells after each (re)render. They're the only
+    // interactive cells, so they're keyboard buttons too (Enter / Space), not
+    // mouse-only click targets.
     const markCells = () => {
-      mount.querySelectorAll('.fc-daygrid-day.has-milestone').forEach((el) => el.classList.remove('has-milestone'));
+      mount.querySelectorAll('.fc-daygrid-day.has-milestone').forEach((el) => {
+        el.classList.remove('has-milestone');
+        el.removeAttribute('tabindex'); el.removeAttribute('role'); el.removeAttribute('aria-label');
+      });
       for (const iso in cfg.dayIndex) {
         const cell = mount.querySelector(`.fc-daygrid-day[data-date="${iso}"]`);
-        if (cell) { cell.classList.add('has-milestone'); cell.setAttribute('title', `${cfg.dayIndex[iso].title} — ${cfg.dayIndex[iso].body}`); }
+        if (!cell) continue;
+        const label = `${cfg.dayIndex[iso].title} — ${cfg.dayIndex[iso].body}`;
+        cell.classList.add('has-milestone');
+        cell.setAttribute('title', label);
+        cell.setAttribute('tabindex', '0');
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('aria-label', label);
       }
     };
 
@@ -173,17 +182,23 @@ const config = { initialISO: `${windowStartISO.slice(0, 7)}-01`, events, dayInde
 
       // Milestones are background fills (no eventClick), so surface detail via a
       // delegated day-cell click mapped through the date index.
-      mount.addEventListener('click', (e) => {
-        const cell = (e.target as HTMLElement).closest<HTMLElement>('.fc-daygrid-day[data-date]');
+      const showDay = (target: EventTarget | null) => {
+        const cell = (target as HTMLElement).closest<HTMLElement>('.fc-daygrid-day[data-date]');
         const hit = cell && cfg.dayIndex[cell.dataset.date!];
         if (hit) showToast(hit.title, hit.body, 'info');
+        return !!hit;
+      };
+      mount.addEventListener('click', (e) => showDay(e.target));
+      mount.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && showDay(e.target)) e.preventDefault();
       });
 
       root.querySelector('[data-cal="prev"]')!.addEventListener('click', () => { cal.prev(); setTitle(); });
       root.querySelector('[data-cal="next"]')!.addEventListener('click', () => { cal.next(); setTitle(); });
       root.querySelector('[data-cal="today"]')!.addEventListener('click', () => { cal.gotoDate(cfg.initialISO); setTitle(); });
-      for (const b of viewBtns) b.addEventListener('click', () => {
-        cal.changeView(b.dataset.view!); setActiveView(b.dataset.view!); setTitle();
+      root.querySelector('[data-cal-views]')!.addEventListener('cds-content-switcher-selected', (e) => {
+        const view = (e as CustomEvent).detail?.item?.value as string | undefined;
+        if (view) { cal.changeView(view); setTitle(); }
       });
     };
 
@@ -211,7 +226,8 @@ const config = { initialISO: `${windowStartISO.slice(0, 7)}-01`, events, dayInde
     flex-wrap: wrap;
     margin-bottom: 1rem;
   }
-  .cal__nav, .cal__views { display: flex; align-items: center; gap: 0.25rem; }
+  .cal__nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+  .cal__views { inline-size: 10rem; }
   .cal__title { margin: 0; color: var(--cds-text-primary); flex: 1 1 auto; text-align: center; min-width: 12rem; }
 
   .cal__legend {
@@ -250,6 +266,10 @@ const config = { initialISO: `${windowStartISO.slice(0, 7)}-01`, events, dayInde
     text-decoration: none;
   }
   .permit-cal :global(.fc .fc-daygrid-day.has-milestone) { cursor: pointer; }
+  .permit-cal :global(.fc .fc-daygrid-day.has-milestone:focus-visible) {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
+  }
   .permit-cal :global(.fc .fc-multimonth) { border: 0; }
   .permit-cal :global(.fc .fc-multimonth-daygrid) { background: transparent; }
 </style>

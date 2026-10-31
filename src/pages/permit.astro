@@ -53,7 +53,8 @@ import ApplicationHistory from '../components/ApplicationHistory.astro';
 import PermitAlerts from '../components/PermitAlerts.astro';
 import RecordLetter from '../components/record/RecordLetter.astro';
 import AnnualReport from '../components/AnnualReport.astro';
-import { permit, permitInfoTags, badgesForSection } from '../data/permit';
+import FixtureToggle from '../components/FixtureToggle.astro';
+import { permit, permitInfoTags, badgesForSection, type HistoryPhase } from '../data/permit';
 import { userDirectory, findUser } from '../data/user';
 import { district as districtRecord } from '../data/district';
 import { parkKey, parks as parkDirectory } from '../data/parks';
@@ -95,12 +96,18 @@ const applicationTocItems = [
 ];
 
 // Responsible analyst = the lead/highlighted member of the analysis team (the
-// "responsible agent" in the history). Derived from the same roster so they agree.
+// "responsible analyst" in the history). Derived from the same roster so they agree.
 const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight);
 
+// A one-day window reads as one date, not "Sep 12, 2026 – Sep 12, 2026".
+const { start: winStart, end: winEnd } = permit.activeWindow;
+// Submitted = the history's "Application submitted" step — the record's own date.
+const submittedOn = (permit.overview.history as HistoryPhase[])
+  .flatMap((p) => p.steps).find((s) => s.key === 'submitted')?.date;
+
 const stats = [
-  { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
-  { label: 'Submitted', value: 'Jul 9, 2026' },
+  { label: 'Requested dates', value: winStart === winEnd ? winStart : `${winStart} – ${winEnd}` },
+  { label: 'Submitted', value: submittedOn ?? '—' },
   { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
 ];
 
@@ -128,6 +135,9 @@ const appliedTags = permit.overview.tagOptions.filter((t) => permit.overview.tag
 const tagStorageKey = `permit-tags-${permit.id}`;
 
 const t = permit.researchTeam;
+
+// Field dates list: the first few, then "Show all N dates" for long schedules.
+const FIELD_DATES_SHOWN = 10;
 
 // Story 11 — researcher record scoping. A Researcher may reach this permit only if
 // they are its submitter, principal investigator, or field lead (PICOF). These are
@@ -350,7 +360,7 @@ const allParksModel = districtNames.map((name) => {
         <div class="cds--css-grid">
           <cds-tabs class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16" id="permit-tabs" value="overview">
             {tabs.map((tab) => (
-              <cds-tab id={`tab-${tab.value}`} value={tab.value} data-gate={tab.gate} style={tab.gate ? 'display:none' : undefined}>{tab.label}</cds-tab>
+              <cds-tab id={`tab-${tab.value}`} value={tab.value} data-gate={tab.gate} disabled={tab.gate ? true : undefined} style={tab.gate ? 'display:none' : undefined}>{tab.label}</cds-tab>
             ))}
           </cds-tabs>
         </div>
@@ -385,12 +395,12 @@ const allParksModel = districtNames.map((name) => {
             <div class="cds--css-grid cds--css-grid--with-row-gap">
               <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-11 overview-main">
               <!-- Supporting review (Story 10). An informational action shown only
-                   to a Supporting Agent during Under review — it records their review
-                   without gating the Responsible Agent's decision. Hidden for everyone
+                   to a Supporting analyst during Under review — it records their review
+                   without gating the Responsible analyst's decision. Hidden for everyone
                    else (client-gated by the IR matrix: supporting-review). -->
               <div id="supporting-review-section" hidden>
                 <ReviewSection title="Supporting review" panel>
-                  <p class="section-hint t-body-01" id="sr-hint">Record your supporting review. This is informational — it doesn't hold up the Responsible Agent's decision.</p>
+                  <p class="section-hint t-body-01" id="sr-hint">Record your supporting review. This is informational — it doesn't hold up the responsible analyst's decision.</p>
                   <div class="sr-row">
                     <cds-tag id="sr-status-tag" type="cool-gray" size="md">Not started</cds-tag>
                     <cds-button id="sr-action" kind="tertiary" size="md" type="button">Start supporting review</cds-button>
@@ -562,12 +572,16 @@ const allParksModel = districtNames.map((name) => {
                   requiredLabel={permit.projectInfo.annualReport.requiredLabel}
                   todayISO={permit.projectInfo.demoTodayISO}
                 />
-                <h3 class="subhead sub-head t-heading-02">Field investigation occurrences</h3>
-                <cds-contained-list class="field-dates" label="Scheduled field dates" kind="on-page">
-                  {permit.projectInfo.fieldOccurrences.map((d) => (
-                    <cds-contained-list-item>{d}</cds-contained-list-item>
+                <h3 class="subhead sub-head t-heading-02">Field visits</h3>
+                <cds-contained-list class="field-dates" label="Field visit dates" kind="on-page">
+                  {permit.projectInfo.fieldOccurrences.map((d, i) => (
+                    <cds-contained-list-item data-field-date-extra={i >= FIELD_DATES_SHOWN || undefined}
+                      style={i >= FIELD_DATES_SHOWN ? 'display:none' : undefined}>{d}</cds-contained-list-item>
                   ))}
                 </cds-contained-list>
+                {permit.projectInfo.fieldOccurrences.length > FIELD_DATES_SHOWN && (
+                  <cds-button kind="ghost" size="sm" id="field-dates-all">Show all {permit.projectInfo.fieldOccurrences.length} dates</cds-button>
+                )}
               </ReviewSection>
               </div>
               <div class="app-anchor" id="study-areas">
@@ -667,6 +681,14 @@ const allParksModel = districtNames.map((name) => {
     </cds-stack>
 
   </main>
+  <FixtureToggle />
+  <script>
+    // Long schedules: reveal the field dates past the first few.
+    document.getElementById('field-dates-all')?.addEventListener('click', (e) => {
+      document.querySelectorAll<HTMLElement>('[data-field-date-extra]').forEach((el) => { el.style.display = ''; });
+      (e.currentTarget as HTMLElement).style.display = 'none';
+    });
+  </script>
 </BaseLayout>
 
 <style is:global>
@@ -697,6 +719,14 @@ const allParksModel = districtNames.map((name) => {
   const acc = sectionAccessor(readIdentity(), thePermitId, permitBanner?.dataset.permitType, liveStatus());
 
   // ── Viewer class: internal reviewer · researcher owner · public (Stories 11–12) ─
+  // A gated-off tab is hidden AND disabled: cds-tabs' arrow-key navigation skips
+  // only [disabled] tabs, so display:none alone lets ←/→ select it (and open its
+  // panel — e.g. a researcher reaching Internal review).
+  const setTabShown = (tab: HTMLElement | null, shown: boolean) => {
+    if (!tab) return;
+    tab.style.display = shown ? '' : 'none';
+    tab.toggleAttribute('disabled', !shown);
+  };
   const hideSec = (sel: string) =>
     (document.querySelector(sel)?.closest('.sec, .rpanel') as HTMLElement | null)?.style.setProperty('display', 'none');
   let internalReviewHidden = false; // set for researcher/public viewers — no internal comments
@@ -717,7 +747,7 @@ const allParksModel = districtNames.map((name) => {
     // tab, so it goes as a whole (gateRecordTabs reads internalReviewHidden).
     document.querySelector('[data-panel="internal"]')?.setAttribute('hidden', '');
     if (keepConditions) return;
-    (document.getElementById('tab-special-conditions') as HTMLElement | null)?.style.setProperty('display', 'none');
+    setTabShown(document.getElementById('tab-special-conditions'), false);
     (document.querySelector('[data-panel="special-conditions"]') as HTMLElement | null)?.setAttribute('hidden', '');
   };
   let viewerIsPublic = false; // Story 12 public summary — no letter, no report
@@ -727,7 +757,11 @@ const allParksModel = districtNames.map((name) => {
     const statusLabel = liveStatus();
     const isInternal = who === 'admin' || who === 'hq-technical' || who === 'district-lead' || who === 'district-assistant';
     const isPublicStatus = statusLabel === 'Active' || statusLabel === 'Expired';
-    if (!isInternal) {
+    if (isInternal && acc('form') === 'cannot-access') {
+      // Reviewers can't open a Draft (it's the applicant's), and district
+      // reviewers can't open a Withdrawn permit — permissions-matrix.md §5.1.
+      location.replace(withBase('/my-permits'));
+    } else if (!isInternal) {
       let owners: string[] = [];
       try { owners = JSON.parse(document.getElementById('permit-owners')?.textContent || '[]'); } catch {}
       const me = activeUser(who);
@@ -764,7 +798,17 @@ const allParksModel = districtNames.map((name) => {
   const tabsEl = document.getElementById('permit-tabs') as any;
   const panels = Array.from(document.querySelectorAll<HTMLElement>('.panel'));
 
+  // Never reveal a panel whose tab is gated off for this viewer — fall back to
+  // the Overview instead (the tab strip follows).
+  const tabAvailable = (value: string) => {
+    const tab = document.getElementById(`tab-${value}`);
+    return !!tab && !tab.hasAttribute('disabled') && tab.style.display !== 'none';
+  };
   function showPanel(value: string) {
+    if (!tabAvailable(value)) {
+      value = 'overview';
+      if (tabsEl && tabsEl.value !== value) tabsEl.value = value;
+    }
     panels.forEach((p) => { p.hidden = p.dataset.panel !== value; });
   }
   tabsEl?.addEventListener('cds-tabs-selected', () => showPanel(tabsEl.value));
@@ -772,7 +816,7 @@ const allParksModel = districtNames.map((name) => {
   // Gated record tabs. Final permit letter: once the letter has gone out for
   // signature (staff + the researcher owner). Annual report: once the permit is
   // Active or Expired — the tab is where the researcher uploads the report and the
-  // Responsible Agent reviews it. Neither is part of the public summary. A gated
+  // Responsible analyst reviews it. Neither is part of the public summary. A gated
   // tab that disappears while open falls back to Overview.
   const LETTER_STATUSES = ['Out for signature', 'Waiting for annual report', 'Active', 'Expired'];
   const gateRecordTabs = () => {
@@ -783,7 +827,7 @@ const allParksModel = districtNames.map((name) => {
     };
     document.querySelectorAll<HTMLElement>('#permit-tabs cds-tab[data-gate]').forEach((tab) => {
       const visible = show[tab.dataset.gate!] ?? true;
-      tab.style.display = visible ? '' : 'none';
+      setTabShown(tab, visible);
       if (!visible && tabsEl?.value === tab.getAttribute('value')) {
         tabsEl.value = 'overview';
         showPanel('overview');
@@ -822,8 +866,14 @@ const allParksModel = districtNames.map((name) => {
   const syncWindowLabel = () => {
     const issued = LETTER_STATUSES.includes(liveStatus());
     document.querySelectorAll<HTMLElement>('#permit-banner .stat__label').forEach((dt) => {
-      if (/^(Requested|Authorized) window$/.test(dt.textContent!.trim())) dt.textContent = issued ? 'Authorized window' : 'Requested window';
+      if (/^(Requested|Authorized) dates$/.test(dt.textContent!.trim())) dt.textContent = issued ? 'Authorized dates' : 'Requested dates';
     });
+    // The parks are only "authorized" once issued — same word as the Overview.
+    const parks = `${issued ? 'Authorized' : 'Requested'} parks`;
+    const parksTitle = document.querySelector<HTMLElement>('#study-areas .rpanel__title');
+    if (parksTitle) parksTitle.textContent = parks;
+    const parksToc = document.querySelector<HTMLElement>('[data-toc-link="study-areas"] > span');
+    if (parksToc) parksToc.textContent = parks;
   };
   syncWindowLabel();
   window.addEventListener('permit-status-changed', syncWindowLabel);
@@ -1277,7 +1327,7 @@ const allParksModel = districtNames.map((name) => {
   }
 
   // ── Supporting review (Story 10): SA-only, informational ────────────────────
-  // Shown only when the resolver grants it (Supporting Agent, Under review). It
+  // Shown only when the resolver grants it (Supporting analyst, Under review). It
   // records the SA's review state (per identity, per permit) but never gates the RA.
   const srSection = document.getElementById('supporting-review-section') as HTMLElement | null;
   if (srSection && acc('supporting-review') === 'update') {
@@ -1634,7 +1684,8 @@ const allParksModel = districtNames.map((name) => {
   .comment__body { min-width: 0; }
   .comment__meta { margin: 0 0 0.25rem; color: var(--cds-text-secondary, #525252); }
   .comment__author { font-weight: 600; color: var(--cds-text-primary, #161616); }
-  .comment__text { margin: 0; }
+  /* Keep the line breaks a reviewer typed; let a pasted URL break, not widen the page. */
+  .comment__text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
 
   /* Anchored comments (?comments=anchored) — layout only; controls are cds-*.
      A section's thread sits on the next layer up, directly under its head, so it
@@ -1694,5 +1745,18 @@ const allParksModel = districtNames.map((name) => {
      column width; the list itself is styled by Carbon tokens. */
   .field-dates {
     max-width: 28rem;
+  }
+  /* cds-tabs sizes itself to 100% of its grid area, which ignores the column's
+     gutter margins and pushes the strip 16px past the page edge on phones. */
+  #permit-tabs { inline-size: auto; min-inline-size: 0; }
+  /* The tab label's screen-reader suffix (", open comments") is absolutely
+     positioned; anchoring it to its tab keeps it inside the strip's scroll
+     container instead of stretching the page. */
+  #permit-tabs cds-tab { position: relative; }
+  /* Touch: inline email / phone / document links are ~20px tall. cds-link is
+     inline-block, so padding grows the hit area toward 44px and an equal
+     negative margin cancels it in layout — nothing moves. */
+  @media (pointer: coarse) {
+    .panels :global(cds-link) { padding-block: 0.75rem; margin-block: -0.75rem; }
   }
 </style>

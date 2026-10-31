@@ -82,7 +82,7 @@ const ad = permit.additionalDocs;
 
 // ── Derived counts (all from the record, so the summary never disagrees with it) ──
 const parkCount = sa.districts.reduce((n, d) => n + d.parks.length, 0);
-const specimenTotal = dc.specimens.reduce((n, s) => n + Number(s.quantity), 0);
+const specimenTotal = dc.specimens.reduce((n, s) => n + (Number(String(s.quantity).replace(/,/g, '')) || 0), 0);
 const piIsFieldLead = t.principalInvestigator.name === t.fieldLead.name;
 const facts = (rows: readonly MetaRow[]) => rows as readonly MetaRow[];
 const curation = facts(dc.collection).find((r) => r.key === 'Curation facility');
@@ -124,7 +124,7 @@ const glanceFacts = [
 // due date. (Every permit runs 12 months, so no duration.)
 const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight);
 const headerStats = [
-  { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
+  { label: 'Requested dates', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
   { label: 'Submitted', value: 'Jul 9, 2026' },
   { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
   { label: 'Annual report due', value: pj.annualReport.requiredLabel },
@@ -174,7 +174,7 @@ const copyIcon = '<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0
         )}
       </div>
       <div class="banner-tags">
-        {permitInfoTags.map((tag) => <cds-tag type={tag.type} size="lg">{tag.label}</cds-tag>)}
+        {permitInfoTags.map((tag) => <cds-tag type={tag.type} size="lg" title={tag.label}>{tag.label}</cds-tag>)}
         {permit.flagTags.map((tag) => <FlagTag tag={tag} size="lg" />)}
       </div>
       <dl class="banner-stats">

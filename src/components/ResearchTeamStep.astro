@@ -15,6 +15,7 @@ import PermitSection from './PermitSection.astro';
 import AddressFieldset from './AddressFieldset.astro';
 import PhoneField from './PhoneField.astro';
 import { applicantOrg, applicant, seedParticipants } from '../data/application';
+import { MAX_FILE_SIZE } from '../lib/file-upload';
 ---
 
 <div class="rt">
@@ -25,10 +26,10 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     </p>
     <div class="field-grid">
       <div class="field-grid__wide">
-        <cds-text-input id="org-name" label="Applicant organization (required)" value={applicantOrg.name}></cds-text-input>
+        <cds-text-input id="org-name" label="Applicant organization (required)" autocomplete="organization" value={applicantOrg.name}></cds-text-input>
       </div>
-      <cds-text-input id="org-phone" type="tel" label="Organization phone (required)" value={applicantOrg.phone}></cds-text-input>
-      <cds-text-input id="org-email" type="email" label="Organization email (required)" value={applicantOrg.email}></cds-text-input>
+      <cds-text-input id="org-phone" type="tel" label="Organization phone (required)" autocomplete="tel" value={applicantOrg.phone}></cds-text-input>
+      <cds-text-input id="org-email" type="email" label="Organization email (required)" autocomplete="email" value={applicantOrg.email}></cds-text-input>
       <div class="field-grid__wide">
         <AddressFieldset prefix="org-addr" country={applicantOrg.address.country} value={applicantOrg.address} />
       </div>
@@ -45,28 +46,26 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     <cds-checkbox id="pi-is-me" label-text="I am the principal investigator for this project"></cds-checkbox>
 
     <div class="field-grid pi-grid">
-      <cds-text-input id="pi-first" label="First name (required)"></cds-text-input>
-      <cds-text-input id="pi-last" label="Last name (required)"></cds-text-input>
-      <cds-text-input id="pi-title" label="Title (required)"></cds-text-input>
+      <cds-text-input id="pi-first" label="First name (required)" autocomplete="given-name"></cds-text-input>
+      <cds-text-input id="pi-last" label="Last name (required)" autocomplete="family-name"></cds-text-input>
+      <cds-text-input id="pi-title" label="Title (required)" autocomplete="organization-title"></cds-text-input>
       <div class="field-grid__wide">
-        <PhoneField id="pi-phone" label="Phone number (required)" />
+        <PhoneField id="pi-phone" label="Phone number (required)" autocomplete="tel-national" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="pi-email" type="email" label="Email address (required)"></cds-text-input>
+        <cds-text-input id="pi-email" type="email" label="Email address (required)" autocomplete="email"></cds-text-input>
       </div>
       <div class="field-grid__wide">
         <AddressFieldset prefix="pi-addr" country="US" />
       </div>
     </div>
 
-    <div class="uploader">
-      <p class="field-label t-label-01">Résumé or CV <span class="req">(required)</span></p>
-      <cds-file-uploader-drop-container id="pi-resume-drop" accept=".pdf,.doc,.docx">
-        Drag and drop a file here, or click to upload
-      </cds-file-uploader-drop-container>
-      <div id="pi-resume-list" class="uploaded-list"></div>
-      <p class="uploader-hint t-label-01">Accepted file types: PDF, DOC, or DOCX.</p>
-    </div>
+    <cds-file-uploader class="uploader">
+      <span slot="label-title">Résumé or CV <span class="req">(required)</span></span>
+      <span slot="label-description">Accepted file types: PDF, DOC, or DOCX. Maximum file size: {MAX_FILE_SIZE}.</span>
+      <cds-file-uploader-button button-kind="tertiary" size="md" id="pi-resume-drop" accept=".pdf,.doc,.docx">Add file</cds-file-uploader-button>
+      <div id="pi-resume-list"></div>
+    </cds-file-uploader>
 
     <!-- Offer to keep the PI's résumé on their profile — shown only once the
          submitter is the PI AND a résumé has been attached. -->
@@ -128,14 +127,14 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     ></cds-inline-notification>
 
     <div id="picof-fields" class="field-grid" hidden>
-      <cds-text-input id="picof-first" label="First name (required)"></cds-text-input>
-      <cds-text-input id="picof-last" label="Last name (required)"></cds-text-input>
-      <cds-text-input id="picof-title" label="Title (required)"></cds-text-input>
+      <cds-text-input id="picof-first" label="First name (required)" autocomplete="off"></cds-text-input>
+      <cds-text-input id="picof-last" label="Last name (required)" autocomplete="off"></cds-text-input>
+      <cds-text-input id="picof-title" label="Title (required)" autocomplete="off"></cds-text-input>
       <div class="field-grid__wide">
-        <PhoneField id="picof-phone" label="Phone number (required)" />
+        <PhoneField id="picof-phone" label="Phone number (required)" autocomplete="off" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="picof-email" type="email" label="Email address (required)"></cds-text-input>
+        <cds-text-input id="picof-email" type="email" label="Email address (required)" autocomplete="off"></cds-text-input>
       </div>
       <div class="field-grid__wide">
         <AddressFieldset prefix="picof-addr" country="US" value={{ country: 'US', region: 'CA' }} />
@@ -182,16 +181,20 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
       <cds-radio-button label-text="No" value="no"></cds-radio-button>
     </cds-radio-button-group>
 
-    <div id="waiver-wrap" class="uploader" hidden>
-      <p class="field-label t-label-01">Liability waiver addendum <span class="req">(required)</span></p>
-      <cds-file-uploader-drop-container id="waiver-drop" accept=".pdf,.doc,.docx">
-        Drag and drop a file here, or click to upload
-      </cds-file-uploader-drop-container>
-      <div id="waiver-list" class="uploaded-list"></div>
-      <p class="uploader-hint t-label-01">
-        Every participant in the research must sign this document, so plan ahead.
-      </p>
-      <cds-link id="waiver-download" href="#">Download the unsigned liability waiver addendum</cds-link>
+    <!-- The download sits in the description, ahead of the button: get the
+         unsigned form, have it signed, then upload it. -->
+    <div id="waiver-wrap" hidden>
+      <cds-file-uploader class="uploader">
+        <span slot="label-title">Liability waiver addendum <span class="req">(required)</span></span>
+        <span slot="label-description" class="uploader-desc">
+          <span>Every participant in the research must sign this document, so plan ahead. Accepted file types: PDF, DOC, or DOCX. Maximum file size: {MAX_FILE_SIZE}.</span>
+          <cds-link id="waiver-download" href="#">Download the unsigned liability waiver addendum
+            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 11 4 7 4.7 6.3 7.5 9.1 7.5 1 8.5 1 8.5 9.1 11.3 6.3 12 7z"/><path d="M13 14H3c-.6 0-1-.4-1-1v-3h1v3h10v-3h1v3C14 13.6 13.6 14 13 14z"/></svg>
+          </cds-link>
+        </span>
+        <cds-file-uploader-button button-kind="tertiary" size="md" id="waiver-drop" accept=".pdf,.doc,.docx">Add file</cds-file-uploader-button>
+        <div id="waiver-list"></div>
+      </cds-file-uploader>
     </div>
   </PermitSection>
 </div>
@@ -207,14 +210,14 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
   </cds-modal-header>
   <cds-modal-body>
     <div class="field-grid">
-      <cds-text-input id="np-first" label="First name (required)"></cds-text-input>
-      <cds-text-input id="np-last" label="Last name (required)"></cds-text-input>
-      <cds-text-input id="np-title" label="Title (optional)"></cds-text-input>
+      <cds-text-input id="np-first" label="First name (required)" autocomplete="off" data-modal-primary-focus></cds-text-input>
+      <cds-text-input id="np-last" label="Last name (required)" autocomplete="off"></cds-text-input>
+      <cds-text-input id="np-title" label="Title (optional)" autocomplete="off"></cds-text-input>
       <div class="field-grid__wide">
-        <PhoneField id="np-phone" label="Phone number (optional)" />
+        <PhoneField id="np-phone" label="Phone number (optional)" autocomplete="off" />
       </div>
       <div class="field-grid__wide">
-        <cds-text-input id="np-email" type="email" label="Email address (required)"></cds-text-input>
+        <cds-text-input id="np-email" type="email" label="Email address (required)" autocomplete="off"></cds-text-input>
       </div>
       <div class="field-grid__wide">
         <cds-textarea id="np-comments" label="Comments (optional)" rows="2"></cds-textarea>
@@ -228,10 +231,12 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
 </cds-modal>
 
 <script>
+  import { wireUpload } from '../lib/file-upload';
   import { applicant, seedParticipants, researchTeam } from '../data/application';
   import type { Participant } from '../data/application';
   import { wireAddressFieldset } from '../lib/address-fields';
   import { wirePhoneField, formatDisplay } from '../lib/phone';
+  import { flagField, submitOnEnter, focusTargetAfterRemove } from '../lib/form-feedback';
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id) as T | null;
@@ -286,34 +291,9 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
   });
 
   // ── Résumé upload + save-to-profile offer ───────────────────────────────
-  // A static prototype can't store the bytes, so "uploaded" means: render a
-  // Carbon file item for the chosen file. The save-to-profile prompt appears
-  // only when the submitter is the PI AND a résumé is attached.
+  // The save-to-profile prompt appears only when the submitter is the PI AND a
+  // valid résumé is attached (an error item doesn't count).
   let piResumeAttached = false;
-
-  const renderFileItem = (
-    listId: string,
-    name: string,
-    onDelete: () => void,
-  ) => {
-    const list = $(listId);
-    if (!list) return;
-    list.innerHTML = '';
-    const item = document.createElement('cds-file-uploader-item') as any;
-    item.state = 'edit';
-    item.size = 'md';
-    item.textContent = name;
-    item.addEventListener('cds-file-uploader-item-deleted', () => {
-      list.innerHTML = '';
-      onDelete();
-    });
-    list.appendChild(item);
-  };
-
-  const firstFileName = (e: Event): string | null => {
-    const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
-    return files && files.length ? files[0].name : null;
-  };
 
   const savePrompt = $('pi-save-prompt');
   const syncSavePrompt = () => {
@@ -325,15 +305,10 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     }
   };
 
-  $('pi-resume-drop')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
-    const name = firstFileName(e);
-    if (!name) return;
-    piResumeAttached = true;
-    renderFileItem('pi-resume-list', name, () => {
-      piResumeAttached = false;
-      syncSavePrompt();
-    });
-    syncSavePrompt();
+  const resumeUpload = wireUpload($('pi-resume-drop')!, {
+    list: $('pi-resume-list')!,
+    single: true,
+    onChange: (names) => { piResumeAttached = names.length > 0; syncSavePrompt(); },
   });
 
   // ── Person in direct charge of field work: two gating questions ──────────
@@ -390,8 +365,10 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
         </cds-icon-button>
       </cds-table-cell>`;
     row.querySelector('.row-remove')?.addEventListener('click', () => {
+      const next = focusTargetAfterRemove(row, $('add-participant'));
       row.remove();
       syncEmpty();
+      next?.focus();
     });
     body.appendChild(row);
     syncEmpty();
@@ -415,16 +392,19 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     npPhone?.setValue('');
   };
 
-  $('np-add')?.addEventListener('click', () => {
+  const addParticipant = () => {
     const val = (id: string) => (($(id) as any)?.value ?? '').toString().trim();
     const first = val('np-first');
     const last = val('np-last');
     const email = val('np-email');
     // Name and email are required for each participant; title, phone, and comments
-    // are optional. Bail to the first missing required field so nothing partial is added.
-    if (!first) { ($('np-first') as any)?.focus(); return; }
-    if (!last) { ($('np-last') as any)?.focus(); return; }
-    if (!email) { ($('np-email') as any)?.focus(); return; }
+    // are optional. Flag the first problem field so nothing partial is added.
+    if (!first) return flagField($('np-first'), 'Enter a first name');
+    if (!last) return flagField($('np-last'), 'Enter a last name');
+    if (!email) return flagField($('np-email'), 'Enter an email address');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return flagField($('np-email'), 'Enter an email like name@example.org');
+    }
     addRow({
       firstName: first,
       lastName: last,
@@ -435,7 +415,10 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     });
     clearModal();
     ($('np-first') as any)?.focus(); // ready for the next in the batch
-  });
+  };
+  $('np-add')?.addEventListener('click', addParticipant);
+  // Enter adds (Cmd/Ctrl+Enter from the comments box) — batch entry stays on the keyboard.
+  submitOnEnter(modal?.querySelector('cds-modal-body'), addParticipant);
 
   // ── Personnel & insurance: conditional waiver upload ────────────────────
   const insured = $('personnel-insured') as any;
@@ -443,10 +426,7 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
   insured?.addEventListener('cds-radio-button-group-changed', () => {
     if (waiverWrap) waiverWrap.hidden = insured.value !== 'no';
   });
-  $('waiver-drop')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
-    const name = firstFileName(e);
-    if (name) renderFileItem('waiver-list', name, () => {});
-  });
+  const waiverUpload = wireUpload($('waiver-drop')!, { list: $('waiver-list')!, single: true });
   // Liability waiver addendum download — serves whatever file a System Admin has
   // made current in Templates & defaults (this is one of its download locations).
   // No real bytes in a static prototype, so hand back a stub PDF NAMED with the
@@ -488,15 +468,12 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
       piPhone?.setValue(pi.phone);
       piAddr?.setValue(pi.address);
     }
-    if (researchTeam.piResume) {
-      piResumeAttached = true;
-      renderFileItem('pi-resume-list', researchTeam.piResume, () => { piResumeAttached = false; syncSavePrompt(); });
-    }
+    if (researchTeam.piResume) resumeUpload.add(researchTeam.piResume);
     setRadio(samePi, researchTeam.fieldCharge.sameAsPI ? 'yes' : 'no');
     syncPicof();
     setRadio(insured, researchTeam.personnelInsured ? 'yes' : 'no');
     if (waiverWrap) waiverWrap.hidden = researchTeam.personnelInsured;
-    if (!researchTeam.personnelInsured && researchTeam.waiverFile) renderFileItem('waiver-list', researchTeam.waiverFile, () => {});
+    if (!researchTeam.personnelInsured && researchTeam.waiverFile) waiverUpload.add(researchTeam.waiverFile);
     syncSavePrompt();
   });
 </script>
@@ -544,29 +521,23 @@ import { applicantOrg, applicant, seedParticipants } from '../data/application';
     margin-top: 1.5rem;
   }
 
-  /* Uploader block — a labeled dropzone (stock cds-file-uploader-drop-container)
-     plus its help text; layout only. */
+  /* Uploaders — stock cds-file-uploader (title, description, "Add file" button, file
+     list); layout only. The (required) marker reads secondary, like every label. */
   .uploader {
+    display: block;
     margin-top: 1.5rem;
     max-width: 46rem;
   }
-  .field-label {
-    margin: 0 0 0.5rem;
+  .uploader .req {
+    font-weight: 400;
     color: var(--cds-text-secondary, #525252);
   }
-  .field-label .req {
-    color: var(--cds-text-secondary, #525252);
-  }
-  .uploaded-list {
-    margin-top: 0.5rem;
-  }
-  .uploader-hint {
-    margin: 0.5rem 0 0;
-    color: var(--cds-text-secondary, #525252);
-  }
-  #waiver-download {
-    display: inline-block;
-    margin-top: 0.75rem;
+  /* A description with a download link: the text, then the link on its own line. */
+  .uploader-desc {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--cds-spacing-03, 0.5rem);
   }
 
   /* Save-to-profile offer — a quiet bordered prompt so it reads as a follow-up

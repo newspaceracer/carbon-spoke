@@ -80,7 +80,7 @@ const hasBadges = tags.length + flags.length > 0;
           <span class="rsec__title t-heading-03">{title}</span>
           {hasBadges && (
             <span class="rsec__badges">
-              {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+              {tags.map((tag) => <cds-tag type={tag.type} size="md" title={tag.label}>{tag.label}</cds-tag>)}
               {flags.map((tag) => <FlagTag tag={tag} />)}
             </span>
           )}
@@ -102,7 +102,7 @@ const hasBadges = tags.length + flags.length > 0;
       <h2 class="rpanel__title t-heading-03">{title}</h2>
       {hasBadges && (
         <div class="rpanel__badges">
-          {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+          {tags.map((tag) => <cds-tag type={tag.type} size="md" title={tag.label}>{tag.label}</cds-tag>)}
           {flags.map((tag) => <FlagTag tag={tag} />)}
         </div>
       )}
@@ -116,7 +116,7 @@ const hasBadges = tags.length + flags.length > 0;
   <PermitSection title={title} commentKey={commentKey}>
     {hasBadges && (
       <Fragment slot="aside">
-        {tags.map((tag) => <cds-tag type={tag.type} size="md">{tag.label}</cds-tag>)}
+        {tags.map((tag) => <cds-tag type={tag.type} size="md" title={tag.label}>{tag.label}</cds-tag>)}
         {flags.map((tag) => <FlagTag tag={tag} />)}
       </Fragment>
     )}

@@ -2,8 +2,8 @@
 // ends. The report is a DOCUMENT the researcher uploads (not a form). Every upload
 // is a new VERSION of that one document; the newest version is current and decides
 // the state — one standing version completes the requirement, unless the
-// Responsible Agent sends it back with "Request changes", which reopens it. Only the
-// Responsible Agent or an admin can remove a version (the previous one becomes
+// Responsible analyst sends it back with "Request changes", which reopens it. Only the
+// Responsible analyst or an admin can remove a version (the previous one becomes
 // current again). Every surface that talks about the report
 // (the researcher Overview, the staff notice, the Annual report tab, the
 // delinquency rules, /apply's renewal block) reads it from here so they never
@@ -12,16 +12,16 @@
 // States, in order:
 //   not-due           — the permit hasn't ended and nothing is on file yet
 //   due               — the permit has ended; the report is due by the due date
-//   changes-requested — the Responsible Agent sent the latest upload back
+//   changes-requested — the Responsible analyst sent the latest upload back
 //   delinquent        — past the due date with no accepted upload (none, or sent
 //                       back). Set AUTOMATICALLY; blocks any new application /
 //                       renewal / amendment where the same person is the principal
-//                       investigator. The Responsible Agent or an admin can LIFT the
+//                       investigator. The Responsible analyst or an admin can LIFT the
 //                       block — the report is still owed.
 //   submitted         — the latest upload stands (clears delinquency immediately)
 //
 // Uploads are accepted any time the permit is Active or Expired — from the
-// researcher, the Responsible Agent, or an admin.
+// researcher, the Responsible analyst, or an admin.
 //
 // Storage (prototype): permit-report-uploads-${id} = ReportUpload[] (oldest first);
 // permit-delinquency-cleared-${id} = { by, at } when a reviewer lifted the block.
@@ -105,7 +105,7 @@ export const addUpload = (id: string, name: string, by: string): ReportUpload =>
   return up;
 };
 
-/** Remove one version (Responsible Agent / admin). The previous one becomes current. */
+/** Remove one version (Responsible analyst / admin). The previous one becomes current. */
 export const removeUpload = (id: string, version: number) => {
   writeUploads(id, readUploads(id).filter((u) => u.version !== version));
 };
@@ -130,6 +130,21 @@ export const reportState = (status: string, id: string = permit.id): ReportState
   if (ended && daysUntil(reportDueISO()) < 0) return 'delinquent';
   if (latestUpload(id)?.sentBack) return 'changes-requested';
   return ended ? 'due' : 'not-due';
+};
+
+// ── A renewal's PREVIOUS permit ──────────────────────────────────────────────
+// MISSING ≠ DELINQUENT. The renewal hold (matrix §8.3) triggers when the previous
+// permit has no annual report on file — usually still within its 30 days, since
+// a renewal is signed around when its predecessor ends. Once that due date passes
+// the report is also overdue, and the previous permit carries the Delinquent label.
+// Prototype: the flag stands in for "the previous permit's report is missing".
+export const renewalHoldKey = (id: string) => `permit-renewal-hold-${id}`;
+export interface PriorReport { permitId: string; dueISO: string; due: string; overdue: boolean }
+/** The previous permit's missing annual report, or null when none is missing. */
+export const priorReport = (id: string = permit.id): PriorReport | null => {
+  if (localStorage.getItem(renewalHoldKey(id)) !== '1') return null;
+  const dueISO = reportDueISO(permit.previousPermit.endISO);
+  return { permitId: permit.previousPermit.id, dueISO, due: formatDate(dueISO), overdue: daysUntil(dueISO) < 0 };
 };
 
 /** Delinquent AND not cleared by a reviewer → renewals are blocked. */

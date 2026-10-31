@@ -19,6 +19,7 @@
 // lives on the page.
 import PermitSection from './PermitSection.astro';
 import { dataCollection, seedSpecimens } from '../data/application';
+import { MAX_FILE_SIZE } from '../lib/file-upload';
 
 const dc = dataCollection;
 const lab = dc.laboratory;
@@ -83,18 +84,12 @@ const cur = dc.curation;
         ></cds-textarea>
       </div>
 
-      <div class="uploader">
-        <p class="field-label t-label-01">Supporting documentation <span class="opt">(optional)</span></p>
-        <cds-file-uploader-drop-container
-          class="doc-drop"
-          data-list="collection-docs-list"
-          multiple
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv"
-        >
-          Drag and drop files here, or click to upload
-        </cds-file-uploader-drop-container>
-        <div id="collection-docs-list" class="uploaded-list"></div>
-      </div>
+      <cds-file-uploader class="uploader">
+        <span slot="label-title">Supporting documentation <span class="opt">(optional)</span></span>
+        <span slot="label-description">Accepted file types: PDF, DOC, DOCX, XLS, XLSX, or CSV. Maximum file size: {MAX_FILE_SIZE}.</span>
+        <cds-file-uploader-drop-container class="doc-drop" data-list="collection-docs-list" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv">Drag and drop files here, or click to upload</cds-file-uploader-drop-container>
+        <div id="collection-docs-list"></div>
+      </cds-file-uploader>
 
       <!-- Curation facility contact. -->
       <div class="subsection">
@@ -170,18 +165,12 @@ const cur = dc.curation;
       ></cds-textarea>
     </div>
 
-    <div class="uploader">
-      <p class="field-label t-label-01">Supporting documentation <span class="opt">(optional)</span></p>
-      <cds-file-uploader-drop-container
-        class="doc-drop"
-        data-list="procedures-docs-list"
-        multiple
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.csv"
-      >
-        Drag and drop files here, or click to upload
-      </cds-file-uploader-drop-container>
-      <div id="procedures-docs-list" class="uploaded-list"></div>
-    </div>
+    <cds-file-uploader class="uploader">
+      <span slot="label-title">Supporting documentation <span class="opt">(optional)</span></span>
+      <span slot="label-description">Accepted file types: PDF, DOC, DOCX, XLS, XLSX, or CSV. Maximum file size: {MAX_FILE_SIZE}.</span>
+      <cds-file-uploader-drop-container class="doc-drop" data-list="procedures-docs-list" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv">Drag and drop files here, or click to upload</cds-file-uploader-drop-container>
+      <div id="procedures-docs-list"></div>
+    </cds-file-uploader>
 
     <div class="proposal-field" role="group" aria-labelledby="data-location-label">
       <p class="proposal-field__label t-label-01" id="data-location-label">Location of data and data products collected under this permit <span class="req">(required)</span></p>
@@ -214,12 +203,12 @@ const cur = dc.curation;
   <cds-modal-body>
     <div class="field-grid">
       <div class="field-grid__wide">
-        <cds-text-input id="ns-species" label="Species (required)"></cds-text-input>
+        <cds-text-input id="ns-species" label="Species (required)" autocomplete="off" data-modal-primary-focus></cds-text-input>
       </div>
-      <cds-text-input id="ns-quantity" label="Quantity (required)"></cds-text-input>
-      <cds-text-input id="ns-size" label="Size (required)"></cds-text-input>
+      <cds-text-input id="ns-quantity" label="Quantity (required)" autocomplete="off"></cds-text-input>
+      <cds-text-input id="ns-size" label="Size (required)" autocomplete="off"></cds-text-input>
       <div class="field-grid__wide">
-        <cds-text-input id="ns-condition" label="Condition (required)"></cds-text-input>
+        <cds-text-input id="ns-condition" label="Condition (required)" autocomplete="off"></cds-text-input>
       </div>
     </div>
   </cds-modal-body>
@@ -230,6 +219,8 @@ const cur = dc.curation;
 </cds-modal>
 
 <script>
+  import { wireUpload } from '../lib/file-upload';
+  import { flagField, submitOnEnter, focusTargetAfterRemove } from '../lib/form-feedback';
   import { seedSpecimens } from '../data/application';
   import type { SpecimenType } from '../data/application';
 
@@ -307,8 +298,10 @@ const cur = dc.curation;
         </cds-icon-button>
       </cds-table-cell>`;
     row.querySelector('.row-remove')?.addEventListener('click', () => {
+      const next = focusTargetAfterRemove(row, $('add-specimen'));
       row.remove();
       syncEmpty();
+      next?.focus();
     });
     body.appendChild(row);
     syncEmpty();
@@ -324,38 +317,30 @@ const cur = dc.curation;
   const nsIds = ['ns-species', 'ns-quantity', 'ns-size', 'ns-condition'];
   const clearModal = () => nsIds.forEach((id) => { const el = $(id); if (el) el.value = ''; });
 
-  $('ns-add')?.addEventListener('click', () => {
+  const addSpecimen = () => {
     const val = (id: string) => ($(id)?.value ?? '').toString().trim();
     const species = val('ns-species');
     const quantity = val('ns-quantity');
     const size = val('ns-size');
     const condition = val('ns-condition');
-    // Every specimen field is required; bail to the first empty one so no partial
+    // Every specimen field is required; flag the first empty one so no partial
     // row is added.
-    if (!species) { $('ns-species')?.focus(); return; }
-    if (!quantity) { $('ns-quantity')?.focus(); return; }
-    if (!size) { $('ns-size')?.focus(); return; }
-    if (!condition) { $('ns-condition')?.focus(); return; }
+    if (!species) return flagField($('ns-species'), 'Enter a species');
+    if (!quantity) return flagField($('ns-quantity'), 'Enter a quantity');
+    if (!size) return flagField($('ns-size'), 'Enter a size');
+    if (!condition) return flagField($('ns-condition'), 'Enter a condition');
     addRow({ species, quantity, size, condition });
     clearModal();
     $('ns-species')?.focus(); // ready for the next in the batch
-  });
+  };
+  $('ns-add')?.addEventListener('click', addSpecimen);
+  submitOnEnter(modal?.querySelector('cds-modal-body'), addSpecimen);
 
   // ── Optional supporting-document uploaders (accumulate multiple files) ───
-  document.querySelectorAll('.doc-drop').forEach((drop) => {
-    const list = $((drop as any).dataset.list);
-    drop.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
-      const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
-      if (!files || !files.length || !list) return;
-      files.forEach((file) => {
-        const item = document.createElement('cds-file-uploader-item') as any;
-        item.state = 'edit';
-        item.size = 'md';
-        item.textContent = file.name;
-        item.addEventListener('cds-file-uploader-item-deleted', () => item.remove());
-        list.appendChild(item);
-      });
-    });
+  // Scoped to this step: Additional documents' uploaders share the class on the page.
+  document.querySelectorAll<HTMLElement>('.dc .doc-drop').forEach((drop) => {
+    const list = $(drop.dataset.list!);
+    if (list) wireUpload(drop, { list });
   });
 </script>
 
@@ -463,15 +448,18 @@ const cur = dc.curation;
     margin-bottom: 0.75rem;
   }
 
-  /* Uploader block — labeled dropzone (stock cds-file-uploader-drop-container)
-     plus its list; layout only. */
-  .uploader {
-    max-width: 46rem;
-  }
   .field-label {
     margin: 0 0 0.5rem;
   }
-  .uploaded-list {
-    margin-top: 0.5rem;
+
+  /* Uploaders — stock cds-file-uploader (title, description, drop zone, file
+     list); layout only. Drag-and-drop: they take several files. The (optional) marker reads secondary, like every label. */
+  .uploader {
+    display: block;
+    max-width: 46rem;
+  }
+  .uploader .opt {
+    font-weight: 400;
+    color: var(--cds-text-secondary, #525252);
   }
 </style>

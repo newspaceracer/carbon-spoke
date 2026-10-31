@@ -24,8 +24,8 @@
        record ↔ conditions ↔ documents sit together, and the letter is downstream.
 
      Roles (permissions.ts): the wizard is reachable only once review has started, and
-       only by a reviewer ASSIGNED to the permit — the lead (Responsible Agent / Admin)
-       or an assistant (Supporting Agent); anyone else is sent to the permit detail.
+       only by a reviewer ASSIGNED to the permit — the lead (Responsible analyst / Admin)
+       or an assistant (Supporting analyst); anyone else is sent to the permit detail.
        The primary CTA is role- and step-aware:
          • lead, step ① — "Finalize review" (advances to Finalize letter → Send)
          • assistant, step ① — "Complete review" (records their supporting review under
@@ -103,7 +103,7 @@ const responsibleAnalyst = permit.overview.analysisTeam.find((m) => m.highlight)
 // ── Permit header props ─── mirror the permit detail page so the finalize view
 // carries the identical header (same classification badges + at-a-glance facts).
 const headerStats = [
-  { label: 'Requested window', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
+  { label: 'Requested dates', value: `${permit.activeWindow.start} – ${permit.activeWindow.end}` },
   { label: 'Submitted', value: 'Jul 9, 2026' },
   { label: 'Responsible analyst', value: responsibleAnalyst?.name ?? '—' },
 ];
@@ -323,7 +323,7 @@ const letterData = {
 };
 ---
 
-<BaseLayout title={`Finalize ${permit.id}`}>
+<BaseLayout title={`Review ${permit.id}`}>
   <PermitNav slot="nav">
     <!-- Anchored-comments version (?comments=anchored): a stock UI Shell header
          action (open-comment count) that toggles a cds-header-panel listing every
@@ -344,17 +344,17 @@ const letterData = {
         <!-- General comments: not about one section. The panel is their home. -->
         <div class="comments-panel__general">
           <div class="mention-field">
-            <cds-textarea id="general-comment-input" label="General comment" placeholder="Not about one section? Comment here… type @ to mention someone" rows="2"></cds-textarea>
+            <cds-textarea id="general-comment-input" label="General comment" placeholder="Type @ to mention someone · ⌘/Ctrl+Enter to post" rows="2"></cds-textarea>
             <ul id="general-comment-menu" class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
           </div>
-          <cds-button id="general-comment-submit" kind="primary" size="sm">Add comment</cds-button>
+          <cds-button id="general-comment-submit" kind="primary" size="md">Add comment</cds-button>
         </div>
       </div>
     </cds-header-panel>
     </Fragment>
   </PermitNav>
 
-  <main class="page">
+  <main class="page" data-ready="false">
     <PermitHeader
       id={permit.id}
       name={permit.name}
@@ -371,13 +371,13 @@ const letterData = {
       <cds-breadcrumb slot="breadcrumb" no-trailing-slash>
         <cds-breadcrumb-item><cds-breadcrumb-link href={withBase('/permits')}>Permits</cds-breadcrumb-link></cds-breadcrumb-item>
         <cds-breadcrumb-item><cds-breadcrumb-link href={withBase('/permit')}>{permit.id}</cds-breadcrumb-link></cds-breadcrumb-item>
-        <cds-breadcrumb-item><cds-breadcrumb-link aria-current="page">Finalize</cds-breadcrumb-link></cds-breadcrumb-item>
+        <cds-breadcrumb-item><cds-breadcrumb-link aria-current="page">Review</cds-breadcrumb-link></cds-breadcrumb-item>
       </cds-breadcrumb>
     </PermitHeader>
 
     <!-- Horizontal progress track — full width, so the side-by-side content keeps
          its room. Steps are a tracker, not a gate; position resumes on return. -->
-    <nav class="wiz-track cds--css-grid" aria-label="Finalize steps">
+    <nav class="wiz-track cds--css-grid" aria-label="Review steps">
       <!-- The grid-column classes go on this wrapper, NOT on the progress indicator:
            a col-span class forces `display:block` on its element, which would defeat
            `cds-progress-indicator`'s own `:host{display:flex}` and collapse the steps
@@ -385,7 +385,7 @@ const letterData = {
       <div class="cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
         <cds-progress-indicator id="wiz-progress" space-equally>
           {pages.map((p) => (
-            <cds-progress-step label={p.label} secondary-label={p.secondaryLabel}></cds-progress-step>
+            <cds-progress-step label={p.label}></cds-progress-step>
           ))}
         </cds-progress-indicator>
       </div>
@@ -394,7 +394,7 @@ const letterData = {
     <div class="page-head cds--css-grid">
       <header class="page-head__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-16">
         <p id="page-head-eyebrow" class="page-head__eyebrow t-label-01">Step 1 of {pages.length}</p>
-        <h2 id="page-head-title" class="page-head__title t-heading-04">{pages[0].label}</h2>
+        <h2 id="page-head-title" class="page-head__title t-heading-04" tabindex="-1">{pages[0].label}</h2>
         <p id="page-head-sub" class="page-head__sub t-body-02">{pages[0].secondaryLabel}</p>
       </header>
     </div>
@@ -409,7 +409,7 @@ const letterData = {
     <section class="step step--record cds--css-grid cds--css-grid--with-row-gap" data-step="0">
       <div class="col-main record-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
         <div class="pane-head">
-          <h3 class="pane-title t-heading-04">Application record</h3>
+          <h3 class="pane-title t-heading-03">Application record</h3>
           <!-- Shown only while the working panel is hidden (record goes full width). -->
           <cds-button class="js-panel-show" kind="tertiary" size="md" style="display: none">
             Show working panel
@@ -421,7 +421,7 @@ const letterData = {
                mirroring the working panel's tab strip opposite. -->
           <cds-tabs value="form" data-record-tabs data-panels>
             <cds-tab value="form">Form</cds-tab>
-            <cds-tab value="documents">Documents <span class="tab-badge" data-tab-badge="documents">{documents.length}</span></cds-tab>
+            <cds-tab value="documents">Documents <cds-tag class="tab-badge" size="sm" type="gray" data-tab-badge="documents">{documents.length}</cds-tag></cds-tab>
           </cds-tabs>
 
         <!-- Form — the submitter's answers, section by section. -->
@@ -438,10 +438,7 @@ const letterData = {
              carbon-checked: Carbon has no selection-anchored action bar; the control
              itself is a stock cds-button. -->
         <div id="select-comment" class="select-comment" hidden>
-          <cds-button id="select-comment-btn" kind="primary" size="sm">
-            Comment
-            <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M17.74,30,16,29l4-7h6a2,2,0,0,0,2-2V8a2,2,0,0,0-2-2H6A2,2,0,0,0,4,8V20a2,2,0,0,0,2,2h9v2H6a4,4,0,0,1-4-4V8A4,4,0,0,1,6,4H26a4,4,0,0,1,4,4V20a4,4,0,0,1-4,4H21.16Z"/><path d="M17 9 15 9 15 13 11 13 11 15 15 15 15 19 17 19 17 15 21 15 21 13 17 13 17 9z"/></svg>
-          </cds-button>
+          <cds-button id="select-comment-btn" kind="primary" size="sm">Comment</cds-button>
           <cds-button id="select-issue-btn" kind="secondary" size="sm">Issue</cds-button>
         </div>
 
@@ -472,7 +469,7 @@ const letterData = {
                   </cds-icon-button>
                 </div>
                 <div class="mention-field">
-                  <cds-textarea class="rsec-thread__input" helper-text="Tip: select text in this section to comment on that passage." placeholder="Type @ to mention someone (⌘/Ctrl+Enter to post)" rows="2"></cds-textarea>
+                  <cds-textarea class="rsec-thread__input" label="Add a comment" helper-text="To comment on a passage, select it in this section, then press ⌘/Ctrl+Alt+M." placeholder="Type @ to mention someone · ⌘/Ctrl+Enter to post" rows="2"></cds-textarea>
                   <ul class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
                 </div>
                 <cds-button class="rsec-thread__submit" kind="primary" size="md">Add comment</cds-button>
@@ -501,9 +498,9 @@ const letterData = {
         </div>
       </div>
 
-      <div class="col-main dock-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8" aria-label="Working panel">
+      <div class="col-main dock-col cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8" role="region" aria-labelledby="dock-title">
         <div class="pane-head">
-          <h3 class="pane-title t-heading-04">Working panel</h3>
+          <h3 id="dock-title" class="pane-title t-heading-03">Working panel</h3>
           <cds-icon-button class="js-panel-hide" kind="ghost" size="sm" align="left">
             <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="m2,6v20c0,1.1045.8955,2,2,2h24c1.1045,0,2-.8955,2-2V6c0-1.1045-.8955-2-2-2H4c-1.1045,0-2,.8955-2,2Zm20,0h6v20h-6V6Zm-18,0h16v20H4v-9h10.1699s-3.5801,3.5898-3.5801,3.5898l1.4102,1.4102,6-6-6-6-1.4102,1.4102,3.5801,3.5898H4V6Z"/></svg>
             <span slot="tooltip-content">Hide working panel</span>
@@ -513,8 +510,8 @@ const letterData = {
           <!-- Special conditions first (and open by default), then Comments. The
                analysis team lives in the header's team modal (Manage team). -->
           <cds-tabs value="conditions" data-panels>
-            <cds-tab value="conditions">Special conditions <span class="tab-badge" data-tab-badge="conditions" hidden></span></cds-tab>
-            <cds-tab value="comments">Comments <span class="tab-badge" data-tab-badge="comments" hidden></span></cds-tab>
+            <cds-tab value="conditions">Special conditions <cds-tag class="tab-badge" size="sm" type="gray" data-tab-badge="conditions" style="display:none"></cds-tag></cds-tab>
+            <cds-tab value="comments">Comments <cds-tag class="tab-badge" size="sm" type="gray" data-tab-badge="comments" style="display:none"></cds-tag></cds-tab>
           </cds-tabs>
 
           <!-- Special conditions — the SAME builder as before (HQ + each district,
@@ -542,7 +539,7 @@ const letterData = {
                 </cds-icon-button>
               </div>
               <div class="mention-field">
-                <cds-textarea id="comments-input" label="Add a comment" helper-text="Tip: select text in the application record to comment on that passage." placeholder="Note something for the team… type @ to mention someone (⌘/Ctrl+Enter to post)" rows="2"></cds-textarea>
+                <cds-textarea id="comments-input" label="Add a comment" helper-text="To comment on a passage, select it in the record, then press ⌘/Ctrl+Alt+M." placeholder="Type @ to mention someone · ⌘/Ctrl+Enter to post" rows="2"></cds-textarea>
                 <ul id="comments-mention-menu" class="mention-menu" role="listbox" aria-label="Mention a user" hidden></ul>
               </div>
               <cds-button id="comments-add" kind="primary" size="md">Add comment</cds-button>
@@ -573,16 +570,16 @@ const letterData = {
         </div>
 
         <div class="field-group">
-          <h3 class="field-group__title t-heading-compact-01">Summary report due</h3>
+          <h3 class="field-group__title t-heading-compact-01">Annual report due</h3>
           <cds-date-picker id="fb-report" date-format="m/d/Y">
-            <cds-date-picker-input kind="single" label-text="Report due" placeholder="mm/dd/yyyy"></cds-date-picker-input>
+            <cds-date-picker-input kind="single" label-text="Due date" placeholder="mm/dd/yyyy"></cds-date-picker-input>
           </cds-date-picker>
-          <p class="field-hint t-label-01">Defaults to one year after the start date. Change it to override.</p>
+          <p class="field-hint t-label-01">Defaults to 30 days after the permit ends.</p>
         </div>
 
         <div class="field-group">
-          <h3 class="field-group__title t-heading-compact-01">Authorized parks</h3>
-          <p class="field-hint t-label-01">Every park this permit authorizes, across all districts — the same set as Study areas on the previous step. Add or remove a park and the letter's contact list and permit type update to match.</p>
+          <h3 class="field-group__title t-heading-compact-01">Authorized parks <span id="fb-parks-count"></span></h3>
+          <p class="field-hint t-label-01">Same parks as Study areas. Changes update the letter's contact list and permit type.</p>
           <!-- One flat list (not one per district). Same mechanic as step ①'s Study
                areas: a filterable cds-multi-select over every in-scope park + a single
                roster with a District column. The shell is static; the page script sets
@@ -600,13 +597,12 @@ const letterData = {
             ))}
           </cds-multi-select>
           <div class="selected">
-            <p class="selected__label t-label-01">Authorized parks <span id="fb-parks-count"></span></p>
             <cds-table class="ro-table">
               <cds-table-head>
                 <cds-table-header-row>
                   <cds-table-header-cell>Park</cds-table-header-cell>
                   <cds-table-header-cell>District</cds-table-header-cell>
-                  <cds-table-header-cell>Remove</cds-table-header-cell>
+                  <cds-table-header-cell><span class="cds--visually-hidden">Actions</span></cds-table-header-cell>
                 </cds-table-header-row>
               </cds-table-head>
               <cds-table-body id="fb-parks-body"></cds-table-body>
@@ -623,7 +619,7 @@ const letterData = {
              step ①.) The lead's Finalize letter locks the set. -->
         <div class="field-group">
           <h3 class="field-group__title t-heading-compact-01">District contacts</h3>
-          <p class="field-hint t-label-01">These print on the letter's Contact List for Parks. Each district's lead is its <strong>Primary</strong> contact (the main point of contact). <strong>Park contacts</strong> attach automatically for the specific parks on this permit. Add more from the district's users. Supporting analysts' change requests appear here to accept or decline.</p>
+          <p class="field-hint t-label-01">These print on the letter's contact list. Each district lead is the primary contact; park contacts attach automatically.</p>
           <cds-inline-notification
             id="contacts-locked-note"
             kind="info" low-contrast hide-close-button
@@ -637,9 +633,9 @@ const letterData = {
         <div class="field-group">
           <div class="field-group__bar">
             <h3 class="field-group__title t-heading-compact-01">Signature</h3>
-            <cds-button kind="tertiary" size="sm" id="signer-change">Change signer</cds-button>
+            <cds-button kind="tertiary" size="md" id="signer-change">Change signer</cds-button>
           </div>
-          <p class="field-hint t-label-01">A default signer is set by an administrator. Reassign it for this permit if a different Environmental Scientist will sign — the name and classification print on the letter.</p>
+          <p class="field-hint t-label-01">The signer's name and classification print on the letter. An administrator sets the default.</p>
           <!-- The signer is shown the SAME way as a district contact: a ContactCard
                tile (one per candidate, only the selected one visible). "Change signer"
                (in the section header) reassigns. The admin-configured default is pre-selected. -->
@@ -661,9 +657,9 @@ const letterData = {
       <aside class="preview cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-9" aria-label="Final letter preview">
         <div class="preview__head">
           <p class="preview__label t-label-01">Final letter — updates as you go</p>
-          <cds-button id="copy-reset" kind="ghost" size="sm" style="display:none">Restore default wording</cds-button>
+          <cds-button id="copy-reset" kind="tertiary" size="md" style="display:none">Restore default wording</cds-button>
         </div>
-        <p class="preview__hint t-label-01">Click a body paragraph to edit its wording. The dates, parks, and conditions stay derived.</p>
+        <p class="preview__hint t-label-01">Select a body paragraph to edit its wording. Dates, parks, and conditions fill in automatically.</p>
         <article class="sheet ltr-sheet cds--white letter-host letter-host--editable" aria-label={`Final permit letter for ${permit.id}`}></article>
       </aside>
     </section>
@@ -676,7 +672,7 @@ const letterData = {
         </section>
 
         <section class="pkg-letter">
-          <p class="preview__label t-label-01">The letter</p>
+          <h3 class="preview__label t-label-01">The letter</h3>
           <article class="sheet ltr-sheet cds--white letter-host" aria-label={`Final permit letter for ${permit.id}`}></article>
         </section>
       </div>
@@ -687,10 +683,10 @@ const letterData = {
          step ② col-7, step ③ col-12 offset by col-start-3. -->
     <footer class="wiz-actions cds--css-grid">
       <div class="wiz-actions__inner cds--css-grid-column cds--sm:col-span-4 cds--md:col-span-8 cds--lg:col-span-8">
-        <cds-button id="wiz-back" kind="secondary" hidden>Back</cds-button>
-        <cds-button kind="ghost" href={withBase('/permit')}>Cancel</cds-button>
+        <cds-button id="wiz-back" kind="secondary" size="lg" hidden>Back</cds-button>
+        <cds-button kind="ghost" size="lg" href={withBase('/permit')}>Cancel</cds-button>
         <div class="wiz-actions__spacer"></div>
-        <cds-button id="wiz-next">Save and continue</cds-button>
+        <cds-button id="wiz-next" size="lg">Finalize review</cds-button>
       </div>
     </footer>
   </main>
@@ -706,7 +702,7 @@ const letterData = {
         The letter locks and the permit moves to <strong>Out for signature</strong>.
         Then download the letter, get it signed, and upload the signed copy.
       </p>
-      <!-- Unfinished supporting reviews warn but never block the Responsible Agent. -->
+      <!-- Unfinished supporting reviews warn but never block the Responsible analyst. -->
       <cds-inline-notification id="send-open-reviews" kind="warning" low-contrast hide-close-button style="display: none"></cds-inline-notification>
     </cds-modal-body>
     <cds-modal-footer>
@@ -868,6 +864,34 @@ const letterData = {
     import { mountConditionsEditor } from '../lib/conditions-editor';
     import { buildIssueCard, openIssueModal } from '../lib/issue-ui';
     import { reviewStore, RECORD_SECTIONS } from '../lib/review-thread';
+    import { reportDueISO } from '../lib/final-report';
+
+    // Every programmatic scroll honors reduced motion.
+    const scrollBehavior = (): ScrollBehavior =>
+      matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+    // Row lists here re-render via innerHTML, which destroys the button that was just
+    // pressed and drops focus to <body>. After a row action, put focus back on the
+    // same-position control (or `fallback` when the list empties). Waits out a
+    // confirmation modal the action may have opened.
+    const keepFocusIn = (host: HTMLElement | null, sel: string, fallback?: () => HTMLElement | null) => {
+      host?.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest?.(sel);
+        if (!btn) return;
+        const idx = [...host.querySelectorAll(sel)].indexOf(btn);
+        const restore = () => requestAnimationFrame(() => {
+          if (btn.isConnected) return;
+          const a = document.activeElement;
+          if (a && a !== document.body) return;
+          const all = [...host.querySelectorAll<HTMLElement>(sel)];
+          (all[Math.min(idx, all.length - 1)] ?? fallback?.())?.focus();
+        });
+        requestAnimationFrame(() => {
+          if (document.querySelector('cds-modal[open]')) document.addEventListener('cds-modal-closed', restore, { once: true });
+          else restore();
+        });
+      }, { capture: true }); // capture: read the index BEFORE the row handler re-renders
+    };
 
     interface ContactOption {
       id: string; name: string; role: string; email: string; phone: string;
@@ -931,7 +955,7 @@ const letterData = {
 
     // Guard + role model (the review wizard is the analysis team's review surface).
     // Reachable only (1) once review has started AND (2) by a reviewer ASSIGNED to
-    // this permit — the Responsible Agent (lead), a Supporting Agent (assistant), or
+    // this permit — the Responsible analyst (lead), a Supporting analyst (assistant), or
     // a System Admin. Anyone else — an unassigned reviewer, a researcher — is sent to
     // the permit detail (which enforces its own read-only view).
     //   • Lead (RA/Admin): edits the application, curates conditions, and drives the
@@ -964,7 +988,6 @@ const letterData = {
     // scannable anchor; the letter body keeps the written month (fmt).
     const fmtNum = (iso: string) => parseISO(iso).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
     const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const plusYear = (iso: string) => { const d = parseISO(iso); return toISO(new Date(d.getFullYear() + 1, d.getMonth(), d.getDate())); };
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
     // ── State ──────────────────────────────────────────────────────────────────
@@ -995,8 +1018,12 @@ const letterData = {
     const state = {
       startISO: (persistedFinal.startISO || data.window.startISO) as string,
       endISO: (persistedFinal.endISO || data.window.endISO) as string,
-      reportISO: (persistedFinal.reportISO || plusYear(persistedFinal.startISO || data.window.startISO)) as string,
-      reportOverridden: Boolean(persistedFinal.reportISO),
+      // The annual report is due 30 days after the permit ends (lib/final-report) —
+      // follows the end date until the reviewer picks a date themselves.
+      reportISO: (persistedFinal.reportOverridden && persistedFinal.reportISO
+        ? persistedFinal.reportISO
+        : reportDueISO(persistedFinal.endISO || data.window.endISO)) as string,
+      reportOverridden: Boolean(persistedFinal.reportOverridden && persistedFinal.reportISO),
       parks: initialParkMap,
       // The district's contact list (what the letter prints) — a flat array of entries
       // per district, each a person + park scope. Seeded from the roster, then fully
@@ -1037,7 +1064,8 @@ const letterData = {
       const el = document.querySelector(`[data-tab-badge="${name}"]`) as HTMLElement | null;
       if (!el) return;
       el.textContent = String(n);
-      el.hidden = n === 0;
+      // cds-tag sets :host display, so `hidden` won't collapse it.
+      el.style.display = n === 0 ? 'none' : '';
     };
     // Auto-save hook — assigned later (lead only) once the indicator exists; every
     // persist below flashes it. No-op until then (and for read-only assistants).
@@ -1046,7 +1074,7 @@ const letterData = {
     const persistConditions = () => { savePermitConditions(permitId, state.conditions); flashSaved(); };
     const persistFinal = () => {
       localStorage.setItem(finalKey, JSON.stringify({
-        ...persistedFinal, startISO: state.startISO, endISO: state.endISO, reportISO: state.reportISO,
+        ...persistedFinal, startISO: state.startISO, endISO: state.endISO, reportISO: state.reportISO, reportOverridden: state.reportOverridden,
         fields: state.fields, specimens: state.specimens, contacts: state.contacts,
         contactRequests: state.contactRequests, signerId: state.signerId,
         letterCopy: state.letterCopy,
@@ -1208,9 +1236,9 @@ const letterData = {
       districts.filter((d) => (state.parks[d.name] || []).length > 0).map((d) => d.key);
 
     // Story 8 — a district drop/flip is a MANAGED transition. On commit: prune the
-    // dropped district's Supporting Agents from the analysis team, and on a type flip
-    // auto-reassign the Responsible Agent (multi→single ⇒ the remaining district's
-    // Lead; single→multi ⇒ a random eligible HQ reviewer), notifying both agents.
+    // dropped district's Supporting analysts from the analysis team, and on a type flip
+    // auto-reassign the Responsible analyst (multi→single ⇒ the remaining district's
+    // Lead; single→multi ⇒ a random eligible HQ reviewer), notifying both analysts.
     const pruneDroppedSAs = (droppedNames: string[]) => {
       const teamKey = `permit-team-${permitId}`;
       let edits: any = {};
@@ -1306,9 +1334,9 @@ const letterData = {
         msg += `${msg ? ' ' : ''}This adds ${added.join(' and ')} to the permit.`;
       }
       if (flipToSingle) {
-        msg += ' It changes this to a single-district permit — a District Lead becomes the Responsible Agent (an HQ reviewer can no longer lead it).';
+        msg += ' It changes this to a single-district permit — a District Lead becomes the Responsible analyst (an HQ reviewer can no longer lead it).';
       } else if (flipToMulti) {
-        msg += ' It changes this to a multi-district permit — an HQ reviewer becomes the Responsible Agent (a District Lead can no longer lead it).';
+        msg += ' It changes this to a multi-district permit — an HQ reviewer becomes the Responsible analyst (a District Lead can no longer lead it).';
       } else if (after === 0) {
         msg += ' No districts would remain authorized.';
       }
@@ -1377,6 +1405,7 @@ const letterData = {
       requestParksChange(grouped);
     };
     $('fb-parks-body')?.addEventListener('click', onRosterRemove);
+    keepFocusIn($('fb-parks-body'), '[data-remove-park]', () => fbSelect);
 
     // ── District contacts (Working Panel tab, step ①) ────────────────────────────
     // The letter's Contact List for Parks is built here. Per district: a PRIMARY
@@ -1750,6 +1779,7 @@ const letterData = {
       commitChange(dName, { kind: 'edit', eid, person, scope: parks, summary: `set ${nm} to cover ${scopeText(parks)}` }, { quiet: true, debounce: true });
     };
     contactsHost?.addEventListener('click', onContactAction);
+    keepFocusIn(contactsHost, '.crow-act');
     contactModal?.addEventListener('cds-radio-button-group-changed', onScopeModeToggle);
     contactsConfirmBody?.addEventListener('click', onContactAction);
     contactsConfirmBody?.addEventListener('cds-dropdown-selected', onInlineEntryChange);
@@ -1833,6 +1863,7 @@ const letterData = {
     };
 
     $('add-specimen')?.addEventListener('click', () => openSpecimenModal(null));
+    keepFocusIn(specBody, '[data-remove-specimen]', () => $('add-specimen'));
     if (specBody) {
       specBody.addEventListener('click', (e) => {
         const ed = (e.target as HTMLElement).closest?.('[data-edit-specimen]') as HTMLElement | null;
@@ -1888,7 +1919,7 @@ const letterData = {
       const dates: Date[] = e.detail?.selectedDates || [];
       if (dates[0]) state.startISO = toISO(dates[0]);
       if (dates[1]) state.endISO = toISO(dates[1]);
-      if (!state.reportOverridden) { state.reportISO = plusYear(state.startISO); if (reportPicker) reportPicker.value = state.reportISO; }
+      if (!state.reportOverridden) { state.reportISO = reportDueISO(state.endISO); if (reportPicker) reportPicker.value = state.reportISO; }
       persistFinal(); renderPreview();
     });
     reportPicker?.addEventListener('cds-date-picker-changed', (e: any) => {
@@ -1912,6 +1943,7 @@ const letterData = {
     const editableHost = document.querySelector<HTMLElement>('.letter-host--editable');
     const copyResetBtn = $('copy-reset');
     const COPY_KEYS = ['intro', 'conditionsNotice', 'reportReminder'] as const;
+    const COPY_LABELS: Record<string, string> = { intro: 'introduction', conditionsNotice: 'conditions notice', reportReminder: 'report reminder' };
 
     // Live-derived defaults — recomputed each render so an un-overridden paragraph
     // always reflects the current dates, permit type, project title, and report due.
@@ -1961,6 +1993,9 @@ const letterData = {
         editableHost.querySelectorAll<HTMLElement>('[data-copy]').forEach((p) => {
           p.setAttribute('contenteditable', 'true');
           p.setAttribute('spellcheck', 'true');
+          p.setAttribute('role', 'textbox');
+          p.setAttribute('aria-multiline', 'true');
+          p.setAttribute('aria-label', `Letter paragraph: ${COPY_LABELS[p.dataset.copy!] ?? 'body'}`);
           p.classList.toggle('is-edited', state.letterCopy[p.dataset.copy!] != null);
         });
       }
@@ -1983,10 +2018,33 @@ const letterData = {
       updateCopyReset();
     }, true);
 
+    // Escape abandons the in-progress edit: put back what was there, then blur.
+    editableHost?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const p = (e.target as HTMLElement)?.closest?.('[data-copy]') as HTMLElement | null;
+      if (!p) return;
+      const key = p.dataset.copy!;
+      p.innerHTML = state.letterCopy[key] ?? defaultLetterCopy()[key];
+      p.blur();
+    });
+
+    // Restoring wipes every paragraph override — offer Undo instead of a confirm.
+    // The toast goes away on the next paragraph edit so Undo can't clobber it.
+    let undoToast: HTMLElement | null = null;
+    editableHost?.addEventListener('focusin', () => { undoToast?.remove(); undoToast = null; });
     copyResetBtn?.addEventListener('click', () => {
+      const before = { ...state.letterCopy };
       COPY_KEYS.forEach((k) => (state.letterCopy[k] = null));
       persistFinal();
       renderPreview();
+      undoToast = showToast('Default wording restored', '', 'info', {
+        label: 'Undo',
+        onAction: () => {
+          Object.assign(state.letterCopy, before);
+          persistFinal();
+          renderPreview();
+        },
+      });
     });
     const conditionBody = (c: PermitCondition) =>
       c.inventoryId === 'hq-c04'
@@ -2131,7 +2189,7 @@ const letterData = {
                 <p class="issue__date-val t-heading-04">${fmtNum(state.startISO)} – ${fmtNum(state.endISO)}</p>
               </div>
               <div class="issue__date">
-                <p class="issue__date-label t-label-01">Summary report due</p>
+                <p class="issue__date-label t-label-01">Annual report due</p>
                 <p class="issue__date-val t-heading-03">${fmtNum(state.reportISO)}</p>
               </div>
             </cds-tile>
@@ -2203,7 +2261,7 @@ const letterData = {
     const headEyebrow = $('page-head-eyebrow');
     const headTitle = $('page-head-title');
     const headSub = $('page-head-sub');
-    // An assistant (Supporting Agent) reviews the application only — they never
+    // An assistant (Supporting analyst) reviews the application only — they never
     // reach the Finalize-letter / Review-&-send steps. Their journey is the single
     // review step, capped here so a stored/return step can't stray past it.
     const LAST_STEP = isLead ? PAGES - 1 : 0;
@@ -2242,7 +2300,13 @@ const letterData = {
       // (both mounts: full banner + sticky compact bar) so it reads "Finalize
       // review" / "Finalize letter" / "Send for signature", not a static label.
       document.querySelectorAll('.permit-open-review').forEach((c) => c.setAttribute('label', cta));
-      if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (scroll) {
+        window.scrollTo({ top: 0, behavior: scrollBehavior() });
+        // Move focus off the CTA: its label (and meaning) just changed, so a second
+        // Enter would otherwise skip a whole step. The title also announces the step.
+        headTitle?.focus({ preventScroll: true });
+      }
+      document.querySelector('main.page')?.setAttribute('data-ready', 'true');
     };
     const goTo = (i: number) => { current = Math.min(LAST_STEP, Math.max(0, i)); localStorage.setItem(stepKey, String(current)); renderPreview(); render(true); };
     if (progress) progress.onChange = (e: CustomEvent<{ index: number }>) => goTo(e.detail.index);
@@ -2283,7 +2347,7 @@ const letterData = {
       goTo(1); // the Finalize-the-letter step, where contacts are edited
       requestAnimationFrame(() => {
         const sel = `.contact-district[data-district="${(window.CSS?.escape ? CSS.escape(empty[0].name) : empty[0].name)}"]`;
-        (contactsHost?.querySelector(sel) as HTMLElement | null)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        (contactsHost?.querySelector(sel) as HTMLElement | null)?.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
       });
       return false;
     };
@@ -2428,7 +2492,7 @@ const letterData = {
       if (tabs) { tabs.value = 'comments'; tabs.dispatchEvent(new CustomEvent('cds-tabs-selected')); }
       requestAnimationFrame(() => {
         const items = indexes.map((i) => thread.querySelector<HTMLElement>(`[data-comment-index="${i}"]`)).filter((x): x is HTMLElement => !!x);
-        items[0]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        items[0]?.scrollIntoView({ block: 'nearest', behavior: scrollBehavior() });
         items.forEach((li) => { li.classList.add('comment--flash'); setTimeout(() => li.classList.remove('comment--flash'), 2000); });
         const ranges = anchoredComments().filter((f) => indexes.includes(f.i)).map((f) => f.range);
         paintHighlight('review-comment-active', ranges);
@@ -2476,7 +2540,7 @@ const letterData = {
         const range = findAnchor(a, recordRoot);
         if (!range) { showToast('Passage not found', 'That text has changed since the comment was posted.', 'info'); return; }
         const rect = range.getBoundingClientRect();
-        window.scrollTo({ top: window.scrollY + rect.top - window.innerHeight / 3, behavior: 'smooth' });
+        window.scrollTo({ top: window.scrollY + rect.top - window.innerHeight / 3, behavior: scrollBehavior() });
         paintHighlight('review-comment-active', [range]);
         setTimeout(() => paintHighlight('review-comment-active', []), 2200);
       });
@@ -2793,7 +2857,7 @@ const letterData = {
       requestAnimationFrame(() => {
         const region = threadFor(sec);
         const target = (opts.flashKey && region?.querySelector<HTMLElement>(`[data-comment-key="${CSS.escape(opts.flashKey)}"]`)) || region;
-        target?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        target?.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
         if (opts.flashKey && target && target !== region) {
           target.classList.add('comment--flash'); setTimeout(() => target.classList.remove('comment--flash'), 2000);
         }
@@ -2820,7 +2884,11 @@ const letterData = {
       if (!selectHost || !selectionRange) return;
       const rect = selectionRange.getBoundingClientRect();
       if (!rect.width && !rect.height) { selectHost.hidden = true; return; }
-      selectHost.style.top = `${Math.max(8, rect.top - 44)}px`;
+      // Never over the UI Shell header + compact bar (6rem): flip below the
+      // selection when there's no room above it, and hide once it's under the chrome.
+      const chrome = 96;
+      selectHost.style.visibility = rect.bottom < chrome ? 'hidden' : '';
+      selectHost.style.top = `${rect.top - 44 < chrome + 8 ? rect.bottom + 8 : rect.top - 44}px`;
       selectHost.style.left = `${Math.min(window.innerWidth - 140, rect.left + rect.width / 2 - 50)}px`;
     };
     const onSelectionDone = () => {
@@ -2835,10 +2903,26 @@ const letterData = {
       if (issueBtn) issueBtn.style.display = canFlagIssues() ? '' : 'none';
       placeSelectButton();
     };
-    recordRoot?.addEventListener('mouseup', () => setTimeout(onSelectionDone, 0));
-    recordRoot?.addEventListener('keyup', (e: KeyboardEvent) => { if (e.shiftKey || e.key.startsWith('Arrow')) onSelectionDone(); });
+    // Selection settles differently per input: mouse on pointerup, keyboard (Shift+
+    // arrows) and touch handles via selectionchange — debounced, and ignored mid-drag
+    // so the button doesn't chase the pointer.
+    let pointerDown = false;
+    let selTimer = 0;
+    document.addEventListener('pointerdown', () => { pointerDown = true; });
+    document.addEventListener('pointerup', () => { pointerDown = false; setTimeout(onSelectionDone, 0); });
     document.addEventListener('selectionchange', () => {
-      if (selectHost && !selectHost.hidden && window.getSelection()?.isCollapsed) selectHost.hidden = true;
+      if (window.getSelection()?.isCollapsed) { if (selectHost) selectHost.hidden = true; return; }
+      if (pointerDown) return;
+      clearTimeout(selTimer);
+      selTimer = window.setTimeout(onSelectionDone, 150);
+    });
+    // ⌘/Ctrl+Alt+M comments on the selected passage (the Google Docs chord). e.code,
+    // since Alt changes e.key on macOS.
+    document.addEventListener('keydown', (e) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.altKey || e.code !== 'KeyM') return;
+      if (!selectionAnchor || selectHost?.hidden) return;
+      e.preventDefault();
+      ($('select-comment-btn') as HTMLElement | null)?.click();
     });
     window.addEventListener('scroll', placeSelectButton, { passive: true });
     // mousedown would otherwise clear the selection before the click lands.
@@ -3030,7 +3114,7 @@ const letterData = {
       // Opening Documents: bring the pinned column fully into view (it only sticks
       // once the page has scrolled past the page head), so the viewer gets its
       // full height at once instead of a sliver under the header.
-      if (docs && !was) recordColEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (docs && !was) recordColEl?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     };
     recordTabs?.addEventListener('cds-tabs-selected', syncRecordTab);
     customElements.whenDefined('cds-tabs').then(syncRecordTab);
@@ -3048,7 +3132,7 @@ const letterData = {
         showRecordTab('form');
         // The Form tab re-expands the page first; then restore the scroll + focus.
         requestAnimationFrame(() => {
-          window.scrollTo({ top: y, behavior: 'smooth' });
+          window.scrollTo({ top: y, behavior: scrollBehavior() });
           trigger.focus({ preventScroll: true });
         });
       });
@@ -3209,6 +3293,12 @@ const letterData = {
     /* Send modal: the lede sits above the open-reviews warning. */
     .send-lead { margin: 0 0 var(--cds-spacing-05, 1rem); }
     .page { padding-block: 0 var(--cds-spacing-10, 4rem); }
+    /* The server renders step ①; the script applies the saved step + role labels.
+       Hold the wizard invisible (not display:none — layout is still computed) until
+       then, so a return to step ③ doesn't flash step ① and jump. */
+    .page[data-ready="false"] :is(.wiz-track, .page-head, .step, .wiz-actions) { visibility: hidden; }
+    /* Programmatic focus target on step change (tabindex=-1), not a control. */
+    .page-head__title:focus { outline: none; }
 
     /* The identity header is the shared PermitHeader component (its own g100
        banner + compact-bar-on-scroll behavior + styles). */
@@ -3219,7 +3309,7 @@ const letterData = {
     .page-head__inner { max-width: 46rem; padding-bottom: var(--cds-spacing-05, 1rem); border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
     .page-head__eyebrow { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
     .page-head__title { margin: 0; }
-    .page-head__sub { margin: 0.25rem 0 0; color: var(--cds-text-secondary, #525252); }
+    .page-head__sub { margin: var(--cds-spacing-02, 0.25rem) 0 0; color: var(--cds-text-secondary, #525252); }
 
     /* Each step is its own grid, toggled one at a time. A hidden step collapses
        (the [hidden] attr-selector out-specifies .cds--css-grid's display:grid). */
@@ -3263,14 +3353,8 @@ const letterData = {
     .rail-panel[hidden] { display: none; }
     .dock-list { display: flex; flex-direction: column; }
 
-    /* Count badges on the working-panel tabs (Y comments / X conditions). */
-    .tab-badge {
-      display: inline-grid; place-items: center; min-inline-size: 1.25rem; block-size: 1.25rem;
-      margin-inline-start: 0.375rem; padding: 0 0.375rem; border-radius: 0.75rem;
-      background: var(--cds-layer-accent-01, #e0e0e0); color: var(--cds-text-primary, #161616);
-      font-size: 0.75rem; font-weight: 600; line-height: 1; vertical-align: middle;
-    }
-    .tab-badge[hidden] { display: none; }
+    /* Tab counts are stock cds-tag (sm, gray); placement + steady digits only. */
+    .tab-badge { margin-block: 0; margin-inline: var(--cds-spacing-03, 0.5rem) 0; vertical-align: middle; font-variant-numeric: tabular-nums; }
 
     /* On wide screens the working panel pins beside the record AND scrolls WITHIN
        itself: capped to the viewport, the tab strip stays put, and the active panel
@@ -3348,7 +3432,7 @@ const letterData = {
     /* Read-only identity recap on the finalize step. */
     .recap__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem); }
     .recap__head .field-group__title { flex: 1 1 auto; }
-    .recap { display: grid; gap: 0.125rem; }
+    .recap { display: grid; gap: var(--cds-spacing-01, 0.125rem); }
     .recap__line { margin: 0; color: var(--cds-text-primary, #161616); }
     .recap__line--muted { margin-top: var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
 
@@ -3377,8 +3461,9 @@ const letterData = {
     .contacts-input :global(.creq) { display: flex; align-items: center; gap: var(--cds-spacing-04, 0.75rem); flex-wrap: wrap; }
     .contacts-input :global(.creq__text) { flex: 1 1 12rem; }
     .contacts-input :global(.creq__acts) { display: flex; gap: var(--cds-spacing-02, 0.25rem); margin-inline-start: auto; }
-    /* A removed (excluded) special contact — dimmed, with a Re-add action. */
-    .contacts-input :global(.crow--muted) { opacity: 0.6; }
+    /* A removed (excluded) special contact — its name drops to the secondary text
+       color (opacity would push the meta text under 4.5:1), with a Re-add action. */
+    .contacts-input :global(.crow--muted .crow__name) { color: var(--cds-text-secondary, #525252); }
     /* A contact row inside the contained list: avatar, name + badge, meta, action. */
     .contacts-input :global(.crow) { display: flex; align-items: center; gap: var(--cds-spacing-04, 0.75rem); width: 100%; }
     .contacts-input :global(.crow__avatar) {
@@ -3389,9 +3474,9 @@ const letterData = {
     }
     .contacts-input :global(.crow__body) { flex: 1 1 auto; min-width: 0; }
     .contacts-input :global(.crow__name) { margin: 0; display: flex; align-items: center; gap: var(--cds-spacing-03, 0.5rem); flex-wrap: wrap; }
-    .contacts-input :global(.crow__meta) { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); overflow-wrap: anywhere; }
+    .contacts-input :global(.crow__meta) { margin: var(--cds-spacing-01, 0.125rem) 0 0; color: var(--cds-text-secondary, #525252); overflow-wrap: anywhere; }
     /* The park(s) a contact covers — the only classifier now (no role badges). */
-    .contacts-input :global(.crow__scope) { margin: 0.125rem 0 0; color: var(--cds-text-secondary, #525252); font-style: italic; overflow-wrap: anywhere; }
+    .contacts-input :global(.crow__scope) { margin: var(--cds-spacing-01, 0.125rem) 0 0; color: var(--cds-text-secondary, #525252); font-style: italic; overflow-wrap: anywhere; }
     /* Scope fieldset (radio + park checkboxes) — used inline in the SA modal AND inside
        the lead's editor modal. Injected via innerHTML in both, so styled with :global. */
     :global(.scope-field) { display: flex; flex-direction: column; gap: var(--cds-spacing-03, 0.5rem); }
@@ -3412,10 +3497,10 @@ const letterData = {
        injected into #confirm-contacts-body, so :global() its descendants. */
     .confirm-contacts__lead { margin: 0 0 var(--cds-spacing-05, 1rem); color: var(--cds-text-secondary, #525252); }
     .confirm-contacts { display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
-    .confirm-contacts :global(.confirm-contacts__district) { display: flex; flex-direction: column; gap: 0.125rem; }
+    .confirm-contacts :global(.confirm-contacts__district) { display: flex; flex-direction: column; gap: var(--cds-spacing-01, 0.125rem); }
     .confirm-contacts :global(.confirm-contacts__name) { margin: 0; }
     .confirm-contacts :global(.confirm-contacts__parks) { margin: 0; color: var(--cds-text-secondary, #525252); }
-    .confirm-contacts :global(.confirm-contacts__list) { margin: var(--cds-spacing-03, 0.5rem) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; }
+    .confirm-contacts :global(.confirm-contacts__list) { margin: var(--cds-spacing-03, 0.5rem) 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--cds-spacing-02, 0.25rem); }
     .confirm-contacts :global(.confirm-contacts__meta) { color: var(--cds-text-secondary, #525252); }
 
     .subgroup { display: grid; gap: var(--cds-spacing-03, 0.5rem); margin-bottom: var(--cds-spacing-05, 1rem); }
@@ -3425,7 +3510,6 @@ const letterData = {
        multi-select over a selected-parks roster (one flat list). Layout only — the
        controls are stock cds-*. */
     .selected { margin-top: var(--cds-spacing-03, 0.5rem); }
-    .selected__label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
     .col-fields .ro-table { display: block; }
 
     /* Package step (③) — recap of what's issued, then the letter. */
@@ -3444,7 +3528,7 @@ const letterData = {
     }
     :global(.issue__type) { margin: 0; color: var(--cds-text-primary, #161616); }
     :global(.issue__cat) {
-      margin: var(--cds-spacing-02, 0.25rem) 0 0; text-transform: uppercase;
+      margin: var(--cds-spacing-02, 0.25rem) 0 0;
       color: var(--cds-text-secondary, #525252);
     }
 
@@ -3456,7 +3540,7 @@ const letterData = {
       gap: var(--cds-spacing-04, 0.75rem) var(--cds-spacing-07, 2rem);
     }
     :global(.issue__date-label) {
-      margin: 0; text-transform: uppercase; color: var(--cds-text-secondary, #525252);
+      margin: 0; color: var(--cds-text-secondary, #525252);
     }
     :global(.issue__date-val) {
       margin: var(--cds-spacing-02, 0.25rem) 0 0; color: var(--cds-text-primary, #161616);
@@ -3491,15 +3575,17 @@ const letterData = {
     /* @-mention picker — a token-styled suggestion menu anchored under the composer.
        carbon-checked: Carbon ships no @-mention typeahead; this composes over the
        stock cds-textarea, styled entirely with --cds-* tokens. */
-    .mention-menu { position: absolute; inset-inline: 0; top: calc(100% + 0.25rem); z-index: 100; margin: 0; padding: 0; list-style: none; max-block-size: 14rem; overflow-y: auto; background: var(--cds-layer-02, #fff); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); }
+    /* z-index 1: it only has to clear the composer's following siblings (its
+       .mention-field is the positioning context). */
+    .mention-menu { position: absolute; inset-inline: 0; top: calc(100% + 0.25rem); z-index: 1; margin: 0; padding: 0; list-style: none; max-block-size: 14rem; overflow-y: auto; background: var(--cds-layer-02, #fff); border: 1px solid var(--cds-border-subtle-01, #e0e0e0); box-shadow: 0 2px 6px var(--cds-shadow, rgba(0, 0, 0, 0.3)); }
     .mention-menu[hidden] { display: none; }
     /* Menu items + posted mention tokens are BUILT IN JS (no Astro scope attribute),
        so their rules must be :global to match. */
     :global(.mention-menu__item) { display: flex; flex-direction: column; gap: 0.0625rem; cursor: pointer; padding: var(--cds-spacing-03, 0.5rem) var(--cds-spacing-05, 1rem); border-block-end: 1px solid var(--cds-border-subtle-01, #e0e0e0); }
     :global(.mention-menu__item:last-child) { border-block-end: none; }
     :global(.mention-menu__item.is-active), :global(.mention-menu__item:hover) { background: var(--cds-layer-hover-02, #e8e8e8); }
-    :global(.mention-menu__name) { color: var(--cds-text-primary, #161616); font-size: 0.875rem; }
-    :global(.mention-menu__detail) { color: var(--cds-text-secondary, #525252); font-size: 0.75rem; }
+    :global(.mention-menu__name) { color: var(--cds-text-primary, #161616); font-size: var(--cds-body-compact-01-font-size, 0.875rem); }
+    :global(.mention-menu__detail) { color: var(--cds-text-secondary, #525252); font-size: var(--cds-label-01-font-size, 0.75rem); }
     :global(.mention) { color: var(--cds-link-primary, #0f62fe); font-weight: 600; }
 
     /* ── Comment on a selection ──────────────────────────────────────────────
@@ -3517,26 +3603,28 @@ const letterData = {
     :global(::highlight(review-comment-pending)) { background-color: var(--cds-highlight, #d0e2ff); text-decoration: underline 2px var(--cds-border-interactive, #0f62fe); }
     :global(::highlight(review-comment-active)),
     :global(::highlight(review-comment-hover)) { background-color: var(--cds-support-warning, #f1c21b); }
-    .select-comment { position: fixed; z-index: 8000; display: flex; gap: 1px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+    /* Carbon's floating layer (6000): above page content, BELOW the UI Shell header
+       (8000) and modals (9000). The script also keeps it out from under the chrome. */
+    .select-comment { position: fixed; z-index: 6000; display: flex; gap: 1px; box-shadow: 0 2px 6px var(--cds-shadow, rgba(0, 0, 0, 0.3)); }
     .select-comment[hidden] { display: none; }
     /* The passage being commented on, above the composer: a token-colored rule +
        quote, with a ghost "remove" button. */
     .comment-quote { display: flex; align-items: flex-start; gap: var(--cds-spacing-03, 0.5rem); inline-size: 100%; padding: var(--cds-spacing-03, 0.5rem) 0 var(--cds-spacing-03, 0.5rem) var(--cds-spacing-04, 0.75rem); border-inline-start: 3px solid var(--cds-border-interactive, #0f62fe); background: var(--cds-layer-02, #fff); }
     .comment-quote[hidden] { display: none; }
     .comment-quote__body { flex: 1 1 auto; min-inline-size: 0; }
-    .comment-quote__label { margin: 0 0 0.25rem; color: var(--cds-text-secondary, #525252); }
+    .comment-quote__label { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
     .comment-quote__text { margin: 0; color: var(--cds-text-primary, #161616); font-style: italic; }
     /* A posted comment's quoted passage (built in JS → :global). */
     :global(.comment__quote) { margin: 0 0 var(--cds-spacing-03, 0.5rem); padding-inline-start: var(--cds-spacing-04, 0.75rem); border-inline-start: 3px solid var(--cds-highlight, #d0e2ff); }
     :global(.comment__quote-text) { margin: 0; color: var(--cds-text-secondary, #525252); font-style: italic; }
     :global(.comment__quote cds-button) { margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
-    :global(.comment__quote-note) { margin: 0.25rem 0 0; color: var(--cds-text-helper, #6f6f6f); }
+    :global(.comment__quote-note) { margin: var(--cds-spacing-02, 0.25rem) 0 0; color: var(--cds-text-helper, #6f6f6f); }
     /* Comment markers in the record (built in JS): the marker + Edit button share one
        action slot; section headers carry a "N comments" tag. */
     :global(.app-review .item-actions) { display: inline-flex; align-items: center; flex: 0 0 auto; }
     :global(.app-review .rsec-comments) { margin-inline-start: var(--cds-spacing-03, 0.5rem); }
     /* A comment brought into view from the record flashes with the highlight color. */
-    :global(.comment) { transition: background-color 0.4s ease; }
+    :global(.comment) { transition: background-color 200ms ease; }
     :global(.comment.comment--flash), :global(.comment.comment--hover) { background-color: var(--cds-highlight, #d0e2ff); }
     /* Replies: indented under the comment, each with its own meta line; the reply
        composer and the Reply action sit under the thread. */
@@ -3553,13 +3641,15 @@ const letterData = {
     .rsec-thread__panel { display: grid; gap: var(--cds-spacing-05, 1rem); margin-block-start: var(--cds-spacing-03, 0.5rem); padding: var(--cds-spacing-05, 1rem); background: var(--cds-layer-01, #f4f4f4); }
     .rsec-thread__panel[hidden], .rsec-thread__list[hidden], .rsec-thread__empty[hidden] { display: none; }
     .rsec-thread__resolved-toggle { justify-self: start; margin-inline-start: calc(-1 * var(--cds-spacing-05, 1rem)); }
-    .rsec-thread__list--resolved { opacity: 0.75; }
+    /* Resolved comments read quieter via the secondary text color — not opacity,
+       which drops the meta line under 4.5:1. */
+    .rsec-thread__list--resolved :global(.comment__text) { color: var(--cds-text-secondary, #525252); }
     .rsec-thread__empty { margin: 0; color: var(--cds-text-secondary, #525252); }
     .rsec-thread__composer cds-textarea { display: block; inline-size: 100%; }
     .rsec-thread__composer { margin-block-end: 0; }
     :global(.rsec-thread .comment__meta) { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
     :global(.rsec-thread .comment__author) { font-weight: 600; color: var(--cds-text-primary, #161616); }
-    :global(.rsec-thread .comment__text) { margin: 0; }
+    :global(.rsec-thread .comment__text) { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
     /* Header comments panel — wider than the 16rem default only while open. */
     .comments-panel[expanded] { inline-size: min(26rem, 100vw); }
     .comments-panel__inner { block-size: 100%; overflow-y: auto; padding: var(--cds-spacing-05, 1rem); display: flex; flex-direction: column; gap: var(--cds-spacing-05, 1rem); }
@@ -3574,25 +3664,31 @@ const letterData = {
     .comment { min-width: 0; }
     .comment__meta { margin: 0 0 var(--cds-spacing-02, 0.25rem); color: var(--cds-text-secondary, #525252); }
     .comment__author { font-weight: 600; color: var(--cds-text-primary, #161616); }
-    .comment__text { margin: 0; }
+    .comment__text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
 
     /* ── Live letter preview ── a white document surface, sticky beside the fields. */
     .preview__head { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-03, 0.5rem); }
     .preview__label { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
     .preview__head .preview__label { margin-bottom: 0; }
     .preview__hint { margin: 0 0 var(--cds-spacing-03, 0.5rem); color: var(--cds-text-secondary, #525252); }
-    @media (min-width: 66.01rem) { .preview { position: sticky; top: 4rem; align-self: start; } }
     .sheet {
       background: var(--cds-background, #ffffff);
       border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
       padding: var(--cds-spacing-07, 2rem);
       color: var(--cds-text-primary, #161616);
-      max-height: calc(100vh - 6rem);
-      overflow-y: auto;
     }
-    /* On the package step the letter reads through in full — no inner scroll. */
-    .pkg-letter .sheet { max-height: none; overflow-y: visible; }
-    @media (max-width: 66rem) { .sheet { max-height: none; } }
+    /* Wide screens: the preview pins at the same line as the step-① dock (UI Shell
+       header + compact bar = 6rem) and caps to the viewport as ONE column — label,
+       hint, and sheet together — so the sheet's bottom edge stays on screen and
+       the sheet scrolls inside. */
+    @media (min-width: 66.01rem) {
+      .preview {
+        position: sticky; top: 6rem; align-self: start;
+        max-block-size: calc(100vh - 7rem);
+        display: flex; flex-direction: column;
+      }
+      .preview .sheet { flex: 1 1 auto; min-block-size: 0; overflow-y: auto; }
+    }
 
     /* Editable body paragraphs (step ②): a quiet click-to-edit affordance, a focus
        field, and a left accent once a paragraph carries a reviewer override. Only

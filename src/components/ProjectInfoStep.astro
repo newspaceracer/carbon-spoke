@@ -14,6 +14,7 @@
 import PermitSection from './PermitSection.astro';
 import { project, seedOccurrences } from '../data/application';
 import { expertiseOptions } from '../data/user';
+import { MAX_FILE_SIZE } from '../lib/file-upload';
 
 const d = project.dates;
 ---
@@ -33,37 +34,41 @@ const d = project.dates;
         {expertiseOptions.map((o) => <cds-dropdown-item value={o.value}>{o.label}</cds-dropdown-item>)}
       </cds-dropdown>
 
-      <cds-text-input id="proj-title" label="Project title (required)" value={project.title}></cds-text-input>
+      <cds-text-input id="proj-title" label="Project title (required)" value={project.title} max-count="200" enable-counter></cds-text-input>
 
       <!-- Rich text: purpose + benefits are long-form narrative that benefits from
            formatting (lists, emphasis), so they use the reusable sc-rich-text
            editor (Tiptap in Carbon chrome) rather than a plain textarea. The label
            + helper are rendered here since the editor is not a native field. -->
       <div class="rt-field">
-        <span class="rt-label t-label-01" id="purpose-label">Project purpose <span class="req">(required)</span></span>
-        <p class="rt-helper t-label-01">
+        <span class="rt-label t-label-01" id="purpose-label" data-focus="proj-purpose">Project purpose <span class="req">(required)</span></span>
+        <p class="rt-helper t-label-01" id="purpose-helper">
           Describe the study's rationale and significance. Summarize relevant literature and state
           your hypotheses or study objectives.
         </p>
         <sc-rich-text
           id="proj-purpose"
-          aria-label="Project purpose"
+          data-labelledby="purpose-label"
+          data-describedby="purpose-helper"
+          data-required
           placeholder="Describe the study rationale and significance…"
           value={`<p>${project.purpose}</p>`}
         ></sc-rich-text>
       </div>
 
       <div class="rt-field">
-        <span class="rt-label t-label-01" id="benefits-label">
+        <span class="rt-label t-label-01" id="benefits-label" data-focus="proj-benefits">
           Anticipated benefits to the California State Park System <span class="req">(required)</span>
         </span>
-        <p class="rt-helper t-label-01">
+        <p class="rt-helper t-label-01" id="benefits-helper">
           Explain why you want to work in California State Parks and what the park system stands to
           gain from your research.
         </p>
         <sc-rich-text
           id="proj-benefits"
-          aria-label="Anticipated benefits to the California State Park System"
+          data-labelledby="benefits-label"
+          data-describedby="benefits-helper"
+          data-required
           placeholder="Describe the anticipated benefits…"
           value={`<p>${project.benefits}</p>`}
         ></sc-rich-text>
@@ -130,20 +135,20 @@ const d = project.dates;
       Optionally attach a detailed project schedule, timeline, or Gantt chart to support the
       occurrences above.
     </p>
-    <div class="uploader">
-      <p class="field-label t-label-01">Project schedule <span class="opt">(optional)</span></p>
-      <cds-file-uploader-drop-container id="schedule-drop" accept=".pdf,.doc,.docx,.xls,.xlsx">
-        Drag and drop a file here, or click to upload
-      </cds-file-uploader-drop-container>
-      <div id="schedule-list" class="uploaded-list"></div>
-      <p class="uploader-hint t-label-01">Accepted file types: PDF, DOC, DOCX, XLS, or XLSX.</p>
-    </div>
+    <cds-file-uploader class="uploader">
+      <span slot="label-title">Project schedule <span class="opt">(optional)</span></span>
+      <span slot="label-description">Accepted file types: PDF, DOC, DOCX, XLS, or XLSX. Maximum file size: {MAX_FILE_SIZE}.</span>
+      <cds-file-uploader-button button-kind="tertiary" size="md" id="schedule-drop" accept=".pdf,.doc,.docx,.xls,.xlsx">Add file</cds-file-uploader-button>
+      <div id="schedule-list"></div>
+    </cds-file-uploader>
   </PermitSection>
 </div>
 
 <script>
   import { seedOccurrences } from '../data/application';
+  import { wireUpload } from '../lib/file-upload';
   import type { FieldOccurrence } from '../data/application';
+  import { flagField, focusTargetAfterRemove, parseUsDate } from '../lib/form-feedback';
   // Registers the <sc-rich-text> custom element (Tiptap in Carbon chrome) used
   // for the Project purpose and Anticipated benefits fields above.
   import '../components/sc-rich-text.ts';
@@ -195,7 +200,9 @@ const d = project.dates;
         </cds-icon-button>
       </cds-table-cell>`;
     row.querySelector('.row-remove')?.addEventListener('click', () => {
+      const next = focusTargetAfterRemove(row, $('occ-add'));
       row.remove();
+      next?.focus();
       renumber();
       syncEmpty();
     });
@@ -210,9 +217,11 @@ const d = project.dates;
   $('occ-add')?.addEventListener('click', () => {
     const start = (startInput?.value ?? '').trim();
     const end = (endInput?.value ?? '').trim();
-    if (!start || !end) {
-      startInput?.focus?.();
-      return; // both dates required for a window
+    // Both dates are required, and a window can't end before it starts.
+    if (!start) return flagField(startInput, 'Choose a start date');
+    if (!end) return flagField(endInput, 'Choose an end date');
+    if (parseUsDate(end) < parseUsDate(start)) {
+      return flagField(endInput, 'End date must be on or after the start date');
     }
     addRow({ start, end });
     // Clear the picker for the next window (both the container and its inputs).
@@ -221,20 +230,21 @@ const d = project.dates;
     if (endInput) endInput.value = '';
   });
 
-  // ── Project schedule upload ─────────────────────────────────────────────
-  $('schedule-drop')?.addEventListener('cds-file-uploader-drop-container-changed', (e) => {
-    const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
-    if (!files || !files.length) return;
-    const list = $('schedule-list');
-    if (!list) return;
-    list.innerHTML = '';
-    const item = document.createElement('cds-file-uploader-item') as any;
-    item.state = 'edit';
-    item.size = 'md';
-    item.textContent = files[0].name;
-    item.addEventListener('cds-file-uploader-item-deleted', () => (list.innerHTML = ''));
-    list.appendChild(item);
+  // Picking dates from the calendar sets the value without an `input` event, so
+  // clear any flag on the picker's own change too.
+  range?.addEventListener('cds-date-picker-changed', () => {
+    [startInput, endInput].forEach((el) => { if (el) { el.invalid = false; el.invalidText = ''; } });
   });
+
+  // ── Rich-text labels: clicking the label focuses its editor, like a <label>.
+  document.querySelectorAll<HTMLElement>('.pi .rt-label[data-focus]').forEach((label) => {
+    label.addEventListener('click', () => $(label.dataset.focus!)?.focus());
+  });
+
+  // ── Project schedule upload ─────────────────────────────────────────────
+  const scheduleDrop = $('schedule-drop');
+  const scheduleList = $('schedule-list');
+  if (scheduleDrop && scheduleList) wireUpload(scheduleDrop, { list: scheduleList, single: true });
 </script>
 
 <style>
@@ -323,25 +333,18 @@ const d = project.dates;
     display: none;
   }
 
-  /* Uploader block — labeled dropzone (stock cds-file-uploader-drop-container)
-     plus help text; layout only. */
-  .uploader {
-    max-width: 46rem;
-  }
-  .field-label {
-    margin: 0 0 0.5rem;
-    color: var(--cds-text-secondary, #525252);
-  }
-  .field-label .opt,
-  .field-label .req,
   .rt-label .req {
     color: var(--cds-text-secondary, #525252);
   }
-  .uploaded-list {
-    margin-top: 0.5rem;
+
+  /* Uploader — stock cds-file-uploader (title, description, "Add file" button, file
+     list); layout only. The (optional) marker reads secondary, like every label. */
+  .uploader {
+    display: block;
+    max-width: 46rem;
   }
-  .uploader-hint {
-    margin: 0.5rem 0 0;
+  .uploader .opt {
+    font-weight: 400;
     color: var(--cds-text-secondary, #525252);
   }
 </style>

@@ -7,7 +7,7 @@
 // copy button), and their application-review status with the relevant date:
 // Completed <when> / Last opened <when> (in progress) / Added <when> (not started).
 //
-// Editing (add / remove) is Responsible-Agent-or-Admin only during review — the
+// Editing (add / remove) is Responsible-analyst-or-Admin only during review — the
 // component resolves that itself from the shared IR matrix, so both hosts gate
 // identically. Add / remove / email-all persist to the shared `permit-team-${id}`
 // storage, keeping both surfaces in sync. The host only supplies the data.
@@ -281,7 +281,7 @@ const trashIcon =
   const emailAll = document.getElementById('team-email-all');
 
   if (root && groupsWrap && rowTpl && groupTpl && dirEl) {
-    // Editability = the analysis-team roster's IR access (Responsible Agent / Admin
+    // Editability = the analysis-team roster's IR access (Responsible analyst / Admin
     // during review), resolved the SAME way on both hosts from the shared banner.
     const banner = document.getElementById('permit-banner');
     const permitId = banner?.dataset.permitId || '';

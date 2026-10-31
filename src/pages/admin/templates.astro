@@ -35,6 +35,7 @@ import {
   reportDueCadenceOptions,
   notificationSeeds,
 } from '../../data/site-settings';
+import { MAX_FILE_SIZE } from '../../lib/file-upload';
 
 // Eligible second signers for multi-district permits (Story 7): any HQ system
 // admin or HQ technical reviewer.
@@ -242,7 +243,7 @@ export const prototype = {
           <PermitSection title="Default second signer">
             <p class="section-hint t-body-01">
               The second signature on every <strong>multi-district</strong> permit. The
-              Responsible Agent signs first; this person co-signs to activate. Eligible:
+              Responsible analyst signs first; this person co-signs to activate. Eligible:
               any HQ system admin or HQ technical reviewer.
             </p>
             <cds-dropdown id="second-signer" title-text="Second signer (multi-district)" label="Select a signer" value="">
@@ -315,25 +316,13 @@ export const prototype = {
           researchers download right away.
         </p>
 
-        <!-- Wrapped: the drop container self-assigns slot="drop-container", which
-             cds-modal-body doesn't have, so as a direct child it never renders. -->
-        <div>
-          <cds-file-uploader-drop-container id="rm-drop" accept=".pdf">
-            Drag and drop a PDF here, or click to upload
-          </cds-file-uploader-drop-container>
-        </div>
-        <p class="uploader-hint t-label-01">Accepted file type: PDF.</p>
-        <div id="rm-list" class="uploaded-list"></div>
-
-        <cds-inline-notification
-          id="rm-error"
-          hidden
-          kind="error"
-          low-contrast
-          hide-close-button
-          title="Unsupported file type"
-          subtitle="Upload a PDF file. Other formats aren’t accepted."
-        ></cds-inline-notification>
+        <!-- The modal heading names the upload, so the uploader carries no title. The
+             button slots into cds-file-uploader (as a direct child of
+             cds-modal-body it would never render). -->
+        <cds-file-uploader label-description={`Accepted file type: PDF. Maximum file size: ${MAX_FILE_SIZE}.`}>
+          <cds-file-uploader-button button-kind="tertiary" size="md" id="rm-drop" accept=".pdf">Add file</cds-file-uploader-button>
+          <div id="rm-list"></div>
+        </cds-file-uploader>
       </cds-modal-body>
       <cds-modal-footer>
         <cds-modal-footer-button kind="secondary" data-modal-close>Cancel</cds-modal-footer-button>
@@ -403,10 +392,10 @@ export const prototype = {
   import '../../components/sc-rich-text.ts';
   import { readIdentity } from '../../lib/maintenance';
   import { showToast } from '../../lib/toast';
+  import { wireUpload } from '../../lib/file-upload';
   import {
     readRegulatedDocs,
     replaceRegulatedDoc,
-    isPdf,
     formatDocDate,
   } from '../../data/regulated-docs';
   import {
@@ -459,7 +448,6 @@ export const prototype = {
     const desc = $('rm-desc');
     const drop = $('rm-drop');
     const list = $('rm-list');
-    const errorEl = $('rm-error');
     const confirmBtn = $('rm-confirm');
 
     let targetId = '';
@@ -476,12 +464,17 @@ export const prototype = {
     };
     readRegulatedDocs().forEach(paintRow);
 
-    const resetModal = () => {
-      pendingName = '';
-      list.innerHTML = '';
-      errorEl.hidden = true;
-      confirmBtn.disabled = true;
-    };
+    // A wrong-type or too-large file shows as an error item and leaves
+    // "Replace document" off (lib/file-upload).
+    const upload = wireUpload(drop, {
+      list,
+      single: true,
+      onChange: (names) => {
+        pendingName = names[0] ?? '';
+        confirmBtn.disabled = !pendingName;
+      },
+    });
+    const resetModal = () => upload.clear();
 
     document.querySelectorAll('.replace-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -495,32 +488,6 @@ export const prototype = {
         resetModal();
         modal.open = true;
       });
-    });
-
-    drop.addEventListener('cds-file-uploader-drop-container-changed', (e: Event) => {
-      const files = (e as CustomEvent).detail?.addedFiles as File[] | undefined;
-      const file = files && files[0];
-      if (!file) return;
-      list.innerHTML = '';
-      if (!isPdf(file)) {
-        pendingName = '';
-        confirmBtn.disabled = true;
-        errorEl.hidden = false;
-        return;
-      }
-      errorEl.hidden = true;
-      pendingName = file.name;
-      const item = document.createElement('cds-file-uploader-item') as any;
-      item.state = 'edit';
-      item.size = 'md';
-      item.textContent = file.name;
-      item.addEventListener('cds-file-uploader-item-deleted', () => {
-        item.remove();
-        pendingName = '';
-        confirmBtn.disabled = true;
-      });
-      list.appendChild(item);
-      confirmBtn.disabled = false;
     });
 
     confirmBtn.addEventListener('click', () => {
@@ -998,10 +965,6 @@ export const prototype = {
     overflow: hidden;
   }
 
-  .uploader-hint { margin: 0.5rem 0 0; color: var(--cds-text-secondary, #525252); }
-  .uploaded-list { margin-top: 0.75rem; }
-  #rm-error { margin-top: 1rem; }
-  #rm-error[hidden] { display: none; }
   .modal-hint { margin: 0 0 1.5rem; }
   .nm-body-wrap { margin-top: 1.25rem; }
   /* The editor isn't a native field, so its label is a plain span — match the

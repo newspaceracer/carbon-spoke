@@ -123,11 +123,6 @@ export function replaceRegulatedDoc(
 // ── PDF-only validation ──────────────────────────────────────────────────
 export const PDF_ACCEPT = '.pdf';
 
-/** A replacement must be a PDF; anything else is rejected before the store is touched. */
-export function isPdf(file: File): boolean {
-  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-}
-
 /** "Nov 3, 2025" — the "last updated" display, in UTC to match the stored instant. */
 export function formatDocDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {

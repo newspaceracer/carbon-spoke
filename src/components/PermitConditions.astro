@@ -90,4 +90,6 @@ const { idPrefix = 'conditions' } = Astro.props;
   :global(.cond__body blockquote) { margin: 0 0 0.375rem; padding-left: 0.75rem; border-left: 3px solid var(--cds-border-subtle-01, #e0e0e0); color: var(--cds-text-secondary, #525252); }
   :global(.cond__body code) { font-family: var(--cds-code-01-font-family, 'IBM Plex Mono', monospace); background: var(--cds-layer-accent-01, #e0e0e0); padding: 0.05rem 0.3rem; border-radius: 0.25rem; font-size: 0.85em; }
   :global(.cond__body a) { color: var(--cds-link-primary, #0f62fe); }
+  /* Pasted URLs have no spaces — let them break rather than widen the page. */
+  :global(.cond__body) { overflow-wrap: anywhere; }
 </style>
